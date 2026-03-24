@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEAT — Sistema de Visitas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --negro: #0a0a0a;
+  --amarillo: #F5C400;
+  --amarillo-dark: #c49b00;
+  --blanco: #ffffff;
+  --gris-oscuro: #1a1a1a;
+  --gris-medio: #2a2a2a;
+  --gris-claro: #3a3a3a;
+  --gris-borde: rgba(255,255,255,0.1);
+  --gris-texto: rgba(255,255,255,0.5);
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--negro); color: var(--blanco); min-height: 100vh; }
+
+/* ── LOGIN ── */
+#screen-login {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+}
+.login-logo { text-align: center; margin-bottom: 40px; }
+.login-logo .g-icon { width: 72px; height: 72px; margin: 0 auto 14px; position: relative; }
+.login-logo .g-icon svg { width: 72px; height: 72px; }
+.login-logo .brand { font-size: 28px; font-weight: 800; letter-spacing: 0.08em; color: var(--blanco); }
+.login-logo .sub { font-size: 11px; letter-spacing: 0.15em; color: var(--gris-texto); text-transform: uppercase; margin-top: 2px; }
+.login-card { background: var(--gris-oscuro); border: 1px solid var(--gris-borde); border-radius: 14px; padding: 32px 28px; width: 100%; max-width: 340px; }
+.login-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.login-sub { font-size: 13px; color: var(--gris-texto); margin-bottom: 24px; }
+.login-select { width: 100%; padding: 12px 14px; background: var(--gris-medio); border: 1px solid var(--gris-borde); border-radius: var(--radius-sm); color: var(--blanco); font-size: 14px; margin-bottom: 16px; }
+.pin-label { font-size: 11px; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.pin-dots { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+.pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gris-claro); transition: all 0.15s; }
+.pin-dot.filled { background: var(--amarillo); border-color: var(--amarillo); }
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.numpad-btn { padding: 16px; background: var(--gris-medio); border: 1px solid var(--gris-borde); border-radius: var(--radius-sm); color: var(--blanco); font-size: 18px; font-weight: 600; cursor: pointer; transition: all 0.1s; text-align: center; }
+.numpad-btn:hover { background: var(--gris-claro); border-color: rgba(255,255,255,0.2); }
+.numpad-btn:active { transform: scale(0.95); }
+.numpad-btn.del { font-size: 14px; font-weight: 400; color: var(--gris-texto); }
+.numpad-btn.zero { grid-column: 2; }
+.login-error { color: #ff5a5a; font-size: 13px; text-align: center; height: 18px; }
+
+/* ── APP ── */
+#screen-app { display: none; min-height: 100vh; }
+.topbar { background: var(--negro); border-bottom: 1px solid var(--gris-borde); padding: 0 16px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+.topbar-logo { display: flex; align-items: center; gap: 10px; }
+.topbar-logo svg { width: 28px; height: 28px; }
+.topbar-logo .brand { font-size: 15px; font-weight: 800; letter-spacing: 0.06em; }
+.topbar-logo .brand span { color: var(--amarillo); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.user-chip { font-size: 12px; color: var(--gris-texto); }
+.user-chip strong { color: var(--blanco); }
+.logout-btn { font-size: 12px; color: var(--gris-texto); background: none; border: none; cursor: pointer; padding: 4px 8px; }
+.logout-btn:hover { color: var(--blanco); }
+
+.tabs-bar { display: flex; background: var(--negro); border-bottom: 1px solid var(--gris-borde); padding: 0 12px; overflow-x: auto; }
+.tabs-bar::-webkit-scrollbar { display: none; }
+.tab { padding: 13px 14px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--gris-texto); border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; white-space: nowrap; transition: all 0.15s; }
+.tab.active { color: var(--amarillo); border-bottom-color: var(--amarillo); }
+.tab:hover:not(.active) { color: var(--blanco); }
+
+.content { max-width: 700px; margin: 0 auto; padding: 20px 14px; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── CARDS ── */
+.card { background: var(--gris-oscuro); border: 1px solid var(--gris-borde); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--blanco); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── FORMS ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fg { display: flex; flex-direction: column; gap: 5px; }
+.fg.full { grid-column: 1/-1; }
+label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gris-texto); }
+input, select, textarea { padding: 10px 12px; font-size: 14px; border: 1px solid var(--gris-borde); border-radius: var(--radius-sm); background: var(--gris-medio); color: var(--blanco); font-family: inherit; width: 100%; transition: border 0.15s; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--amarillo); }
+select option { background: var(--gris-oscuro); }
+textarea { resize: none; height: 72px; }
+.btn-primary { padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 700; cursor: pointer; border: none; background: var(--amarillo); color: var(--negro); width: 100%; margin-top: 6px; letter-spacing: 0.02em; transition: all 0.15s; }
+.btn-primary:hover { background: var(--amarillo-dark); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-sec { padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--gris-borde); background: transparent; color: var(--blanco); transition: all 0.15s; }
+.btn-sec:hover { border-color: var(--amarillo); color: var(--amarillo); }
+
+/* ── STATS ── */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.stat { background: var(--gris-oscuro); border: 1px solid var(--gris-borde); border-radius: var(--radius-sm); padding: 14px 12px; }
+.stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gris-texto); font-weight: 600; }
+.stat-val { font-size: 26px; font-weight: 700; margin-top: 2px; color: var(--blanco); }
+.stat-val.yellow { color: var(--amarillo); }
+
+/* ── VISITA ITEM ── */
+.visit-item { background: var(--gris-oscuro); border: 1px solid var(--gris-borde); border-radius: var(--radius); padding: 13px 15px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start; transition: border 0.15s; }
+.visit-item:hover { border-color: rgba(245,196,0,0.3); }
+.visit-num { width: 34px; height: 34px; border-radius: 50%; background: rgba(245,196,0,0.1); border: 1px solid rgba(245,196,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--amarillo); flex-shrink: 0; }
+.visit-body { flex: 1; min-width: 0; }
+.visit-name { font-size: 14px; font-weight: 600; color: var(--blanco); }
+.visit-tel { font-size: 12px; color: var(--amarillo); margin-left: 6px; font-weight: 400; }
+.visit-meta { font-size: 11px; color: var(--gris-texto); margin-top: 3px; }
+.visit-desc { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visit-right { flex-shrink: 0; text-align: right; }
+.cerrador-chip { font-size: 11px; font-weight: 700; color: var(--amarillo); }
+.status-sel { font-size: 11px; padding: 4px 8px; border-radius: 20px; border: 1px solid var(--gris-borde); background: var(--gris-medio); color: var(--blanco); cursor: pointer; margin-top: 5px; }
+.status-sel:focus { outline: none; border-color: var(--amarillo); }
+
+/* ── SECTION LABEL ── */
+.section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gris-texto); margin: 18px 0 10px; }
+
+/* ── FILTER BAR ── */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.filter-bar select { width: auto; flex: 1; min-width: 110px; font-size: 13px; }
+.export-btn { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--gris-borde); background: transparent; color: var(--amarillo); border-color: rgba(245,196,0,0.4); white-space: nowrap; transition: all 0.15s; }
+.export-btn:hover { background: rgba(245,196,0,0.1); }
+
+/* ── CALENDARIO ── */
+.cal-wrap { margin-bottom: 14px; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cal-month { font-size: 15px; font-weight: 700; color: var(--blanco); }
+.cal-btn { padding: 5px 12px; background: var(--gris-medio); border: 1px solid var(--gris-borde); border-radius: var(--radius-sm); color: var(--blanco); cursor: pointer; font-size: 14px; transition: all 0.1s; }
+.cal-btn:hover { border-color: var(--amarillo); color: var(--amarillo); }
+.cal-dow { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; margin-bottom: 4px; }
+.cal-dow span { font-size: 10px; color: var(--gris-texto); font-weight: 700; padding: 4px 0; letter-spacing: 0.04em; text-transform: uppercase; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+.cal-cell { min-height: 50px; border-radius: 7px; padding: 5px 4px; cursor: pointer; background: var(--gris-oscuro); border: 1px solid transparent; transition: all 0.1s; }
+.cal-cell:hover { border-color: rgba(245,196,0,0.3); }
+.cal-cell.today { border: 1px solid var(--amarillo); }
+.cal-cell.selected { background: rgba(245,196,0,0.12); border: 1px solid var(--amarillo); }
+.cal-cell.empty { background: transparent; cursor: default; border: none; }
+.cal-cell-num { font-size: 11px; font-weight: 600; color: var(--gris-texto); }
+.cal-cell.today .cal-cell-num { color: var(--amarillo); }
+.cal-cell.selected .cal-cell-num { color: var(--amarillo); }
+.cal-event { font-size: 9px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--negro); background: var(--amarillo); border-radius: 3px; padding: 1px 3px; font-weight: 600; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.chart-card { background: var(--gris-oscuro); border: 1px solid var(--gris-borde); border-radius: var(--radius); padding: 16px; }
+.chart-card.full { grid-column: 1/-1; }
+.chart-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gris-texto); margin-bottom: 14px; }
+.chart-container { position: relative; height: 180px; }
+.chart-container.tall { height: 220px; }
+.rec-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--gris-borde); }
+.rec-item:last-child { border-bottom: none; }
+.rec-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px; }
+.rec-icon.warn { background: rgba(245,196,0,0.15); }
+.rec-icon.ok { background: rgba(60,200,100,0.12); }
+.rec-icon.info { background: rgba(80,140,255,0.12); }
+.rec-text { font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.5; }
+.rec-text strong { color: var(--blanco); }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--gris-texto); font-size: 14px; }
+.loading { text-align: center; padding: 30px; color: var(--gris-texto); font-size: 13px; }
+.dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--amarillo); margin: 0 2px; animation: pulse 1s infinite; }
+.dot:nth-child(2){animation-delay:0.2s}.dot:nth-child(3){animation-delay:0.4s}
+@keyframes pulse{0%,100%{opacity:0.2}50%{opacity:1}}
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--amarillo); color: var(--negro); padding: 10px 22px; border-radius: 20px; font-size: 13px; font-weight: 700; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.pin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pin-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gris-texto); padding: 8px 12px; border-bottom: 1px solid var(--gris-borde); font-weight: 600; }
+.pin-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.rol-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+.rol-admin { background: rgba(245,196,0,0.2); color: var(--amarillo); }
+.rol-cerrador { background: rgba(80,160,255,0.15); color: #7eb8ff; }
+.rol-captador { background: rgba(100,220,100,0.12); color: #7dd87d; }
+.pin-code { font-family: monospace; font-size: 15px; font-weight: 700; color: var(--amarillo); letter-spacing: 0.1em; }
+@media(max-width:480px){.stats-row{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.chart-grid{grid-template-columns:1fr}}
+</style></head><body>
+<div id="screen-login"><div class="login-logo"><div class="g-icon">
+<svg viewBox="0 0 72 72" fill="none"><line x1="22" y1="6" x2="22" y2="66" stroke="white" stroke-width="0.8" stroke-opacity="0.4"/><line x1="50" y1="6" x2="50" y2="66" stroke="white" stroke-width="0.8" stroke-opacity="0.4"/><line x1="6" y1="22" x2="66" y2="22" stroke="white" stroke-width="0.8" stroke-opacity="0.4"/><line x1="6" y1="50" x2="66" y2="50" stroke="white" stroke-width="0.8" stroke-opacity="0.4"/>
+<rect x="18" y="18" width="8" height="8" fill="white" opacity="0.6"/><rect x="46" y="18" width="8" height="8" fill="white" opacity="0.6"/><rect x="18" y="46" width="8" height="8" fill="white" opacity="0.6"/><rect x="46" y="46" width="8" height="8" fill="white" opacity="0.6"/>
+<text x="36" y="46" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="32" fill="#F5C400">G</text></svg>
+</div><div class="brand">GEAT</div><div class="sub">Construcción y Consultoría</div></div>
+<div class="login-card"><div class="login-title">Acceso al sistema</div><div class="login-sub">Selecciona tu nombre e ingresa tu PIN</div>
+<select class="login-select" id="login-user" onchange="resetPin()"><option value="">Seleccionar colaborador...</option></select>
+<div class="pin-label">PIN de acceso</div>
+<div class="pin-dots" id="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div></div>
+<div class="numpad">
+<button class="numpad-btn" onclick="addPin('1')">1</button><button class="numpad-btn" onclick="addPin('2')">2</button><button class="numpad-btn" onclick="addPin('3')">3</button>
+<button class="numpad-btn" onclick="addPin('4')">4</button><button class="numpad-btn" onclick="addPin('5')">5</button><button class="numpad-btn" onclick="addPin('6')">6</button>
+<button class="numpad-btn" onclick="addPin('7')">7</button><button class="numpad-btn" onclick="addPin('8')">8</button><button class="numpad-btn" onclick="addPin('9')">9</button>
+<button class="numpad-btn zero" onclick="addPin('0')">0</button><button class="numpad-btn del" onclick="delPin()">⌫</button>
+</div><div class="login-error" id="login-error"></div></div></div>
+<div id="screen-app"><div class="topbar"><div class="topbar-logo">
+<svg viewBox="0 0 72 72" fill="none"><line x1="22" y1="6" x2="22" y2="66" stroke="white" stroke-width="1" stroke-opacity="0.3"/><line x1="50" y1="6" x2="50" y2="66" stroke="white" stroke-width="1" stroke-opacity="0.3"/><line x1="6" y1="22" x2="66" y2="22" stroke="white" stroke-width="1" stroke-opacity="0.3"/><line x1="6" y1="50" x2="66" y2="50" stroke="white" stroke-width="1" stroke-opacity="0.3"/>
+<rect x="18" y="18" width="8" height="8" fill="white" opacity="0.5"/><rect x="46" y="18" width="8" height="8" fill="white" opacity="0.5"/><rect x="18" y="46" width="8" height="8" fill="white" opacity="0.5"/><rect x="46" y="46" width="8" height="8" fill="white" opacity="0.5"/>
+<text x="36" y="46" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="32" fill="#F5C400">G</text></svg>
+<div class="brand">GE<span>A</span>T</div></div>
+<div class="topbar-right"><div class="user-chip">Hola, <strong id="user-display">—</strong></div><button class="logout-btn" onclick="logout()">Salir</button></div></div>
+<div class="tabs-bar" id="tabs-bar"></div><div class="content">
+<div class="panel" id="panel-captador"><div class="card"><div class="card-title">Nueva visita</div>
+<div class="form-grid">
+<div class="fg"><label>Nombre</label><input type="text" id="f-nombre" placeholder="Cliente"></div>
+<div class="fg"><label>Teléfono</label><input type="text" id="f-tel" placeholder="70293851"></div>
+<div class="fg"><label>Fecha</label><input type="date" id="f-fecha"></div>
+<div class="fg"><label>Hora</label><input type="time" id="f-hora"></div>
+<div class="fg"><label>Cerrador</label><select id="f-cerrador"><option value="">Seleccionar...</option><option>Gustavo</option><option>David</option><option>Samuel</option><option>Fat</option></select></div>
+<div class="fg"><label>Captador</label><select id="f-captador"><option value="">Seleccionar...</option><option>Maria Luisa</option><option>Steffi</option><option>Corp Genoveva</option></select></div>
+<div class="fg full"><label>Descripción</label><textarea id="f-desc" placeholder="Ej: Construcción en su terreno..."></textarea></div>
+</div><button class="btn-primary" id="btn-reg" onclick="registrarVisita()">Registrar visita</button></div>
+<div class="section-label">Visitas de hoy</div><div id="lista-hoy"><div class="loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div></div>
+<div class="panel" id="panel-cerrador"><div class="filter-bar">
+<select id="fil-cerrador" onchange="renderCerrador()"><option value="">Todos</option><option>Gustavo</option><option>David</option><option>Samuel</option><option>Fat</option></select>
+<select id="fil-fecha-c" onchange="renderCerrador()"><option value="hoy">Hoy</option><option value="manana">Mañana</option><option value="todos">Todos</option></select>
+</div><div id="cerrador-lista"></div></div>
+<div class="panel" id="panel-calendario"><div class="card cal-wrap">
+<div class="cal-nav"><button class="cal-btn" onclick="cambiarMes(-1)">‹</button><div class="cal-month" id="cal-title">—</div><button class="cal-btn" onclick="cambiarMes(1)">›</button></div>
+<div class="cal-dow"><span>Do</span><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sa</span></div>
+<div class="cal-grid" id="cal-grid"></div></div>
+<div class="section-label" id="cal-section-label">Todas las visitas del mes</div><div id="cal-lista"></div></div>
+<div class="panel" id="panel-analytics">
+<div class="stats-row"><div class="stat"><div class="stat-label">Total mes</div><div class="stat-val yellow" id="a-total">—</div></div><div class="stat"><div class="stat-label">Pendientes</div><div class="stat-val" id="a-pend">—</div></div><div class="stat"><div class="stat-label">Atendidas</div><div class="stat-val" id="a-aten">—</div></div><div class="stat"><div class="stat-label">Cerradas</div><div class="stat-val" id="a-cerr">—</div></div></div>
+<div class="filter-bar"><select id="a-mes" onchange="renderAnalytics()"><option value="2026-03">Marzo 2026</option><option value="2026-04">Abril 2026</option><option value="2026-02">Febrero 2026</option><option value="2026-01">Enero 2026</option></select>
+<button class="export-btn" onclick="exportarCSV()">↓ CSV</button><button class="export-btn" onclick="exportarHTML()">↓ Informe</button></div>
+<div class="chart-grid">
+<div class="chart-card"><div class="chart-title">Por estado</div><div class="chart-container"><canvas id="chart-estado"></canvas></div></div>
+<div class="chart-card"><div class="chart-title">Por cerrador</div><div class="chart-container"><canvas id="chart-cerrador"></canvas></div></div>
+<div class="chart-card full"><div class="chart-title">Por día</div><div class="chart-container tall"><canvas id="chart-dias"></canvas></div></div>
+<div class="chart-card full"><div class="chart-title">Por captador</div><div class="chart-container"><canvas id="chart-captador"></canvas></div></div>
+</div><div class="card"><div class="card-title">Recomendaciones</div><div id="recomendaciones"></div></div></div>
+<div class="panel" id="panel-admin"><div class="card"><div class="card-title">PINs del equipo</div>
+<table class="pin-table"><thead><tr><th>Colaborador</th><th>Rol</th><th>PIN</th></tr></thead><tbody id="pin-tbody"></tbody></table></div>
+<div class="filter-bar" style="margin-top:8px;"><button class="export-btn" onclick="exportarTodo()">↓ Exportar todo</button></div></div>
+</div></div><div class="toast" id="toast"></div>
+<script>
+const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const today=new Date(),todayStr=today.toISOString().split('T')[0],tomorrowStr=new Date(today.getTime()+86400000).toISOString().split('T')[0];
+const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+let allVisits=[],colaboradores=[],currentUser=null,calYear=today.getFullYear(),calMonth=today.getMonth(),selectedDay=null,pinBuffer='',charts={};
+async function loadColaboradores(){const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('rol');colaboradores=data||[];const sel=document.getElementById('login-user');sel.innerHTML='<option value="">Seleccionar colaborador...</option>';colaboradores.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.nombre+' ('+c.rol+')';sel.appendChild(o);});}
+function resetPin(){pinBuffer='';updateDots();document.getElementById('login-error').textContent='';}
+function updateDots(){for(let i=0;i<4;i++)document.getElementById('d'+i).classList.toggle('filled',i<pinBuffer.length);}
+function addPin(n){if(pinBuffer.length>=4)return;pinBuffer+=n;updateDots();if(pinBuffer.length===4)setTimeout(verifyPin,150);}
+function delPin(){if(pinBuffer.length>0){pinBuffer=pinBuffer.slice(0,-1);updateDots();}}
+function verifyPin(){const uid=document.getElementById('login-user').value;if(!uid){document.getElementById('login-error').textContent='Selecciona un colaborador';pinBuffer='';updateDots();return;}const col=colaboradores.find(c=>String(c.id)===uid);if(!col){pinBuffer='';updateDots();return;}if(col.pin===pinBuffer){currentUser=col;loginSuccess();}else{document.getElementById('login-error').textContent='PIN incorrecto';pinBuffer='';updateDots();setTimeout(()=>document.getElementById('login-error').textContent='',2000);}}
+function loginSuccess(){document.getElementById('screen-login').style.display='none';document.getElementById('screen-app').style.display='block';document.getElementById('user-display').textContent=currentUser.nombre;buildTabs();init();}
+function logout(){currentUser=null;pinBuffer='';document.getElementById('screen-app').style.display='none';document.getElementById('screen-login').style.display='flex';document.getElementById('login-user').value='';updateDots();document.getElementById('login-error').textContent='';}
+function buildTabs(){const bar=document.getElementById('tabs-bar'),rol=currentUser.rol;let tabs=[];if(rol==='captador'||rol==='admin')tabs.push({id:'captador',label:'Captador'});if(rol==='cerrador'||rol==='admin')tabs.push({id:'cerrador',label:'Mi agenda'});tabs.push({id:'calendario',label:'Calendario'});if(rol==='admin'){tabs.push({id:'analytics',label:'Analytics'});tabs.push({id:'admin',label:'Admin'});}else{tabs.push({id:'analytics',label:'Informes'});}bar.innerHTML=tabs.map((t,i)=>'<button class="tab'+(i===0?' active':'')+'" onclick="switchTab(\''+t.id+'\')">'+t.label+'</button>').join('');switchTab(tabs[0].id);}
+function switchTab(tab){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));const a=document.querySelector('.tab[onclick*="\''+tab+'\'"]');if(a)a.classList.add('active');document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));const p=document.getElementById('panel-'+tab);if(p)p.classList.add('active');if(tab==='analytics')renderAnalytics();if(tab==='admin')renderAdmin();if(tab==='cerrador'){if(currentUser.rol==='cerrador'&&document.getElementById('fil-cerrador'))document.getElementById('fil-cerrador').value=currentUser.nombre;renderCerrador();}}
+async function init(){await loadVisits();document.getElementById('f-fecha').value=todayStr;if(currentUser.rol==='captador'&&document.getElementById('f-captador'))document.getElementById('f-captador').value=currentUser.nombre;}
+async function loadVisits(){const{data}=await sb.from('visitas').select('*').order('id');allVisits=data||[];renderAll();}
+function renderAll(){renderHoy();renderCerrador();renderCalendario();}
+function ff(f){if(!f)return'';const[y,m,d]=f.split('-');return d+'/'+m+'/'+y;}
+function fh(h){return h?h.slice(0,5):'Sin hora';}
+function visitHTML(v,editable=true){return '<div class="visit-item"><div class="visit-num">#'+(v.numero_mes||'?')+'</div><div class="visit-body"><div class="visit-name">'+v.nombre+'<span class="visit-tel">'+v.telefono+'</span></div><div class="visit-meta">'+ff(v.fecha)+' · '+fh(v.hora)+' · '+v.captador+'</div>'+(v.descripcion?'<div class="visit-desc">'+v.descripcion+'</div>':'')+'</div><div class="visit-right"><div class="cerrador-chip">'+v.cerrador+'</div>'+(editable?'<select class="status-sel" onchange="cambiarEstado('+v.id+',this.value)"><option value="pendiente"'+(v.estado==='pendiente'?' selected':'')+'>pendiente</option><option value="atendido"'+(v.estado==='atendido'?' selected':'')+'>atendido</option><option value="cerrado"'+(v.estado==='cerrado'?' selected':'')+'>cerrado</option></select>':'<div style="font-size:11px;color:var(--gris-texto);margin-top:4px;">'+v.estado+'</div>')+'</div></div>';}
+function renderHoy(){const hoy=allVisits.filter(v=>v.fecha===todayStr);const el=document.getElementById('lista-hoy');if(el)el.innerHTML=hoy.length?hoy.map(v=>visitHTML(v)).join(''):'<div class="empty-state">No hay visitas para hoy</div>';}
+function renderCerrador(){const cer=document.getElementById('fil-cerrador')?.value||'';const fec=document.getElementById('fil-fecha-c')?.value||'hoy';let f=allVisits;if(cer)f=f.filter(v=>v.cerrador===cer);if(fec==='hoy')f=f.filter(v=>v.fecha===todayStr);if(fec==='manana')f=f.filter(v=>v.fecha===tomorrowStr);const el=document.getElementById('cerrador-lista');if(el)el.innerHTML=f.length?f.map(v=>visitHTML(v)).join(''):'<div class="empty-state">Sin visitas</div>';}
+async function registrarVisita(){const nombre=document.getElementById('f-nombre').value.trim(),telefono=document.getElementById('f-tel').value.trim(),fecha=document.getElementById('f-fecha').value,hora=document.getElementById('f-hora').value||null,cerrador=document.getElementById('f-cerrador').value,captador=document.getElementById('f-captador').value,descripcion=document.getElementById('f-desc').value.trim();if(!nombre||!telefono||!fecha||!cerrador||!captador){showToast('Completa los campos requeridos');return;}const btn=document.getElementById('btn-reg');btn.disabled=true;btn.textContent='Guardando...';const{error}=await sb.from('visitas').insert([{nombre,telefono,fecha,hora,cerrador,captador,descripcion}]);btn.disabled=false;btn.textContent='Registrar visita';if(error){showToast('Error al guardar');return;}['f-nombre','f-tel','f-hora','f-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-cerrador').value='';document.getElementById('f-fecha').value=todayStr;if(currentUser.rol!=='captador')document.getElementById('f-captador').value='';showToast('Visita registrada');await loadVisits();}
+async function cambiarEstado(id,estado){await sb.from('visitas').update({estado}).eq('id',id);const v=allVisits.find(x=>x.id===id);if(v)v.estado=estado;renderAll();}
+function renderCalendario(){const ms=calYear+'-'+String(calMonth+1).padStart(2,'0');document.getElementById('cal-title').textContent=MONTHS[calMonth]+' '+calYear;const fd=new Date(calYear,calMonth,1).getDay(),dim=new Date(calYear,calMonth+1,0).getDate();let html='';for(let i=0;i<fd;i++)html+='<div class="cal-cell empty"></div>';for(let d=1;d<=dim;d++){const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const dv=allVisits.filter(v=>v.fecha===ds);html+='<div class="cal-cell'+(ds===todayStr?' today':'')+(selectedDay===ds?' selected':'')+'" onclick="selectDay(\''+ds+'\')"><div class="cal-cell-num">'+d+'</div>'+dv.slice(0,2).map(v=>'<div class="cal-event">'+v.nombre.split(' ')[0]+'</div>').join('')+'</div>';}document.getElementById('cal-grid').innerHTML=html;const filtered=selectedDay?allVisits.filter(v=>v.fecha===selectedDay):allVisits.filter(v=>v.fecha.startsWith(ms));document.getElementById('cal-section-label').textContent=selectedDay?'Visitas del '+ff(selectedDay):'Todas las visitas del mes';document.getElementById('cal-lista').innerHTML=filtered.length?filtered.map(v=>visitHTML(v)).join(''):'<div class="empty-state">Sin visitas</div>';}
+function selectDay(ds){selectedDay=selectedDay===ds?null:ds;renderCalendario();}
+function cambiarMes(d){calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}selectedDay=null;renderCalendario();}
+function renderAnalytics(){const mes=document.getElementById('a-mes')?.value||(calYear+'-'+String(calMonth+1).padStart(2,'0'));const mv=allVisits.filter(v=>v.fecha&&v.fecha.startsWith(mes));document.getElementById('a-total').textContent=mv.length;document.getElementById('a-pend').textContent=mv.filter(v=>v.estado==='pendiente').length;document.getElementById('a-aten').textContent=mv.filter(v=>v.estado==='atendido').length;document.getElementById('a-cerr').textContent=mv.filter(v=>v.estado==='cerrado').length;
+const Y='#F5C400';const co={plugins:{legend:{labels:{color:'rgba(255,255,255,0.6)',font:{size:11}}}},scales:{x:{ticks:{color:'rgba(255,255,255,0.5)',font:{size:10}},grid:{color:'rgba(255,255,255,0.06)'}},y:{ticks:{color:'rgba(255,255,255,0.5)',font:{size:10}},grid:{color:'rgba(255,255,255,0.06)'}}}};
+const ec=['pendiente','atendido','cerrado'].map(s=>mv.filter(v=>v.estado===s).length);if(charts.ce)charts.ce.destroy();charts.ce=new Chart(document.getElementById('chart-estado'),{type:'doughnut',data:{labels:['Pendiente','Atendido','Cerrado'],datasets:[{data:ec,backgroundColor:['rgba(245,196,0,0.8)','rgba(80,160,255,0.7)','rgba(80,200,120,0.7)'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'rgba(255,255,255,0.6)',font:{size:11}}}},cutout:'60%'}});
+const cer=['Gustavo','David','Samuel','Fat'],cc=cer.map(c=>mv.filter(v=>v.cerrador===c).length);if(charts.cc)charts.cc.destroy();charts.cc=new Chart(document.getElementById('chart-cerrador'),{type:'bar',data:{labels:cer,datasets:[{label:'Visitas',data:cc,backgroundColor:Y,borderRadius:4}]},options:{...co,plugins:{legend:{display:false}}}});
+const dim=new Date(parseInt(mes.split('-')[0]),parseInt(mes.split('-')[1]),0).getDate(),dias=Array.from({length:dim},(_,i)=>allVisits.filter(v=>v.fecha===(mes+'-'+String(i+1).padStart(2,'0'))).length);if(charts.cd)charts.cd.destroy();charts.cd=new Chart(document.getElementById('chart-dias'),{type:'line',data:{labels:Array.from({length:dim},(_,i)=>i+1),datasets:[{label:'Visitas',data:dias,borderColor:Y,backgroundColor:'rgba(245,196,0,0.1)',tension:0.3,fill:true,pointBackgroundColor:Y,pointRadius:3}]},options:{...co,plugins:{legend:{display:false}}}});
+const cap=['Maria Luisa','Steffi','Corp Genoveva'],cpc=cap.map(c=>mv.filter(v=>v.captador===c).length);if(charts.cp)charts.cp.destroy();charts.cp=new Chart(document.getElementById('chart-captador'),{type:'bar',data:{labels:cap,datasets:[{label:'Registros',data:cpc,backgroundColor:['rgba(245,196,0,0.8)','rgba(245,196,0,0.55)','rgba(245,196,0,0.35)'],borderRadius:4}]},options:{...co,plugins:{legend:{display:false}},indexAxis:'y'}});
+const tot=mv.length,cer2=mv.filter(v=>v.estado==='cerrado').length,conv=tot?Math.round(cer2/tot*100):0,maxC=cer[cc.indexOf(Math.max(...cc))],minC=cer[cc.indexOf(Math.min(...cc))],maxCap=cap[cpc.indexOf(Math.max(...cpc))],pen=mv.filter(v=>v.estado==='pendiente').length;
+let recs=[];if(tot===0){recs.push({i:'ℹ️',t:'info',x:'No hay visitas en este periodo.'});}else{recs.push({i:conv>=30?'✅':'⚠️',t:conv>=30?'ok':'warn',x:'<strong>Tasa de cierre: '+conv+'%</strong> ('+cer2+' de '+tot+' cerradas). '+(conv>=30?'Buen rendimiento.':'Revisar proceso de cierre.')});if(pen>0)recs.push({i:'⚠️',t:'warn',x:'<strong>'+pen+' visita'+(pen>1?'s':'')+' pendiente'+(pen>1?'s':'')+'</strong> sin actualizar.'});recs.push({i:'🏆',t:'ok',x:'<strong>'+maxC+'</strong> tiene más visitas asignadas este mes.'});if(Math.min(...cc)===0)recs.push({i:'⚠️',t:'warn',x:'<strong>'+minC+'</strong> no tiene visitas. Verificar disponibilidad.'});recs.push({i:'📋',t:'info',x:'<strong>'+maxCap+'</strong> generó más registros este mes.'});}
+document.getElementById('recomendaciones').innerHTML=recs.map(r=>'<div class="rec-item"><div class="rec-icon '+r.t+'">'+r.i+'</div><div class="rec-text">'+r.x+'</div></div>').join('');}
+function renderAdmin(){document.getElementById('pin-tbody').innerHTML=colaboradores.map(c=>'<tr><td>'+c.nombre+'</td><td><span class="rol-badge rol-'+c.rol+'">'+c.rol+'</span></td><td><span class="pin-code">'+c.pin+'</span></td></tr>').join('');}
+function exportarCSV(){const mes=document.getElementById('a-mes')?.value||(calYear+'-'+String(calMonth+1).padStart(2,'0'));const mv=allVisits.filter(v=>v.fecha&&v.fecha.startsWith(mes));const h=['#','Nombre','Tel','Fecha','Hora','Cerrador','Captador','Estado','Descripcion'];const r=mv.map(v=>[v.numero_mes,v.nombre,v.telefono,v.fecha,v.hora||'',v.cerrador,v.captador,v.estado,(v.descripcion||'').replace(/,/g,' ')]);dl('geat-'+mes+'.csv',[h,...r].map(x=>x.join(',')).join('\n'),'text/csv');showToast('CSV descargado');}
+function exportarHTML(){const mes=document.getElementById('a-mes')?.value||(calYear+'-'+String(calMonth+1).padStart(2,'0'));const mv=allVisits.filter(v=>v.fecha&&v.fecha.startsWith(mes));const tot=mv.length,ce=mv.filter(v=>v.estado==='cerrado').length,pe=mv.filter(v=>v.estado==='pendiente').length,at=mv.filter(v=>v.estado==='atendido').length,co=tot?Math.round(ce/tot*100):0,mn=MONTHS[parseInt(mes.split('-')[1])-1]+' '+mes.split('-')[0];const hh='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Informe GEAT '+mn+'</title><style>body{font-family:Arial;margin:0;padding:40px;background:#fff;color:#111}h1{font-size:28px;font-weight:900}h1 span{color:#F5C400}.st{display:flex;gap:16px;margin:24px 0}.s{background:#f5f5f5;border-radius:8px;padding:16px 20px;flex:1}.sl{font-size:11px;text-transform:uppercase;color:#888;font-weight:700}.sv{font-size:28px;font-weight:800;margin-top:2px}table{width:100%;border-collapse:collapse;font-size:13px;margin-top:20px}th{background:#111;color:#fff;padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase}td{padding:9px 12px;border-bottom:1px solid #eee}.b{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}.p{background:#fff3cd;color:#856404}.a{background:#d1ecf1;color:#0c5460}.c{background:#d4edda;color:#155724}</style></head><body><h1>GE<span>A</span>T Visitas</h1><p>Informe - '+mn+'</p><div class="st"><div class="s"><div class="sl">Total</div><div class="sv">'+tot+'</div></div><div class="s"><div class="sl">Pendientes</div><div class="sv">'+pe+'</div></div><div class="s"><div class="sl">Atendidas</div><div class="sv">'+at+'</div></div><div class="s"><div class="sl">Cerradas</div><div class="sv">'+ce+'</div></div><div class="s"><div class="sl">Tasa</div><div class="sv">'+co+'%</div></div></div><table><thead><tr><th>#</th><th>Cliente</th><th>Tel</th><th>Fecha</th><th>Hora</th><th>Cerrador</th><th>Captador</th><th>Estado</th></tr></thead><tbody>'+mv.map(v=>'<tr><td>#'+v.numero_mes+'</td><td>'+v.nombre+'</td><td>'+v.telefono+'</td><td>'+ff(v.fecha)+'</td><td>'+fh(v.hora)+'</td><td>'+v.cerrador+'</td><td>'+v.captador+'</td><td><span class="b '+v.estado.charAt(0)+'">'+v.estado+'</span></td></tr>').join('')+'</tbody></table></body></html>';dl('informe-geat-'+mes+'.html',hh,'text/html');showToast('Informe descargado');}
+function exportarTodo(){const h=['#','Nombre','Tel','Fecha','Hora','Cerrador','Captador','Estado','Descripcion'];const r=allVisits.map(v=>[v.numero_mes,v.nombre,v.telefono,v.fecha,v.hora||'',v.cerrador,v.captador,v.estado,(v.descripcion||'').replace(/,/g,' ')]);dl('geat-completo.csv',[h,...r].map(x=>x.join(',')).join('\n'),'text/csv');showToast('Exportado');}
+function dl(n,c,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=n;a.click();}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+loadColaboradores();
+</script></body></html>
