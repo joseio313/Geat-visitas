@@ -1,4 +1,4 @@
-[index.html](https://github.com/user-attachments/files/26481242/index.html)
+[index.html](https://github.com/user-attachments/files/26482576/index.html)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -779,13 +779,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
       <div class="panel" id="pn-admin">
         <div class="page-header">
           <div>
-            <div class="page-title">Administración</div>
-            <div class="page-subtitle">PINs y configuración del equipo</div>
+            <div class="page-title">⚙️ Administración</div>
+            <div class="page-subtitle">Gestión del equipo y acceso rápido</div>
           </div>
         </div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">👥 Acceso rápido — Ver como colaborador</div></div>
+          <div style="font-size:12px;color:var(--gris4);margin-bottom:16px">Haz clic para ver el CRM desde la perspectiva de cada colaborador.</div>
+          <div id="admin-colabs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div>
+        </div>
+        <div id="impersonate-banner" style="display:none;background:rgba(245,196,0,0.12);border:1px solid rgba(245,196,0,0.3);border-radius:var(--r2);padding:12px 16px;margin-bottom:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">👁️</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--amarillo)" id="impersonate-label">Viendo como: —</div>
+              <div style="font-size:11px;color:var(--gris4)">Modo vistazo activo. Datos reales.</div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="volverAdmin()">↩ Volver a Admin</button>
+        </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">PINs del equipo</div></div>
-          <table class="kpi-table" id="admin-pins"></table>
+          <div class="card-header"><div class="card-title">🔑 PINs del equipo</div></div>
+          <div style="overflow-x:auto"><table class="kpi-table" id="admin-pins" style="min-width:340px"></table></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><div class="card-title">📊 Resumen global</div></div>
+          <div class="stats-grid" id="admin-stats-global"></div>
         </div>
       </div>
 
@@ -1545,9 +1564,90 @@ async function guardarCampana(){
 }
 
 // ── ADMIN ──
+// ── IMPERSONACIÓN (ver como colaborador) ──
+let cuReal=null; // guarda el admin real cuando está en modo vistazo
+
+function impersonarIdx(i){
+  impersonar(colaboradores[i]);
+}
+
+function impersonar(colab){
+  if(!cuReal) cuReal=cu; // guardar admin
+  cu=colab;
+  // Mostrar banner
+  const banner=document.getElementById('impersonate-banner');
+  banner.style.display='flex';
+  document.getElementById('impersonate-label').textContent='Viendo como: '+colab.nombre+' ('+colab.rol+')';
+  // Actualizar topbar
+  document.getElementById('topbar-user').textContent=colab.nombre;
+  document.getElementById('topbar-role').textContent=colab.rol;
+  document.getElementById('inicio-nombre').textContent=colab.nombre.split(' ')[0];
+  // Reconstruir sidebar/bottom-nav
+  buildSidebar();
+  // Recargar datos
+  loadAll();
+  toast('Viendo CRM como '+colab.nombre,'success');
+}
+
+function volverAdmin(){
+  if(cuReal){
+    cu=cuReal;
+    cuReal=null;
+  }
+  document.getElementById('impersonate-banner').style.display='none';
+  document.getElementById('topbar-user').textContent=cu.nombre;
+  document.getElementById('topbar-role').textContent=cu.rol;
+  document.getElementById('inicio-nombre').textContent=cu.nombre.split(' ')[0];
+  buildSidebar();
+  loadAll();
+  sw('admin');
+  toast('Regresaste a Admin','success');
+}
+
 function renderAdmin(){
-  document.getElementById('admin-pins').innerHTML=`<thead><tr><th>Colaborador</th><th>Rol</th><th>PIN</th></tr></thead><tbody>
-    ${colaboradores.map(c=>`<tr><td class="kpi-name">${c.nombre}</td><td><span class="badge ${c.rol==='admin'?'badge-recursos':c.rol==='cerrador'?'badge-visita':'badge-nuevo'}">${c.rol}</span></td><td style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td></tr>`).join('')}</tbody>`;
+  // Grid de colaboradores con 1 clic
+  const colores={admin:'var(--amarillo)',captador:'var(--azul)',cerrador:'var(--verde)'};
+  const iconos={admin:'👑',captador:'📋',cerrador:'🤝'};
+  document.getElementById('admin-colabs-grid').innerHTML=colaboradores.map((c,i)=>`
+    <button onclick="impersonarIdx(${i})" style="
+      background:var(--negro3);border:2px solid ${c.nombre===cu.nombre?'var(--amarillo)':'var(--gris2)'};
+      border-radius:var(--r2);padding:16px 12px;cursor:pointer;transition:all 0.2s;
+      display:flex;flex-direction:column;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;
+      -webkit-tap-highlight-color:transparent;
+    ">
+      <div style="width:44px;height:44px;border-radius:50%;background:${(colores[c.rol]||'var(--gris3)').replace('var(--amarillo)','rgba(245,196,0').replace('var(--azul)','rgba(52,152,219').replace('var(--verde)','rgba(46,204,113')},0.15);
+        border:2px solid ${colores[c.rol]||'var(--gris3)'};display:flex;align-items:center;justify-content:center;font-size:20px">
+        ${iconos[c.rol]||'👤'}
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--blanco);text-align:center;line-height:1.3">${c.nombre}</div>
+      <span style="font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 8px;border-radius:10px;
+        background:var(--gris1);color:${colores[c.rol]||'var(--gris4)'}">${c.rol}</span>
+    </button>
+  `).join('');
+
+  // Tabla de PINs
+  document.getElementById('admin-pins').innerHTML=`
+    <thead><tr><th>Colaborador</th><th>Rol</th><th>PIN</th><th>Acción</th></tr></thead>
+    <tbody>${colaboradores.map((c,i)=>`
+      <tr>
+        <td class="kpi-name">${c.nombre}</td>
+        <td><span class="badge ${c.rol==='admin'?'badge-recursos':c.rol==='cerrador'?'badge-visita':'badge-nuevo'}">${c.rol}</span></td>
+        <td style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="impersonarIdx(${i})" style="font-size:11px">👁 Ver</button></td>
+      </tr>`).join('')}
+    </tbody>`;
+
+  // Stats globales
+  const total=allLeads.length;
+  const activos=allLeads.filter(l=>l.estado==='en_seguimiento').length;
+  const visitas=allLeads.filter(l=>['visita_realizada','visita_agendada'].includes(l.estado)).length;
+  const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
+  document.getElementById('admin-stats-global').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total leads</div><div class="stat-value y">${total.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">En seguimiento</div><div class="stat-value b">${activos}</div></div>
+    <div class="stat-card"><div class="stat-label">Visitas</div><div class="stat-value" style="color:var(--naranja)">${visitas}</div></div>
+    <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value g">${ganados}</div></div>
+  `;
 }
 
 // ── MENSAJES PREFABRICADOS ──
