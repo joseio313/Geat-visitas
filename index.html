@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141414">
 <title>GEAT CRM — Construcción y Consultoría</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -297,13 +301,181 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .toast.success .toast-dot{background:var(--verde)}
 .toast.error .toast-dot{background:var(--rojo)}
 
-/* ── RESPONSIVE ── */
+/* ── BOTTOM NAV MÓVIL ── */
+.bottom-nav{
+  display:none;
+  position:fixed;
+  bottom:0;left:0;right:0;
+  background:rgba(20,20,20,0.97);
+  border-top:1px solid var(--gris2);
+  z-index:300;
+  padding:0 4px;
+  padding-bottom:env(safe-area-inset-bottom,8px);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 -4px 20px rgba(0,0,0,0.3);
+}
+.bottom-nav-inner{
+  display:flex;
+  align-items:stretch;
+  height:62px;
+  overflow-x:auto;
+  gap:0;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.bottom-nav-inner::-webkit-scrollbar{display:none}
+.bnav-btn{
+  flex:1;
+  min-width:60px;
+  max-width:90px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  background:none;
+  border:none;
+  color:var(--gris4);
+  cursor:pointer;
+  font-family:'DM Sans',sans-serif;
+  padding:10px 6px 8px;
+  position:relative;
+  transition:all 0.15s;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.bnav-btn:active{transform:scale(0.93)}
+.bnav-btn.active{color:var(--amarillo)}
+.bnav-btn.active::before{
+  content:'';
+  position:absolute;
+  top:0;left:50%;
+  transform:translateX(-50%);
+  width:32px;height:3px;
+  background:var(--amarillo);
+  border-radius:0 0 3px 3px;
+}
+.bnav-icon{font-size:20px;line-height:1}
+.bnav-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;opacity:0.8}
+.bnav-btn.active .bnav-label{opacity:1}
+.bnav-badge{
+  position:absolute;
+  top:8px;right:10px;
+  background:var(--rojo);
+  color:#fff;
+  font-size:9px;
+  font-weight:700;
+  padding:1px 4px;
+  border-radius:8px;
+  min-width:14px;
+  text-align:center;
+  line-height:1.4;
+}
+
+/* ── RESPONSIVE MÓVIL ── */
 @media(max-width:768px){
+  /* Navegación */
   .sidebar{display:none}
-  .form-grid{grid-template-columns:1fr}
-  .agenda-grid{grid-template-columns:1fr}
-  .analytics-grid{grid-template-columns:1fr}
-  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .bottom-nav{display:block}
+
+  /* Layout principal */
+  .app-body{flex-direction:column}
+  .main{
+    padding:14px 12px 80px 12px;
+    max-width:100%;
+    width:100%;
+    overflow-x:hidden;
+  }
+
+  /* Topbar */
+  .topbar{padding:0 12px;height:50px}
+  .topbar-brand{font-size:13px}
+  .topbar-user{display:none}
+  .topbar-role{display:none}
+  .topbar-divider{display:none}
+  .topbar-section{font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logout-btn{font-size:11px;padding:4px 10px}
+
+  /* Página */
+  .page-header{flex-direction:column;align-items:flex-start;gap:10px}
+  .page-title{font-size:18px}
+  .page-subtitle{font-size:12px}
+  .page-actions{width:100%;display:flex;flex-wrap:wrap;gap:8px}
+  .page-actions .btn{flex:1;min-width:120px;justify-content:center;font-size:12px;padding:8px 10px}
+
+  /* Stats */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
+  .stat-card{padding:14px}
+  .stat-value{font-size:26px}
+  .stat-label{font-size:10px}
+
+  /* Cards */
+  .card{padding:14px;margin-bottom:12px}
+
+  /* Leads toolbar */
+  .leads-toolbar{flex-direction:column;gap:8px;margin-bottom:12px}
+  .search-input{min-width:0;width:100%;font-size:14px}
+  .filter-sel{width:100%;font-size:14px}
+
+  /* Tabla de leads — scroll horizontal */
+  .leads-table-wr{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--r);border:1px solid var(--gris1)}
+  .leads-table{font-size:12px;min-width:500px}
+  .leads-table th{padding:9px 10px;font-size:10px}
+  .leads-table td{padding:9px 10px}
+  .lead-name{font-size:12px}
+  .lead-tel{font-size:11px}
+
+  /* Formularios */
+  .form-grid{grid-template-columns:1fr;gap:12px}
+  .form-grid.cols3{grid-template-columns:1fr}
+  .form-group.full{grid-column:1}
+  .form-input,.form-select,.form-textarea{font-size:16px;padding:11px 13px} /* 16px evita zoom en iOS */
+
+  /* Modal — pantalla completa en móvil */
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{
+    border-radius:var(--r3) var(--r3) 0 0;
+    max-width:100%;
+    width:100%;
+    max-height:92vh;
+    margin:0;
+  }
+  .modal-header{padding:16px 16px 12px}
+  .modal-body{padding:16px}
+  .modal-footer{padding:12px 16px;flex-direction:column}
+  .modal-footer .btn{width:100%;justify-content:center}
+
+  /* Agenda */
+  .agenda-grid{grid-template-columns:1fr;gap:12px}
+
+  /* Analytics */
+  .analytics-grid{grid-template-columns:1fr;gap:12px}
+  .analytics-grid.cols3{grid-template-columns:1fr}
+  .chart-card.full{grid-column:1}
+  .kpi-table{font-size:11px}
+  #kpi-table td{padding:9px 10px}
+  .chart-wr{height:180px}
+  .chart-wrap.tall{height:220px}
+
+  /* Marketing / campañas */
+  .campana-card{grid-template-columns:1fr;gap:8px}
+  .campana-stats{justify-content:flex-start;gap:16px}
+
+  /* Mensajes prefabricados */
+  .msg-cards{gap:8px}
+  .msg-card{flex-direction:column;gap:8px;padding:12px}
+  .msg-copy-btn{align-self:flex-end}
+
+  /* Tareas de hoy */
+  .tareas-hoy{padding:14px}
+  .tarea-item{padding:10px 0}
+
+  /* Misc */
+  .inner-tabs{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .inner-tab{padding:7px 14px;font-size:11px;white-space:nowrap}
+  .badge{font-size:9px;padding:2px 6px}
+  .btn-sm{font-size:11px;padding:6px 10px}
 }
 
 /* ── TABS DENTRO DE PANEL ── */
@@ -402,6 +574,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
       <button class="logout-btn" onclick="logout()">Salir</button>
     </div>
   </div>
+  <!-- BOTTOM NAV MÓVIL -->
+  <div class="bottom-nav" id="bottom-nav">
+    <div class="bottom-nav-inner" id="bottom-nav-inner"></div>
+  </div>
+
   <div class="app-body">
     <div class="sidebar" id="sidebar"></div>
     <div class="main" id="main-content">
@@ -601,13 +778,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
       <div class="panel" id="pn-admin">
         <div class="page-header">
           <div>
-            <div class="page-title">Administración</div>
-            <div class="page-subtitle">PINs y configuración del equipo</div>
+            <div class="page-title">⚙️ Administración</div>
+            <div class="page-subtitle">Gestión del equipo y acceso rápido</div>
           </div>
         </div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">👥 Acceso rápido — Ver como colaborador</div></div>
+          <div style="font-size:12px;color:var(--gris4);margin-bottom:16px">Haz clic para ver el CRM desde la perspectiva de cada colaborador.</div>
+          <div id="admin-colabs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div>
+        </div>
+        <div id="impersonate-banner" style="display:none;background:rgba(245,196,0,0.12);border:1px solid rgba(245,196,0,0.3);border-radius:var(--r2);padding:12px 16px;margin-bottom:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">👁️</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--amarillo)" id="impersonate-label">Viendo como: —</div>
+              <div style="font-size:11px;color:var(--gris4)">Modo vistazo activo. Datos reales.</div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="volverAdmin()">↩ Volver a Admin</button>
+        </div>
         <div class="card">
-          <div class="card-header"><div class="card-title">PINs del equipo</div></div>
-          <table class="kpi-table" id="admin-pins"></table>
+          <div class="card-header"><div class="card-title">🔑 PINs del equipo</div></div>
+          <div style="overflow-x:auto"><table class="kpi-table" id="admin-pins" style="min-width:340px"></table></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><div class="card-title">📊 Resumen global</div></div>
+          <div class="stats-grid" id="admin-stats-global"></div>
         </div>
       </div>
 
@@ -906,6 +1102,7 @@ function buildSidebar(){
     cu.rol==='cerrador'?'cerrador':
     cu.rol==='captador'?'captador':'marketing';
   const items=NAV_ITEMS[rol]||NAV_ITEMS.captador;
+  // Sidebar desktop
   const sb2=document.getElementById('sidebar');
   sb2.innerHTML=`<div class="sidebar-section"><div class="sidebar-section-label">Navegación</div>
     ${items.map((it,i)=>`<button class="nav-btn${i===0?' active':''}" onclick="sw('${it.id}')" id="nav-${it.id}">
@@ -913,6 +1110,16 @@ function buildSidebar(){
       ${it.id==='mis-leads'||it.id==='todos-leads'?'<span class="nav-badge" id="badge-'+it.id+'">0</span>':''}
     </button>`).join('')}
   </div>`;
+  // Bottom nav móvil
+  const bn=document.getElementById('bottom-nav-inner');
+  if(bn){
+    bn.innerHTML=items.map((it,i)=>`
+      <button class="bnav-btn${i===0?' active':''}" onclick="sw('${it.id}')" id="bnav-${it.id}">
+        <span class="bnav-icon">${it.icon}</span>
+        <span class="bnav-label">${it.label.split(' ')[0]}</span>
+        ${it.id==='mis-leads'||it.id==='todos-leads'?'<span class="bnav-badge" id="bnav-badge-'+it.id+'" style="display:none">0</span>':''}
+      </button>`).join('');
+  }
   sw(items[0].id);
 }
 
@@ -920,10 +1127,14 @@ function sw(tab){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nb=document.getElementById('nav-'+tab);
   if(nb)nb.classList.add('active');
+  // Bottom nav móvil
+  document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
+  const bnb=document.getElementById('bnav-'+tab);
+  if(bnb)bnb.classList.add('active');
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   const pn=document.getElementById('pn-'+tab);
   if(pn)pn.classList.add('active');
-  document.getElementById('topbar-section').textContent=nb?.textContent?.trim()||'';
+  document.getElementById('topbar-section').textContent=nb?.textContent?.trim()||tab;
   if(tab==='analytics')renderAnalytics();
   if(tab==='marketing')renderMarketing();
   if(tab==='admin')renderAdmin();
@@ -956,10 +1167,16 @@ async function loadCampanas(){
 function updateBadges(){
   const mes=todayStr.slice(0,7);
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre&&l.mes_anio===mes);
+  const totalMes=allLeads.filter(l=>l.mes_anio===mes).length;
   const b1=document.getElementById('badge-mis-leads');
   const b2=document.getElementById('badge-todos-leads');
   if(b1)b1.textContent=misLeads.length;
-  if(b2)b2.textContent=allLeads.filter(l=>l.mes_anio===mes).length;
+  if(b2)b2.textContent=totalMes;
+  // Bottom nav badges
+  const bb1=document.getElementById('bnav-badge-mis-leads');
+  const bb2=document.getElementById('bnav-badge-todos-leads');
+  if(bb1){bb1.textContent=misLeads.length;bb1.style.display=misLeads.length>0?'block':'none';}
+  if(bb2){bb2.textContent=totalMes;bb2.style.display=totalMes>0?'block':'none';}
 }
 
 // ── INICIO ──
@@ -1346,9 +1563,90 @@ async function guardarCampana(){
 }
 
 // ── ADMIN ──
+// ── IMPERSONACIÓN (ver como colaborador) ──
+let cuReal=null; // guarda el admin real cuando está en modo vistazo
+
+function impersonarIdx(i){
+  impersonar(colaboradores[i]);
+}
+
+function impersonar(colab){
+  if(!cuReal) cuReal=cu; // guardar admin
+  cu=colab;
+  // Mostrar banner
+  const banner=document.getElementById('impersonate-banner');
+  banner.style.display='flex';
+  document.getElementById('impersonate-label').textContent='Viendo como: '+colab.nombre+' ('+colab.rol+')';
+  // Actualizar topbar
+  document.getElementById('topbar-user').textContent=colab.nombre;
+  document.getElementById('topbar-role').textContent=colab.rol;
+  document.getElementById('inicio-nombre').textContent=colab.nombre.split(' ')[0];
+  // Reconstruir sidebar/bottom-nav
+  buildSidebar();
+  // Recargar datos
+  loadAll();
+  toast('Viendo CRM como '+colab.nombre,'success');
+}
+
+function volverAdmin(){
+  if(cuReal){
+    cu=cuReal;
+    cuReal=null;
+  }
+  document.getElementById('impersonate-banner').style.display='none';
+  document.getElementById('topbar-user').textContent=cu.nombre;
+  document.getElementById('topbar-role').textContent=cu.rol;
+  document.getElementById('inicio-nombre').textContent=cu.nombre.split(' ')[0];
+  buildSidebar();
+  loadAll();
+  sw('admin');
+  toast('Regresaste a Admin','success');
+}
+
 function renderAdmin(){
-  document.getElementById('admin-pins').innerHTML=`<thead><tr><th>Colaborador</th><th>Rol</th><th>PIN</th></tr></thead><tbody>
-    ${colaboradores.map(c=>`<tr><td class="kpi-name">${c.nombre}</td><td><span class="badge ${c.rol==='admin'?'badge-recursos':c.rol==='cerrador'?'badge-visita':'badge-nuevo'}">${c.rol}</span></td><td style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td></tr>`).join('')}</tbody>`;
+  // Grid de colaboradores con 1 clic
+  const colores={admin:'var(--amarillo)',captador:'var(--azul)',cerrador:'var(--verde)'};
+  const iconos={admin:'👑',captador:'📋',cerrador:'🤝'};
+  document.getElementById('admin-colabs-grid').innerHTML=colaboradores.map((c,i)=>`
+    <button onclick="impersonarIdx(${i})" style="
+      background:var(--negro3);border:2px solid ${c.nombre===cu.nombre?'var(--amarillo)':'var(--gris2)'};
+      border-radius:var(--r2);padding:16px 12px;cursor:pointer;transition:all 0.2s;
+      display:flex;flex-direction:column;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;
+      -webkit-tap-highlight-color:transparent;
+    ">
+      <div style="width:44px;height:44px;border-radius:50%;background:${(colores[c.rol]||'var(--gris3)').replace('var(--amarillo)','rgba(245,196,0').replace('var(--azul)','rgba(52,152,219').replace('var(--verde)','rgba(46,204,113')},0.15);
+        border:2px solid ${colores[c.rol]||'var(--gris3)'};display:flex;align-items:center;justify-content:center;font-size:20px">
+        ${iconos[c.rol]||'👤'}
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--blanco);text-align:center;line-height:1.3">${c.nombre}</div>
+      <span style="font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 8px;border-radius:10px;
+        background:var(--gris1);color:${colores[c.rol]||'var(--gris4)'}">${c.rol}</span>
+    </button>
+  `).join('');
+
+  // Tabla de PINs
+  document.getElementById('admin-pins').innerHTML=`
+    <thead><tr><th>Colaborador</th><th>Rol</th><th>PIN</th><th>Acción</th></tr></thead>
+    <tbody>${colaboradores.map((c,i)=>`
+      <tr>
+        <td class="kpi-name">${c.nombre}</td>
+        <td><span class="badge ${c.rol==='admin'?'badge-recursos':c.rol==='cerrador'?'badge-visita':'badge-nuevo'}">${c.rol}</span></td>
+        <td style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="impersonarIdx(${i})" style="font-size:11px">👁 Ver</button></td>
+      </tr>`).join('')}
+    </tbody>`;
+
+  // Stats globales
+  const total=allLeads.length;
+  const activos=allLeads.filter(l=>l.estado==='en_seguimiento').length;
+  const visitas=allLeads.filter(l=>['visita_realizada','visita_agendada'].includes(l.estado)).length;
+  const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
+  document.getElementById('admin-stats-global').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total leads</div><div class="stat-value y">${total.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">En seguimiento</div><div class="stat-value b">${activos}</div></div>
+    <div class="stat-card"><div class="stat-label">Visitas</div><div class="stat-value" style="color:var(--naranja)">${visitas}</div></div>
+    <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value g">${ganados}</div></div>
+  `;
 }
 
 // ── MENSAJES PREFABRICADOS ──
