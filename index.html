@@ -571,6 +571,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div class="topbar-right">
       <span class="topbar-role" id="topbar-role">—</span>
       <span class="topbar-user">Hola, <strong id="topbar-user">—</strong></span>
+      <button id="btn-refresh" onclick="loadAll();toast('Datos actualizados','success')" style="display:none;background:none;border:1px solid var(--gris2);border-radius:var(--r);padding:4px 10px;color:var(--amarillo);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif" title="Actualizar datos ahora">🔄</button>
       <button class="logout-btn" onclick="logout()">Salir</button>
     </div>
   </div>
@@ -817,47 +818,63 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div class="modal-header">
       <div>
         <div class="modal-title" id="modal-lead-title">Nuevo Lead</div>
-        <div class="modal-subtitle">Registro de cliente captado</div>
+        <div class="modal-subtitle" id="modal-lead-subtitle">Registro de cliente captado</div>
       </div>
       <button class="modal-close" onclick="cerrarModal('modal-lead')">✕</button>
     </div>
     <div class="modal-body">
+      <!-- INDICADOR BORRADOR -->
+      <div id="draft-indicator" style="display:none;background:rgba(245,196,0,0.1);border:1px solid rgba(245,196,0,0.25);border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--amarillo);display:flex;align-items:center;gap:8px">
+        <span>📝</span><span>Borrador guardado — continuando desde donde lo dejaste</span>
+        <button onclick="limpiarBorrador()" style="margin-left:auto;background:none;border:none;color:var(--gris4);cursor:pointer;font-size:11px">✕ Limpiar</button>
+      </div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Nombre completo</label><input type="text" class="form-input" id="ml-nombre" placeholder="Nombre del cliente"></div>
-        <div class="form-group"><label class="form-label">Celular</label><input type="text" class="form-input" id="ml-celular" placeholder="Ej: 76123456"></div>
-        <div class="form-group"><label class="form-label">Ciudad</label><input type="text" class="form-input" id="ml-ciudad" placeholder="Santa Cruz" value="Santa Cruz"></div>
+        <!-- DATOS BÁSICOS -->
+        <div class="form-group"><label class="form-label">Nombre completo</label>
+          <input type="text" class="form-input" id="ml-nombre" placeholder="Nombre del cliente" oninput="guardarBorrador()"></div>
+        <div class="form-group"><label class="form-label">Celular *</label>
+          <input type="tel" class="form-input" id="ml-celular" placeholder="Ej: 76123456" oninput="guardarBorrador()"></div>
+        <div class="form-group"><label class="form-label">Ciudad</label>
+          <input type="text" class="form-input" id="ml-ciudad" placeholder="Santa Cruz" value="Santa Cruz" oninput="guardarBorrador()"></div>
         <div class="form-group"><label class="form-label">Financiamiento</label>
-          <select class="form-select" id="ml-financiamiento">
+          <select class="form-select" id="ml-financiamiento" onchange="guardarBorrador()">
             <option value="recursos_propios">Recursos propios ⭐</option>
             <option value="bancario">Financiamiento bancario</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Captador</label>
-          <select class="form-select" id="ml-captador">
+
+        <!-- CAPTADOR (solo admin ve el select, captador ve su nombre fijo) -->
+        <div class="form-group" id="wrap-captador"><label class="form-label">Captador</label>
+          <select class="form-select" id="ml-captador" onchange="guardarBorrador()">
             <option value="">Seleccionar...</option>
-            <option>Maria Luisa</option><option>Steffi</option><option>Corp Genoveva</option>
-            <option>Gustavo</option><option>David</option><option>Samuel</option><option>Fat</option>
           </select>
         </div>
+        <!-- CAMPAÑA -->
         <div class="form-group"><label class="form-label">Campaña origen</label>
-          <select class="form-select" id="ml-campana">
+          <select class="form-select" id="ml-campana" onchange="guardarBorrador()">
             <option value="">Sin campaña</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Próximo contacto</label><input type="date" class="form-input" id="ml-proximo"></div>
+
+        <!-- ESTADO -->
         <div class="form-group"><label class="form-label">Estado</label>
-          <select class="form-select" id="ml-estado">
-            <option value="nuevo">Nuevo</option>
-            <option value="en_seguimiento">En seguimiento</option>
-            <option value="visita_agendada">Visita agendada</option>
-            <option value="visita_realizada">Visita realizada</option>
-            <option value="cerrado_ganado">Cerrado ganado ✓</option>
-            <option value="cerrado_perdido">Cerrado perdido ✗</option>
+          <select class="form-select" id="ml-estado" onchange="toggleMotivo();guardarBorrador()">
+            <option value="nuevo">🆕 Nuevo</option>
+            <option value="en_seguimiento">🔄 En seguimiento</option>
+            <option value="visita_agendada">📅 Visita agendada</option>
+            <option value="visita_realizada">✅ Visita realizada</option>
+            <option value="cerrado_ganado">🏆 Cerrado ganado</option>
+            <option value="cerrado_perdido">❌ Cerrado perdido</option>
           </select>
         </div>
+        <!-- PRÓXIMO CONTACTO -->
+        <div class="form-group"><label class="form-label">Próximo contacto</label>
+          <input type="date" class="form-input" id="ml-proximo" onchange="guardarBorrador()"></div>
+
+        <!-- MOTIVO PÉRDIDA (solo si cerrado_perdido) -->
         <div class="form-group" id="motivo-wrap" style="display:none">
           <label class="form-label">Motivo de pérdida</label>
-          <select class="form-select" id="ml-motivo" onchange="checkOtroMotivo()">
+          <select class="form-select" id="ml-motivo" onchange="checkOtroMotivo();guardarBorrador()">
             <option value="">Seleccionar...</option>
             <option>No contesta (3 intentos)</option>
             <option>Sin presupuesto</option>
@@ -870,82 +887,97 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         </div>
         <div class="form-group" id="motivo-otro-wrap" style="display:none">
           <label class="form-label">Especificar motivo</label>
-          <input type="text" class="form-input" id="ml-motivo-otro" placeholder="Describir motivo...">
-        </div>
-        <div class="form-group full"><label class="form-label">Notas de seguimiento</label>
-          <textarea class="form-textarea" id="ml-notas" placeholder="Detalles del cliente: tipo de construcción, terreno, presupuesto aproximado, observaciones importantes..."></textarea>
+          <input type="text" class="form-input" id="ml-motivo-otro" placeholder="Describir motivo..." oninput="guardarBorrador()">
         </div>
 
+        <!-- NOTAS -->
+        <div class="form-group full"><label class="form-label">Notas de seguimiento</label>
+          <textarea class="form-textarea" id="ml-notas" placeholder="Tipo de construcción, terreno, presupuesto, observaciones..." oninput="guardarBorrador()"></textarea>
+        </div>
+
+        <!-- INTENTOS DE CONTACTO -->
         <div class="form-section full">
-          <div class="form-section-label">Intentos de contacto</div>
+          <div class="form-section-label">📞 Intentos de contacto</div>
           <div class="form-grid cols3">
             <div class="form-group">
-              <label class="form-label">Intento 1 — Fecha</label>
-              <input type="date" class="form-input" id="ml-i1-fecha">
-              <select class="form-select" id="ml-i1-estado" style="margin-top:6px">
+              <label class="form-label">Intento 1</label>
+              <input type="date" class="form-input" id="ml-i1-fecha" onchange="guardarBorrador()">
+              <select class="form-select" id="ml-i1-estado" style="margin-top:6px" onchange="guardarBorrador()">
                 <option value="pendiente">Pendiente</option>
                 <option value="enviado">Enviado</option>
-                <option value="respondio">Respondió</option>
-                <option value="no_respondio">No respondió</option>
+                <option value="respondio">Respondió ✓</option>
+                <option value="no_respondio">No respondió ✗</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Intento 2 — Fecha</label>
-              <input type="date" class="form-input" id="ml-i2-fecha">
-              <select class="form-select" id="ml-i2-estado" style="margin-top:6px">
+              <label class="form-label">Intento 2</label>
+              <input type="date" class="form-input" id="ml-i2-fecha" onchange="guardarBorrador()">
+              <select class="form-select" id="ml-i2-estado" style="margin-top:6px" onchange="guardarBorrador()">
                 <option value="pendiente">Pendiente</option>
                 <option value="enviado">Enviado</option>
-                <option value="respondio">Respondió</option>
-                <option value="no_respondio">No respondió</option>
+                <option value="respondio">Respondió ✓</option>
+                <option value="no_respondio">No respondió ✗</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Intento 3 — Fecha</label>
-              <input type="date" class="form-input" id="ml-i3-fecha">
-              <select class="form-select" id="ml-i3-estado" style="margin-top:6px">
+              <label class="form-label">Intento 3</label>
+              <input type="date" class="form-input" id="ml-i3-fecha" onchange="guardarBorrador()">
+              <select class="form-select" id="ml-i3-estado" style="margin-top:6px" onchange="guardarBorrador()">
                 <option value="pendiente">Pendiente</option>
                 <option value="enviado">Enviado</option>
-                <option value="respondio">Respondió</option>
-                <option value="no_respondio">No respondió</option>
+                <option value="respondio">Respondió ✓</option>
+                <option value="no_respondio">No respondió ✗</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div class="form-section full">
-          <div class="form-section-label">Asignación a cerrador</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label">Cerrador asignado</label>
-              <select class="form-select" id="ml-cerrador">
-                <option value="">Sin asignar</option>
-                <option>David</option><option>Gustavo</option><option>Samuel</option><option>Fat</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Sala</label>
-              <select class="form-select" id="ml-sala">
-                <option value="">Sin sala</option>
-                <option value="sala_principal">Sala Principal</option>
-                <option value="gerencia">Gerencia</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Fecha y hora de visita</label>
-              <input type="datetime-local" class="form-input" id="ml-visita-fecha">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Resultado reunión</label>
-              <select class="form-select" id="ml-resultado">
-                <option value="">Sin resultado</option>
-                <option value="contrato">Contrato firmado</option>
-                <option value="seguimiento">En seguimiento</option>
-                <option value="perdido">Perdido en reunión</option>
-              </select>
-            </div>
-            <div class="form-group full">
-              <label class="form-label">Notas del cerrador</label>
-              <textarea class="form-textarea" id="ml-resultado-notas" placeholder="Detalles de la reunión, acuerdos, próximos pasos..."></textarea>
+        <!-- AGENDA/VISITA — OPCIONAL, se puede dejar para después -->
+        <div class="form-section full" id="seccion-visita">
+          <div class="form-section-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>📅 Agendar visita <span style="font-size:10px;font-weight:400;color:var(--gris4);margin-left:6px">(opcional — se puede completar después)</span></span>
+            <button type="button" onclick="toggleSeccionVisita()" id="btn-toggle-visita" style="background:none;border:none;color:var(--amarillo);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif">▼ Mostrar</button>
+          </div>
+          <div id="visita-campos" style="display:none;margin-top:12px">
+            <div class="form-grid">
+              <!-- CERRADOR — SOLO cerradores -->
+              <div class="form-group">
+                <label class="form-label">Cerrador asignado</label>
+                <select class="form-select" id="ml-cerrador" onchange="asignarCerrador();guardarBorrador()">
+                  <option value="">Auto-asignar ↻</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Sala</label>
+                <select class="form-select" id="ml-sala" onchange="guardarBorrador()">
+                  <option value="">Sin sala</option>
+                  <option value="sala_principal">Sala Principal</option>
+                  <option value="gerencia">Gerencia</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fecha de visita</label>
+                <input type="date" class="form-input" id="ml-visita-fecha-dia" onchange="setHoraAuto();guardarBorrador()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Hora <span style="color:var(--gris4);font-weight:400">(auto-asignada)</span></label>
+                <input type="time" class="form-input" id="ml-visita-hora" value="09:00" onchange="guardarBorrador()">
+                <div id="hora-sugerida" style="font-size:11px;color:var(--amarillo);margin-top:4px"></div>
+              </div>
+              <input type="hidden" id="ml-visita-fecha">
+              <div class="form-group">
+                <label class="form-label">Resultado reunión</label>
+                <select class="form-select" id="ml-resultado" onchange="guardarBorrador()">
+                  <option value="">Sin resultado aún</option>
+                  <option value="contrato">🏆 Contrato firmado</option>
+                  <option value="seguimiento">🔄 En seguimiento</option>
+                  <option value="perdido">❌ Perdido en reunión</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Notas del cerrador</label>
+                <textarea class="form-textarea" id="ml-resultado-notas" placeholder="Detalles de la reunión, acuerdos, próximos pasos..." oninput="guardarBorrador()"></textarea>
+              </div>
             </div>
           </div>
         </div>
@@ -954,7 +986,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div class="modal-footer">
       <input type="hidden" id="ml-id">
       <button class="btn btn-ghost" onclick="cerrarModal('modal-lead')">Cancelar</button>
-      <button class="btn btn-primary" id="btn-guardar-lead" onclick="guardarLead()">Guardar lead</button>
+      <button class="btn btn-primary" id="btn-guardar-lead" onclick="guardarLead()">💾 Guardar lead</button>
     </div>
   </div>
 </div>
@@ -1059,6 +1091,7 @@ function loginOk(){
   document.getElementById('inicio-fecha').textContent=today.toLocaleDateString('es-BO',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   buildSidebar();
   loadAll();
+  iniciarRealtime();
 }
 function logout(){
   cu=null;pb='';
@@ -1098,6 +1131,9 @@ const NAV_ITEMS={
 };
 
 function buildSidebar(){
+  // Mostrar botón refresh solo para admin
+  const btnRef=document.getElementById('btn-refresh');
+  if(btnRef) btnRef.style.display=(cu.rol==='admin')?'':'none';
   const rol=cu.rol==='admin'||cu.nombre==='Admin'?'admin':
     cu.rol==='cerrador'?'cerrador':
     cu.rol==='captador'?'captador':'marketing';
@@ -1144,8 +1180,31 @@ function sw(tab){
 
 // ── DATA ──
 async function loadAll(){
+  // Admin ve datos frescos siempre (sin caché)
   await Promise.all([loadLeads(),loadCampanas()]);
   renderInicio();
+}
+
+// Suscripción realtime — admin ve cambios al instante
+let realtimeChannel=null;
+function iniciarRealtime(){
+  if(realtimeChannel) return;
+  realtimeChannel=sb.channel('leads-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'leads'},async(payload)=>{
+      // Actualizar allLeads en memoria sin recargar todo
+      if(payload.eventType==='INSERT'){
+        allLeads.unshift(payload.new);
+      } else if(payload.eventType==='UPDATE'){
+        const idx=allLeads.findIndex(l=>l.id===payload.new.id);
+        if(idx>=0) allLeads[idx]=payload.new; else allLeads.unshift(payload.new);
+      } else if(payload.eventType==='DELETE'){
+        allLeads=allLeads.filter(l=>l.id!==payload.old.id);
+      }
+      renderMisLeads();
+      renderTodosLeads();
+      renderInicio();
+    })
+    .subscribe();
 }
 
 async function loadLeads(){
@@ -1159,9 +1218,7 @@ async function loadLeads(){
 async function loadCampanas(){
   const{data}=await sb.from('campanas').select('*').order('created_at',{ascending:false});
   campanas=data||[];
-  const sel=document.getElementById('ml-campana');
-  sel.innerHTML='<option value="">Sin campaña</option>';
-  campanas.forEach(c=>sel.innerHTML+=`<option value="${c.id}">${c.nombre}</option>`);
+  // No llenar aquí — se llena dinámicamente en abrirModalLead con mes actual marcado
 }
 
 function updateBadges(){
@@ -1293,13 +1350,179 @@ function filtrarTodos(){
 
 // ── MODAL LEAD ──
 let editingLeadId=null;
+// ── BORRADOR AUTOMÁTICO ──
+function guardarBorrador(){
+  if(editingLeadId) return; // no guardar borrador si estamos editando
+  const datos={
+    nombre:document.getElementById('ml-nombre').value,
+    celular:document.getElementById('ml-celular').value,
+    ciudad:document.getElementById('ml-ciudad').value,
+    financiamiento:document.getElementById('ml-financiamiento').value,
+    captador:document.getElementById('ml-captador').value,
+    campana:document.getElementById('ml-campana').value,
+    estado:document.getElementById('ml-estado').value,
+    motivo:document.getElementById('ml-motivo').value,
+    motivo_otro:document.getElementById('ml-motivo-otro').value,
+    notas:document.getElementById('ml-notas').value,
+    proximo:document.getElementById('ml-proximo').value,
+    i1f:document.getElementById('ml-i1-fecha').value,
+    i1e:document.getElementById('ml-i1-estado').value,
+    i2f:document.getElementById('ml-i2-fecha').value,
+    i2e:document.getElementById('ml-i2-estado').value,
+    i3f:document.getElementById('ml-i3-fecha').value,
+    i3e:document.getElementById('ml-i3-estado').value,
+    cerrador:document.getElementById('ml-cerrador').value,
+    sala:document.getElementById('ml-sala').value,
+    visita_dia:document.getElementById('ml-visita-fecha-dia').value,
+    visita_hora:document.getElementById('ml-visita-hora').value,
+    resultado:document.getElementById('ml-resultado').value,
+    resultado_notas:document.getElementById('ml-resultado-notas').value,
+  };
+  localStorage.setItem('geat_draft_'+cu.nombre, JSON.stringify(datos));
+}
+
+function cargarBorrador(){
+  const raw=localStorage.getItem('geat_draft_'+cu.nombre);
+  if(!raw) return false;
+  try{
+    const d=JSON.parse(raw);
+    if(!d.nombre && !d.celular) return false; // borrador vacío
+    document.getElementById('ml-nombre').value=d.nombre||'';
+    document.getElementById('ml-celular').value=d.celular||'';
+    document.getElementById('ml-ciudad').value=d.ciudad||'Santa Cruz';
+    document.getElementById('ml-financiamiento').value=d.financiamiento||'recursos_propios';
+    document.getElementById('ml-captador').value=d.captador||'';
+    document.getElementById('ml-campana').value=d.campana||'';
+    document.getElementById('ml-estado').value=d.estado||'nuevo';
+    document.getElementById('ml-motivo').value=d.motivo||'';
+    document.getElementById('ml-motivo-otro').value=d.motivo_otro||'';
+    document.getElementById('ml-notas').value=d.notas||'';
+    document.getElementById('ml-proximo').value=d.proximo||'';
+    document.getElementById('ml-i1-fecha').value=d.i1f||'';
+    document.getElementById('ml-i1-estado').value=d.i1e||'pendiente';
+    document.getElementById('ml-i2-fecha').value=d.i2f||'';
+    document.getElementById('ml-i2-estado').value=d.i2e||'pendiente';
+    document.getElementById('ml-i3-fecha').value=d.i3f||'';
+    document.getElementById('ml-i3-estado').value=d.i3e||'pendiente';
+    document.getElementById('ml-cerrador').value=d.cerrador||'';
+    document.getElementById('ml-sala').value=d.sala||'';
+    document.getElementById('ml-visita-fecha-dia').value=d.visita_dia||'';
+    document.getElementById('ml-visita-hora').value=d.visita_hora||'09:00';
+    document.getElementById('ml-resultado').value=d.resultado||'';
+    document.getElementById('ml-resultado-notas').value=d.resultado_notas||'';
+    toggleMotivo();
+    return true;
+  }catch(e){return false;}
+}
+
+function limpiarBorrador(){
+  localStorage.removeItem('geat_draft_'+cu.nombre);
+  document.getElementById('draft-indicator').style.display='none';
+}
+
+function toggleSeccionVisita(){
+  const campos=document.getElementById('visita-campos');
+  const btn=document.getElementById('btn-toggle-visita');
+  const visible=campos.style.display!=='none';
+  campos.style.display=visible?'none':'block';
+  btn.textContent=visible?'▼ Mostrar':'▲ Ocultar';
+}
+
+function setHoraAuto(){
+  const fecha=document.getElementById('ml-visita-fecha-dia').value;
+  if(!fecha) return;
+  const sala=document.getElementById('ml-sala').value||'sala_principal';
+  // Visitas ese día en esa sala
+  const visitas=allLeads.filter(l=>
+    l.visita_fecha && l.visita_fecha.slice(0,10)===fecha &&
+    (!sala || l.visita_sala===sala)
+  );
+  const horasOcupadas=new Set(visitas.map(l=>{
+    const d=new Date(l.visita_fecha);
+    return d.getUTCHours();
+  }));
+  // Buscar primer hueco desde las 9am
+  let hora=9;
+  while(hora<=18 && horasOcupadas.has(hora)) hora++;
+  const horaStr=String(hora).padStart(2,'0')+':00';
+  document.getElementById('ml-visita-hora').value=horaStr;
+  const hint=document.getElementById('hora-sugerida');
+  if(hint) hint.textContent=`⏰ Auto: ${horaStr} · ${visitas.length} visita${visitas.length!==1?'s':''} ese día`;
+  document.getElementById('ml-visita-fecha').value=fecha+'T'+horaStr+':00';
+  guardarBorrador();
+}
+
+function asignarCerrador(){
+  // El admin puede intervenir — si deja "Auto-asignar" se asigna automáticamente al guardar
+}
+
+// Llenar selects de captadores y cerradores según rol
+function llenarSelectsColaboradores(){
+  const captadores=colaboradores.filter(c=>c.rol==='captador');
+  const cerradores=colaboradores.filter(c=>c.rol==='cerrador'||c.rol==='admin');
+  
+  // Select de captador — solo captadores
+  const selCap=document.getElementById('ml-captador');
+  selCap.innerHTML='<option value="">Seleccionar...</option>';
+  captadores.forEach(c=>selCap.innerHTML+=`<option value="${c.nombre}">${c.nombre}</option>`);
+  
+  // Visibilidad campo captador según rol
+  const wrapCap=document.getElementById('wrap-captador');
+  const esCapt=cu.rol==='captador';
+  const esCerr=cu.rol==='cerrador';
+  if(esCapt){
+    // Captador: auto-rellena su nombre, no puede cambiar
+    selCap.value=cu.nombre;
+    if(wrapCap) wrapCap.style.display='none'; // no muestra el select
+  } else if(esCerr){
+    // Cerrador: no ve campo captador
+    if(wrapCap) wrapCap.style.display='none';
+  } else {
+    // Admin: ve todo
+    if(wrapCap) wrapCap.style.display='';
+  }
+
+  // Select de cerrador — cerradores no lo ven (no asignan)
+  const selCer=document.getElementById('ml-cerrador');
+  selCer.innerHTML='<option value="">Auto-asignar ↻</option>';
+  cerradores.forEach(c=>selCer.innerHTML+=`<option value="${c.nombre}">${c.nombre}</option>`);
+  
+  // Campaña — solo mostrar campañas del mes actual
+  const selCamp=document.getElementById('ml-campana');
+  const mesActual=new Date().toISOString().slice(0,7);
+  selCamp.innerHTML='<option value="">Sin campaña</option>';
+  campanas.forEach(c=>{
+    const esActual=c.mes&&c.mes.startsWith(mesActual);
+    if(esActual||!c.mes){
+      selCamp.innerHTML+=`<option value="${c.id}" ${esActual?'selected':''}>${c.nombre}${esActual?' ✓':''}</option>`;
+    }
+  });
+}
+
+// Turno actual de cerradores (rotación automática)
+let turnoIdx=0;
+function siguienteCerrador(){
+  const cerradores=colaboradores.filter(c=>c.rol==='cerrador');
+  if(!cerradores.length) return null;
+  const c=cerradores[turnoIdx % cerradores.length];
+  turnoIdx++;
+  return c.nombre;
+}
+
 function abrirModalLead(id=null){
   editingLeadId=id;
   const modal=document.getElementById('modal-lead');
+  llenarSelectsColaboradores();
+  
+  // Campaña ya se llena en llenarSelectsColaboradores (mes actual auto-seleccionado)
+
   if(id){
+    // EDITAR LEAD EXISTENTE
     const l=allLeads.find(x=>x.id===id);
     if(!l)return;
-    document.getElementById('modal-lead-title').textContent='Editar Lead — '+l.nombre;
+    document.getElementById('modal-lead-title').textContent='Editar Lead';
+    document.getElementById('modal-lead-subtitle').textContent=l.nombre||'Sin nombre';
+    document.getElementById('draft-indicator').style.display='none';
     document.getElementById('ml-nombre').value=l.nombre||'';
     document.getElementById('ml-celular').value=l.celular||'';
     document.getElementById('ml-ciudad').value=l.ciudad||'Santa Cruz';
@@ -1317,60 +1540,111 @@ function abrirModalLead(id=null){
     document.getElementById('ml-i2-estado').value=l.intento2_estado||'pendiente';
     document.getElementById('ml-i3-fecha').value=l.intento3_fecha||'';
     document.getElementById('ml-i3-estado').value=l.intento3_estado||'pendiente';
+    // Si tiene visita agendada, mostrar sección
+    if(l.cerrador||l.visita_fecha){
+      document.getElementById('visita-campos').style.display='block';
+      document.getElementById('btn-toggle-visita').textContent='▲ Ocultar';
+    }
     document.getElementById('ml-cerrador').value=l.cerrador||'';
     document.getElementById('ml-sala').value=l.visita_sala||'';
-    document.getElementById('ml-visita-fecha').value=l.visita_fecha?l.visita_fecha.slice(0,16):'';
+    if(l.visita_fecha){
+      const vf=new Date(l.visita_fecha);
+      document.getElementById('ml-visita-fecha-dia').value=vf.toISOString().slice(0,10);
+      document.getElementById('ml-visita-hora').value=vf.toTimeString().slice(0,5);
+    } else {
+      document.getElementById('ml-visita-fecha-dia').value='';
+      document.getElementById('ml-visita-hora').value='09:00';
+    }
     document.getElementById('ml-resultado').value=l.resultado_estado||'';
     document.getElementById('ml-resultado-notas').value=l.resultado_reunion||'';
     toggleMotivo();
+    checkOtroMotivo();
   } else {
+    // NUEVO LEAD — cargar borrador si existe
     document.getElementById('modal-lead-title').textContent='Nuevo Lead';
-    document.getElementById('ml-nombre').value='';
-    document.getElementById('ml-celular').value='';
-    document.getElementById('ml-ciudad').value='Santa Cruz';
-    document.getElementById('ml-financiamiento').value='recursos_propios';
-    document.getElementById('ml-captador').value=cu.rol==='captador'?cu.nombre:'';
-    document.getElementById('ml-campana').value='';
-    document.getElementById('ml-estado').value='nuevo';
-    document.getElementById('ml-motivo').value='';
-    document.getElementById('ml-motivo-otro').value='';
-    document.getElementById('ml-notas').value='';
-    document.getElementById('ml-proximo').value='';
-    ['ml-i1-fecha','ml-i2-fecha','ml-i3-fecha'].forEach(id=>document.getElementById(id).value='');
-    ['ml-i1-estado','ml-i2-estado','ml-i3-estado'].forEach(id=>document.getElementById(id).value='pendiente');
-    document.getElementById('ml-cerrador').value='';
-    document.getElementById('ml-sala').value='';
-    document.getElementById('ml-visita-fecha').value='';
+    document.getElementById('modal-lead-subtitle').textContent='Registro de cliente captado';
+    // Resetear visita
+    document.getElementById('visita-campos').style.display='none';
+    document.getElementById('btn-toggle-visita').textContent='▼ Mostrar';
+    document.getElementById('ml-visita-fecha-dia').value='';
+    document.getElementById('ml-visita-hora').value='09:00';
     document.getElementById('ml-resultado').value='';
     document.getElementById('ml-resultado-notas').value='';
+    
+    const tieneBorrador=cargarBorrador();
+    if(tieneBorrador){
+      document.getElementById('draft-indicator').style.display='flex';
+    } else {
+      // Valores por defecto
+      document.getElementById('draft-indicator').style.display='none';
+      document.getElementById('ml-nombre').value='';
+      document.getElementById('ml-celular').value='';
+      document.getElementById('ml-ciudad').value='Santa Cruz';
+      document.getElementById('ml-financiamiento').value='recursos_propios';
+      // Captador: auto-rellenar y ocultar el campo
+      if(cu.rol==='captador'){
+        document.getElementById('ml-captador').value=cu.nombre;
+      } else {
+        document.getElementById('ml-captador').value='';
+      }
+      document.getElementById('ml-estado').value='nuevo';
+      document.getElementById('ml-motivo').value='';
+      document.getElementById('ml-motivo-otro').value='';
+      document.getElementById('ml-notas').value='';
+      document.getElementById('ml-proximo').value='';
+      ['ml-i1-fecha','ml-i2-fecha','ml-i3-fecha'].forEach(x=>document.getElementById(x).value='');
+      ['ml-i1-estado','ml-i2-estado','ml-i3-estado'].forEach(x=>document.getElementById(x).value='pendiente');
+      document.getElementById('ml-cerrador').value='';
+      document.getElementById('ml-sala').value='';
+    }
+    toggleMotivo();
+    checkOtroMotivo();
   }
   modal.classList.add('open');
 }
 
 function toggleMotivo(){
   const e=document.getElementById('ml-estado').value;
-  document.getElementById('motivo-wrap').style.display=e==='cerrado_perdido'?'flex':'none';
+  document.getElementById('motivo-wrap').style.display=e==='cerrado_perdido'?'':'none';
 }
-document.getElementById('ml-estado')?.addEventListener('change',toggleMotivo);
 
 function checkOtroMotivo(){
   const v=document.getElementById('ml-motivo').value;
-  document.getElementById('motivo-otro-wrap').style.display=v==='otro'?'flex':'none';
+  document.getElementById('motivo-otro-wrap').style.display=v==='otro'?'':'none';
 }
 
 async function guardarLead(){
   const btn=document.getElementById('btn-guardar-lead');
   btn.disabled=true;btn.textContent='Guardando...';
+  
+  // Construir visita_fecha combinando dia+hora
+  let visitaFecha=null;
+  const vDia=document.getElementById('ml-visita-fecha-dia').value;
+  const vHora=document.getElementById('ml-visita-hora').value||'09:00';
+  if(vDia) visitaFecha=vDia+'T'+vHora+':00';
+  
+  // Si es captador, forzar su nombre como captador
+  if(cu.rol==='captador'){
+    datos.captador=cu.nombre;
+  }
+  // Asignación automática de cerrador si es "Auto-asignar"
+  let cerrador=document.getElementById('ml-cerrador').value||null;
+  if(!cerrador && visitaFecha){
+    cerrador=siguienteCerrador();
+  }
+  
+  // Calcular mes_anio automáticamente
+  const fechaHoy=new Date().toISOString().slice(0,7);
+  
   const data={
-    nombre:document.getElementById('ml-nombre').value.trim(),
-    celular:document.getElementById('ml-celular').value.trim(),
+    nombre:document.getElementById('ml-nombre').value.trim()||'Sin nombre',
+    celular:document.getElementById('ml-celular').value.trim()||'0',
     ciudad:document.getElementById('ml-ciudad').value.trim()||'Santa Cruz',
     financiamiento:document.getElementById('ml-financiamiento').value,
     captador:document.getElementById('ml-captador').value,
     campana:document.getElementById('ml-campana').value||null,
     estado:document.getElementById('ml-estado').value,
     motivo_perdida:document.getElementById('ml-motivo').value||null,
-    motivo_perdida_detalle:document.getElementById('ml-motivo-otro').value||null,
     notas:document.getElementById('ml-notas').value||null,
     proximo_contacto:document.getElementById('ml-proximo').value||null,
     intento1_fecha:document.getElementById('ml-i1-fecha').value||null,
@@ -1379,27 +1653,47 @@ async function guardarLead(){
     intento2_estado:document.getElementById('ml-i2-estado').value,
     intento3_fecha:document.getElementById('ml-i3-fecha').value||null,
     intento3_estado:document.getElementById('ml-i3-estado').value,
-    cerrador:document.getElementById('ml-cerrador').value||null,
+    cerrador:cerrador,
     visita_sala:document.getElementById('ml-sala').value||null,
-    visita_fecha:document.getElementById('ml-visita-fecha').value||null,
+    visita_fecha:visitaFecha,
     resultado_estado:document.getElementById('ml-resultado').value||null,
     resultado_reunion:document.getElementById('ml-resultado-notas').value||null,
+    mes_anio:fechaHoy,
+    numero_mes:new Date().getMonth()+1,
+    fecha_ingreso:new Date().toISOString().slice(0,10),
   };
-  if(!data.nombre||!data.celular||!data.captador){toast('Completa nombre, celular y captador','error');btn.disabled=false;btn.textContent='Guardar lead';return;}
-  let err;
+  
+  if(!data.captador){toast('Selecciona un captador','error');btn.disabled=false;btn.textContent='💾 Guardar lead';return;}
+  
+  let err,newId=null;
   if(editingLeadId){
     const r=await sb.from('leads').update(data).eq('id',editingLeadId);
     err=r.error;
   } else {
-    const r=await sb.from('leads').insert([data]);
+    const r=await sb.from('leads').insert([data]).select();
     err=r.error;
+    if(r.data&&r.data[0]) newId=r.data[0].id;
   }
-  btn.disabled=false;btn.textContent='Guardar lead';
-  if(err){toast('Error al guardar','error');return;}
+  
+  btn.disabled=false;btn.textContent='💾 Guardar lead';
+  if(err){toast('Error: '+err.message,'error');return;}
+  
+  // Limpiar borrador tras guardar exitosamente
+  limpiarBorrador();
   cerrarModal('modal-lead');
-  toast(editingLeadId?'Lead actualizado':'Lead registrado','success');
-  await loadLeads();
-  renderInicio();
+  toast(editingLeadId?'✅ Lead actualizado':'✅ Lead registrado','success');
+  
+  // Admin ve el lead inmediatamente (sin esperar loadLeads)
+  if(newId){
+    const{data:newLead}=await sb.from('leads').select('*').eq('id',newId).single();
+    if(newLead) allLeads.unshift(newLead);
+    renderMisLeads();
+    renderTodosLeads();
+    renderInicio();
+  } else {
+    await loadLeads();
+    renderInicio();
+  }
 }
 
 // ── AGENDA ──
@@ -1533,7 +1827,12 @@ async function renderMarketing(){
   document.getElementById('mkt-stats').innerHTML=stats.map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value ${s.cls}">${s.val}</div></div>`).join('');
   
   const el=document.getElementById('campanas-list');
-  if(!campanas.length){el.innerHTML='<div class="empty-state"><div class="empty-title">Sin campañas</div></div>';return;}
+  const mesActual=new Date().toLocaleString('es-BO',{month:'long',year:'numeric'});
+  // Filtrar solo campañas del mes actual o activas
+  const mesKey=new Date().toISOString().slice(0,7);
+  const campanasMes=campanas.filter(c=>!c.mes||c.mes.startsWith(mesKey)||c.activa);
+  if(!campanasMes.length){el.innerHTML=`<div class="empty-state"><div class="empty-title">Sin campañas para ${mesActual}</div><div class="empty-sub">Crea una campaña para ${mesActual}</div></div>`;return;}
+  const campanas=campanasMes; // usar solo las del mes
   el.innerHTML=campanas.map(c=>{
     const leads=allLeads.filter(l=>l.campana==c.id);
     const vis=leads.filter(l=>['visita_agendada','visita_realizada','cerrado_ganado'].includes(l.estado)).length;
