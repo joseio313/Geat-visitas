@@ -229,8 +229,48 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .tarea-nombre{font-size:13px;font-weight:500;color:var(--blanco)}
 .tarea-meta{font-size:11px;color:var(--gris4);margin-top:1px}
 
-/* ── AGENDA ── */
+/* ── AGENDA TIPO GOOGLE CALENDAR ── */
 .agenda-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* Semana */
+.cal-semana{display:grid;grid-template-columns:60px repeat(7,1fr);border:1px solid var(--gris1);border-radius:var(--r2);overflow:hidden;min-width:600px}
+.cal-col-header{background:var(--negro3);padding:10px 6px;text-align:center;border-bottom:1px solid var(--gris2);border-right:1px solid var(--gris1)}
+.cal-col-header.hoy{background:rgba(245,196,0,0.12)}
+.cal-col-dia{font-size:11px;color:var(--gris4);text-transform:uppercase;letter-spacing:0.06em}
+.cal-col-num{font-size:22px;font-weight:600;color:var(--blanco);line-height:1.2}
+.cal-col-num.hoy-num{background:var(--amarillo);color:var(--negro);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:18px}
+.cal-hora-col{background:var(--negro2);border-right:1px solid var(--gris1)}
+.cal-hora-label{height:60px;padding:0 8px;font-size:10px;color:var(--gris3);font-family:'DM Mono',monospace;display:flex;align-items:flex-start;padding-top:4px;border-bottom:1px solid var(--gris1)}
+.cal-celda{height:60px;border-bottom:1px solid var(--gris1);border-right:1px solid var(--gris1);position:relative;cursor:pointer;transition:background 0.1s}
+.cal-celda:hover{background:var(--gris1)}
+.cal-celda.hoy-col{background:rgba(245,196,0,0.03)}
+.cal-evento{position:absolute;left:2px;right:2px;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:500;cursor:pointer;z-index:1;overflow:hidden;transition:opacity 0.15s;line-height:1.3}
+.cal-evento:hover{opacity:0.85}
+.cal-evento.sala-principal{background:rgba(245,196,0,0.25);border-left:3px solid var(--amarillo);color:var(--blanco)}
+.cal-evento.sala-gerencia{background:rgba(52,152,219,0.25);border-left:3px solid var(--azul);color:var(--blanco)}
+.cal-evento.sin-sala{background:rgba(155,89,182,0.25);border-left:3px solid #9b59b6;color:var(--blanco)}
+
+/* Popup evento */
+.evento-popup{position:fixed;background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r2);padding:16px;min-width:260px;max-width:320px;z-index:600;box-shadow:var(--shadow)}
+.evento-popup-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.evento-popup-titulo{font-size:14px;font-weight:600;color:var(--blanco)}
+.evento-popup-cerrar{background:none;border:none;color:var(--gris4);cursor:pointer;font-size:18px;padding:0;line-height:1}
+.evento-popup-fila{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;font-size:12px}
+.evento-popup-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.evento-popup-val{color:var(--gris5);line-height:1.4}
+
+/* Lista */
+.agenda-lista-item{background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;display:flex;gap:16px;align-items:flex-start;cursor:pointer;transition:all 0.15s}
+.agenda-lista-item:hover{border-color:var(--gris3);background:var(--negro3)}
+.agenda-lista-fecha{min-width:64px;text-align:center}
+.agenda-lista-dia-num{font-size:22px;font-weight:700;color:var(--amarillo);line-height:1}
+.agenda-lista-dia-str{font-size:10px;color:var(--gris4);text-transform:uppercase;letter-spacing:0.06em}
+.agenda-lista-body{flex:1}
+.agenda-lista-titulo{font-size:14px;font-weight:600;color:var(--blanco);margin-bottom:4px}
+.agenda-lista-meta{font-size:12px;color:var(--gris4);display:flex;gap:12px;flex-wrap:wrap}
+.agenda-lista-sala{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.agenda-lista-sala.sala_principal{background:rgba(245,196,0,0.15);color:var(--amarillo)}
+.agenda-lista-sala.gerencia{background:rgba(52,152,219,0.15);color:var(--azul)}
 .sala-card{background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);overflow:hidden}
 .sala-header{padding:14px 18px;background:var(--negro3);border-bottom:1px solid var(--gris1);display:flex;align-items:center;gap:8px}
 .sala-indicator{width:8px;height:8px;border-radius:50%}
@@ -591,6 +631,40 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div class="sidebar" id="sidebar"></div>
     <div class="main" id="main-content">
 
+      <!-- PANEL: BUSCADOR GLOBAL -->
+      <div class="panel" id="pn-buscar">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🔍 Buscador</div>
+            <div class="page-subtitle">Busca cualquier dato — nombre, celular, ciudad, notas, captador, cerrador</div>
+          </div>
+        </div>
+        <div style="position:relative;margin-bottom:20px">
+          <input type="text" id="buscar-input" class="search-input" 
+            placeholder="🔍 Escribe nombre, celular, ciudad, notas..." 
+            oninput="ejecutarBusqueda()" autofocus
+            style="width:100%;font-size:16px;padding:14px 18px">
+          <div id="buscar-contador" style="font-size:12px;color:var(--gris4);margin-top:8px"></div>
+        </div>
+        <!-- Filtros rápidos -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+          <button class="btn btn-ghost btn-sm buscar-filtro active" data-campo="" onclick="setBuscarFiltro(this,'')">Todo</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="nombre" onclick="setBuscarFiltro(this,'nombre')">Nombre</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="celular" onclick="setBuscarFiltro(this,'celular')">Celular</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="ciudad" onclick="setBuscarFiltro(this,'ciudad')">Ciudad</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="captador" onclick="setBuscarFiltro(this,'captador')">Captador</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="cerrador" onclick="setBuscarFiltro(this,'cerrador')">Cerrador</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="notas" onclick="setBuscarFiltro(this,'notas')">Notas</button>
+          <button class="btn btn-ghost btn-sm buscar-filtro" data-campo="estado" onclick="setBuscarFiltro(this,'estado')">Estado</button>
+        </div>
+        <div id="buscar-resultados">
+          <div class="empty-state">
+            <div class="empty-title">Escribe para buscar</div>
+            <div class="empty-sub">Busca en todos los leads del sistema</div>
+          </div>
+        </div>
+      </div>
+
       <!-- PANEL: INICIO (tareas del día) -->
       <div class="panel" id="pn-inicio">
         <div class="page-header">
@@ -672,34 +746,55 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         <div id="todos-leads-container"><div class="loading-state"><span class="spin"></span>Cargando...</div></div>
       </div>
 
-      <!-- PANEL: AGENDA -->
+      <!-- PANEL: AGENDA tipo Google Calendar -->
       <div class="panel" id="pn-agenda">
-        <div class="page-header">
+        <!-- Cabecera con navegación de semana -->
+        <div class="page-header" style="align-items:center">
           <div>
-            <div class="page-title">Agenda de Oficina</div>
-            <div class="page-subtitle">Reserva de salas — compartida con todo el equipo</div>
+            <div class="page-title">📅 Agenda de Oficina</div>
+            <div class="page-subtitle">Centralizada — todos ven y gestionan lo mismo</div>
           </div>
-          <div class="page-actions">
-            <input type="date" class="form-input" id="agenda-fecha" style="width:160px" onchange="cargarAgenda()">
+          <div class="page-actions" style="align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="agendaNavSemana(-1)">‹ Anterior</button>
+            <button class="btn btn-ghost btn-sm" onclick="agendaHoy()" id="btn-agenda-hoy" style="color:var(--amarillo)">Hoy</button>
+            <button class="btn btn-ghost btn-sm" onclick="agendaNavSemana(1)">Siguiente ›</button>
             <button class="btn btn-primary" onclick="abrirModalVisita()">+ Agendar Visita</button>
           </div>
         </div>
-        <div class="agenda-grid">
-          <div class="sala-card sala-principal">
-            <div class="sala-header">
-              <div class="sala-indicator"></div>
-              <div class="sala-name">Sala Principal</div>
-            </div>
-            <div class="sala-body" id="sala-principal-slots"><div class="loading-state"><span class="spin"></span></div></div>
+
+        <!-- Selector de vista -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+          <div class="inner-tabs" style="margin-bottom:0">
+            <button class="inner-tab active" id="vista-semana-btn" onclick="setVistaAgenda('semana')">Semana</button>
+            <button class="inner-tab" id="vista-dia-btn" onclick="setVistaAgenda('dia')">Día</button>
+            <button class="inner-tab" id="vista-lista-btn" onclick="setVistaAgenda('lista')">Lista</button>
           </div>
-          <div class="sala-card sala-gerencia">
-            <div class="sala-header">
-              <div class="sala-indicator"></div>
-              <div class="sala-name">Gerencia</div>
-            </div>
-            <div class="sala-body" id="sala-gerencia-slots"><div class="loading-state"><span class="spin"></span></div></div>
-          </div>
+          <span id="agenda-periodo-label" style="font-size:14px;font-weight:600;color:var(--blanco);margin-left:8px"></span>
+          <!-- Filtro de sala -->
+          <select class="filter-sel" id="agenda-sala-filtro" onchange="renderAgenda()" style="margin-left:auto">
+            <option value="">Todas las salas</option>
+            <option value="sala_principal">Sala Principal</option>
+            <option value="gerencia">Gerencia</option>
+          </select>
         </div>
+
+        <!-- Vista semana (default) -->
+        <div id="agenda-vista-semana">
+          <div id="cal-semana-grid" style="overflow-x:auto"></div>
+        </div>
+
+        <!-- Vista día -->
+        <div id="agenda-vista-dia" style="display:none">
+          <div id="cal-dia-contenido"></div>
+        </div>
+
+        <!-- Vista lista -->
+        <div id="agenda-vista-lista" style="display:none">
+          <div id="cal-lista-contenido"></div>
+        </div>
+
+        <!-- Mini resumen de salas hoy -->
+        <div id="agenda-resumen-salas" style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px"></div>
       </div>
 
       <!-- PANEL: MI AGENDA (cerrador) -->
@@ -812,6 +907,43 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         <div class="card" style="margin-top:16px">
           <div class="card-header"><div class="card-title">📊 Resumen global</div></div>
           <div class="stats-grid" id="admin-stats-global"></div>
+        </div>
+
+        <!-- DATOS HISTÓRICOS -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <div class="card-title">🗃️ Datos históricos (pre-abril 2026)</div>
+            <button class="btn btn-ghost btn-sm" id="btn-historico" onclick="toggleHistorico(this)">▼ Ver historial</button>
+          </div>
+          <div id="historico-wrap" style="display:none">
+            <div style="font-size:12px;color:var(--gris4);margin-bottom:16px">
+              📦 5,362 leads archivados — historial real de tu equipo desde Oct 2025. Usa los filtros para explorar.
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+              <select class="filter-sel" id="hist-captador" onchange="cargarHistorico()">
+                <option value="">Todos los captadores</option>
+                <option>Steffi</option><option>Maria Luisa</option><option>Corp Genoveva</option>
+              </select>
+              <select class="filter-sel" id="hist-mes" onchange="cargarHistorico()">
+                <option value="">Todos los meses</option>
+                <option value="2026-03">Marzo 2026</option>
+                <option value="2026-02">Febrero 2026</option>
+                <option value="2026-01">Enero 2026</option>
+                <option value="2025-12">Diciembre 2025</option>
+                <option value="2025-11">Noviembre 2025</option>
+                <option value="2025-10">Octubre 2025</option>
+                <option value="2025-09">Septiembre 2025</option>
+              </select>
+              <select class="filter-sel" id="hist-estado" onchange="cargarHistorico()">
+                <option value="">Todos los estados</option>
+                <option value="en_seguimiento">En seguimiento</option>
+                <option value="cerrado_ganado">Ganados</option>
+                <option value="cerrado_perdido">Perdidos</option>
+              </select>
+            </div>
+            <div id="hist-stats" class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
+            <div id="hist-tabla"><div class="empty-state"><div class="empty-title">Usa los filtros arriba</div></div></div>
+          </div>
         </div>
       </div>
 
@@ -1111,29 +1243,32 @@ function logout(){
 const NAV_ITEMS={
   captador:[
     {id:'inicio',icon:'◈',label:'Inicio'},
+    {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'mis-leads',icon:'◎',label:'Mis Leads'},
-    {id:'agenda',icon:'◻',label:'Agenda de Oficina'},
+    {id:'agenda',icon:'◻',label:'Agenda'},
   ],
   cerrador:[
     {id:'inicio',icon:'◈',label:'Inicio'},
+    {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'mi-agenda',icon:'◻',label:'Mi Agenda'},
-    {id:'todos-leads',icon:'◎',label:'Ver Leads'},
+    {id:'todos-leads',icon:'◎',label:'Leads'},
     {id:'analytics',icon:'▦',label:'Informes'},
   ],
   admin:[
     {id:'inicio',icon:'◈',label:'Inicio'},
-    {id:'mis-leads',icon:'◎',label:'Leads (Captador)'},
+    {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'todos-leads',icon:'◉',label:'Todos los Leads'},
-    {id:'agenda',icon:'◻',label:'Agenda Oficina'},
-    {id:'mi-agenda',icon:'⬡',label:'Agenda Cerrador'},
+    {id:'mis-leads',icon:'◎',label:'Leads Captador'},
+    {id:'agenda',icon:'◻',label:'Agenda'},
     {id:'analytics',icon:'▦',label:'Analytics'},
     {id:'marketing',icon:'◈',label:'Marketing'},
     {id:'admin',icon:'⚙',label:'Admin'},
   ],
   marketing:[
     {id:'inicio',icon:'◈',label:'Inicio'},
+    {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'marketing',icon:'◈',label:'Marketing'},
-    {id:'todos-leads',icon:'◎',label:'Ver Leads'},
+    {id:'todos-leads',icon:'◎',label:'Leads'},
   ]
 };
 
@@ -1183,8 +1318,14 @@ function sw(tab){
   document.getElementById('topbar-section').textContent=nb?.textContent?.trim()||tab;
   if(tab==='analytics')renderAnalytics();
   if(tab==='marketing')renderMarketing();
+  if(tab==='buscar'){
+    setTimeout(()=>{
+      const inp=document.getElementById('buscar-input');
+      if(inp) inp.focus();
+    },100);
+  }
   if(tab==='admin')renderAdmin();
-  if(tab==='agenda'){document.getElementById('agenda-fecha').value=todayStr;cargarAgenda();}
+  if(tab==='agenda'){cargarAgendaReal();}
   if(tab==='mi-agenda')cargarMiAgenda();
 }
 
@@ -1218,7 +1359,7 @@ function iniciarRealtime(){
 }
 
 async function loadLeads(){
-  const{data}=await sb.from('leads').select('*').order('id');
+  const{data}=await sb.from('leads').select('*').eq('archivado',false).order('created_at',{ascending:false});
   allLeads=data||[];
   filtrarLeads();
   filtrarTodos();
@@ -1707,32 +1848,367 @@ async function guardarLead(){
 }
 
 // ── AGENDA ──
-async function cargarAgenda(){
-  const fecha=document.getElementById('agenda-fecha').value||todayStr;
-  const{data:visitas}=await sb.from('leads').select('*').not('visita_fecha','is',null).gte('visita_fecha',fecha+'T00:00:00').lte('visita_fecha',fecha+'T23:59:59').order('visita_fecha');
-  const principal=(visitas||[]).filter(v=>v.visita_sala==='sala_principal');
-  const gerencia=(visitas||[]).filter(v=>v.visita_sala==='gerencia');
-  renderSlots('sala-principal-slots',principal,fecha);
-  renderSlots('sala-gerencia-slots',gerencia,fecha);
+// ── AGENDA TIPO GOOGLE CALENDAR ──
+let agendaVista = 'semana'; // 'semana' | 'dia' | 'lista'
+let agendaFechaBase = new Date(); // fecha de referencia
+let agendaVisitas = []; // cache de visitas
+
+function agendaHoy(){
+  agendaFechaBase = new Date();
+  cargarAgenda();
 }
 
-function renderSlots(elId,visitas,fecha){
-  const el=document.getElementById(elId);
-  if(!visitas.length){el.innerHTML='<div style="color:var(--gris4);font-size:13px;padding:8px 0;">Día libre — sin visitas agendadas</div>';return;}
-  el.innerHTML=visitas.map(v=>{
-    const h=v.visita_fecha?new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}):'';
-    return`<div class="slot-item slot-ocupado">
-      <div class="slot-time">${h}</div>
-      <div class="slot-cliente">${v.nombre}</div>
-      <div class="slot-cerrador">${v.cerrador||'Sin cerrador asignado'} · ${v.celular}</div>
+function agendaNavSemana(dir){
+  const d = new Date(agendaFechaBase);
+  d.setDate(d.getDate() + dir * (agendaVista === 'dia' ? 1 : 7));
+  agendaFechaBase = d;
+  cargarAgenda();
+}
+
+function setVistaAgenda(vista){
+  agendaVista = vista;
+  ['semana','dia','lista'].forEach(v=>{
+    document.getElementById('agenda-vista-'+v).style.display = v===vista ? '' : 'none';
+    document.getElementById('vista-'+v+'-btn').classList.toggle('active', v===vista);
+  });
+  renderAgenda();
+}
+
+async function cargarAgenda(){
+  // Calcular rango según vista
+  const base = new Date(agendaFechaBase);
+  let ini, fin;
+  if(agendaVista === 'dia'){
+    ini = new Date(base); ini.setHours(0,0,0,0);
+    fin = new Date(base); fin.setHours(23,59,59,999);
+  } else {
+    // Semana: lunes a domingo
+    const dow = base.getDay(); // 0=Dom
+    const lunes = new Date(base);
+    lunes.setDate(base.getDate() - (dow === 0 ? 6 : dow - 1));
+    lunes.setHours(0,0,0,0);
+    ini = lunes;
+    fin = new Date(lunes);
+    fin.setDate(lunes.getDate() + 6);
+    fin.setHours(23,59,59,999);
+  }
+  
+  // Para lista: próximos 30 días
+  if(agendaVista === 'lista'){
+    ini = new Date(); ini.setHours(0,0,0,0);
+    fin = new Date(); fin.setDate(fin.getDate()+30); fin.setHours(23,59,59,999);
+  }
+
+  const iniStr = ini.toISOString();
+  const finStr = fin.toISOString();
+
+  const{data}=await sb.from('leads')
+    .select('id,nombre,celular,ciudad,captador,cerrador,visita_fecha,visita_sala,estado,resultado_estado,financiamiento,notas')
+    .not('visita_fecha','is',null)
+    .gte('visita_fecha',iniStr)
+    .lte('visita_fecha',finStr)
+    .order('visita_fecha');
+
+  agendaVisitas = data || [];
+  renderAgenda();
+}
+
+function renderAgenda(){
+  const filtroSala = document.getElementById('agenda-sala-filtro')?.value || '';
+  const visitas = filtroSala ? agendaVisitas.filter(v=>v.visita_sala===filtroSala) : agendaVisitas;
+
+  if(agendaVista === 'semana') renderAgendaSemana(visitas);
+  else if(agendaVista === 'dia') renderAgendaDia(visitas);
+  else renderAgendaLista(visitas);
+
+  // Label del período
+  const base = new Date(agendaFechaBase);
+  const opts = {month:'long',year:'numeric'};
+  let label = '';
+  if(agendaVista === 'dia'){
+    label = base.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  } else if(agendaVista === 'semana'){
+    const dow = base.getDay();
+    const lunes = new Date(base);
+    lunes.setDate(base.getDate() - (dow===0?6:dow-1));
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+6);
+    label = lunes.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' — '+domingo.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'});
+  } else {
+    label = 'Próximas 4 semanas';
+  }
+  const lbl = document.getElementById('agenda-periodo-label');
+  if(lbl) lbl.textContent = label;
+
+  // Resumen salas hoy
+  renderResumenSalas();
+}
+
+function renderAgendaSemana(visitas){
+  const horas = Array.from({length:12},(_,i)=>i+8); // 8am - 7pm
+  const base = new Date(agendaFechaBase);
+  const dow = base.getDay();
+  const lunes = new Date(base);
+  lunes.setDate(base.getDate() - (dow===0?6:dow-1));
+  const dias = Array.from({length:7},(_,i)=>{const d=new Date(lunes);d.setDate(lunes.getDate()+i);return d;});
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diasNombres = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+  let html = `<div class="cal-semana">
+    <!-- Headers -->
+    <div class="cal-col-header" style="border-right:1px solid var(--gris1)"></div>
+    ${dias.map((d,i)=>{
+      const esHoy = d.getTime() === hoy.getTime();
+      return`<div class="cal-col-header${esHoy?' hoy':''}">
+        <div class="cal-col-dia">${diasNombres[i]}</div>
+        <div class="${esHoy?'cal-col-num hoy-num':'cal-col-num'}">${d.getDate()}</div>
+      </div>`;
+    }).join('')}
+    <!-- Filas de horas -->
+    ${horas.map(h=>{
+      const hStr = String(h).padStart(2,'0')+':00';
+      return`<div class="cal-hora-col"><div class="cal-hora-label">${hStr}</div></div>
+      ${dias.map(d=>{
+        const esHoy = d.getTime() === hoy.getTime();
+        // Eventos en esta celda (±30min)
+        const eventos = visitas.filter(v=>{
+          if(!v.visita_fecha) return false;
+          // Usar tiempo local del navegador para comparar
+          const vd = new Date(v.visita_fecha);
+          const vH = vd.getHours(); // hora local del navegador
+          const vDate = new Date(vd.getFullYear(), vd.getMonth(), vd.getDate());
+          const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          return vDate.getTime()===dDate.getTime() && vH===h;
+        });
+        return`<div class="cal-celda${esHoy?' hoy-col':''}" onclick="agendaClickCelda('${d.toISOString().slice(0,10)}','${hStr}')">
+          ${eventos.map(v=>{
+            const sala = v.visita_sala||'sin-sala';
+            const hora = new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+            return`<div class="cal-evento ${sala}" onclick="event.stopPropagation();mostrarPopupEvento(event,${v.id})" title="${v.nombre}">
+              <span>${hora}</span> ${v.nombre||'Sin nombre'}<br>
+              <span style="opacity:0.8;font-size:10px">${v.cerrador||'Sin cerrador'}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('')}`;
+    }).join('')}
+  </div>`;
+
+  document.getElementById('cal-semana-grid').innerHTML = html;
+}
+
+function renderAgendaDia(visitas){
+  const horas = Array.from({length:13},(_,i)=>i+7); // 7am - 7pm
+  const base = new Date(agendaFechaBase);
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const esHoy = base.setHours(0,0,0,0) === hoy.getTime();
+
+  let h = `<div style="background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);overflow:hidden">
+    ${horas.map(hr=>{
+      const hStr = String(hr).padStart(2,'0')+':00';
+      const eventos = visitas.filter(v=>{
+        if(!v.visita_fecha) return false;
+        const vd = new Date(v.visita_fecha);
+        const vDate = new Date(vd.getFullYear(), vd.getMonth(), vd.getDate());
+        const bDate = new Date(agendaFechaBase);
+        const bDateOnly = new Date(bDate.getFullYear(), bDate.getMonth(), bDate.getDate());
+        return vDate.getTime()===bDateOnly.getTime() && vd.getHours()===hr;
+      });
+      return`<div style="display:grid;grid-template-columns:64px 1fr;border-bottom:1px solid var(--gris1);min-height:60px">
+        <div style="padding:8px;font-size:11px;color:var(--gris3);font-family:'DM Mono',monospace;border-right:1px solid var(--gris1)">${hStr}</div>
+        <div style="padding:4px 8px;position:relative${esHoy?' background:rgba(245,196,0,0.02)':''}">
+          ${eventos.map(v=>{
+            const sala = v.visita_sala||'sin-sala';
+            const salaLabel = v.visita_sala==='sala_principal'?'Sala Principal':v.visita_sala==='gerencia'?'Gerencia':'Sin sala';
+            return`<div class="cal-evento ${sala}" style="position:relative;margin-bottom:4px;padding:6px 8px" onclick="mostrarPopupEvento(event,${v.id})">
+              <div style="font-weight:600">${v.nombre||'Sin nombre'}</div>
+              <div style="font-size:10px;opacity:0.8">${salaLabel} · ${v.cerrador||'Sin cerrador'} · ${v.celular||''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+  document.getElementById('cal-dia-contenido').innerHTML = h;
+}
+
+function renderAgendaLista(visitas){
+  if(!visitas.length){
+    document.getElementById('cal-lista-contenido').innerHTML='<div class="empty-state"><div class="empty-title">Sin visitas próximas</div><div class="empty-sub">No hay visitas agendadas en los próximos 30 días</div></div>';
+    return;
+  }
+  const salaLabel = s=>s==='sala_principal'?'Sala Principal':s==='gerencia'?'Gerencia':'Sin sala';
+  const estadoLabel = {nuevo:'Nuevo',en_seguimiento:'Seguimiento',visita_agendada:'Visita agendada',visita_realizada:'Realizada',cerrado_ganado:'Ganado',cerrado_perdido:'Perdido'};
+  
+  let html = '<div>';
+  // Agrupar por día
+  const grupos = {};
+  visitas.forEach(v=>{
+    const d = v.visita_fecha.slice(0,10);
+    if(!grupos[d]) grupos[d]=[];
+    grupos[d].push(v);
+  });
+  
+  Object.keys(grupos).sort().forEach(fecha=>{
+    const d = new Date(fecha+'T12:00:00');
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const esHoy = d.setHours(0,0,0,0) === hoy.getTime();
+    const diaLabel = new Date(fecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+    
+    html += `<div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${esHoy?'var(--amarillo)':'var(--gris4)'};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--gris1)">
+        ${esHoy?'HOY · ':''} ${diaLabel}
+      </div>`;
+    
+    grupos[fecha].forEach(v=>{
+      const hora = v.visita_fecha ? new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+      html += `<div class="agenda-lista-item" onclick="abrirModalLead(${v.id})">
+        <div class="agenda-lista-fecha">
+          <div class="agenda-lista-dia-num">${hora}</div>
+          <div class="agenda-lista-dia-str">${new Date(fecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short'})}</div>
+        </div>
+        <div class="agenda-lista-body">
+          <div class="agenda-lista-titulo">${v.nombre||'Sin nombre'}</div>
+          <div class="agenda-lista-meta">
+            <span>📞 ${v.celular||'—'}</span>
+            <span>👤 ${v.captador||'—'}</span>
+            <span>🤝 ${v.cerrador||'Sin cerrador'}</span>
+            <span class="agenda-lista-sala ${v.visita_sala||''}">${salaLabel(v.visita_sala||'')}</span>
+          </div>
+          ${v.financiamiento?`<div style="font-size:11px;color:var(--gris4);margin-top:4px">💰 ${v.financiamiento==='bancario'?'Financiamiento bancario':'Recursos propios'}</div>`:''}
+          ${v.notas?`<div style="font-size:11px;color:var(--gris4);margin-top:4px;font-style:italic">"${v.notas.slice(0,80)}${v.notas.length>80?'...':''}"</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <span class="badge ${v.estado==='cerrado_ganado'?'badge-ganado':v.estado==='cerrado_perdido'?'badge-perdido':v.estado==='visita_realizada'?'badge-visita':'badge-seguimiento'}">${estadoLabel[v.estado]||v.estado}</span>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalLead(${v.id})">✏️ Editar</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('cal-lista-contenido').innerHTML = html;
+}
+
+function renderResumenSalas(){
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const fin = new Date(hoy); fin.setHours(23,59,59,999);
+  const hoyVisitas = agendaVisitas.filter(v=>{
+    if(!v.visita_fecha) return false;
+    const vd = new Date(v.visita_fecha); vd.setHours(0,0,0,0);
+    return vd.getTime() === hoy.getTime();
+  });
+  const principal = hoyVisitas.filter(v=>v.visita_sala==='sala_principal');
+  const gerencia = hoyVisitas.filter(v=>v.visita_sala==='gerencia');
+  const salaCard = (nombre,color,visitas) => `
+    <div style="background:var(--negro2);border:1px solid ${color}33;border-radius:var(--r2);padding:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${color}"></div>
+        <div style="font-size:12px;font-weight:600;color:var(--gris5)">${nombre} — Hoy</div>
+        <div style="margin-left:auto;font-size:11px;color:${color};font-weight:600">${visitas.length} visita${visitas.length!==1?'s':''}</div>
+      </div>
+      ${visitas.length===0
+        ?'<div style="color:var(--gris3);font-size:12px">Libre todo el día</div>'
+        :visitas.map(v=>{
+          const h=new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+          return`<div style="padding:8px 0;border-top:1px solid var(--gris1);cursor:pointer" onclick="abrirModalLead(${v.id})">
+            <div style="font-size:13px;font-weight:500;color:var(--blanco)">${v.nombre||'Sin nombre'} <span style="font-size:11px;color:var(--gris4)">· ${h}</span></div>
+            <div style="font-size:11px;color:var(--gris4);margin-top:2px">🤝 ${v.cerrador||'—'} · 📞 ${v.celular||'—'}</div>
+          </div>`;
+        }).join('')}
     </div>`;
-  }).join('');
+  
+  const el = document.getElementById('agenda-resumen-salas');
+  if(el) el.innerHTML = salaCard('Sala Principal','var(--amarillo)',principal) + salaCard('Gerencia','var(--azul)',gerencia);
+}
+
+// Mostrar popup de evento al hacer clic
+function mostrarPopupEvento(e, leadId){
+  // Cerrar popup anterior
+  document.querySelectorAll('.evento-popup').forEach(p=>p.remove());
+  
+  const v = agendaVisitas.find(x=>x.id===leadId);
+  if(!v) return;
+  
+  const hora = v.visita_fecha ? new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+  const fecha = v.visita_fecha ? new Date(v.visita_fecha).toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'}) : '—';
+  const salaLabel = v.visita_sala==='sala_principal'?'🏢 Sala Principal':v.visita_sala==='gerencia'?'🏛 Gerencia':'📍 Sin sala';
+  const estadoLabel = {nuevo:'Nuevo',en_seguimiento:'Seguimiento',visita_agendada:'Visita agendada',visita_realizada:'Realizada',cerrado_ganado:'🏆 Ganado',cerrado_perdido:'❌ Perdido'};
+  const colorSala = v.visita_sala==='sala_principal'?'var(--amarillo)':v.visita_sala==='gerencia'?'var(--azul)':'var(--gris3)';
+
+  const popup = document.createElement('div');
+  popup.className = 'evento-popup';
+  popup.style.cssText = `top:${Math.min(e.clientY,window.innerHeight-320)}px;left:${Math.min(e.clientX+10,window.innerWidth-340)}px`;
+  popup.innerHTML = `
+    <div class="evento-popup-header">
+      <div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${colorSala};display:inline-block;margin-right:6px"></div>
+        <span class="evento-popup-titulo">${v.nombre||'Sin nombre'}</span>
+      </div>
+      <button class="evento-popup-cerrar" onclick="this.closest('.evento-popup').remove()">✕</button>
+    </div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">🕐</span><span class="evento-popup-val">${fecha} · ${hora}</span></div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">📍</span><span class="evento-popup-val">${salaLabel}</span></div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">📞</span><span class="evento-popup-val">${v.celular||'—'}</span></div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">🤝</span><span class="evento-popup-val">Cerrador: ${v.cerrador||'Sin asignar'}</span></div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">👤</span><span class="evento-popup-val">Captador: ${v.captador||'—'}</span></div>
+    <div class="evento-popup-fila"><span class="evento-popup-icon">📊</span><span class="evento-popup-val">Estado: ${estadoLabel[v.estado]||v.estado||'—'}</span></div>
+    ${v.financiamiento?`<div class="evento-popup-fila"><span class="evento-popup-icon">💰</span><span class="evento-popup-val">${v.financiamiento==='bancario'?'Financiamiento bancario':'Recursos propios'}</span></div>`:''}
+    ${v.notas?`<div class="evento-popup-fila"><span class="evento-popup-icon">📝</span><span class="evento-popup-val" style="font-style:italic">${v.notas.slice(0,100)}${v.notas.length>100?'...':''}</span></div>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px;border-top:1px solid var(--gris1);padding-top:12px">
+      <button class="btn btn-primary btn-sm" onclick="this.closest('.evento-popup').remove();abrirModalLead(${v.id})" style="flex:1">✏️ Editar</button>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.evento-popup').remove()">Cerrar</button>
+    </div>`;
+  document.body.appendChild(popup);
+  
+  // Cerrar al hacer clic fuera
+  setTimeout(()=>{
+    document.addEventListener('click', function cerrarPopup(ev){
+      if(!popup.contains(ev.target)){popup.remove();document.removeEventListener('click',cerrarPopup);}
+    });
+  },100);
+}
+
+function agendaClickCelda(fecha, hora){
+  // Al hacer clic en celda vacía → abrir modal de nuevo lead con fecha/hora pre-rellenada
+  abrirModalLead();
+  document.getElementById('ml-estado').value='visita_agendada';
+  const fh = fecha+'T'+hora;
+  document.getElementById('ml-visita-fecha-dia').value=fecha;
+  document.getElementById('ml-visita-hora').value=hora;
+  document.getElementById('ml-visita-fecha').value=fh+':00';
+  document.getElementById('visita-campos').style.display='block';
+  document.getElementById('btn-toggle-visita').textContent='▲ Ocultar';
 }
 
 function abrirModalVisita(){
+  const hoy = new Date().toISOString().slice(0,10);
   abrirModalLead();
   document.getElementById('ml-estado').value='visita_agendada';
-  document.getElementById('ml-visita-fecha').value=document.getElementById('agenda-fecha').value+'T09:00';
+  document.getElementById('ml-visita-fecha-dia').value=hoy;
+  document.getElementById('ml-visita-hora').value='09:00';
+  document.getElementById('ml-visita-fecha').value=hoy+'T09:00:00';
+  document.getElementById('visita-campos').style.display='block';
+  document.getElementById('btn-toggle-visita').textContent='▲ Ocultar';
+}
+
+// Slots legacy (compatibilidad)
+function renderSlots(elId,visitas,fecha){ /* legacy - no usado */ }
+async function cargarAgenda(){ 
+  await cargarAgendaReal();
+}
+async function cargarAgendaReal(){
+  // Rango: 7 días atrás hasta 90 días adelante (captura todo)
+  const ini = new Date(); ini.setDate(ini.getDate()-7); ini.setHours(0,0,0,0);
+  const fin = new Date(); fin.setDate(fin.getDate()+90); fin.setHours(23,59,59,999);
+  const{data}=await sb.from('leads')
+    .select('id,nombre,celular,ciudad,captador,cerrador,visita_fecha,visita_sala,estado,resultado_estado,financiamiento,notas,archivado')
+    .not('visita_fecha','is',null)
+    .eq('archivado',false)
+    .gte('visita_fecha',ini.toISOString())
+    .lte('visita_fecha',fin.toISOString())
+    .order('visita_fecha');
+  agendaVisitas = data||[];
+  renderAgenda();
 }
 
 async function cargarMiAgenda(){
@@ -1828,8 +2304,12 @@ function renderAnalytics(){
 // ── MARKETING ──
 async function renderMarketing(){
   const mes=todayStr.slice(0,7);
+  const mesActual=new Date().toLocaleString('es-BO',{month:'long',year:'numeric'});
+  const mesKey=new Date().toISOString().slice(0,7);
+
+  // Stats del mes
   const stats=[
-    {label:'Leads totales',val:allLeads.filter(l=>l.mes_anio===mes).length,cls:'y'},
+    {label:'Leads '+mesActual,val:allLeads.filter(l=>l.mes_anio===mes).length,cls:'y'},
     {label:'Con campaña',val:allLeads.filter(l=>l.mes_anio===mes&&l.campana).length,cls:'b'},
     {label:'Sin campaña',val:allLeads.filter(l=>l.mes_anio===mes&&!l.campana).length,cls:''},
     {label:'Campañas activas',val:campanas.filter(c=>c.activa).length,cls:'g'},
@@ -1837,38 +2317,74 @@ async function renderMarketing(){
   document.getElementById('mkt-stats').innerHTML=stats.map(s=>`<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value ${s.cls}">${s.val}</div></div>`).join('');
   
   const el=document.getElementById('campanas-list');
-  const mesActual=new Date().toLocaleString('es-BO',{month:'long',year:'numeric'});
-  // Filtrar solo campañas del mes actual o activas
-  const mesKey=new Date().toISOString().slice(0,7);
-  const campanasMes=campanas.filter(c=>!c.mes||c.mes.startsWith(mesKey)||c.activa);
-  if(!campanasMes.length){el.innerHTML=`<div class="empty-state"><div class="empty-title">Sin campañas para ${mesActual}</div><div class="empty-sub">Crea una campaña para ${mesActual}</div></div>`;return;}
-  const campanas=campanasMes; // usar solo las del mes
-  el.innerHTML=campanas.map(c=>{
-    const leads=allLeads.filter(l=>l.campana==c.id);
-    const vis=leads.filter(l=>['visita_agendada','visita_realizada','cerrado_ganado'].includes(l.estado)).length;
-    const gan=leads.filter(l=>l.estado==='cerrado_ganado').length;
-    return`<div class="campana-card">
+
+  // Si no hay campañas en la BD, mostrar opción de crear
+  if(!campanas||!campanas.length){
+    el.innerHTML=`<div class="empty-state">
+      <div class="empty-title">Sin campañas aún</div>
+      <div class="empty-sub">Crea tu primera campaña de Facebook Ads para ${mesActual}</div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="abrirModal('modal-campana')">+ Nueva Campaña</button>
+    </div>`;
+    return;
+  }
+
+  // Mostrar TODAS las campañas ordenadas: activas primero, luego por mes
+  const campanasOrdenadas=[...campanas].sort((a,b)=>{
+    if(a.activa&&!b.activa) return -1;
+    if(!a.activa&&b.activa) return 1;
+    return (b.created_at||'').localeCompare(a.created_at||'');
+  });
+
+  el.innerHTML=campanasOrdenadas.map(c=>{
+    const leadsC=allLeads.filter(l=>String(l.campana)===String(c.id));
+    const leadsmes=leadsC.filter(l=>l.mes_anio===mes);
+    const vis=leadsC.filter(l=>['visita_agendada','visita_realizada','cerrado_ganado'].includes(l.estado)).length;
+    const gan=leadsC.filter(l=>l.estado==='cerrado_ganado').length;
+    const cpl=leadsC.length&&c.presupuesto?'Bs.'+(c.presupuesto/leadsC.length).toFixed(0):'—';
+    const convRate=leadsC.length?((gan/leadsC.length)*100).toFixed(1)+'%':'0%';
+    return`<div class="campana-card" style="${c.activa?'border-color:rgba(46,204,113,0.3)':''}">
       <div>
-        <div class="campana-name">${c.nombre} ${c.activa?'<span class="badge badge-ganado">Activa</span>':''}</div>
-        <div class="campana-meta">${c.plataforma}${c.presupuesto?' · Bs. '+c.presupuesto:''}</div>
+        <div class="campana-name">${c.nombre} ${c.activa?'<span class="badge badge-ganado">✓ Activa</span>':'<span class="badge badge-perdido">Inactiva</span>'}</div>
+        <div class="campana-meta">${c.plataforma||'Facebook Ads'}${c.presupuesto?' · Presupuesto: Bs. '+Number(c.presupuesto).toLocaleString():''}</div>
+        ${c.fecha_inicio?`<div class="campana-meta" style="margin-top:4px">📅 ${c.fecha_inicio}${c.fecha_fin?' → '+c.fecha_fin:''}</div>`:''}
+        ${c.notas?`<div class="campana-meta" style="margin-top:4px;color:var(--gris5)">${c.notas}</div>`:''}
       </div>
       <div class="campana-stats">
-        <div class="campana-stat"><div class="campana-stat-val">${leads.length}</div><div class="campana-stat-lbl">Leads</div></div>
+        <div class="campana-stat"><div class="campana-stat-val">${leadsC.length}</div><div class="campana-stat-lbl">Total leads</div></div>
+        <div class="campana-stat"><div class="campana-stat-val">${leadsmes.length}</div><div class="campana-stat-lbl">Este mes</div></div>
         <div class="campana-stat"><div class="campana-stat-val">${vis}</div><div class="campana-stat-lbl">Visitas</div></div>
         <div class="campana-stat"><div class="campana-stat-val">${gan}</div><div class="campana-stat-lbl">Contratos</div></div>
-        <div class="campana-stat"><div class="campana-stat-val">${leads.length&&c.presupuesto?'Bs.'+(c.presupuesto/leads.length).toFixed(0):'—'}</div><div class="campana-stat-lbl">CPL</div></div>
+        <div class="campana-stat"><div class="campana-stat-val">${cpl}</div><div class="campana-stat-lbl">CPL</div></div>
+        <div class="campana-stat"><div class="campana-stat-val">${convRate}</div><div class="campana-stat-lbl">Conversión</div></div>
       </div>
     </div>`;
   }).join('');
 }
 
 async function guardarCampana(){
-  const data={nombre:document.getElementById('mc-nombre').value.trim(),plataforma:document.getElementById('mc-plataforma').value,presupuesto:parseFloat(document.getElementById('mc-presupuesto').value)||0,fecha_inicio:document.getElementById('mc-inicio').value||null,fecha_fin:document.getElementById('mc-fin').value||null,notas:document.getElementById('mc-notas').value||null};
-  if(!data.nombre){toast('Escribe el nombre de la campaña','error');return;}
+  const nombre=document.getElementById('mc-nombre').value.trim();
+  if(!nombre){toast('Escribe el nombre de la campaña','error');return;}
+  const data={
+    nombre,
+    plataforma:document.getElementById('mc-plataforma').value||'Facebook Ads',
+    presupuesto:parseFloat(document.getElementById('mc-presupuesto').value)||null,
+    fecha_inicio:document.getElementById('mc-inicio').value||null,
+    fecha_fin:document.getElementById('mc-fin').value||null,
+    notas:document.getElementById('mc-notas').value||null,
+    mes:new Date().toISOString().slice(0,7), // mes actual automático
+    activa:true
+  };
   const{error}=await sb.from('campanas').insert([data]);
-  if(error){toast('Error al guardar','error');return;}
-  cerrarModal('modal-campana');toast('Campaña creada','success');
-  await loadCampanas();renderMarketing();
+  if(error){console.error(error);toast('Error: '+error.message,'error');return;}
+  cerrarModal('modal-campana');
+  toast('Campaña creada ✓','success');
+  // Limpiar formulario
+  ['mc-nombre','mc-presupuesto','mc-inicio','mc-fin','mc-notas'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  await loadCampanas();
+  renderMarketing();
 }
 
 // ── ADMIN ──
@@ -1958,7 +2474,166 @@ function renderAdmin(){
   `;
 }
 
-// ── BUSCADOR GLOBAL ──
+// ── DATOS HISTÓRICOS ──
+function toggleHistorico(btn){
+  const wrap = document.getElementById('historico-wrap');
+  const visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : '';
+  btn.textContent = visible ? '▼ Ver historial' : '▲ Ocultar';
+  if(!visible) cargarHistorico();
+}
+
+async function cargarHistorico(){
+  const cap = document.getElementById('hist-captador')?.value || '';
+  const mes = document.getElementById('hist-mes')?.value || '';
+  const est = document.getElementById('hist-estado')?.value || '';
+  
+  const el = document.getElementById('hist-tabla');
+  el.innerHTML = '<div class="loading-state"><span class="spin"></span>Cargando historial...</div>';
+  
+  let q = sb.from('leads')
+    .select('id,nombre,celular,ciudad,captador,cerrador,fecha_ingreso,mes_anio,estado,financiamiento,notas,intento1_estado,intento2_estado,intento3_estado')
+    .eq('archivado', true)
+    .order('fecha_ingreso', {ascending: false})
+    .limit(200);
+  
+  if(cap) q = q.eq('captador', cap);
+  if(mes) q = q.eq('mes_anio', mes);
+  if(est) q = q.eq('estado', est);
+  
+  const {data, error} = await q;
+  if(error){el.innerHTML='<div class="empty-state"><div class="empty-title">Error al cargar</div></div>';return;}
+  
+  const leads = data||[];
+  
+  // Stats resumen
+  const total = leads.length;
+  const ganados = leads.filter(l=>l.estado==='cerrado_ganado').length;
+  const perdidos = leads.filter(l=>l.estado==='cerrado_perdido').length;
+  const seguimiento = leads.filter(l=>l.estado==='en_seguimiento').length;
+  const conv = total ? ((ganados/total)*100).toFixed(1) : 0;
+  
+  const statsEl = document.getElementById('hist-stats');
+  if(statsEl) statsEl.innerHTML = [
+    {l:'Registros',v:total,c:'y'},
+    {l:'Ganados',v:ganados,c:'g'},
+    {l:'Perdidos',v:perdidos,c:'r'},
+    {l:'Seguimiento',v:seguimiento,c:'b'},
+    {l:'Conversión',v:conv+'%',c:''},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value ${s.c}" style="font-size:22px">${s.v}</div></div>`).join('');
+  
+  if(!leads.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-title">Sin registros con esos filtros</div></div>';
+    return;
+  }
+  
+  const estadoBadge={nuevo:'badge-nuevo',en_seguimiento:'badge-seguimiento',visita_agendada:'badge-visita',visita_realizada:'badge-visita',cerrado_ganado:'badge-ganado',cerrado_perdido:'badge-perdido'};
+  const estadoLabel={nuevo:'Nuevo',en_seguimiento:'Seguimiento',visita_agendada:'Visita',visita_realizada:'Realizada',cerrado_ganado:'Ganado',cerrado_perdido:'Perdido'};
+  
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--gris4);margin-bottom:8px">Mostrando ${leads.length} de máx. 200 registros</div>
+    <div class="leads-table-wrap" style="overflow-x:auto">
+      <table class="leads-table" style="min-width:700px">
+        <thead><tr>
+          <th>Nombre</th><th>Celular</th><th>Captador</th>
+          <th>Fecha</th><th>Estado</th><th>Intentos</th><th>Notas</th>
+        </tr></thead>
+        <tbody>
+          ${leads.map(l=>`<tr>
+            <td><div class="lead-name">${l.nombre||'Sin nombre'}</div></td>
+            <td class="lead-tel">${l.celular||'—'}</td>
+            <td style="font-size:12px">${l.captador||'—'}</td>
+            <td style="font-size:11px;color:var(--gris4)">${l.fecha_ingreso||'—'}</td>
+            <td><span class="badge ${estadoBadge[l.estado]||''}">${estadoLabel[l.estado]||l.estado||'—'}</span></td>
+            <td>
+              <div class="intentos-wrap">
+                <div class="intento-dot ${l.intento1_estado||'pendiente'}" title="Int. 1: ${l.intento1_estado||'pendiente'}"></div>
+                <div class="intento-dot ${l.intento2_estado||'pendiente'}" title="Int. 2: ${l.intento2_estado||'pendiente'}"></div>
+                <div class="intento-dot ${l.intento3_estado||'pendiente'}" title="Int. 3: ${l.intento3_estado||'pendiente'}"></div>
+              </div>
+            </td>
+            <td style="font-size:11px;color:var(--gris4);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.notas||''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── BUSCADOR GLOBAL POTENTE ──
+let buscarCampo = ''; // filtro de campo activo
+
+function setBuscarFiltro(btn, campo){
+  document.querySelectorAll('.buscar-filtro').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buscarCampo = campo;
+  ejecutarBusqueda();
+}
+
+function ejecutarBusqueda(){
+  const q = (document.getElementById('buscar-input').value||'').trim().toLowerCase();
+  const res = document.getElementById('buscar-resultados');
+  const ctr = document.getElementById('buscar-contador');
+  
+  if(!q || q.length < 1){
+    res.innerHTML='<div class="empty-state"><div class="empty-title">Escribe para buscar</div><div class="empty-sub">Busca en todos los leads activos del sistema</div></div>';
+    ctr.textContent='';
+    return;
+  }
+
+  // Búsqueda en el campo seleccionado o en todos
+  const campos = buscarCampo ? [buscarCampo] : ['nombre','celular','ciudad','captador','cerrador','notas','estado','resultado_reunion'];
+  
+  const found = allLeads.filter(l => {
+    return campos.some(c => {
+      const val = l[c];
+      return val && String(val).toLowerCase().includes(q);
+    });
+  });
+
+  ctr.textContent = found.length ? `${found.length} resultado${found.length!==1?'s':''} encontrado${found.length!==1?'s':''}` : 'Sin resultados';
+
+  if(!found.length){
+    res.innerHTML=`<div class="empty-state"><div class="empty-title">Sin resultados para "${q}"</div><div class="empty-sub">Intenta con otros términos o cambia el filtro</div></div>`;
+    return;
+  }
+
+  const estadoLabel={nuevo:'🆕 Nuevo',en_seguimiento:'🔄 Seguimiento',visita_agendada:'📅 Visita',visita_realizada:'✅ Realizada',cerrado_ganado:'🏆 Ganado',cerrado_perdido:'❌ Perdido'};
+  const estadoBadge={nuevo:'badge-nuevo',en_seguimiento:'badge-seguimiento',visita_agendada:'badge-visita',visita_realizada:'badge-visita',cerrado_ganado:'badge-ganado',cerrado_perdido:'badge-perdido'};
+
+  // Destacar el texto encontrado
+  function highlight(text, q){
+    if(!text) return '—';
+    const idx = String(text).toLowerCase().indexOf(q);
+    if(idx<0) return text;
+    const s = String(text);
+    return s.slice(0,idx)+'<mark style="background:rgba(245,196,0,0.35);color:var(--blanco);border-radius:2px;padding:0 2px">'+s.slice(idx,idx+q.length)+'</mark>'+s.slice(idx+q.length);
+  }
+
+  res.innerHTML = `
+    <div class="leads-table-wrap" style="overflow-x:auto">
+      <table class="leads-table">
+        <thead><tr>
+          <th>Nombre</th><th>Celular</th><th>Ciudad</th>
+          <th>Captador</th><th>Estado</th><th>Cerrador</th><th>Notas</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${found.map(l=>`
+            <tr onclick="abrirModalLead(${l.id})" style="cursor:pointer">
+              <td><div class="lead-name">${highlight(l.nombre||'Sin nombre',q)}</div><div style="font-size:11px;color:var(--gris4)">${l.fecha_ingreso||''}</div></td>
+              <td class="lead-tel">${highlight(l.celular,q)}</td>
+              <td class="lead-city">${highlight(l.ciudad,q)}</td>
+              <td style="font-size:12px">${highlight(l.captador,q)||'—'}</td>
+              <td><span class="badge ${estadoBadge[l.estado]||''}">${estadoLabel[l.estado]||l.estado||'—'}</span></td>
+              <td style="font-size:12px">${highlight(l.cerrador,q)||'—'}</td>
+              <td style="font-size:11px;color:var(--gris4);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${highlight(l.notas,q)||''}</td>
+              <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirModalLead(${l.id})">Ver</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// Buscador rápido del topbar (solo abre panel buscar)
 function buscarGlobal(q){
   const res=document.getElementById('buscador-results');
   if(!q||q.length<2){res.style.display='none';return;}
