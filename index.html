@@ -572,6 +572,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
       <span class="topbar-role" id="topbar-role">—</span>
       <span class="topbar-user">Hola, <strong id="topbar-user">—</strong></span>
       <button id="btn-refresh" onclick="loadAll();toast('Datos actualizados','success')" style="display:none;background:none;border:1px solid var(--gris2);border-radius:var(--r);padding:4px 10px;color:var(--amarillo);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif" title="Actualizar datos ahora">🔄</button>
+      <!-- BUSCADOR GLOBAL -->
+      <div id="buscador-wrap" style="position:relative;display:none">
+        <input type="text" id="buscador-global" placeholder="🔍 Buscar lead..." 
+          style="background:var(--negro3);border:1px solid var(--gris2);border-radius:var(--r);padding:5px 12px;color:var(--blanco);font-size:12px;font-family:'DM Sans',sans-serif;width:180px;outline:none;transition:all 0.2s"
+          oninput="buscarGlobal(this.value)" onfocus="this.style.borderColor='var(--amarillo)'" onblur="this.style.borderColor='var(--gris2)'">
+        <div id="buscador-results" style="position:absolute;top:36px;right:0;background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r2);min-width:280px;max-height:320px;overflow-y:auto;z-index:999;display:none;box-shadow:var(--shadow)"></div>
+      </div>
       <button class="logout-btn" onclick="logout()">Salir</button>
     </div>
   </div>
@@ -1134,6 +1141,9 @@ function buildSidebar(){
   // Mostrar botón refresh solo para admin
   const btnRef=document.getElementById('btn-refresh');
   if(btnRef) btnRef.style.display=(cu.rol==='admin')?'':'none';
+  // Mostrar buscador global para todos
+  const bw=document.getElementById('buscador-wrap');
+  if(bw) bw.style.display='';
   const rol=cu.rol==='admin'||cu.nombre==='Admin'?'admin':
     cu.rol==='cerrador'?'cerrador':
     cu.rol==='captador'?'captador':'marketing';
@@ -1947,6 +1957,45 @@ function renderAdmin(){
     <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value g">${ganados}</div></div>
   `;
 }
+
+// ── BUSCADOR GLOBAL ──
+function buscarGlobal(q){
+  const res=document.getElementById('buscador-results');
+  if(!q||q.length<2){res.style.display='none';return;}
+  const ql=q.toLowerCase();
+  const found=allLeads.filter(l=>
+    (l.nombre&&l.nombre.toLowerCase().includes(ql))||
+    (l.celular&&l.celular.toLowerCase().includes(ql))||
+    (l.ciudad&&l.ciudad.toLowerCase().includes(ql))||
+    (l.captador&&l.captador.toLowerCase().includes(ql))||
+    (l.notas&&l.notas.toLowerCase().includes(ql))
+  ).slice(0,10);
+  if(!found.length){
+    res.innerHTML='<div style="padding:14px 16px;color:var(--gris4);font-size:13px">Sin resultados para "'+q+'"</div>';
+    res.style.display='block';return;
+  }
+  const badge=(estado)=>{
+    const map={nuevo:'badge-nuevo',en_seguimiento:'badge-seguimiento',visita_agendada:'badge-visita',visita_realizada:'badge-visita',cerrado_ganado:'badge-ganado',cerrado_perdido:'badge-perdido'};
+    const labels={nuevo:'Nuevo',en_seguimiento:'Seguimiento',visita_agendada:'Visita',visita_realizada:'Realizada',cerrado_ganado:'Ganado',cerrado_perdido:'Perdido'};
+    return `<span class="badge ${map[estado]||''}" style="font-size:9px">${labels[estado]||estado}</span>`;
+  };
+  res.innerHTML=found.map(l=>`
+    <div onclick="abrirModalLead(${l.id});document.getElementById('buscador-global').value='';document.getElementById('buscador-results').style.display='none'" 
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--gris1);transition:background 0.1s"
+      onmouseover="this.style.background='var(--gris1)'" onmouseout="this.style.background=''">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-size:13px;font-weight:500;color:var(--blanco)">${l.nombre||'Sin nombre'}</div>
+        ${badge(l.estado)}
+      </div>
+      <div style="font-size:11px;color:var(--gris4);margin-top:2px">${l.celular||''} · ${l.captador||''} · ${l.ciudad||''}</div>
+    </div>
+  `).join('');
+  res.style.display='block';
+}
+// Cerrar buscador al hacer clic fuera
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#buscador-wrap'))document.getElementById('buscador-results').style.display='none';
+});
 
 // ── MENSAJES PREFABRICADOS ──
 function copiarMensaje(idx){
