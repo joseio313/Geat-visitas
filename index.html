@@ -947,6 +947,48 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         </div>
       </div>
 
+      <!-- PANEL: COMISIONES -->
+      <div class="panel" id="pn-comisiones">
+        <div class="page-header">
+          <div>
+            <div class="page-title">💰 Registro de Comisiones</div>
+            <div class="page-subtitle">Comisión: 1.27% del contrato — mitad captador / mitad cerrador</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="abrirModalComision()">+ Registrar Cierre</button>
+          </div>
+        </div>
+
+        <!-- Stats rápidos -->
+        <div class="stats-grid" id="com-stats" style="margin-bottom:20px"></div>
+
+        <!-- Filtros -->
+        <div class="leads-toolbar" style="margin-bottom:16px">
+          <select class="filter-sel" id="com-fil-mes" onchange="renderComisiones()">
+            <option value="">Todos los meses</option>
+            <option value="2026-04">Abril 2026</option>
+            <option value="2026-03">Marzo 2026</option>
+            <option value="2026-02">Febrero 2026</option>
+          </select>
+          <select class="filter-sel" id="com-fil-persona" onchange="renderComisiones()">
+            <option value="">Todos</option>
+            <option value="captador">Por captador</option>
+            <option value="cerrador">Por cerrador</option>
+          </select>
+          <select class="filter-sel" id="com-fil-pagado" onchange="renderComisiones()">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendientes</option>
+            <option value="pagado">Pagados</option>
+          </select>
+        </div>
+
+        <!-- Tabla de comisiones -->
+        <div id="com-tabla"><div class="loading-state"><span class="spin"></span>Cargando...</div></div>
+
+        <!-- Resumen por persona -->
+        <div id="com-resumen" style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px"></div>
+      </div>
+
     </div><!-- /main -->
   </div><!-- /app-body -->
 </div><!-- /screen-app -->
@@ -1130,6 +1172,62 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
   </div>
 </div>
 
+<!-- ══ MODAL: REGISTRAR CIERRE/COMISIÓN ══ -->
+<div class="modal-overlay" id="modal-comision">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">💰 Registrar Cierre</div>
+        <div class="modal-subtitle">El sistema calcula la comisión automáticamente (1.27%)</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModal('modal-comision')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Cliente (lead)</label>
+          <select class="form-select" id="com-lead-id" onchange="autoRellenarComision(this.value)">
+            <option value="">Seleccionar lead cerrado...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Captador</label>
+          <input type="text" class="form-input" id="com-captador" placeholder="Nombre captador">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cerrador</label>
+          <input type="text" class="form-input" id="com-cerrador" placeholder="Nombre cerrador">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto contrato (USD)</label>
+          <input type="number" class="form-input" id="com-monto" placeholder="Ej: 45000" oninput="calcularComision()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha contrato</label>
+          <input type="date" class="form-input" id="com-fecha">
+        </div>
+        <!-- Cálculo automático -->
+        <div class="form-group full" id="com-calculo-wrap" style="display:none;background:rgba(245,196,0,0.08);border:1px solid rgba(245,196,0,0.2);border-radius:var(--r2);padding:14px">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--amarillo);margin-bottom:10px">Comisión calculada (1.27%)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
+            <div><div style="font-size:10px;color:var(--gris4)">Total</div><div id="com-calc-total" style="font-size:18px;font-weight:700;color:var(--amarillo)">$0</div></div>
+            <div><div style="font-size:10px;color:var(--gris4)">Captador (50%)</div><div id="com-calc-cap" style="font-size:18px;font-weight:700;color:var(--verde)">$0</div></div>
+            <div><div style="font-size:10px;color:var(--gris4)">Cerrador (50%)</div><div id="com-calc-cer" style="font-size:18px;font-weight:700;color:var(--azul)">$0</div></div>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Observaciones</label>
+          <textarea class="form-textarea" id="com-obs" placeholder="Notas sobre el contrato o pago..." style="min-height:60px"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cerrarModal('modal-comision')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarComision()">💾 Guardar cierre</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL: MENSAJES PREFABRICADOS ══ -->
 <div class="modal-overlay" id="modal-mensajes">
   <div class="modal" style="max-width:560px">
@@ -1148,35 +1246,47 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 
 <!-- ══ MODAL: CAMPAÑA ══ -->
 <div class="modal-overlay" id="modal-campana">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:560px">
     <div class="modal-header">
-      <div><div class="modal-title">Nueva Campaña</div></div>
+      <div><div class="modal-title" id="modal-campana-titulo">Nueva campaña</div>
+      <div class="modal-subtitle">Inversión en USD (USDT) → Bs. automático</div></div>
       <button class="modal-close" onclick="cerrarModal('modal-campana')">✕</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="mc-id">
       <div class="form-grid">
-        <div class="form-group full"><label class="form-label">Nombre de campaña</label><input type="text" class="form-input" id="mc-nombre" placeholder="Ej: Campaña Abril 2026"></div>
+        <div class="form-group full"><label class="form-label">Nombre de la campaña *</label>
+          <input type="text" class="form-input" id="mc-nombre" placeholder="Ej: Video Steffi Abril 2026"></div>
         <div class="form-group"><label class="form-label">Plataforma</label>
           <select class="form-select" id="mc-plataforma">
-            <option>Facebook Ads</option><option>Instagram</option><option>TikTok</option><option>Google Ads</option><option>Otro</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label">Presupuesto (Bs.)</label><input type="number" class="form-input" id="mc-presupuesto" placeholder="0.00"></div>
-        <div class="form-group"><label class="form-label">Fecha inicio</label><input type="date" class="form-input" id="mc-inicio"></div>
-        <div class="form-group"><label class="form-label">Fecha fin</label><input type="date" class="form-input" id="mc-fin"></div>
-        <div class="form-group full"><label class="form-label">Notas</label><textarea class="form-textarea" id="mc-notas" placeholder="Objetivo de la campaña, público objetivo..."></textarea></div>
+            <option>Facebook Ads</option><option>TikTok</option><option>Instagram</option><option>Orgánico</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Cuenta / Fan Page</label>
+          <input type="text" class="form-input" id="mc-cuenta" placeholder="Ej: Página personal Steffi, Fan Page GEAT"></div>
+        <div class="form-group"><label class="form-label">Leads van a → captador</label>
+          <select class="form-select" id="mc-captador-camp">
+            <option value="">Sin asignar</option>
+            <option>Steffi Villarpando</option><option>Maria Luisa</option><option>Genoveva Alata</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Inversión USD (USDT pagado)</label>
+          <input type="number" class="form-input" id="mc-presupuesto" placeholder="Ej: 50" oninput="calcularInversionBs()" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Tipo cambio (Face convierte a Bs.)</label>
+          <input type="number" class="form-input" id="mc-tipo-cambio" value="6.96" oninput="calcularInversionBs()" step="0.01">
+          <div id="mc-bs-preview" style="font-size:13px;color:var(--amarillo);margin-top:4px;font-weight:600"></div></div>
+        <div class="form-group"><label class="form-label">Fecha inicio</label>
+          <input type="date" class="form-input" id="mc-inicio"></div>
+        <div class="form-group"><label class="form-label">Fecha fin</label>
+          <input type="date" class="form-input" id="mc-fin"></div>
+        <div class="form-group full"><label class="form-label">Notas</label>
+          <textarea class="form-textarea" id="mc-notas" style="min-height:60px"></textarea></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="cerrarModal('modal-campana')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarCampana()">Guardar campaña</button>
+      <button class="btn btn-primary" onclick="guardarCampana()">💾 Guardar campaña</button>
     </div>
   </div>
 </div>
-
-<!-- ══ TOAST ══ -->
-<div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
-
 <script>
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
@@ -1245,23 +1355,35 @@ const NAV_ITEMS={
     {id:'inicio',icon:'◈',label:'Inicio'},
     {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'mis-leads',icon:'◎',label:'Mis Leads'},
-    {id:'agenda',icon:'◻',label:'Agenda'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
   ],
   cerrador:[
     {id:'inicio',icon:'◈',label:'Inicio'},
     {id:'buscar',icon:'🔍',label:'Buscar'},
-    {id:'mi-agenda',icon:'◻',label:'Mi Agenda'},
-    {id:'todos-leads',icon:'◎',label:'Leads'},
-    {id:'analytics',icon:'▦',label:'Informes'},
+    {id:'todos-leads',icon:'◎',label:'Mis Leads'},
+    {id:'mi-agenda',icon:'📋',label:'Mi Agenda'},
+    {id:'agenda',icon:'📅',label:'Agenda Oficina'},
+    {id:'analytics',icon:'▦',label:'Mis KPIs'},
+  ],
+  jefe_comercial:[
+    {id:'inicio',icon:'◈',label:'Inicio'},
+    {id:'buscar',icon:'🔍',label:'Buscar'},
+    {id:'todos-leads',icon:'◉',label:'Todos los Leads'},
+    {id:'agenda',icon:'📅',label:'Agenda Oficina'},
+    {id:'mi-agenda',icon:'📋',label:'Mi Agenda'},
+    {id:'analytics',icon:'▦',label:'Analytics'},
+    {id:'marketing',icon:'◈',label:'Marketing'},
+    {id:'comisiones',icon:'💰',label:'Comisiones'},
   ],
   admin:[
     {id:'inicio',icon:'◈',label:'Inicio'},
     {id:'buscar',icon:'🔍',label:'Buscar'},
     {id:'todos-leads',icon:'◉',label:'Todos los Leads'},
     {id:'mis-leads',icon:'◎',label:'Leads Captador'},
-    {id:'agenda',icon:'◻',label:'Agenda'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
     {id:'analytics',icon:'▦',label:'Analytics'},
     {id:'marketing',icon:'◈',label:'Marketing'},
+    {id:'comisiones',icon:'💰',label:'Comisiones'},
     {id:'admin',icon:'⚙',label:'Admin'},
   ],
   marketing:[
@@ -1280,6 +1402,8 @@ function buildSidebar(){
   const bw=document.getElementById('buscador-wrap');
   if(bw) bw.style.display='';
   const rol=cu.rol==='admin'||cu.nombre==='Admin'?'admin':
+    cu.rol==='jefe_comercial'?'jefe_comercial':
+    cu.rol==='jefe_comercial'?'jefe_comercial':
     cu.rol==='cerrador'?'cerrador':
     cu.rol==='captador'?'captador':'marketing';
   const items=NAV_ITEMS[rol]||NAV_ITEMS.captador;
@@ -1318,6 +1442,8 @@ function sw(tab){
   document.getElementById('topbar-section').textContent=nb?.textContent?.trim()||tab;
   if(tab==='analytics')renderAnalytics();
   if(tab==='marketing')renderMarketing();
+  if(tab==='comisiones')renderComisiones();
+  if(tab==='comisiones')renderComisiones();
   if(tab==='buscar'){
     setTimeout(()=>{
       const inp=document.getElementById('buscar-input');
@@ -1493,7 +1619,16 @@ function filtrarTodos(){
   const cap=document.getElementById('filter-captador-todos')?.value||'';
   const estado=document.getElementById('filter-estado-todos')?.value||'';
   let leads=[...allLeads];
-  if(q)leads=leads.filter(l=>l.nombre.toLowerCase().includes(q)||l.celular.includes(q)||(l.ciudad||'').toLowerCase().includes(q)||l.captador.toLowerCase().includes(q));
+  // Cerrador solo ve sus leads asignados
+  if(cu.rol==='cerrador') leads=leads.filter(l=>l.cerrador===cu.nombre);
+  if(q)leads=leads.filter(l=>
+    (l.nombre||'').toLowerCase().includes(q)||
+    (l.celular||'').includes(q)||
+    (l.ciudad||'').toLowerCase().includes(q)||
+    (l.captador||'').toLowerCase().includes(q)||
+    (l.cerrador||'').toLowerCase().includes(q)||
+    (l.notas||'').toLowerCase().includes(q)
+  );
   if(cap)leads=leads.filter(l=>l.captador===cap);
   if(estado)leads=leads.filter(l=>l.estado===estado);
   renderLeadsTable(leads,'todos-leads-container',true);
@@ -2361,31 +2496,7 @@ async function renderMarketing(){
   }).join('');
 }
 
-async function guardarCampana(){
-  const nombre=document.getElementById('mc-nombre').value.trim();
-  if(!nombre){toast('Escribe el nombre de la campaña','error');return;}
-  const data={
-    nombre,
-    plataforma:document.getElementById('mc-plataforma').value||'Facebook Ads',
-    presupuesto:parseFloat(document.getElementById('mc-presupuesto').value)||null,
-    fecha_inicio:document.getElementById('mc-inicio').value||null,
-    fecha_fin:document.getElementById('mc-fin').value||null,
-    notas:document.getElementById('mc-notas').value||null,
-    mes:new Date().toISOString().slice(0,7), // mes actual automático
-    activa:true
-  };
-  const{error}=await sb.from('campanas').insert([data]);
-  if(error){console.error(error);toast('Error: '+error.message,'error');return;}
-  cerrarModal('modal-campana');
-  toast('Campaña creada ✓','success');
-  // Limpiar formulario
-  ['mc-nombre','mc-presupuesto','mc-inicio','mc-fin','mc-notas'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.value='';
-  });
-  await loadCampanas();
-  renderMarketing();
-}
+async function guardarCampana(){const nombre=document.getElementById('mc-nombre').value.trim();if(!nombre){toast('Escribe el nombre','error');return;}const mcId=document.getElementById('mc-id')?.value;const usd=parseFloat(document.getElementById('mc-presupuesto')?.value)||0;const tc=parseFloat(document.getElementById('mc-tipo-cambio')?.value)||6.96;const data={nombre,plataforma:document.getElementById('mc-plataforma').value||'Facebook Ads',cuenta:document.getElementById('mc-cuenta')?.value||null,captador_asignado:document.getElementById('mc-captador-camp')?.value||null,inversion_usd:usd||null,tipo_cambio:tc,presupuesto:usd||null,fecha_inicio:document.getElementById('mc-inicio').value||null,fecha_fin:document.getElementById('mc-fin').value||null,notas:document.getElementById('mc-notas').value||null,mes:new Date().toISOString().slice(0,7),activa:true};let error;if(mcId){({error}=await sb.from('campanas').update(data).eq('id',parseInt(mcId)));}else{({error}=await sb.from('campanas').insert([data]));}if(error){toast('Error: '+error.message,'error');return;}if(document.getElementById('mc-id'))document.getElementById('mc-id').value='';cerrarModal('modal-campana');toast(mcId?'Actualizada ✓':'Creada ✓','success');await loadCampanas();renderMarketing();}
 
 // ── ADMIN ──
 // ── IMPERSONACIÓN (ver como colaborador) ──
@@ -2473,6 +2584,228 @@ function renderAdmin(){
     <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value g">${ganados}</div></div>
   `;
 }
+
+// ── COMISIONES ──
+let comisiones = [];
+
+async function loadComisiones(){
+  const{data}=await sb.from('comisiones').select('*').order('created_at',{ascending:false});
+  comisiones = data||[];
+}
+
+async function renderComisiones(){
+  await loadComisiones();
+  const filMes = document.getElementById('com-fil-mes')?.value||'';
+  const filPagado = document.getElementById('com-fil-pagado')?.value||'';
+  
+  let data = comisiones;
+  if(filMes) data = data.filter(c=>(c.fecha_contrato||'').startsWith(filMes));
+  if(filPagado==='pendiente') data = data.filter(c=>!c.pagado_captador||!c.pagado_cerrador);
+  if(filPagado==='pagado') data = data.filter(c=>c.pagado_captador&&c.pagado_cerrador);
+
+  // Stats
+  const totalMonto = data.reduce((s,c)=>s+(Number(c.monto_contrato)||0),0);
+  const totalComision = data.reduce((s,c)=>s+(Number(c.comision_total)||0),0);
+  const pendCap = data.filter(c=>!c.pagado_captador).reduce((s,c)=>s+(Number(c.comision_captador)||0),0);
+  const pendCer = data.filter(c=>!c.pagado_cerrador).reduce((s,c)=>s+(Number(c.comision_cerrador)||0),0);
+  
+  const statsEl = document.getElementById('com-stats');
+  if(statsEl) statsEl.innerHTML = [
+    {l:'Contratos',v:data.length,c:'y'},
+    {l:'Monto total',v:'$'+totalMonto.toLocaleString(),c:''},
+    {l:'Comisión total',v:'$'+totalComision.toFixed(2),c:'g'},
+    {l:'Pendiente captadores',v:'$'+pendCap.toFixed(2),c:'r'},
+    {l:'Pendiente cerradores',v:'$'+pendCer.toFixed(2),c:'b'},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value ${s.c}" style="font-size:20px">${s.v}</div></div>`).join('');
+
+  const el = document.getElementById('com-tabla');
+  if(!data.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-title">Sin cierres registrados</div><div class="empty-sub">Registra tu primer contrato con el botón + Registrar Cierre</div></div>';
+    renderResumenComisiones(data);
+    return;
+  }
+
+  el.innerHTML=`<div class="leads-table-wrap" style="overflow-x:auto">
+    <table class="leads-table" style="min-width:800px">
+      <thead><tr>
+        <th>Cliente</th><th>Captador</th><th>Cerrador</th>
+        <th>Monto USD</th><th>Comisión 1.27%</th><th>Captador 50%</th><th>Cerrador 50%</th>
+        <th>Fecha</th><th>Estado pago</th><th>Acciones</th>
+      </tr></thead>
+      <tbody>
+        ${data.map(c=>`<tr>
+          <td><div class="lead-name">${c.nombre_cliente}</div></td>
+          <td style="font-size:12px">${c.captador||'—'}</td>
+          <td style="font-size:12px">${c.cerrador||'—'}</td>
+          <td style="font-family:'DM Mono',monospace;color:var(--amarillo)">$${Number(c.monto_contrato).toLocaleString()}</td>
+          <td style="font-family:'DM Mono',monospace;color:var(--verde)">$${Number(c.comision_total).toFixed(2)}</td>
+          <td style="font-size:12px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-family:'DM Mono',monospace">$${Number(c.comision_captador).toFixed(2)}</span>
+              <span class="badge ${c.pagado_captador?'badge-ganado':'badge-perdido'}" style="font-size:9px">${c.pagado_captador?'✓ Pagado':'Pendiente'}</span>
+            </div>
+          </td>
+          <td style="font-size:12px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-family:'DM Mono',monospace">$${Number(c.comision_cerrador).toFixed(2)}</span>
+              <span class="badge ${c.pagado_cerrador?'badge-ganado':'badge-perdido'}" style="font-size:9px">${c.pagado_cerrador?'✓ Pagado':'Pendiente'}</span>
+            </div>
+          </td>
+          <td style="font-size:11px;color:var(--gris4)">${c.fecha_contrato||'—'}</td>
+          <td>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${!c.pagado_captador?`<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="marcarPagado(${c.id},'captador')">Pagar cap.</button>`:''}
+              ${!c.pagado_cerrador?`<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="marcarPagado(${c.id},'cerrador')">Pagar cer.</button>`:''}
+            </div>
+          </td>
+          <td><button class="btn btn-ghost btn-sm" onclick="eliminarComision(${c.id})">🗑</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+  
+  renderResumenComisiones(data);
+}
+
+function renderResumenComisiones(data){
+  // Resumen por persona
+  const personas = {};
+  data.forEach(c=>{
+    if(c.captador){
+      if(!personas[c.captador]) personas[c.captador]={tipo:'captador',contratos:0,ganado:0,pendiente:0};
+      personas[c.captador].contratos++;
+      personas[c.captador].ganado += c.pagado_captador ? Number(c.comision_captador) : 0;
+      personas[c.captador].pendiente += !c.pagado_captador ? Number(c.comision_captador) : 0;
+    }
+    if(c.cerrador){
+      if(!personas[c.cerrador]) personas[c.cerrador]={tipo:'cerrador',contratos:0,ganado:0,pendiente:0};
+      personas[c.cerrador].contratos++;
+      personas[c.cerrador].ganado += c.pagado_cerrador ? Number(c.comision_cerrador) : 0;
+      personas[c.cerrador].pendiente += !c.pagado_cerrador ? Number(c.comision_cerrador) : 0;
+    }
+  });
+  
+  const resEl = document.getElementById('com-resumen');
+  if(!resEl) return;
+  
+  const entries = Object.entries(personas);
+  if(!entries.length){resEl.innerHTML='';return;}
+  
+  resEl.innerHTML = entries.map(([nombre,d])=>`
+    <div class="card" style="margin-bottom:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:600;color:var(--blanco)">${nombre}</div>
+          <div style="font-size:11px;color:var(--gris4)">${d.tipo==='captador'?'Captador':'Cerrador'} · ${d.contratos} contrato${d.contratos!==1?'s':''}</div>
+        </div>
+        <span class="badge ${d.tipo==='captador'?'badge-nuevo':'badge-visita'}">${d.tipo}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:rgba(46,204,113,0.1);border-radius:var(--r);padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--gris4)">Cobrado</div>
+          <div style="font-size:18px;font-weight:700;color:var(--verde)">$${d.ganado.toFixed(2)}</div>
+        </div>
+        <div style="background:rgba(231,76,60,0.1);border-radius:var(--r);padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--gris4)">Pendiente</div>
+          <div style="font-size:18px;font-weight:700;color:var(--rojo)">$${d.pendiente.toFixed(2)}</div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function abrirModalComision(){
+  // Llenar select de leads ganados
+  const sel = document.getElementById('com-lead-id');
+  const ganados = allLeads.filter(l=>l.estado==='cerrado_ganado'||l.monto_contrato);
+  sel.innerHTML = '<option value="">Seleccionar lead cerrado...</option>' + 
+    ganados.map(l=>`<option value="${l.id}">${l.nombre||'Sin nombre'} — ${l.captador||''} / ${l.cerrador||''}</option>`).join('');
+  document.getElementById('com-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('com-calculo-wrap').style.display='none';
+  document.getElementById('com-monto').value='';
+  document.getElementById('com-obs').value='';
+  abrirModal('modal-comision');
+}
+
+function autoRellenarComision(leadId){
+  if(!leadId) return;
+  const l = allLeads.find(x=>x.id==leadId);
+  if(!l) return;
+  document.getElementById('com-captador').value = l.captador||'';
+  document.getElementById('com-cerrador').value = l.cerrador||'';
+  if(l.monto_contrato){
+    document.getElementById('com-monto').value = l.monto_contrato;
+    calcularComision();
+  }
+}
+
+function calcularComision(){
+  const monto = parseFloat(document.getElementById('com-monto').value)||0;
+  const wrap = document.getElementById('com-calculo-wrap');
+  if(monto>0){
+    const total = monto*0.0127;
+    const mitad = total/2;
+    document.getElementById('com-calc-total').textContent = '$'+total.toFixed(2);
+    document.getElementById('com-calc-cap').textContent = '$'+mitad.toFixed(2);
+    document.getElementById('com-calc-cer').textContent = '$'+mitad.toFixed(2);
+    wrap.style.display='';
+  } else {
+    wrap.style.display='none';
+  }
+}
+
+async function guardarComision(){
+  const leadId = document.getElementById('com-lead-id').value;
+  const monto = parseFloat(document.getElementById('com-monto').value);
+  if(!monto||monto<=0){toast('Ingresa el monto del contrato','error');return;}
+  
+  const l = leadId ? allLeads.find(x=>x.id==leadId) : null;
+  const data = {
+    lead_id: leadId||null,
+    nombre_cliente: l?.nombre || 'Cliente manual',
+    captador: document.getElementById('com-captador').value||null,
+    cerrador: document.getElementById('com-cerrador').value||null,
+    monto_contrato: monto,
+    fecha_contrato: document.getElementById('com-fecha').value||null,
+    observaciones: document.getElementById('com-obs').value||null,
+  };
+  
+  const{error}=await sb.from('comisiones').insert([data]);
+  if(error){toast('Error: '+error.message,'error');return;}
+  
+  // Si hay lead, marcarlo como ganado y guardar monto
+  if(leadId){
+    await sb.from('leads').update({estado:'cerrado_ganado',monto_contrato:monto}).eq('id',leadId);
+  }
+  
+  cerrarModal('modal-comision');
+  toast('Cierre registrado ✓','success');
+  await loadAll();
+  renderComisiones();
+}
+
+async function marcarPagado(id, tipo){
+  const upd = tipo==='captador' 
+    ? {pagado_captador:true, fecha_pago_captador:new Date().toISOString().slice(0,10)}
+    : {pagado_cerrador:true, fecha_pago_cerrador:new Date().toISOString().slice(0,10)};
+  await sb.from('comisiones').update(upd).eq('id',id);
+  toast('Pago registrado ✓','success');
+  renderComisiones();
+}
+
+async function eliminarComision(id){
+  if(!confirm('¿Eliminar este registro de comisión?')) return;
+  await sb.from('comisiones').delete().eq('id',id);
+  toast('Registro eliminado','success');
+  renderComisiones();
+}
+
+// ── FECHAS Y HORAS AUTOMÁTICAS ──
+// Al guardar un lead, si tiene proximo_contacto = auto-fecha
+function getFechaHoraAhora(){
+  return new Date().toISOString();
+}
+
+function calcularInversionBs(){const usd=parseFloat(document.getElementById('mc-presupuesto')?.value)||0;const tc=parseFloat(document.getElementById('mc-tipo-cambio')?.value)||6.96;const bs=usd*tc;const el=document.getElementById('mc-bs-preview');if(el)el.textContent=bs>0?'= Bs. '+bs.toLocaleString('es-BO',{minimumFractionDigits:2}):'';}async function editarCampana(id){const c=campanas.find(x=>x.id===id);if(!c)return;if(document.getElementById('mc-id'))document.getElementById('mc-id').value=id;document.getElementById('mc-nombre').value=c.nombre||'';document.getElementById('mc-plataforma').value=c.plataforma||'Facebook Ads';if(document.getElementById('mc-cuenta'))document.getElementById('mc-cuenta').value=c.cuenta||'';if(document.getElementById('mc-captador-camp'))document.getElementById('mc-captador-camp').value=c.captador_asignado||'';document.getElementById('mc-presupuesto').value=c.inversion_usd||c.presupuesto||0;if(document.getElementById('mc-tipo-cambio'))document.getElementById('mc-tipo-cambio').value=c.tipo_cambio||6.96;document.getElementById('mc-inicio').value=c.fecha_inicio||'';document.getElementById('mc-fin').value=c.fecha_fin||'';document.getElementById('mc-notas').value=c.notas||'';calcularInversionBs();if(document.getElementById('modal-campana-titulo'))document.getElementById('modal-campana-titulo').textContent='Editar campaña';abrirModal('modal-campana');}async function toggleCampana(id,activa){await sb.from('campanas').update({activa}).eq('id',id);toast(activa?'Activada ✓':'Pausada','success');await loadCampanas();renderMarketing();}function renderRankingCaptadores(mes){const caps=colaboradores.filter(c=>c.rol==='captador').map(c=>c.nombre);const lm=allLeads.filter(l=>l.mes_anio===mes);const max=Math.max(...caps.map(c=>lm.filter(l=>l.captador===c).length),1);const el=document.getElementById('mkt-ranking');if(!el)return;el.innerHTML='<div class="card"><div class="card-header"><div class="card-title">📊 Ranking captadores este mes</div></div>'+caps.sort((a,b)=>lm.filter(l=>l.captador===b).length-lm.filter(l=>l.captador===a).length).map(cap=>{const n=lm.filter(l=>l.captador===cap).length;const v=lm.filter(l=>l.captador===cap&&['visita_agendada','visita_realizada','cerrado_ganado'].includes(l.estado)).length;const g=lm.filter(l=>l.captador===cap&&l.estado==='cerrado_ganado').length;return'<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-weight:600">'+cap+'</span><span style="font-size:11px;color:var(--gris4)">👥'+n+' 📅'+v+' 🏆'+g+'</span></div><div style="background:var(--gris1);border-radius:4px;height:6px"><div style="height:100%;background:var(--amarillo);border-radius:4px;width:'+(n/max*100)+'%"></div></div></div>';}).join('')+'</div>';}
 
 // ── DATOS HISTÓRICOS ──
 function toggleHistorico(btn){
