@@ -229,6 +229,70 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .tarea-nombre{font-size:13px;font-weight:500;color:var(--blanco)}
 .tarea-meta{font-size:11px;color:var(--gris4);margin-top:1px}
 
+/* ── AUDIO VOICE INPUT ── */
+.audio-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--negro3);border:1px solid var(--gris2);
+  border-radius:var(--r);padding:8px 14px;cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--gris4);
+  font-family:'DM Sans',sans-serif;transition:all 0.2s;
+  position:relative;
+}
+.audio-btn:hover{border-color:var(--gris3);color:var(--blanco)}
+.audio-btn.recording{
+  background:rgba(231,76,60,0.15);border-color:rgba(231,76,60,0.5);
+  color:var(--rojo);animation:pulse-rec 1.5s infinite;
+}
+.audio-btn .rec-dot{
+  width:8px;height:8px;border-radius:50%;background:currentColor;
+  flex-shrink:0;
+}
+.audio-btn.recording .rec-dot{animation:blink-dot 1s infinite}
+@keyframes pulse-rec{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,0.3)}50%{box-shadow:0 0 0 6px rgba(231,76,60,0)}}
+@keyframes blink-dot{0%,100%{opacity:1}50%{opacity:0.2}}
+
+.audio-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.85);
+  z-index:800;display:none;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.audio-overlay.open{display:flex}
+.audio-modal{
+  background:var(--negro2);border:1px solid var(--gris2);
+  border-radius:var(--r3);padding:32px;max-width:420px;width:90%;
+  text-align:center;
+}
+.audio-wave{
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  height:48px;margin:20px 0;
+}
+.audio-wave span{
+  width:4px;border-radius:2px;background:var(--amarillo);
+  animation:wave-bar 1.2s ease-in-out infinite;
+}
+.audio-wave span:nth-child(1){animation-delay:0s;height:16px}
+.audio-wave span:nth-child(2){animation-delay:0.1s;height:28px}
+.audio-wave span:nth-child(3){animation-delay:0.2s;height:40px}
+.audio-wave span:nth-child(4){animation-delay:0.3s;height:28px}
+.audio-wave span:nth-child(5){animation-delay:0.4s;height:16px}
+.audio-wave span:nth-child(6){animation-delay:0.2s;height:32px}
+.audio-wave span:nth-child(7){animation-delay:0.1s;height:20px}
+@keyframes wave-bar{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1)}}
+.audio-proc-spinner{
+  width:48px;height:48px;border:3px solid var(--gris2);
+  border-top-color:var(--amarillo);border-radius:50%;
+  animation:spin 0.8s linear infinite;margin:20px auto;
+}
+.audio-result-card{
+  background:var(--negro3);border:1px solid var(--gris2);
+  border-radius:var(--r2);padding:16px;margin-top:16px;
+  text-align:left;
+}
+.audio-field{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--gris1);font-size:12px}
+.audio-field:last-child{border-bottom:none}
+.audio-field-label{color:var(--gris4);min-width:100px;font-weight:600;text-transform:uppercase;font-size:10px}
+.audio-field-val{color:var(--blanco);flex:1}
+
 /* ── MY TASKS ── */
 .task-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);margin-bottom:8px;cursor:pointer;transition:all 0.15s}
 .task-item:hover{border-color:var(--gris3);background:var(--negro3)}
@@ -256,6 +320,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .cal-evento.sala-principal{background:rgba(245,196,0,0.25);border-left:3px solid var(--amarillo);color:var(--blanco)}
 .cal-evento.sala-gerencia{background:rgba(52,152,219,0.25);border-left:3px solid var(--azul);color:var(--blanco)}
 .cal-evento.sin-sala{background:rgba(155,89,182,0.25);border-left:3px solid #9b59b6;color:var(--blanco)}
+/* Colores por estado del lead en calendario */
+.cal-evento.estado-nuevo{background:rgba(255,182,193,0.3);border-left:3px solid #ff69b4;color:var(--blanco)}
+.cal-evento.estado-seguimiento{background:rgba(245,196,0,0.25);border-left:3px solid var(--amarillo);color:var(--blanco)}
+.cal-evento.estado-visita-agendada{background:rgba(46,204,113,0.2);border-left:3px solid #2ecc71;color:var(--blanco)}
+.cal-evento.estado-visita-realizada{background:rgba(39,174,96,0.35);border-left:3px solid #1a9e6c;color:var(--blanco)}
+.cal-evento.estado-perdido{background:rgba(231,76,60,0.2);border-left:3px solid var(--rojo);color:var(--blanco)}
+.cal-evento.estado-ganado{background:rgba(46,204,113,0.4);border-left:3px solid #00a86b;color:var(--blanco)}
+.cal-evento.tipo-seguimiento{background:rgba(243,156,18,0.2);border-left:3px solid var(--naranja);color:var(--blanco)}
 
 /* Popup evento */
 .evento-popup{position:fixed;background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r2);padding:16px;min-width:260px;max-width:320px;z-index:600;box-shadow:var(--shadow)}
@@ -441,6 +513,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
   .topbar-user{display:none}
   .topbar-role{display:none}
   .topbar-divider{display:none}
+  /* Botón audio siempre visible en topbar */
+  #btn-audio-topbar{
+    width:38px!important;height:38px!important;font-size:18px!important;
+  }
+  #btn-audio-topbar:active{transform:scale(0.88)!important}
   .topbar-section{font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .logout-btn{font-size:11px;padding:4px 10px}
 
@@ -523,6 +600,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
   .inner-tab{padding:7px 14px;font-size:11px;white-space:nowrap}
   .badge{font-size:9px;padding:2px 6px}
   .btn-sm{font-size:11px;padding:6px 10px}
+  
+  /* Audio en móvil - botones de panel más compactos */
+  .audio-btn{
+    padding:8px 12px;
+    font-size:12px;
+  }
 }
 
 /* ── TABS DENTRO DE PANEL ── */
@@ -618,6 +701,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div class="topbar-right">
       <span class="topbar-role" id="topbar-role">—</span>
       <span class="topbar-user">Hola, <strong id="topbar-user">—</strong></span>
+      <!-- BOTÓN AUDIO TOPBAR — visible siempre, compacto en móvil -->
+      <button id="btn-audio-topbar" onclick="mostrarMenuAudioFab()" 
+        title="Registrar por voz"
+        style="display:none;background:var(--amarillo);border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:16px;flex-shrink:0;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:transform 0.15s">
+        🎙️
+      </button>
       <button id="btn-refresh" onclick="loadAll();toast('Datos actualizados','success')" style="display:none;background:none;border:1px solid var(--gris2);border-radius:var(--r);padding:4px 10px;color:var(--amarillo);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif" title="Actualizar datos ahora">🔄</button>
       <!-- BUSCADOR GLOBAL -->
       <div id="buscador-wrap" style="position:relative;display:none">
@@ -647,6 +736,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
           </div>
         </div>
         <div style="position:relative;margin-bottom:20px">
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+            <button class="audio-btn" onclick="iniciarGrabacion('buscar')">
+              <span class="rec-dot"></span> Buscar por voz
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="cargarAudioArchivo('buscar')">📁 Audio</button>
+          </div>
           <input type="text" id="buscar-input" class="search-input" 
             placeholder="🔍 Escribe nombre, celular, ciudad, notas..." 
             oninput="ejecutarBusqueda()" autofocus
@@ -679,6 +774,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <div class="page-title">Buenos días, <span id="inicio-nombre">—</span> 👋</div>
             <div class="page-subtitle" id="inicio-fecha">—</div>
           </div>
+          <div class="page-actions">
+            <button class="audio-btn" onclick="iniciarGrabacion('nuevo_lead')" title="Registrar lead por voz">
+              <span class="rec-dot"></span> Nuevo lead por voz
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="cargarAudioArchivo('nuevo_lead')" title="Cargar audio desde archivo">
+              📁 Cargar audio
+            </button>
+          </div>
         </div>
         <!-- NOTIFICACIONES DEL DÍA -->
         <div id="notif-wrap" style="display:none;margin-bottom:16px">
@@ -708,6 +811,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <div class="page-subtitle">Gestión y seguimiento de clientes captados</div>
           </div>
           <div class="page-actions">
+            <button class="audio-btn" onclick="iniciarGrabacion('nuevo_lead')" title="Registrar por voz">
+              <span class="rec-dot"></span> Voz
+            </button>
             <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(0)">📋 Mensaje 1</button>
             <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(1)">📋 Mensaje 2</button>
             <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(2)">📋 Mensaje 3</button>
@@ -822,6 +928,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <div class="page-subtitle">Tu agenda personal — visitas, seguimientos y tareas</div>
           </div>
           <div class="page-actions">
+            <button class="audio-btn btn-sm" onclick="iniciarGrabacion('seguimiento')">
+              <span class="rec-dot"></span> Seguimiento voz
+            </button>
             <button class="btn btn-primary btn-sm" onclick="abrirModalVisita()">+ Agendar visita</button>
           </div>
         </div>
@@ -991,6 +1100,44 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         </div>
       </div>
 
+      <!-- PANEL: PAPELERA DE PERDIDOS -->
+      <div class="panel" id="pn-papelera">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🗑️ Leads Perdidos</div>
+            <div class="page-subtitle">Historial de leads perdidos con motivos — puedes reactivarlos</div>
+          </div>
+        </div>
+        <!-- Filtros -->
+        <div class="leads-toolbar" style="margin-bottom:16px">
+          <select class="filter-sel" id="pap-motivo" onchange="cargarPapelera()">
+            <option value="">Todos los motivos</option>
+            <option value="no_contesto">No contestó</option>
+            <option value="dejo_contestar">Dejó de contestar</option>
+            <option value="falta_presupuesto">Falta de presupuesto</option>
+            <option value="otro_departamento">Otro departamento</option>
+            <option value="precio_elevado">Precio elevado</option>
+            <option value="quiere_credito_directo">Quiere crédito directo</option>
+            <option value="no_califica_bancario">No califica bancario</option>
+            <option value="solo_informacion">Solo quería información</option>
+            <option value="otros">Otros</option>
+          </select>
+          <select class="filter-sel" id="pap-mes" onchange="cargarPapelera()">
+            <option value="">Todos los meses</option>
+            <option value="2026-04">Abril 2026</option>
+            <option value="2026-03">Marzo 2026</option>
+            <option value="2026-02">Febrero 2026</option>
+          </select>
+          <select class="filter-sel" id="pap-reactivado" onchange="cargarPapelera()">
+            <option value="">Todos</option>
+            <option value="false">Sin reactivar</option>
+            <option value="true">Reactivados</option>
+          </select>
+        </div>
+        <div class="stats-grid" id="pap-stats" style="margin-bottom:16px"></div>
+        <div id="pap-tabla"><div class="loading-state"><span class="spin"></span>Cargando...</div></div>
+      </div>
+
       <!-- PANEL: COMISIONES -->
       <div class="panel" id="pn-comisiones">
         <div class="page-header">
@@ -1045,7 +1192,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         <div class="modal-title" id="modal-lead-title">Nuevo Lead</div>
         <div class="modal-subtitle" id="modal-lead-subtitle">Registro de cliente captado</div>
       </div>
-      <button class="modal-close" onclick="cerrarModal('modal-lead')">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="audio-btn btn-sm" onclick="cerrarModal('modal-lead');setTimeout(()=>iniciarGrabacion('nuevo_lead'),100)" title="Completar con voz">
+          <span class="rec-dot"></span> Completar con voz
+        </button>
+        <button class="modal-close" onclick="cerrarModal('modal-lead')">✕</button>
+      </div>
     </div>
     <div class="modal-body">
       <!-- INDICADOR BORRADOR -->
@@ -1067,6 +1219,31 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <option value="bancario">Financiamiento bancario</option>
           </select>
         </div>
+        <div class="form-group"><label class="form-label">Medio de difusión</label>
+          <select class="form-select" id="ml-medio-difusion" onchange="guardarBorrador()">
+            <option value="">Seleccionar...</option>
+            <option value="fan_page_geat">📘 Fan Page GEAT (video)</option>
+            <option value="fan_page_steffi">📘 Fan Page Steffi (video)</option>
+            <option value="fan_page_genoveva">📘 Fan Page Genoveva</option>
+            <option value="tiktok_steffi">🎵 TikTok Steffi</option>
+            <option value="tiktok_empresa">🎵 TikTok Empresa</option>
+            <option value="instagram">📸 Instagram</option>
+            <option value="referido_cliente">🤝 Referido de cliente</option>
+            <option value="referido_directorio">📒 Referido de directorio</option>
+            <option value="contacto_propio">👤 Contacto propio</option>
+            <option value="barrido_ruteo">🗺️ Barrido / Ruteo</option>
+            <option value="viaje_corporativo">✈️ Viaje corporativo</option>
+            <option value="otro">Otro</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Campaña</label>
+          <select class="form-select" id="ml-campana-id" onchange="guardarBorrador()">
+            <option value="">Sin campaña específica</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">¿Visitó oficina?</label>
+          <select class="form-select" id="ml-visito-oficina">
+            <option value="false">No visitó</option>
+            <option value="true">✅ Sí visitó</option>
+          </select></div>
 
         <!-- CAPTADOR (solo admin ve el select, captador ve su nombre fijo) -->
         <div class="form-group" id="wrap-captador"><label class="form-label">Captador</label>
@@ -1091,6 +1268,40 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <option value="cerrado_ganado">🏆 Cerrado ganado</option>
             <option value="cerrado_perdido">❌ Cerrado perdido</option>
           </select>
+        </div>
+        <!-- Campos condicionales según estado -->
+        <div id="campos-perdido" style="display:none" class="form-group full">
+          <label class="form-label" style="color:var(--rojo)">Motivo de pérdida *</label>
+          <select class="form-select" id="ml-motivo-perdida">
+            <option value="">Seleccionar motivo...</option>
+            <option value="no_contesto">No contestó llamadas ni mensajes</option>
+            <option value="dejo_contestar">Dejó de contestar llamadas y mensajes</option>
+            <option value="falta_presupuesto">Por falta de presupuesto</option>
+            <option value="otro_departamento">Era de otro departamento</option>
+            <option value="precio_elevado">Por precio elevado</option>
+            <option value="quiere_credito_directo">Quiere crédito directo</option>
+            <option value="no_califica_bancario">No califica a financiamiento bancario</option>
+            <option value="celular_apagado">Celular apagado</option>
+            <option value="celular_fuera_servicio">Celular fuera de servicio</option>
+            <option value="cliente_conflictivo">Cliente conflictivo</option>
+            <option value="era_competencia">Era la competencia</option>
+            <option value="solo_informacion">Solo quería información</option>
+            <option value="pide_varias_veces">Varias veces pide información y no contesta</option>
+            <option value="otros">Otros</option>
+          </select>
+        </div>
+        <div id="campos-ganado" style="display:none" class="form-group full">
+          <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.2);border-radius:var(--r2);padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="grid-column:1/-1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--verde)">🏆 Registrar venta</div>
+            <div class="form-group"><label class="form-label">Código de venta</label>
+              <input type="text" class="form-input" id="ml-codigo-venta" placeholder="Ej: GEAT-2026-001"></div>
+            <div class="form-group"><label class="form-label">Monto USD</label>
+              <input type="number" class="form-input" id="ml-monto-venta" placeholder="Ej: 45000"></div>
+            <div class="form-group"><label class="form-label">M² construidos</label>
+              <input type="number" class="form-input" id="ml-metros" placeholder="Ej: 120"></div>
+            <div class="form-group"><label class="form-label">Modelo</label>
+              <input type="text" class="form-input" id="ml-modelo-venta" placeholder="Ej: Paraíso, Portales"></div>
+          </div>
         </div>
         <!-- PRÓXIMO CONTACTO -->
         <div class="form-group"><label class="form-label">Próximo contacto</label>
@@ -1363,6 +1574,63 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
   </div>
 </div>
 
+<!-- ══ AUDIO VOICE INPUT MODAL ══ -->
+<div class="audio-overlay" id="audio-overlay">
+  <div class="audio-modal">
+    <!-- Estado: grabando -->
+    <div id="audio-state-recording" style="display:none">
+      <div style="font-size:32px;margin-bottom:8px">🎙️</div>
+      <div style="font-size:16px;font-weight:600;color:var(--blanco);margin-bottom:4px">Escuchando...</div>
+      <div style="font-size:12px;color:var(--gris4);margin-bottom:16px" id="audio-hint">Habla con claridad. Di el nombre, celular, ciudad y detalles del cliente.</div>
+      <div class="audio-wave">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div id="audio-timer" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--amarillo);margin:8px 0">0:00</div>
+      <button class="btn btn-danger" onclick="detenerGrabacion()" style="margin-top:8px;width:100%">
+        ⏹ Detener y procesar
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelarGrabacion()" style="margin-top:8px;width:100%">
+        Cancelar
+      </button>
+    </div>
+
+    <!-- Estado: procesando -->
+    <div id="audio-state-processing" style="display:none">
+      <div class="audio-proc-spinner"></div>
+      <div style="font-size:15px;font-weight:600;color:var(--blanco);margin-bottom:8px">Procesando con IA...</div>
+      <div style="font-size:12px;color:var(--gris4)" id="audio-proc-msg">Transcribiendo y extrayendo datos</div>
+    </div>
+
+    <!-- Estado: resultado -->
+    <div id="audio-state-result" style="display:none">
+      <div id="audio-result-icon" style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-size:15px;font-weight:600;color:var(--blanco);margin-bottom:4px" id="audio-result-titulo">Datos extraídos</div>
+      <div style="font-size:12px;color:var(--gris4);margin-bottom:12px;font-style:italic" id="audio-transcripcion"></div>
+      <div class="audio-result-card" id="audio-campos"></div>
+      <div id="audio-faltantes-wrap" style="display:none;margin-top:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:var(--r);padding:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--rojo);margin-bottom:6px">⚠️ Falta información</div>
+        <div id="audio-faltantes" style="font-size:12px;color:var(--gris5)"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" onclick="confirmarAudioDatos()" style="flex:1" id="btn-audio-confirmar">
+          ✓ Confirmar y guardar
+        </button>
+        <button class="btn btn-ghost" onclick="cancelarGrabacion()" style="flex:1">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <!-- Estado: error -->
+    <div id="audio-state-error" style="display:none">
+      <div style="font-size:32px;margin-bottom:8px">❌</div>
+      <div style="font-size:15px;font-weight:600;color:var(--rojo);margin-bottom:8px" id="audio-error-msg">Error al procesar</div>
+      <button class="btn btn-secondary" onclick="reiniciarAudio()" style="width:100%;margin-top:8px">Intentar de nuevo</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelarGrabacion()" style="width:100%;margin-top:8px">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
@@ -1450,6 +1718,7 @@ const NAV_ITEMS={
     {id:'mi-agenda',icon:'📋',label:'My Schedule'},
     {id:'analytics',icon:'▦',label:'Analytics'},
     {id:'marketing',icon:'◈',label:'Marketing'},
+    {id:'papelera',icon:'🗑️',label:'Lost Leads'},
     {id:'comisiones',icon:'💰',label:'Commissions'},
     {id:'team',icon:'👥',label:'Team'},
   ],
@@ -1461,6 +1730,7 @@ const NAV_ITEMS={
     {id:'agenda',icon:'📅',label:'Agenda'},
     {id:'analytics',icon:'▦',label:'Analytics'},
     {id:'marketing',icon:'◈',label:'Marketing'},
+    {id:'papelera',icon:'🗑️',label:'Lost Leads'},
     {id:'comisiones',icon:'💰',label:'Commissions'},
     {id:'admin',icon:'⚙',label:'Admin'},
   ],
@@ -1479,6 +1749,9 @@ function buildSidebar(){
   // Mostrar buscador global para todos
   const bw=document.getElementById('buscador-wrap');
   if(bw) bw.style.display='';
+  // Mostrar botón audio en topbar para todos
+  const btnAudioTop=document.getElementById('btn-audio-topbar');
+  if(btnAudioTop) btnAudioTop.style.display='flex';
   const rol=cu.rol==='admin'||cu.nombre==='Admin'?'admin':
     cu.rol==='commercial_lead'?'commercial_lead':
     cu.rol==='closer'?'closer':
@@ -1521,7 +1794,8 @@ function sw(tab){
   if(tab==='analytics') renderAnalytics();
   if(tab==='marketing') renderMarketing();
   if(tab==='comisiones') renderComisiones();
-  if(tab==='team') renderTeam();           // Solo commercial_lead llega aquí
+  if(tab==='team') renderTeam();
+  if(tab==='papelera') cargarPapelera();           // Solo commercial_lead llega aquí
   if(tab==='admin' && cu.rol==='admin') renderAdmin(); // Solo admin real
   if(tab==='mi-agenda') renderTasks();
   if(tab==='agenda') cargarAgendaReal();
@@ -1536,6 +1810,7 @@ function sw(tab){
 
 // ── DATA ──
 async function loadAll(){
+  iniciarRealtime(); // Activar actualizaciones en tiempo real
   // Admin ve datos frescos siempre (sin caché)
   await Promise.all([loadLeads(),loadCampanas()]);
   renderInicio();
@@ -1543,22 +1818,44 @@ async function loadAll(){
 
 // Suscripción realtime — admin ve cambios al instante
 let realtimeChannel=null;
+
+// Realtime: actualización automática cuando cambian leads
 function iniciarRealtime(){
-  if(realtimeChannel) return;
-  realtimeChannel=sb.channel('leads-changes')
-    .on('postgres_changes',{event:'*',schema:'public',table:'leads'},async(payload)=>{
-      // Actualizar allLeads en memoria sin recargar todo
+  if(realtimeChannel) return; // ya activo
+  realtimeChannel = sb.channel('leads-changes')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'leads'
+    }, async (payload) => {
+      // Actualizar el lead en memoria sin recargar todo
       if(payload.eventType==='INSERT'){
-        allLeads.unshift(payload.new);
+        if(!payload.new.archivado){
+          allLeads.unshift(payload.new);
+          updateBadges();
+        }
       } else if(payload.eventType==='UPDATE'){
-        const idx=allLeads.findIndex(l=>l.id===payload.new.id);
-        if(idx>=0) allLeads[idx]=payload.new; else allLeads.unshift(payload.new);
+        const idx = allLeads.findIndex(l=>l.id===payload.new.id);
+        if(idx>-1){
+          if(payload.new.archivado) allLeads.splice(idx,1);
+          else allLeads[idx]={...allLeads[idx],...payload.new};
+        } else if(!payload.new.archivado){
+          allLeads.unshift(payload.new);
+        }
+        updateBadges();
       } else if(payload.eventType==='DELETE'){
-        allLeads=allLeads.filter(l=>l.id!==payload.old.id);
+        allLeads = allLeads.filter(l=>l.id!==payload.old.id);
       }
-      renderMisLeads();
-      renderTodosLeads();
-      renderInicio();
+      // Refrescar la vista activa
+      const panelActivo = document.querySelector('.panel.active');
+      if(panelActivo){
+        const tabId = panelActivo.id.replace('pn-','');
+        if(tabId==='mis-leads') filtrarLeads();
+        if(tabId==='todos-leads') filtrarTodos();
+        if(tabId==='agenda') renderAgenda();
+        if(tabId==='mi-agenda') renderTasks();
+        if(tabId==='inicio') renderInicio();
+      }
     })
     .subscribe();
 }
@@ -1729,22 +2026,30 @@ function guardarBorrador(){
     captador:document.getElementById('ml-captador').value,
     campana:document.getElementById('ml-campana').value,
     estado:document.getElementById('ml-estado').value,
-    motivo:document.getElementById('ml-motivo').value,
-    motivo_otro:document.getElementById('ml-motivo-otro').value,
+    motivo:document.getElementById('ml-motivo')?.value||null,
+    motivo_otro:document.getElementById('ml-motivo-otro')?.value||null,
     notas:document.getElementById('ml-notas').value,
-    proximo:document.getElementById('ml-proximo').value,
-    i1f:document.getElementById('ml-i1-fecha').value,
-    i1e:document.getElementById('ml-i1-estado').value,
-    i2f:document.getElementById('ml-i2-fecha').value,
-    i2e:document.getElementById('ml-i2-estado').value,
-    i3f:document.getElementById('ml-i3-fecha').value,
-    i3e:document.getElementById('ml-i3-estado').value,
+    proximo:document.getElementById('ml-proximo')?.value||null,
+    i1f:document.getElementById('ml-i1-fecha')?.value||null,
+    i1e:document.getElementById('ml-i1-estado')?.value||null,
+    i2f:document.getElementById('ml-i2-fecha')?.value||null,
+    i2e:document.getElementById('ml-i2-estado')?.value||null,
+    i3f:document.getElementById('ml-i3-fecha')?.value||null,
+    i3e:document.getElementById('ml-i3-estado')?.value||null,
     cerrador:document.getElementById('ml-cerrador').value,
-    sala:document.getElementById('ml-sala').value,
-    visita_dia:document.getElementById('ml-visita-fecha-dia').value,
-    visita_hora:document.getElementById('ml-visita-hora').value,
-    resultado:document.getElementById('ml-resultado').value,
-    resultado_notas:document.getElementById('ml-resultado-notas').value,
+    sala:document.getElementById('ml-sala')?.value||null,
+    visita_dia:document.getElementById('ml-visita-fecha-dia')?.value||null,
+    visita_hora:document.getElementById('ml-visita-hora')?.value||null,
+    resultado:document.getElementById('ml-resultado')?.value||null,
+    resultado_notas:document.getElementById('ml-resultado-notas')?.value||null,
+    // Nuevos campos Etapa 2
+    medio_difusion:document.getElementById('ml-medio-difusion')?.value||null,
+    campana_id:document.getElementById('ml-campana-id')?.value||null,
+    visito_oficina:document.getElementById('ml-visito-oficina')?.value==='true',
+    motivo_perdida:document.getElementById('ml-motivo-perdida')?.value||null,
+    codigo_venta:document.getElementById('ml-codigo-venta')?.value||null,
+    monto_contrato:parseFloat(document.getElementById('ml-monto-venta')?.value)||null,
+    metros_cuadrados:parseFloat(document.getElementById('ml-metros')?.value)||null,
   };
   localStorage.setItem('geat_draft_'+cu.nombre, JSON.stringify(datos));
 }
@@ -1972,8 +2277,11 @@ function abrirModalLead(id=null){
 }
 
 function toggleMotivo(){
-  const e=document.getElementById('ml-estado').value;
-  document.getElementById('motivo-wrap').style.display=e==='cerrado_perdido'?'':'none';
+  const est = document.getElementById('ml-estado')?.value;
+  const elP = document.getElementById('campos-perdido');
+  const elG = document.getElementById('campos-ganado');
+  if(elP) elP.style.display = est==='cerrado_perdido' ? '' : 'none';
+  if(elG) elG.style.display = est==='cerrado_ganado' ? '' : 'none';
 }
 
 function checkOtroMotivo(){
@@ -2010,25 +2318,32 @@ async function guardarLead(){
     ciudad:document.getElementById('ml-ciudad').value.trim()||'Santa Cruz',
     financiamiento:document.getElementById('ml-financiamiento').value,
     captador:document.getElementById('ml-captador').value,
-    campana:document.getElementById('ml-campana').value||null,
+    campana:document.getElementById('ml-campana')?.value||null,
     estado:document.getElementById('ml-estado').value,
-    motivo_perdida:document.getElementById('ml-motivo').value||null,
+    motivo_perdida:document.getElementById('ml-motivo-perdida')?.value||document.getElementById('ml-motivo')?.value||null,
     notas:document.getElementById('ml-notas').value||null,
-    proximo_contacto:document.getElementById('ml-proximo').value||null,
-    intento1_fecha:document.getElementById('ml-i1-fecha').value||null,
-    intento1_estado:document.getElementById('ml-i1-estado').value,
-    intento2_fecha:document.getElementById('ml-i2-fecha').value||null,
-    intento2_estado:document.getElementById('ml-i2-estado').value,
-    intento3_fecha:document.getElementById('ml-i3-fecha').value||null,
-    intento3_estado:document.getElementById('ml-i3-estado').value,
+    proximo_contacto:document.getElementById('ml-proximo')?.value||null,
+    intento1_fecha:document.getElementById('ml-i1-fecha')?.value||null,
+    intento1_estado:document.getElementById('ml-i1-estado')?.value||null,
+    intento2_fecha:document.getElementById('ml-i2-fecha')?.value||null,
+    intento2_estado:document.getElementById('ml-i2-estado')?.value||null,
+    intento3_fecha:document.getElementById('ml-i3-fecha')?.value||null,
+    intento3_estado:document.getElementById('ml-i3-estado')?.value||null,
     cerrador:cerrador,
-    visita_sala:document.getElementById('ml-sala').value||null,
+    visita_sala:document.getElementById('ml-sala')?.value||null,
     visita_fecha:visitaFecha,
-    resultado_estado:document.getElementById('ml-resultado').value||null,
-    resultado_reunion:document.getElementById('ml-resultado-notas').value||null,
+    resultado_estado:document.getElementById('ml-resultado')?.value||null,
+    resultado_reunion:document.getElementById('ml-resultado-notas')?.value||null,
     mes_anio:fechaHoy,
     numero_mes:new Date().getMonth()+1,
-    fecha_ingreso:new Date().toISOString().slice(0,10),
+    fecha_ingreso:editingLeadId?undefined:new Date().toISOString().slice(0,10),
+    // Nuevos campos Etapa 2
+    medio_difusion:document.getElementById('ml-medio-difusion')?.value||null,
+    campana_id:document.getElementById('ml-campana-id')?.value?parseInt(document.getElementById('ml-campana-id').value):null,
+    visito_oficina:document.getElementById('ml-visito-oficina')?.value==='true',
+    monto_contrato:parseFloat(document.getElementById('ml-monto-venta')?.value)||null,
+    metros_cuadrados:parseFloat(document.getElementById('ml-metros')?.value)||null,
+    codigo_venta:document.getElementById('ml-codigo-venta')?.value||null,
   };
   
   if(!data.captador){toast('Selecciona un captador','error');btn.disabled=false;btn.textContent='💾 Guardar lead';return;}
@@ -2046,22 +2361,52 @@ async function guardarLead(){
   btn.disabled=false;btn.textContent='💾 Guardar lead';
   if(err){toast('Error: '+err.message,'error');return;}
   
-  // Limpiar borrador tras guardar exitosamente
+  // PASO 1: Cerrar modal y mostrar toast INMEDIATAMENTE (sin esperar nada)
   limpiarBorrador();
   cerrarModal('modal-lead');
   toast(editingLeadId?'✅ Lead actualizado':'✅ Lead registrado','success');
   
-  // Admin ve el lead inmediatamente (sin esperar loadLeads)
-  if(newId){
-    const{data:newLead}=await sb.from('leads').select('*').eq('id',newId).single();
-    if(newLead) allLeads.unshift(newLead);
-    renderMisLeads();
-    renderTodosLeads();
-    renderInicio();
-  } else {
-    await loadLeads();
-    renderInicio();
+  // PASO 2: Actualizar la vista en memoria sin recargar de BD
+  if(editingLeadId){
+    // Actualizar el lead existente en el array local
+    const idx = allLeads.findIndex(l=>l.id===editingLeadId);
+    if(idx>-1) allLeads[idx]={...allLeads[idx],...data};
+  } else if(newId){
+    // Agregar el nuevo lead al inicio del array local
+    allLeads.unshift({...data, id:newId, fecha_ingreso:new Date().toISOString().slice(0,10)});
   }
+  
+  // PASO 3: Re-renderizar la vista activa inmediatamente con datos locales
+  const panelActivo = document.querySelector('.panel.active');
+  const tabId = panelActivo?.id?.replace('pn-','');
+  if(tabId==='mis-leads') filtrarLeads();
+  else if(tabId==='todos-leads') filtrarTodos();
+  else renderInicio();
+  
+  // PASO 4: En background, registrar venta si aplica y refrescar BD
+  const estadoFinal = data.estado;
+  if(estadoFinal==='cerrado_ganado'){
+    const codVenta = document.getElementById('ml-codigo-venta')?.value;
+    const montoVenta = parseFloat(document.getElementById('ml-monto-venta')?.value)||null;
+    const metrosV = parseFloat(document.getElementById('ml-metros')?.value)||null;
+    const modeloV = document.getElementById('ml-modelo-venta')?.value||null;
+    const leadIdFinal = editingLeadId || newId;
+    if(leadIdFinal){
+      sb.from('ventas').insert([{
+        lead_id:leadIdFinal,
+        nombre_cliente:document.getElementById('ml-nombre').value,
+        codigo_venta:codVenta||null,
+        monto_usd:montoVenta,
+        metros_cuadrados:metrosV,
+        modelo_casa:modeloV,
+        captador:document.getElementById('ml-captador').value,
+        cerrador:document.getElementById('ml-cerrador').value,
+      }]); // sin await - en background
+    }
+  }
+  
+  // PASO 5: Recargar datos reales de BD en background (sin bloquear UI)
+  setTimeout(()=>loadLeads(), 1500);
 }
 
 // ── AGENDA ──
@@ -2200,9 +2545,10 @@ function renderAgendaSemana(visitas){
           ${eventos.map(v=>{
             const sala = v.visita_sala||'sin-sala';
             const hora = new Date(v.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-            return`<div class="cal-evento ${sala}" onclick="event.stopPropagation();mostrarPopupEvento(event,${v.id})" title="${v.nombre}">
+            const estadoClass = v.estado==='nuevo'?'estado-nuevo':v.estado==='en_seguimiento'?'estado-seguimiento':v.estado==='visita_agendada'?'estado-visita-agendada':v.estado==='visita_realizada'?'estado-visita-realizada':v.estado==='cerrado_perdido'?'estado-perdido':v.estado==='cerrado_ganado'?'estado-ganado':'';
+            return`<div class="cal-evento ${estadoClass}" onclick="event.stopPropagation();mostrarPopupEvento(event,${v.id})" title="${v.nombre}">
               <span>${hora}</span> ${v.nombre||'Sin nombre'}<br>
-              <span style="opacity:0.8;font-size:10px">${v.cerrador||'Sin cerrador'}</span>
+              <span style="opacity:0.8;font-size:10px">${v.cerrador||v.captador||'—'}</span>
             </div>`;
           }).join('')}
         </div>`;
@@ -2714,6 +3060,139 @@ function renderTeam(){
   if(cloEl)cloEl.innerHTML=closers.map(buildTeamCard).join('')||'<div style="color:var(--gris4)">Sin cerradores</div>';
 }
 
+// ── PAPELERA DE PERDIDOS ──
+async function cargarPapelera(){
+  const motivo = document.getElementById('pap-motivo')?.value||'';
+  const mes = document.getElementById('pap-mes')?.value||'';
+  const react = document.getElementById('pap-reactivado')?.value||'';
+  
+  const el = document.getElementById('pap-tabla');
+  el.innerHTML = '<div class="loading-state"><span class="spin"></span>Cargando...</div>';
+  
+  let q = sb.from('leads_perdidos').select('*').order('fecha_perdida',{ascending:false}).limit(200);
+  if(motivo) q = q.eq('motivo_perdida',motivo);
+  if(mes) q = q.gte('fecha_perdida',mes+'-01').lte('fecha_perdida',mes+'-31');
+  if(react!=='') q = q.eq('reactivado',react==='true');
+  
+  const{data,error}=await q;
+  if(error){el.innerHTML='<div class="empty-state"><div class="empty-title">Error al cargar</div></div>';return;}
+  
+  const leads = data||[];
+  
+  // Stats
+  const statsEl = document.getElementById('pap-stats');
+  const motivos = {};
+  leads.forEach(l=>{ motivos[l.motivo_perdida]=(motivos[l.motivo_perdida]||0)+1; });
+  const topMotivo = Object.entries(motivos).sort((a,b)=>b[1]-a[1])[0];
+  
+  if(statsEl) statsEl.innerHTML=[
+    {l:'Total perdidos',v:leads.length,c:'r'},
+    {l:'Sin reactivar',v:leads.filter(l=>!l.reactivado).length,c:''},
+    {l:'Reactivados',v:leads.filter(l=>l.reactivado).length,c:'g'},
+    {l:'Motivo principal',v:topMotivo?topMotivo[0].replace(/_/g,' '):'-',c:''},
+  ].map(s=>`<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value ${s.c}" style="font-size:${s.v.toString().length>10?'14px':'20px'}">${s.v}</div></div>`).join('');
+  
+  if(!leads.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-title">Sin leads perdidos con ese filtro</div></div>';
+    return;
+  }
+  
+  const motivoLabel = m=>({
+    no_contesto:'No contestó',dejo_contestar:'Dejó de contestar',
+    falta_presupuesto:'Sin presupuesto',otro_departamento:'Otro depto.',
+    precio_elevado:'Precio elevado',quiere_credito_directo:'Crédito directo',
+    no_califica_bancario:'No califica banco',celular_apagado:'Cel. apagado',
+    solo_informacion:'Solo info',cliente_conflictivo:'Conflictivo',
+    era_competencia:'Competencia',otros:'Otros'
+  }[m]||m||'—');
+  
+  el.innerHTML=`<div class="leads-table-wrap" style="overflow-x:auto">
+    <table class="leads-table" style="min-width:700px">
+      <thead><tr>
+        <th>Cliente</th><th>Celular</th><th>Captador</th>
+        <th>Motivo pérdida</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
+      </tr></thead>
+      <tbody>
+        ${leads.map(l=>`<tr>
+          <td><div class="lead-name">${l.nombre_cliente||'—'}</div></td>
+          <td class="lead-tel">${l.celular||'—'}</td>
+          <td style="font-size:12px">${l.captador||'—'}</td>
+          <td><span class="badge badge-perdido" style="font-size:10px">${motivoLabel(l.motivo_perdida)}</span></td>
+          <td style="font-size:11px;color:var(--gris4)">${l.fecha_perdida?l.fecha_perdida.slice(0,10):'—'}</td>
+          <td>${l.reactivado?'<span class="badge badge-ganado" style="font-size:9px">✓ Reactivado</span>':'<span class="badge" style="background:var(--gris1);font-size:9px">Perdido</span>'}</td>
+          <td style="display:flex;gap:6px">
+            ${!l.reactivado&&l.lead_id?`<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="reactivarLead(${l.lead_id})">🔄 Reactivar</button>`:''}
+            <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="abrirModalLead(${l.lead_id})">Ver</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+async function reactivarLead(leadId){
+  if(!confirm('¿Reactivar este lead y volver a seguimiento?')) return;
+  const{error}=await sb.from('leads').update({
+    estado:'en_seguimiento',
+    motivo_perdida:null,
+    archivado:false
+  }).eq('id',leadId);
+  if(error){toast('Error: '+error.message,'error');return;}
+  toast('Lead reactivado ✓','success');
+  await loadAll();
+  cargarPapelera();
+}
+
+// ── FUNCIONES DE ACTIVIDADES ──
+async function registrarActividad(leadId, tipo, nota, resultado, colaborador){
+  const{error}=await sb.from('actividades').insert([{
+    lead_id:leadId,
+    colaborador:colaborador||cu.nombre,
+    tipo,
+    nota,
+    resultado,
+    fecha_actividad:new Date().toISOString()
+  }]);
+  if(error) console.error('Error registrando actividad:', error);
+}
+
+async function cargarActividades(leadId){
+  const{data}=await sb.from('actividades')
+    .select('*')
+    .eq('lead_id',leadId)
+    .order('fecha_actividad',{ascending:false})
+    .limit(20);
+  return data||[];
+}
+
+// ── STATS DE ACTIVIDADES POR PERSONA ──
+async function renderStatsActividades(periodo='mes'){
+  const hoy = new Date();
+  let desde;
+  if(periodo==='dia'){desde=new Date(hoy); desde.setHours(0,0,0,0);}
+  else if(periodo==='semana'){desde=new Date(hoy); desde.setDate(hoy.getDate()-7);}
+  else{desde=new Date(hoy.getFullYear(),hoy.getMonth(),1);}
+  
+  const{data}=await sb.from('actividades')
+    .select('colaborador,tipo,fecha_actividad')
+    .gte('fecha_actividad',desde.toISOString())
+    .order('fecha_actividad',{ascending:false});
+  
+  const acts=data||[];
+  const porPersona={};
+  acts.forEach(a=>{
+    if(!porPersona[a.colaborador]) porPersona[a.colaborador]={total:0,intentos:0,seguimientos:0,visitas:0};
+    porPersona[a.colaborador].total++;
+    if(a.tipo==='intento') porPersona[a.colaborador].intentos++;
+    if(a.tipo==='seguimiento') porPersona[a.colaborador].seguimientos++;
+    if(a.tipo==='visita') porPersona[a.colaborador].visitas++;
+  });
+  return porPersona;
+}
+
+// Tab switch papelera
+// (se agrega en sw() abajo)
+
 // ── COMISIONES ──
 let comisiones = [];
 
@@ -3116,6 +3595,393 @@ async function marcarContactado(leadId){
 // Cargar tasks al entrar al panel
 function onTabMiAgenda(){
   renderTasks();
+}
+
+// ── AUDIO FAB MENÚ MÓVIL ──
+function mostrarMenuAudioFab(){
+  // Mini menú contextual sobre el FAB
+  const existing = document.getElementById('fab-menu');
+  if(existing){ existing.remove(); return; }
+  
+  const fab = document.getElementById('audio-fab');
+  const menu = document.createElement('div');
+  menu.id = 'fab-menu';
+  menu.style.cssText = `
+    position:fixed;top:56px;right:12px; /* Debajo del topbar */
+    background:var(--negro2);border:1px solid var(--gris2);
+    border-radius:var(--r2);padding:8px;
+    z-index:260;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:6px;min-width:200px;
+  `;
+  
+  const opciones = [
+    {icon:'🎙️', label:'Nuevo lead por voz', fn:"iniciarGrabacion('nuevo_lead')"},
+    {icon:'📋', label:'Seguimiento por voz', fn:"iniciarGrabacion('seguimiento')"},
+    {icon:'🔍', label:'Buscar por voz', fn:"iniciarGrabacion('buscar')"},
+    {icon:'📅', label:'Agendar visita por voz', fn:"iniciarGrabacion('agendar_visita')"},
+    {icon:'📁', label:'Cargar audio', fn:"cargarAudioArchivo('nuevo_lead')"},
+  ];
+  
+  opciones.forEach(op=>{
+    const btn = document.createElement('button');
+    btn.style.cssText = "background:none;border:none;color:var(--blanco);font-size:14px;text-align:left;padding:10px 12px;border-radius:var(--r);cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:10px;width:100%;-webkit-tap-highlight-color:transparent";
+    btn.innerHTML = `<span style="font-size:18px">${op.icon}</span>${op.label}`;
+    btn.onclick = ()=>{ menu.remove(); eval(op.fn); };
+    btn.onmouseover = ()=>btn.style.background='var(--gris1)';
+    btn.onmouseout = ()=>btn.style.background='none';
+    menu.appendChild(btn);
+  });
+  
+  document.body.appendChild(menu);
+  
+  // Cerrar al tocar fuera
+  setTimeout(()=>{
+    document.addEventListener('click', function closeMenu(e){
+      if(!menu.contains(e.target)&&e.target!==fab){
+        menu.remove();
+        document.removeEventListener('click',closeMenu);
+      }
+    });
+  },100);
+}
+
+// ── AUDIO VOICE INPUT ──
+const AUDIO_FN_URL = 'https://jsacnpgpnvoslrpurfxc.supabase.co/functions/v1/geat-audio';
+let mediaRecorder = null;
+let audioChunks = [];
+let audioTimerInterval = null;
+let audioStartTime = null;
+let audioContexto = 'nuevo_lead'; // contexto actual
+let audioDatosExtraidos = null; // datos del último procesamiento
+
+// Contextos de audio por pantalla
+const AUDIO_HINTS = {
+  nuevo_lead: 'Di: nombre completo, número de celular, ciudad, si es bancario o contado, y notas del cliente.',
+  seguimiento: 'Di: nombre del cliente y qué pasó en el contacto o cuándo volver a llamar.',
+  visita: 'Di: nombre, fecha y hora de la visita, y qué sala necesitan.',
+  buscar: 'Di el nombre o número del cliente que buscas.',
+  resultado_reunion: 'Di: qué pasó en la reunión, si está interesado y cuál es el siguiente paso.',
+  cierre: 'Di: nombre del cliente, monto del contrato en dólares, y quién fue el captador y cerrador.',
+};
+
+async function iniciarGrabacion(contexto='nuevo_lead'){
+  audioContexto = contexto;
+  
+  // Verificar soporte
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    toast('Tu navegador no soporta grabación de audio','error');
+    return;
+  }
+  
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    
+    // Mostrar overlay
+    document.getElementById('audio-overlay').classList.add('open');
+    setAudioState('recording');
+    
+    // Actualizar hint según contexto
+    const hint = AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead;
+    document.getElementById('audio-hint').textContent = hint;
+    
+    // Configurar MediaRecorder
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+      ? 'audio/webm;codecs=opus' 
+      : MediaRecorder.isTypeSupported('audio/mp4') 
+        ? 'audio/mp4' 
+        : 'audio/webm';
+    
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream, {mimeType});
+    
+    mediaRecorder.ondataavailable = e => {
+      if(e.data.size > 0) audioChunks.push(e.data);
+    };
+    
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      await procesarAudio(mimeType);
+    };
+    
+    // Timer
+    audioStartTime = Date.now();
+    audioTimerInterval = setInterval(() => {
+      const seg = Math.floor((Date.now() - audioStartTime) / 1000);
+      const m = Math.floor(seg / 60);
+      const s = seg % 60;
+      const el = document.getElementById('audio-timer');
+      if(el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+      // Auto-detener a los 2 minutos
+      if(seg >= 120) detenerGrabacion();
+    }, 1000);
+    
+    mediaRecorder.start(250); // chunks cada 250ms
+    
+  } catch(err) {
+    console.error('Error grabación:', err);
+    toast('No se pudo acceder al micrófono. Verifica los permisos.','error');
+  }
+}
+
+function detenerGrabacion(){
+  if(audioTimerInterval){ clearInterval(audioTimerInterval); audioTimerInterval=null; }
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    setAudioState('processing');
+    mediaRecorder.stop();
+  }
+}
+
+function cancelarGrabacion(){
+  if(audioTimerInterval){ clearInterval(audioTimerInterval); audioTimerInterval=null; }
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+    const stream = mediaRecorder.stream;
+    if(stream) stream.getTracks().forEach(t => t.stop());
+  }
+  document.getElementById('audio-overlay').classList.remove('open');
+  mediaRecorder = null;
+  audioChunks = [];
+  audioDatosExtraidos = null;
+}
+
+function reiniciarAudio(){
+  setAudioState('recording');
+  iniciarGrabacion(audioContexto);
+}
+
+function setAudioState(state){
+  ['recording','processing','result','error'].forEach(s => {
+    const el = document.getElementById('audio-state-'+s);
+    if(el) el.style.display = s===state ? 'block' : 'none';
+  });
+}
+
+async function procesarAudio(mimeType){
+  setAudioState('processing');
+  document.getElementById('audio-proc-msg').textContent = 'Convirtiendo audio...';
+  
+  try{
+    // Convertir audio a base64
+    const blob = new Blob(audioChunks, {type: mimeType});
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    
+    document.getElementById('audio-proc-msg').textContent = 'Analizando con IA...';
+    
+    // Llamar a la Edge Function
+    const res = await fetch(AUDIO_FN_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        audio_base64: base64,
+        mime_type: mimeType,
+        contexto: audioContexto,
+      })
+    });
+    
+    if(!res.ok){
+      const err = await res.json();
+      throw new Error(err.error || 'Error del servidor');
+    }
+    
+    const datos = await res.json();
+    audioDatosExtraidos = datos;
+    mostrarResultadoAudio(datos);
+    
+  } catch(err){
+    console.error('Error procesando audio:', err);
+    document.getElementById('audio-error-msg').textContent = err.message || 'Error al procesar el audio';
+    setAudioState('error');
+  }
+}
+
+function mostrarResultadoAudio(datos){
+  setAudioState('result');
+  
+  // Transcripción
+  const transEl = document.getElementById('audio-transcripcion');
+  if(transEl) transEl.textContent = '"' + (datos.transcripcion || '') + '"';
+  
+  // Título según acción
+  const titulos = {
+    nuevo_lead: '✅ Nuevo lead detectado',
+    editar_lead: '✅ Edición detectada',
+    seguimiento: '✅ Seguimiento registrado',
+    buscar: '🔍 Búsqueda detectada',
+    agendar_visita: '📅 Visita detectada',
+    registrar_cierre: '💰 Cierre detectado',
+    resultado_reunion: '🤝 Resultado detectado',
+  };
+  const titleEl = document.getElementById('audio-result-titulo');
+  if(titleEl) titleEl.textContent = titulos[datos.accion] || '✅ Datos extraídos';
+  
+  // Campos extraídos
+  const campos = datos.datos || {};
+  const labels = {
+    nombre:'Nombre', celular:'Celular', ciudad:'Ciudad',
+    financiamiento:'Financ.', notas:'Notas', estado:'Estado',
+    visita_fecha:'Visita', visita_sala:'Sala', cerrador:'Cerrador',
+    monto_contrato:'Monto', resultado_reunion:'Resultado',
+    buscar_query:'Buscar', proximo_contacto:'Próx. contacto'
+  };
+  
+  const camposEl = document.getElementById('audio-campos');
+  const filas = Object.entries(campos)
+    .filter(([k,v]) => v !== null && v !== undefined && v !== '')
+    .map(([k,v]) => `<div class="audio-field">
+      <div class="audio-field-label">${labels[k]||k}</div>
+      <div class="audio-field-val">${v}</div>
+    </div>`).join('');
+  
+  if(camposEl) camposEl.innerHTML = filas || '<div style="color:var(--gris4);font-size:12px">No se detectaron datos específicos</div>';
+  
+  // Campos faltantes
+  const faltantes = datos.campos_faltantes || [];
+  const faltEl = document.getElementById('audio-faltantes-wrap');
+  if(faltantes.length > 0){
+    document.getElementById('audio-faltantes').textContent = 'Falta: ' + faltantes.join(', ');
+    if(faltEl) faltEl.style.display='block';
+    document.getElementById('btn-audio-confirmar').textContent = '✓ Guardar con datos disponibles';
+  } else {
+    if(faltEl) faltEl.style.display='none';
+    document.getElementById('btn-audio-confirmar').textContent = '✓ Confirmar y guardar';
+  }
+}
+
+async function confirmarAudioDatos(){
+  if(!audioDatosExtraidos) return;
+  const {accion, datos} = audioDatosExtraidos;
+  
+  cancelarGrabacion(); // cerrar overlay
+  
+  switch(accion){
+    case 'nuevo_lead':
+    case 'editar_lead':
+      // Rellenar el modal de lead con los datos extraídos
+      abrirModalLead();
+      setTimeout(() => rellenarModalConDatos(datos), 200);
+      break;
+    case 'seguimiento':
+      // Buscar el lead y actualizar
+      if(datos.nombre){
+        const lead = allLeads.find(l => l.nombre?.toLowerCase().includes(datos.nombre.toLowerCase()));
+        if(lead){
+          abrirModalLead(lead.id);
+          setTimeout(() => {
+            if(datos.notas) document.getElementById('ml-notas').value = datos.notas;
+            if(datos.proximo_contacto) document.getElementById('ml-proximo-contacto').value = datos.proximo_contacto;
+          }, 200);
+        } else {
+          toast('Lead no encontrado: ' + datos.nombre, 'error');
+        }
+      }
+      break;
+    case 'buscar':
+      sw('buscar');
+      setTimeout(() => {
+        const inp = document.getElementById('buscar-input');
+        if(inp && datos.buscar_query){ inp.value = datos.buscar_query; ejecutarBusqueda(); }
+      }, 200);
+      break;
+    case 'agendar_visita':
+      abrirModalLead();
+      setTimeout(() => {
+        rellenarModalConDatos(datos);
+        document.getElementById('ml-estado').value = 'visita_agendada';
+        if(document.getElementById('visita-campos')) document.getElementById('visita-campos').style.display='block';
+      }, 200);
+      break;
+    case 'registrar_cierre':
+      abrirModalComision();
+      setTimeout(() => {
+        if(datos.nombre) document.getElementById('com-captador').value = datos.captador||'';
+        if(datos.cerrador) document.getElementById('com-cerrador').value = datos.cerrador||'';
+        if(datos.monto_contrato){ 
+          document.getElementById('com-monto').value = datos.monto_contrato;
+          calcularComision();
+        }
+      }, 200);
+      break;
+    default:
+      toast(audioDatosExtraidos.mensaje_confirmacion || 'Datos procesados','success');
+  }
+}
+
+function rellenarModalConDatos(datos){
+  const map = {
+    nombre: 'ml-nombre',
+    celular: 'ml-celular',
+    ciudad: 'ml-ciudad',
+    financiamiento: 'ml-financiamiento',
+    notas: 'ml-notas',
+    estado: 'ml-estado',
+    cerrador: 'ml-cerrador',
+    visita_sala: 'ml-visita-sala',
+    proximo_contacto: 'ml-proximo-contacto',
+  };
+  Object.entries(datos).forEach(([k,v]) => {
+    if(!v || !map[k]) return;
+    const el = document.getElementById(map[k]);
+    if(el) el.value = v;
+  });
+  if(datos.visita_fecha){
+    const fd = document.getElementById('ml-visita-fecha-dia');
+    const fh = document.getElementById('ml-visita-hora');
+    if(fd && fh){
+      const parts = datos.visita_fecha.split('T');
+      fd.value = parts[0];
+      fh.value = parts[1]||'09:00';
+    }
+  }
+}
+
+// Cargar audio desde archivo (para PC o móvil)
+async function cargarAudioArchivo(contexto='nuevo_lead'){
+  audioContexto = contexto;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'audio/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    document.getElementById('audio-overlay').classList.add('open');
+    setAudioState('processing');
+    document.getElementById('audio-proc-msg').textContent = 'Leyendo archivo...';
+    
+    try{
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      document.getElementById('audio-proc-msg').textContent = 'Analizando con IA...';
+      
+      const res = await fetch(AUDIO_FN_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          audio_base64: base64,
+          mime_type: file.type||'audio/mp4',
+          contexto,
+        })
+      });
+      
+      const datos = await res.json();
+      audioDatosExtraidos = datos;
+      mostrarResultadoAudio(datos);
+    } catch(err){
+      document.getElementById('audio-error-msg').textContent = err.message;
+      setAudioState('error');
+    }
+  };
+  input.click();
 }
 
 // ── NOTIFICACIONES ──
