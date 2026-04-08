@@ -3669,8 +3669,34 @@ async function iniciarGrabacion(contexto='nuevo_lead'){
   
   // Verificar soporte
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    toast('Tu navegador no soporta grabación de audio','error');
+    // Intentar fallback para HTTP o contextos inseguros
+    toast('Grabación requiere HTTPS. Usa el botón 📁 para cargar audio.','error');
     return;
+  }
+  
+  // Verificar estado del permiso antes de pedir
+  if(navigator.permissions){
+    try{
+      const perm = await navigator.permissions.query({name:'microphone'});
+      if(perm.state === 'denied'){
+        // Ya está bloqueado — mostrar instrucciones directamente
+        const isEdge = /Edg\//.test(navigator.userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        let instruccion = '';
+        if(isEdge){
+          instruccion = 'Micrófono bloqueado en Microsoft Edge.\n\n📌 Cómo desbloquearlo:\n1. Clic en el candado 🔒 en la barra de dirección\n2. "Permisos del sitio"\n3. Micrófono → Cambiar a "Permitir"\n4. Recarga la página (F5)';
+        } else if(isIOS){
+          instruccion = 'Micrófono bloqueado en iOS.\n\nAjustes → Safari → Micrófono → Permitir\nLuego recarga la página.';
+        } else {
+          instruccion = 'Micrófono bloqueado.\n\n📌 Cómo desbloquearlo:\n1. Clic en 🔒 junto a la URL\n2. Permisos del sitio → Micrófono → Permitir\n3. Recarga la página';
+        }
+        document.getElementById('audio-overlay').classList.add('open');
+        setAudioState('error');
+        document.getElementById('audio-error-msg').style.whiteSpace = 'pre-line';
+        document.getElementById('audio-error-msg').textContent = instruccion;
+        return;
+      }
+    } catch(e){ /* permissions API no soportada, continuar */ }
   }
   
   try{
@@ -3685,11 +3711,19 @@ async function iniciarGrabacion(contexto='nuevo_lead'){
     document.getElementById('audio-hint').textContent = hint;
     
     // Configurar MediaRecorder
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-      ? 'audio/webm;codecs=opus' 
-      : MediaRecorder.isTypeSupported('audio/mp4') 
-        ? 'audio/mp4' 
-        : 'audio/webm';
+    // Detectar formato compatible por plataforma
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    let mimeType = 'audio/webm';
+    if(isIOS || isSafari){
+      // iOS Safari solo soporta mp4/m4a
+      mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' :
+                 MediaRecorder.isTypeSupported('audio/aac') ? 'audio/aac' : 'audio/mp4';
+    } else {
+      mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+                 MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
+                 MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+    }
     
     audioChunks = [];
     mediaRecorder = new MediaRecorder(stream, {mimeType});
@@ -3719,7 +3753,42 @@ async function iniciarGrabacion(contexto='nuevo_lead'){
     
   } catch(err) {
     console.error('Error grabación:', err);
-    toast('No se pudo acceder al micrófono. Verifica los permisos.','error');
+    
+    let msg = '';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isEdge = /Edg\//.test(navigator.userAgent);
+    const isChrome = /Chrome/.test(navigator.userAgent) && !isEdge;
+    const isSafari = /Safari/.test(navigator.userAgent) && !isChrome && !isEdge;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+      if(isEdge){
+        msg = 'Micrófono bloqueado en Edge. Para activarlo:\n\n1. Haz clic en el candado 🔒 en la barra de dirección\n2. Ir a "Permisos para este sitio"\n3. Cambiar Micrófono a "Permitir"\n4. Recarga la página';
+      } else if(isIOS){
+        msg = 'Micrófono bloqueado en iOS.\n\nVe a: Ajustes → Safari → Micrófono → Permitir\nLuego recarga la página.';
+      } else if(isAndroid){
+        msg = 'Micrófono bloqueado.\n\nToca el ícono 🔒 en la barra de dirección → Permisos → Micrófono → Permitir\nLuego recarga.';
+      } else {
+        msg = 'Micrófono bloqueado.\n\nHaz clic en el ícono 🔒 junto a la URL → Permisos del sitio → Micrófono → Permitir\nRecarga la página.';
+      }
+    } else if(err.name === 'NotFoundError'){
+      msg = 'No se encontró micrófono. Verifica que tu dispositivo tiene micrófono conectado.';
+    } else if(err.name === 'NotSupportedError' || err.name === 'TypeError'){
+      msg = 'Tu navegador no soporta grabación de audio.\n\nUsa Chrome o Safari para esta función.';
+    } else {
+      msg = 'Error al acceder al micrófono: ' + err.message;
+    }
+    
+    // Mostrar error con instrucciones claras
+    if(msg.includes('\n')){
+      // Error largo: mostrar en overlay
+      document.getElementById('audio-overlay').classList.add('open');
+      setAudioState('error');
+      document.getElementById('audio-error-msg').style.whiteSpace = 'pre-line';
+      document.getElementById('audio-error-msg').textContent = msg;
+    } else {
+      toast(msg, 'error');
+    }
   }
 }
 
