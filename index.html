@@ -3597,6 +3597,84 @@ function onTabMiAgenda(){
   renderTasks();
 }
 
+// ── WEB SPEECH API (funciona sin permisos explícitos en Edge/Chrome/Safari) ──
+function usarWebSpeech(contexto, SpeechRec){
+  audioContexto = contexto;
+  
+  document.getElementById('audio-overlay').classList.add('open');
+  setAudioState('recording');
+  
+  const hint = AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead;
+  const hintEl = document.getElementById('audio-hint');
+  if(hintEl) hintEl.textContent = hint;
+  
+  const rec = new SpeechRec();
+  rec.lang = 'es-BO'; // Español Bolivia
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.continuous = false;
+  
+  // Timer visual
+  audioStartTime = Date.now();
+  audioTimerInterval = setInterval(()=>{
+    const seg = Math.floor((Date.now()-audioStartTime)/1000);
+    const m = Math.floor(seg/60), s = seg%60;
+    const el = document.getElementById('audio-timer');
+    if(el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    if(seg>=60) rec.stop();
+  },1000);
+  
+  // Botón detener apunta a rec.stop
+  window._currentSpeechRec = rec;
+  
+  rec.onresult = async (e) => {
+    clearInterval(audioTimerInterval);
+    const texto = e.results[0][0].transcript;
+    setAudioState('processing');
+    document.getElementById('audio-proc-msg').textContent = 'Analizando con IA...';
+    
+    try{
+      const res = await fetch(AUDIO_FN_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({transcripcion_texto: texto, contexto})
+      });
+      const datos = await res.json();
+      if(datos.error) throw new Error(datos.error);
+      datos.transcripcion = texto; // asegurar que se muestre
+      audioDatosExtraidos = datos;
+      mostrarResultadoAudio(datos);
+    } catch(err){
+      document.getElementById('audio-error-msg').textContent = err.message;
+      setAudioState('error');
+    }
+  };
+  
+  rec.onerror = (e) => {
+    clearInterval(audioTimerInterval);
+    if(e.error === 'not-allowed'){
+      document.getElementById('audio-error-msg').style.whiteSpace = 'pre-line';
+      document.getElementById('audio-error-msg').textContent = 
+        'Micrófono bloqueado.\n\n📌 Cómo desbloquearlo:\n1. Clic en 🔒 junto a la URL\n2. Permisos del sitio → Micrófono → Permitir\n3. Recarga la página';
+      setAudioState('error');
+    } else if(e.error === 'no-speech'){
+      toast('No se detectó voz. Intenta de nuevo.','error');
+      document.getElementById('audio-overlay').classList.remove('open');
+    } else {
+      document.getElementById('audio-error-msg').textContent = 'Error: '+e.error;
+      setAudioState('error');
+    }
+  };
+  
+  rec.onend = () => { clearInterval(audioTimerInterval); };
+  
+  rec.start();
+  
+  // Sobrescribir botón detener
+  const btnDetener = document.querySelector('#audio-state-recording button.btn-danger');
+  if(btnDetener) btnDetener.onclick = () => rec.stop();
+}
+
 // ── AUDIO FAB MENÚ MÓVIL ──
 function mostrarMenuAudioFab(){
   // Mini menú contextual sobre el FAB
@@ -3667,10 +3745,16 @@ const AUDIO_HINTS = {
 async function iniciarGrabacion(contexto='nuevo_lead'){
   audioContexto = contexto;
   
-  // Verificar soporte
+  // Intentar Web Speech API primero (funciona en Edge, Chrome, Safari sin pedir permisos explícitos)
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(SpeechRec){
+    usarWebSpeech(contexto, SpeechRec);
+    return;
+  }
+  
+  // Fallback: MediaRecorder (requiere permiso explícito de micrófono)
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    // Intentar fallback para HTTP o contextos inseguros
-    toast('Grabación requiere HTTPS. Usa el botón 📁 para cargar audio.','error');
+    toast('Tu navegador no soporta grabación. Usa 📁 para cargar audio.','error');
     return;
   }
   
