@@ -293,6 +293,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .audio-field-label{color:var(--gris4);min-width:100px;font-weight:600;text-transform:uppercase;font-size:10px}
 .audio-field-val{color:var(--blanco);flex:1}
 
+/* ── FLUJO DE VENTAS ── */
+.lead-pipeline-card{background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:all 0.15s}
+.lead-pipeline-card:hover{background:var(--negro3);border-color:var(--gris3)}
+.flujo-accion-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--gris2);background:var(--negro3);color:var(--gris5);transition:all 0.15s;font-family:"DM Sans",sans-serif}
+.flujo-accion-btn:hover{background:var(--negro4);color:var(--blanco);border-color:var(--gris3)}
+
 /* ── MY TASKS ── */
 .task-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);margin-bottom:8px;cursor:pointer;transition:all 0.15s}
 .task-item:hover{border-color:var(--gris3);background:var(--negro3)}
@@ -736,12 +742,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
           </div>
         </div>
         <div style="position:relative;margin-bottom:20px">
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-            <button class="audio-btn" onclick="iniciarGrabacion('buscar')">
-              <span class="rec-dot"></span> Buscar por voz
-            </button>
-            <button class="btn btn-ghost btn-sm" onclick="cargarAudioArchivo('buscar')">📁 Audio</button>
-          </div>
           <input type="text" id="buscar-input" class="search-input" 
             placeholder="🔍 Escribe nombre, celular, ciudad, notas..." 
             oninput="ejecutarBusqueda()" autofocus
@@ -775,11 +775,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <div class="page-subtitle" id="inicio-fecha">—</div>
           </div>
           <div class="page-actions">
-            <button class="audio-btn" onclick="iniciarGrabacion('nuevo_lead')" title="Registrar lead por voz">
-              <span class="rec-dot"></span> Nuevo lead por voz
+            <button class="audio-btn" onclick="iniciarGrabacion()" title="Registrar por voz">
+              <span class="rec-dot"></span> 🎙️ Voz
             </button>
-            <button class="btn btn-ghost btn-sm" onclick="cargarAudioArchivo('nuevo_lead')" title="Cargar audio desde archivo">
-              📁 Cargar audio
+            <button class="btn btn-ghost btn-sm" onclick="cargarAudioArchivo()" title="Cargar audio desde archivo">
+              📁 Audio
             </button>
           </div>
         </div>
@@ -803,41 +803,47 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         <div class="stats-grid" id="inicio-stats"></div>
       </div>
 
-      <!-- PANEL: MIS LEADS (captador) -->
+      <!-- PANEL: MIS LEADS (field_capturer) - FLUJO PIPELINE -->
       <div class="panel" id="pn-mis-leads">
         <div class="page-header">
           <div>
             <div class="page-title">Mis Leads</div>
-            <div class="page-subtitle">Gestión y seguimiento de clientes captados</div>
+            <div class="page-subtitle">Flujo de ventas — guía cada lead por las etapas</div>
           </div>
           <div class="page-actions">
-            <button class="audio-btn" onclick="iniciarGrabacion('nuevo_lead')" title="Registrar por voz">
-              <span class="rec-dot"></span> Voz
+            <button class="audio-btn" onclick="iniciarGrabacion()" title="Registrar por voz">
+              <span class="rec-dot"></span> 🎙️ Voz
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(0)">📋 Mensaje 1</button>
-            <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(1)">📋 Mensaje 2</button>
-            <button class="btn btn-secondary btn-sm" onclick="copiarMensaje(2)">📋 Mensaje 3</button>
             <button class="btn btn-primary" onclick="abrirModalLead()">+ Nuevo Lead</button>
           </div>
         </div>
-        <div class="leads-toolbar">
-          <input type="text" class="search-input" id="search-leads" placeholder="Buscar por nombre, teléfono, ciudad..." oninput="filtrarLeads()">
-          <select class="filter-sel" id="filter-estado" onchange="filtrarLeads()">
-            <option value="">Todos los estados</option>
-            <option value="nuevo">Nuevo</option>
-            <option value="en_seguimiento">En seguimiento</option>
-            <option value="visita_agendada">Visita agendada</option>
-            <option value="visita_realizada">Visita realizada</option>
-            <option value="cerrado_ganado">Cerrado ganado</option>
-            <option value="cerrado_perdido">Cerrado perdido</option>
-          </select>
-          <select class="filter-sel" id="filter-mes" onchange="filtrarLeads()">
-            <option value="">Este mes</option>
-            <option value="todos">Todos los meses</option>
-          </select>
+
+        <!-- TABS del pipeline por etapa -->
+        <div class="inner-tabs" style="margin-bottom:16px">
+          <button class="inner-tab active" onclick="setEtapaTab('todos',this)">Todos</button>
+          <button class="inner-tab" onclick="setEtapaTab('nuevo',this)">🆕 Nuevos</button>
+          <button class="inner-tab" onclick="setEtapaTab('intentos',this)">📞 Intentos</button>
+          <button class="inner-tab" onclick="setEtapaTab('en_seguimiento',this)">🔄 Seguimiento</button>
+          <button class="inner-tab" onclick="setEtapaTab('visita_agendada',this)">📅 Visita</button>
+          <button class="inner-tab" onclick="setEtapaTab('cerrado_ganado',this)">🏆 Ganados</button>
         </div>
-        <div id="leads-table-container"><div class="loading-state"><span class="spin"></span>Cargando leads...</div></div>
+
+        <!-- Barra de búsqueda -->
+        <div style="margin-bottom:12px">
+          <input type="text" class="search-input" id="search-leads" 
+            placeholder="Buscar por nombre, celular, ciudad..." 
+            oninput="filtrarLeads()" style="width:100%">
+        </div>
+
+        <!-- Contador -->
+        <div id="leads-contador" style="font-size:12px;color:var(--gris4);margin-bottom:12px"></div>
+
+        <!-- Lista de leads como cards del pipeline -->
+        <div id="leads-table-container">
+          <div class="loading-state"><span class="spin"></span>Cargando leads...</div>
+        </div>
       </div>
+
 
       <!-- PANEL: TODOS LOS LEADS (admin/jefe) -->
       <div class="panel" id="pn-todos-leads">
@@ -928,8 +934,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <div class="page-subtitle">Tu agenda personal — visitas, seguimientos y tareas</div>
           </div>
           <div class="page-actions">
-            <button class="audio-btn btn-sm" onclick="iniciarGrabacion('seguimiento')">
-              <span class="rec-dot"></span> Seguimiento voz
+            <button class="audio-btn btn-sm" onclick="iniciarGrabacion()">
+              <span class="rec-dot"></span> 🎙️ Voz
             </button>
             <button class="btn btn-primary btn-sm" onclick="abrirModalVisita()">+ Agendar visita</button>
           </div>
@@ -1192,12 +1198,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
         <div class="modal-title" id="modal-lead-title">Nuevo Lead</div>
         <div class="modal-subtitle" id="modal-lead-subtitle">Registro de cliente captado</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="audio-btn btn-sm" onclick="cerrarModal('modal-lead');setTimeout(()=>iniciarGrabacion('nuevo_lead'),100)" title="Completar con voz">
-          <span class="rec-dot"></span> Completar con voz
-        </button>
-        <button class="modal-close" onclick="cerrarModal('modal-lead')">✕</button>
-      </div>
+      <button class="modal-close" onclick="cerrarModal('modal-lead')">✕</button>
     </div>
     <div class="modal-body">
       <!-- INDICADOR BORRADOR -->
@@ -1581,7 +1582,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
     <div id="audio-state-recording" style="display:none">
       <div style="font-size:32px;margin-bottom:8px">🎙️</div>
       <div style="font-size:16px;font-weight:600;color:var(--blanco);margin-bottom:4px">Escuchando...</div>
-      <div style="font-size:12px;color:var(--gris4);margin-bottom:16px" id="audio-hint">Habla con claridad. Di el nombre, celular, ciudad y detalles del cliente.</div>
+      <div style="font-size:12px;color:var(--gris4);margin-bottom:16px" id="audio-hint">Habla con claridad — el sistema detecta automáticamente la acción.</div>
       <div class="audio-wave">
         <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
       </div>
@@ -1861,7 +1862,7 @@ function iniciarRealtime(){
 }
 
 async function loadLeads(){
-  const{data}=await sb.from('leads').select('*').eq('archivado',false).order('created_at',{ascending:false});
+  const{data}=await sb.from('leads').select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,mes_anio,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,campana_id,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,resultado_reunion,archivado,created_at').eq('archivado',false).order('created_at',{ascending:false});
   allLeads=data||[];
   filtrarLeads();
   filtrarTodos();
@@ -1903,7 +1904,7 @@ function renderInicio(){
       <div class="tarea-item">
         <div class="tarea-check" onclick="marcarContacto(${l.id},this)"></div>
         <div class="tarea-info">
-          <div class="tarea-nombre">${l.nombre} <span style="color:var(--gris4);font-size:12px;font-family:'DM Mono',monospace">${l.celular}</span></div>
+          <div class="tarea-nombre">${l.nombre} <span style="color:var(--gris4);font-size:12px,monospace">${l.celular}</span></div>
           <div class="tarea-meta">${l.captador} · ${l.ciudad} · ${estadoBadge(l.estado)}</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="abrirModalLead(${l.id})">Ver</button>
@@ -2010,7 +2011,16 @@ function filtrarTodos(){
   );
   if(cap)leads=leads.filter(l=>l.captador===cap);
   if(estado)leads=leads.filter(l=>l.estado===estado);
-  renderLeadsTable(leads,'todos-leads-container',true);
+  // Usar vista pipeline para todos los roles
+  const cont = document.getElementById('todos-leads-container');
+  if(cont){
+    const oldEtapa = etapaTabActual;
+    renderLeadsPipeline(leads);
+    // Mover resultado al contenedor correcto
+    const pipelineResult = document.getElementById('leads-table-container')?.innerHTML;
+    if(pipelineResult) cont.innerHTML = pipelineResult;
+    etapaTabActual = oldEtapa;
+  }
 }
 
 // ── MODAL LEAD ──
@@ -2577,7 +2587,7 @@ function renderAgendaDia(visitas){
         return vDate.getTime()===bDateOnly.getTime() && vd.getHours()===hr;
       });
       return`<div style="display:grid;grid-template-columns:64px 1fr;border-bottom:1px solid var(--gris1);min-height:60px">
-        <div style="padding:8px;font-size:11px;color:var(--gris3);font-family:'DM Mono',monospace;border-right:1px solid var(--gris1)">${hStr}</div>
+        <div style="padding:8px;font-size:11px;color:var(--gris3),monospace;border-right:1px solid var(--gris1)">${hStr}</div>
         <div style="padding:4px 8px;position:relative${esHoy?' background:rgba(245,196,0,0.02)':''}">
           ${eventos.map(v=>{
             const sala = v.visita_sala||'sin-sala';
@@ -2791,7 +2801,7 @@ async function cargarMiAgenda(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
         <div>
           <div style="font-size:16px;font-weight:600;margin-bottom:4px">${l.nombre}</div>
-          <div style="font-size:12px;color:var(--gris4);font-family:'DM Mono',monospace">${l.celular}</div>
+          <div style="font-size:12px;color:var(--gris4),monospace">${l.celular}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:14px;font-weight:500;color:var(--amarillo)">${new Date(l.visita_fecha).toLocaleString('es-BO',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
@@ -2820,7 +2830,7 @@ function renderAnalytics(){
     <div class="stat-card"><div class="stat-label">Contratos</div><div class="stat-value g">${gan}</div></div>
     <div class="stat-card"><div class="stat-label">Tasa de cierre</div><div class="stat-value ${conv>=20?'g':'r'}">${conv}%</div></div>`;
 
-  const Y='#F5C400',co={plugins:{legend:{labels:{color:'rgba(248,246,240,0.5)',font:{size:11,family:'DM Sans'}}}},scales:{x:{ticks:{color:'rgba(248,246,240,0.4)',font:{size:10}},grid:{color:'rgba(248,246,240,0.05)'}},y:{ticks:{color:'rgba(248,246,240,0.4)',font:{size:10}},grid:{color:'rgba(248,246,240,0.05)'}}}};
+  const Y='#F5C400',co={plugins:{legend:{labels:{color:'rgba(248,246,240,0.5)',font:{size:11,family:'Arial'}}}},scales:{x:{ticks:{color:'rgba(248,246,240,0.4)',font:{size:10}},grid:{color:'rgba(248,246,240,0.05)'}},y:{ticks:{color:'rgba(248,246,240,0.4)',font:{size:10}},grid:{color:'rgba(248,246,240,0.05)'}}}};
 
   // Estado
   const ec=['nuevo','en_seguimiento','visita_agendada','cerrado_ganado','cerrado_perdido'].map(s=>mv.filter(l=>l.estado===s).length);
@@ -2975,7 +2985,7 @@ function renderAdmin(){
     <button onclick="impersonarIdx(${i})" style="
       background:var(--negro3);border:2px solid ${c.nombre===cu.nombre?'var(--amarillo)':'var(--gris2)'};
       border-radius:var(--r2);padding:16px 12px;cursor:pointer;transition:all 0.2s;
-      display:flex;flex-direction:column;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;
+      display:flex;flex-direction:column;align-items:center;gap:8px;
       -webkit-tap-highlight-color:transparent;
     ">
       <div style="width:44px;height:44px;border-radius:50%;background:${(colores[c.rol]||'var(--gris3)').replace('var(--amarillo)','rgba(245,196,0').replace('var(--azul)','rgba(52,152,219').replace('var(--verde)','rgba(46,204,113')},0.15);
@@ -2995,7 +3005,7 @@ function renderAdmin(){
       <tr>
         <td class="kpi-name">${c.nombre}</td>
         <td><span class="badge ${c.rol==='admin'?'badge-recursos':c.rol==='commercial_lead'?'badge-recursos':c.rol==='closer'?'badge-visita':'badge-nuevo'}">${c.cargo||c.rol}</span></td>
-        <td style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td>
+        <td style=",monospace;font-size:15px;font-weight:600;color:var(--amarillo)">${c.pin}</td>
         <td><button class="btn btn-ghost btn-sm" onclick="impersonarIdx(${i})" style="font-size:11px">👁 Ver</button></td>
       </tr>`).join('')}
     </tbody>`;
@@ -3245,17 +3255,17 @@ async function renderComisiones(){
           <td><div class="lead-name">${c.nombre_cliente}</div></td>
           <td style="font-size:12px">${c.captador||'—'}</td>
           <td style="font-size:12px">${c.cerrador||'—'}</td>
-          <td style="font-family:'DM Mono',monospace;color:var(--amarillo)">$${Number(c.monto_contrato).toLocaleString()}</td>
-          <td style="font-family:'DM Mono',monospace;color:var(--verde)">$${Number(c.comision_total).toFixed(2)}</td>
+          <td style=",monospace;color:var(--amarillo)">$${Number(c.monto_contrato).toLocaleString()}</td>
+          <td style=",monospace;color:var(--verde)">$${Number(c.comision_total).toFixed(2)}</td>
           <td style="font-size:12px">
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-family:'DM Mono',monospace">$${Number(c.comision_captador).toFixed(2)}</span>
+              <span style=",monospace">$${Number(c.comision_captador).toFixed(2)}</span>
               <span class="badge ${c.pagado_captador?'badge-ganado':'badge-perdido'}" style="font-size:9px">${c.pagado_captador?'✓ Pagado':'Pendiente'}</span>
             </div>
           </td>
           <td style="font-size:12px">
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-family:'DM Mono',monospace">$${Number(c.comision_cerrador).toFixed(2)}</span>
+              <span style=",monospace">$${Number(c.comision_cerrador).toFixed(2)}</span>
               <span class="badge ${c.pagado_cerrador?'badge-ganado':'badge-perdido'}" style="font-size:9px">${c.pagado_cerrador?'✓ Pagado':'Pendiente'}</span>
             </div>
           </td>
@@ -3604,7 +3614,9 @@ function usarWebSpeech(contexto, SpeechRec){
   document.getElementById('audio-overlay').classList.add('open');
   setAudioState('recording');
   
-  const hint = AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead;
+  const hint = contexto==='auto' 
+    ? 'Di qué querés hacer: registrar lead, seguimiento, buscar cliente, agendar visita...' 
+    : (AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead);
   const hintEl = document.getElementById('audio-hint');
   if(hintEl) hintEl.textContent = hint;
   
@@ -3693,16 +3705,13 @@ function mostrarMenuAudioFab(){
   `;
   
   const opciones = [
-    {icon:'🎙️', label:'Nuevo lead por voz', fn:"iniciarGrabacion('nuevo_lead')"},
-    {icon:'📋', label:'Seguimiento por voz', fn:"iniciarGrabacion('seguimiento')"},
-    {icon:'🔍', label:'Buscar por voz', fn:"iniciarGrabacion('buscar')"},
-    {icon:'📅', label:'Agendar visita por voz', fn:"iniciarGrabacion('agendar_visita')"},
-    {icon:'📁', label:'Cargar audio', fn:"cargarAudioArchivo('nuevo_lead')"},
+    {icon:'🎙️', label:'Grabar — el sistema detecta la acción', fn:"iniciarGrabacion()"},
+    {icon:'📁', label:'Cargar audio desde archivo', fn:"cargarAudioArchivo()"},
   ];
   
   opciones.forEach(op=>{
     const btn = document.createElement('button');
-    btn.style.cssText = "background:none;border:none;color:var(--blanco);font-size:14px;text-align:left;padding:10px 12px;border-radius:var(--r);cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:10px;width:100%;-webkit-tap-highlight-color:transparent";
+    btn.style.cssText = "background:none;border:none;color:var(--blanco);font-size:14px;text-align:left;padding:10px 12px;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;gap:10px;width:100%;-webkit-tap-highlight-color:transparent";
     btn.innerHTML = `<span style="font-size:18px">${op.icon}</span>${op.label}`;
     btn.onclick = ()=>{ menu.remove(); eval(op.fn); };
     btn.onmouseover = ()=>btn.style.background='var(--gris1)';
@@ -3742,7 +3751,7 @@ const AUDIO_HINTS = {
   cierre: 'Di: nombre del cliente, monto del contrato en dólares, y quién fue el captador y cerrador.',
 };
 
-async function iniciarGrabacion(contexto='nuevo_lead'){
+async function iniciarGrabacion(contexto='auto'){
   audioContexto = contexto;
   
   // Intentar Web Speech API primero (funciona en Edge, Chrome, Safari sin pedir permisos explícitos)
@@ -3791,7 +3800,9 @@ async function iniciarGrabacion(contexto='nuevo_lead'){
     setAudioState('recording');
     
     // Actualizar hint según contexto
-    const hint = AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead;
+    const hint = contexto==='auto' 
+    ? 'Di qué querés hacer: registrar lead, seguimiento, buscar cliente, agendar visita...' 
+    : (AUDIO_HINTS[contexto] || AUDIO_HINTS.nuevo_lead);
     document.getElementById('audio-hint').textContent = hint;
     
     // Configurar MediaRecorder
@@ -4299,6 +4310,504 @@ async function cargarHistorico(){
         </tbody>
       </table>
     </div>`;
+}
+
+// ── PIPELINE DE VENTAS ──
+let etapaTabActual = 'todos';
+
+function setEtapaTab(etapa, btn){
+  etapaTabActual = etapa;
+  document.querySelectorAll('#pn-mis-leads .inner-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  filtrarLeads();
+}
+
+function filtrarLeads(){
+  const q = (document.getElementById('search-leads')?.value||'').toLowerCase();
+  let leads = allLeads.filter(l => {
+    // Solo leads del captador actual (si es field_capturer)
+    if(cu.rol==='field_capturer' && l.captador !== cu.nombre) return false;
+    return true;
+  });
+
+  // Filtro por etapa/tab
+  if(etapaTabActual === 'nuevo') leads = leads.filter(l=>l.estado==='nuevo');
+  else if(etapaTabActual === 'intentos') leads = leads.filter(l=>l.estado==='nuevo'||l.estado==='en_seguimiento');
+  else if(etapaTabActual === 'en_seguimiento') leads = leads.filter(l=>l.estado==='en_seguimiento');
+  else if(etapaTabActual === 'visita_agendada') leads = leads.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada');
+  else if(etapaTabActual === 'cerrado_ganado') leads = leads.filter(l=>l.estado==='cerrado_ganado');
+
+  // Filtro de búsqueda
+  if(q) leads = leads.filter(l =>
+    ['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>
+      l[k]&&l[k].toLowerCase().includes(q)
+    )
+  );
+
+  // Contador
+  const ctr = document.getElementById('leads-contador');
+  if(ctr) ctr.textContent = `${leads.length} lead${leads.length!==1?'s':''}`;
+
+  renderLeadsPipeline(leads);
+}
+
+function renderLeadsPipeline(leads){
+  const el = document.getElementById('leads-table-container');
+  if(!leads.length){
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-title">Sin leads en esta etapa</div>
+      <div class="empty-sub">Los leads que registres aparecerán aquí</div>
+    </div>`;
+    return;
+  }
+
+  const estadoInfo = {
+    nuevo: {label:'Nuevo', color:'var(--azul)', icon:'🆕'},
+    en_seguimiento: {label:'Seguimiento', color:'var(--amarillo)', icon:'🔄'},
+    visita_agendada: {label:'Visita agendada', color:'#2ecc71', icon:'📅'},
+    visita_realizada: {label:'Visita realizada', color:'#27ae60', icon:'✅'},
+    cerrado_ganado: {label:'Ganado', color:'#00b894', icon:'🏆'},
+    cerrado_perdido: {label:'Perdido', color:'var(--rojo)', icon:'❌'},
+  };
+
+  el.innerHTML = leads.map(l => {
+    const est = estadoInfo[l.estado] || {label:l.estado, color:'var(--gris3)', icon:'•'};
+    const hoyStr = new Date().toISOString().slice(0,10);
+    const esHoy = l.proximo_contacto && l.proximo_contacto.slice(0,10) === hoyStr;
+    const vencido = l.proximo_contacto && l.proximo_contacto.slice(0,10) < hoyStr;
+    const tieneVisita = l.visita_fecha;
+    const horaVisita = tieneVisita ? new Date(l.visita_fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : null;
+
+    return `<div style="background:var(--negro2);border:1px solid var(--gris1);border-left:3px solid ${est.color};border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:all 0.15s"
+      onclick="abrirModalLead(${l.id})"
+      onmouseover="this.style.borderColor='var(--gris3)'" 
+      onmouseout="this.style.borderLeftColor='${est.color}';this.style.borderTopColor='var(--gris1)';this.style.borderRightColor='var(--gris1)';this.style.borderBottomColor='var(--gris1)'">
+      
+      <!-- Cabecera del lead -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">${est.icon}</span>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--blanco)">${l.nombre||'Sin nombre'}</div>
+            <div style="font-size:11px;color:var(--gris4)">${l.celular||'—'} ${l.ciudad?'· '+l.ciudad:''}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;background:${est.color}20;color:${est.color}">${est.label}</span>
+          ${l.financiamiento?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--gris1);color:var(--gris4)">${l.financiamiento==='bancario'?'🏦 Banco':'💵 Contado'}</span>`:''}
+          ${l.visito_oficina?'<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(46,204,113,0.15);color:var(--verde)">🏢 Visitó</span>':''}
+        </div>
+      </div>
+
+      <!-- Info adicional -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--gris4);margin-bottom:8px">
+        ${l.fecha_ingreso?`<span>📥 ${l.fecha_ingreso}</span>`:''}
+        ${l.medio_difusion?`<span>📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
+        ${l.captador&&cu.rol!=='field_capturer'?`<span>👤 ${l.captador}</span>`:''}
+        ${l.cerrador?`<span>🤝 ${l.cerrador}</span>`:''}
+      </div>
+
+      <!-- Próximo contacto / visita -->
+      ${l.proximo_contacto?`
+        <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:var(--r);background:${vencido?'rgba(231,76,60,0.15)':esHoy?'rgba(243,156,18,0.15)':'rgba(52,152,219,0.1)'};margin-bottom:8px">
+          <span style="font-size:12px">${vencido?'⚠️':esHoy?'🔔':'📅'}</span>
+          <span style="font-size:11px;font-weight:600;color:${vencido?'var(--rojo)':esHoy?'var(--naranja)':'var(--azul)'}">
+            ${vencido?'Vencido: ':esHoy?'HOY: ':'Próximo: '}${l.proximo_contacto.slice(0,10)}
+          </span>
+        </div>`:''}
+      ${horaVisita?`
+        <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:var(--r);background:rgba(46,204,113,0.1);margin-bottom:8px;margin-left:4px">
+          <span style="font-size:12px">📅</span>
+          <span style="font-size:11px;font-weight:600;color:var(--verde)">Visita: ${horaVisita} ${l.visita_sala==='sala_principal'?'· Sala Principal':l.visita_sala==='gerencia'?'· Gerencia':''}</span>
+        </div>`:''}
+      
+      ${l.notas?`<div style="font-size:11px;color:var(--gris4);font-style:italic;margin-bottom:8px">"${l.notas.slice(0,80)}${l.notas.length>80?'...':''}"</div>`:''}
+
+      <!-- Acciones rápidas del flujo -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px" onclick="event.stopPropagation()">
+        ${l.estado==='nuevo'?`
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirRegistrarIntento(${l.id})">📞 Registrar intento</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirModalLead(${l.id})">✏️ Editar</button>
+        `:''}
+        ${l.estado==='en_seguimiento'?`
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirRegistrarSeguimiento(${l.id})">📋 Seguimiento</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirAgendarVisita(${l.id})">📅 Agendar visita</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirModalLead(${l.id})">✏️ Editar</button>
+        `:''}
+        ${l.estado==='visita_agendada'?`
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="abrirModalLead(${l.id})">📋 Ver detalles</button>
+        `:''}
+        ${l.estado==='visita_realizada'?`
+          <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="abrirRegistrarResultadoVisita(${l.id})">🎯 Resultado visita</button>
+        `:''}
+        <button class="btn btn-danger btn-sm" style="font-size:10px" onclick="abrirPerderLead(${l.id})">✕ Perder</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── MODALES DE FLUJO ──
+
+// Modal registrar intento de contacto
+function abrirRegistrarIntento(leadId){
+  const l = allLeads.find(x=>x.id===leadId);
+  if(!l) return;
+  
+  // Crear mini modal dinámico
+  const existing = document.getElementById('mini-modal-flujo');
+  if(existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'mini-modal-flujo';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;padding:0;backdrop-filter:blur(4px)';
+  
+  // Contar intentos previos
+  const intentoNum = (l.intento1_estado?1:0) + (l.intento2_estado?1:0) + (l.intento3_estado?1:0) + 1;
+  
+  modal.innerHTML = `
+    <div style="background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <div style="font-size:16px;font-weight:600;color:var(--blanco)">📞 Intento ${intentoNum} de contacto</div>
+          <div style="font-size:12px;color:var(--gris4)">${l.nombre} · ${l.celular}</div>
+        </div>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" 
+          style="background:none;border:none;color:var(--gris4);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Resultado del intento</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="resultado-btns">
+            ${[
+              {v:'contesto',l:'✅ Contestó',c:'rgba(46,204,113,0.15)',bc:'rgba(46,204,113,0.4)'},
+              {v:'no_contesto',l:'📵 No contestó',c:'rgba(231,76,60,0.1)',bc:'rgba(231,76,60,0.3)'},
+              {v:'buzon',l:'📬 Buzón de voz',c:'rgba(243,156,18,0.1)',bc:'rgba(243,156,18,0.3)'},
+              {v:'apagado',l:'🔇 Apagado/fuera',c:'rgba(155,89,182,0.1)',bc:'rgba(155,89,182,0.3)'},
+            ].map(r=>`
+              <button onclick="selResultadoIntento('${r.v}',this)" 
+                data-val="${r.v}"
+                style="padding:10px;background:${r.c};border:1px solid ${r.bc};border-radius:var(--r);color:var(--blanco);font-size:12px;cursor:pointer;text-align:left;transition:all 0.15s">
+                ${r.l}
+              </button>`).join('')}
+          </div>
+        </div>
+        
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Nota del intento</label>
+          <textarea id="intento-nota" class="form-textarea" placeholder="¿Qué pasó? ¿Qué dijo el cliente?" style="min-height:70px"></textarea>
+        </div>
+        
+        <div id="intento-siguiente" style="display:none">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Programar próximo intento</label>
+          <input type="date" id="intento-prox-fecha" class="form-input" min="${new Date().toISOString().slice(0,10)}">
+        </div>
+        
+        <div id="intento-pasa-seguimiento" style="display:none;background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3);border-radius:var(--r2);padding:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--verde);margin-bottom:4px">✅ ¡El cliente contestó!</div>
+          <div style="font-size:12px;color:var(--gris4)">Pasará a etapa de Seguimiento automáticamente.</div>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button onclick="guardarIntento(${leadId})" class="btn btn-primary" style="flex:1">
+          💾 Guardar intento
+        </button>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">
+          Cancelar
+        </button>
+      </div>
+    </div>`;
+  
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+let _resultadoIntentoSel = null;
+function selResultadoIntento(val, btn){
+  _resultadoIntentoSel = val;
+  document.querySelectorAll('#resultado-btns button').forEach(b=>{
+    b.style.opacity = b.dataset.val===val ? '1' : '0.5';
+    b.style.fontWeight = b.dataset.val===val ? '700' : '400';
+  });
+  // Mostrar/ocultar campos según resultado
+  const siguienteEl = document.getElementById('intento-siguiente');
+  const pasaEl = document.getElementById('intento-pasa-seguimiento');
+  if(val === 'contesto'){
+    if(siguienteEl) siguienteEl.style.display='none';
+    if(pasaEl) pasaEl.style.display='';
+  } else {
+    if(siguienteEl) siguienteEl.style.display='';
+    if(pasaEl) pasaEl.style.display='none';
+  }
+}
+
+async function guardarIntento(leadId){
+  if(!_resultadoIntentoSel){ toast('Selecciona el resultado del intento','error'); return; }
+  const nota = document.getElementById('intento-nota')?.value||'';
+  const proxFecha = document.getElementById('intento-prox-fecha')?.value||null;
+  
+  const l = allLeads.find(x=>x.id===leadId);
+  if(!l) return;
+  
+  // Determinar número de intento
+  const numIntento = (l.intento1_estado?1:0) + (l.intento2_estado?1:0) + (l.intento3_estado?1:0) + 1;
+  
+  // Registrar en intentos_contacto
+  await sb.from('intentos_contacto').insert([{
+    lead_id: leadId,
+    colaborador: cu.nombre,
+    numero_intento: numIntento,
+    resultado: _resultadoIntentoSel,
+    nota,
+    siguiente_fecha: proxFecha,
+  }]);
+  
+  // Actualizar lead
+  const updateData = {
+    notas: nota ? (l.notas?l.notas+'\n'+nota:nota) : l.notas,
+    proximo_contacto: proxFecha||null,
+  };
+  
+  // Mapear resultado a campo de intento
+  const campoFecha = `intento${numIntento}_fecha`;
+  const campoEstado = `intento${numIntento}_estado`;
+  updateData[campoFecha] = new Date().toISOString().slice(0,10);
+  updateData[campoEstado] = _resultadoIntentoSel;
+  
+  // Si contestó → pasar a seguimiento
+  if(_resultadoIntentoSel === 'contesto'){
+    updateData.estado = 'en_seguimiento';
+  }
+  
+  await sb.from('leads').update(updateData).eq('id', leadId);
+  
+  _resultadoIntentoSel = null;
+  document.getElementById('mini-modal-flujo')?.remove();
+  toast('Intento registrado ✓','success');
+  await loadLeads();
+  filtrarLeads();
+}
+
+// Modal registrar seguimiento
+function abrirRegistrarSeguimiento(leadId){
+  const l = allLeads.find(x=>x.id===leadId);
+  if(!l) return;
+  
+  const existing = document.getElementById('mini-modal-flujo');
+  if(existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'mini-modal-flujo';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  
+  modal.innerHTML = `
+    <div style="background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <div style="font-size:16px;font-weight:600;color:var(--blanco)">🔄 Registrar seguimiento</div>
+          <div style="font-size:12px;color:var(--gris4)">${l.nombre} · ${l.celular}</div>
+        </div>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" 
+          style="background:none;border:none;color:var(--gris4);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">¿Cómo fue el contacto?</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="seg-resultado-btns">
+            ${[
+              {v:'interesado',l:'🔥 Muy interesado',c:'rgba(46,204,113,0.15)',bc:'rgba(46,204,113,0.4)'},
+              {v:'interesado_dudas',l:'🤔 Interesado con dudas',c:'rgba(243,156,18,0.1)',bc:'rgba(243,156,18,0.3)'},
+              {v:'necesita_tiempo',l:'⏰ Necesita más tiempo',c:'rgba(52,152,219,0.1)',bc:'rgba(52,152,219,0.3)'},
+              {v:'frio',l:'❄️ Frío, poco interés',c:'rgba(155,89,182,0.1)',bc:'rgba(155,89,182,0.3)'},
+            ].map(r=>`
+              <button onclick="selSeguimiento('${r.v}',this)" data-val="${r.v}"
+                style="padding:10px;background:${r.c};border:1px solid ${r.bc};border-radius:var(--r);color:var(--blanco);font-size:12px;cursor:pointer;text-align:left">
+                ${r.l}
+              </button>`).join('')}
+          </div>
+        </div>
+        
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Notas del seguimiento</label>
+          <textarea id="seg-nota" class="form-textarea" placeholder="¿Qué conversaron? ¿Qué necesita el cliente?"></textarea>
+        </div>
+        
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Programar próximo contacto</label>
+          <input type="date" id="seg-prox-fecha" class="form-input" min="${new Date().toISOString().slice(0,10)}">
+        </div>
+        
+        <div id="seg-visita-wrap" style="display:none;background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.25);border-radius:var(--r2);padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--verde);margin-bottom:8px">📅 ¿Agendar visita a la oficina?</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input type="date" id="seg-visita-fecha" class="form-input" min="${new Date().toISOString().slice(0,10)}">
+            <select class="form-select" id="seg-visita-hora">
+              ${['08:00','09:00','10:00','11:00','14:00','15:00','16:00','17:00'].map(h=>`<option>${h}</option>`).join('')}
+            </select>
+            <select class="form-select" id="seg-visita-sala" style="grid-column:1/-1">
+              <option value="sala_principal">Sala Principal</option>
+              <option value="gerencia">Gerencia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+        <button onclick="guardarSeguimiento(${leadId})" class="btn btn-primary" style="flex:1">
+          💾 Guardar seguimiento
+        </button>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">
+          Cancelar
+        </button>
+      </div>
+    </div>`;
+  
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+let _resultadoSegSel = null;
+function selSeguimiento(val, btn){
+  _resultadoSegSel = val;
+  document.querySelectorAll('#seg-resultado-btns button').forEach(b=>{
+    b.style.opacity = b.dataset.val===val?'1':'0.5';
+    b.style.fontWeight = b.dataset.val===val?'700':'400';
+  });
+  // Si muy interesado, mostrar opción de agendar visita
+  const visitaWrap = document.getElementById('seg-visita-wrap');
+  if(visitaWrap) visitaWrap.style.display = val==='interesado'?'':'none';
+}
+
+async function guardarSeguimiento(leadId){
+  const nota = document.getElementById('seg-nota')?.value||'';
+  const proxFecha = document.getElementById('seg-prox-fecha')?.value||null;
+  const visitaFecha = document.getElementById('seg-visita-fecha')?.value;
+  const visitaHora = document.getElementById('seg-visita-hora')?.value||'09:00';
+  const visitaSala = document.getElementById('seg-visita-sala')?.value||'sala_principal';
+  
+  const updateData = {
+    estado: 'en_seguimiento',
+    notas: nota||(allLeads.find(x=>x.id===leadId)?.notas||null),
+    proximo_contacto: proxFecha||null,
+  };
+  
+  // Si se agendó visita
+  if(visitaFecha){
+    updateData.estado = 'visita_agendada';
+    updateData.visita_fecha = visitaFecha+'T'+visitaHora+':00';
+    updateData.visita_sala = visitaSala;
+  }
+  
+  // Registrar en tabla seguimientos
+  await sb.from('seguimientos').insert([{
+    lead_id: leadId,
+    colaborador: cu.nombre,
+    fecha_seguimiento: new Date().toISOString(),
+    nota_previa: nota,
+    resultado: _resultadoSegSel||'realizado',
+    estado: 'realizado',
+    fecha_programada: proxFecha ? proxFecha+'T09:00:00' : null,
+  }]);
+  
+  await sb.from('leads').update(updateData).eq('id', leadId);
+  
+  _resultadoSegSel = null;
+  document.getElementById('mini-modal-flujo')?.remove();
+  toast(visitaFecha?'Seguimiento y visita registrados ✓':'Seguimiento registrado ✓','success');
+  await loadLeads();
+  filtrarLeads();
+  if(visitaFecha) cargarAgendaReal(); // actualizar agenda
+}
+
+function abrirAgendarVisita(leadId){
+  abrirModalLead(leadId);
+  setTimeout(()=>{
+    document.getElementById('ml-estado').value = 'visita_agendada';
+    toggleMotivo();
+    const visEl = document.getElementById('visita-campos');
+    if(visEl) visEl.style.display='';
+  },200);
+}
+
+function abrirRegistrarResultadoVisita(leadId){
+  abrirModalLead(leadId);
+  setTimeout(()=>{
+    document.getElementById('ml-estado').value = 'visita_realizada';
+    toggleMotivo();
+  },200);
+}
+
+async function abrirPerderLead(leadId){
+  const l = allLeads.find(x=>x.id===leadId);
+  if(!l) return;
+  
+  const existing = document.getElementById('mini-modal-flujo');
+  if(existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'mini-modal-flujo';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  
+  const motivos = [
+    'No contestó llamadas ni mensajes','Dejó de contestar','Falta de presupuesto',
+    'Era de otro departamento','Precio elevado','Quiere crédito directo',
+    'No califica a financiamiento bancario','Celular apagado','Cliente conflictivo',
+    'Era la competencia','Solo quería información','Otros'
+  ];
+  
+  modal.innerHTML = `
+    <div style="background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:600;color:var(--rojo)">❌ Marcar como perdido</div>
+          <div style="font-size:12px;color:var(--gris4)">${l.nombre} · ${l.celular}</div>
+        </div>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" 
+          style="background:none;border:none;color:var(--gris4);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:8px">Motivo de pérdida</label>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:250px;overflow-y:auto">
+          ${motivos.map(m=>`
+            <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--negro3);border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--blanco)">
+              <input type="radio" name="motivo-perdida" value="${m}" style="accent-color:var(--rojo)"> ${m}
+            </label>`).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Nota final (opcional)</label>
+        <textarea id="perdida-nota" class="form-textarea" placeholder="Observación adicional..." style="min-height:60px"></textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="confirmarPerderLead(${leadId})" class="btn btn-danger" style="flex:1">
+          Confirmar pérdida
+        </button>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>`;
+  
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+async function confirmarPerderLead(leadId){
+  const motivoRadio = document.querySelector('input[name="motivo-perdida"]:checked');
+  if(!motivoRadio){ toast('Selecciona un motivo','error'); return; }
+  const motivo = motivoRadio.value;
+  const nota = document.getElementById('perdida-nota')?.value||'';
+  
+  await sb.from('leads').update({
+    estado: 'cerrado_perdido',
+    motivo_perdida: motivo,
+    notas: nota||(allLeads.find(x=>x.id===leadId)?.notas||null),
+  }).eq('id', leadId);
+  
+  document.getElementById('mini-modal-flujo')?.remove();
+  toast('Lead marcado como perdido','success');
+  await loadLeads();
+  filtrarLeads();
 }
 
 // ── BUSCADOR GLOBAL POTENTE ──
