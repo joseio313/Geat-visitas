@@ -687,7 +687,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <input class="finput" id="seg-prox" type="date">
       </div>
       <div id="seg-visita-wrap" style="display:none;padding:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:10px">📅 Agendar visita a oficina</div>
+        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">📅 Agendar visita a oficina</div>
+        <div id="seg-cerrador-info" style="font-size:11px;color:var(--txt3);margin-bottom:10px;padding:6px 10px;background:rgba(59,130,246,0.1);border-radius:var(--r)">
+          🔄 El cerrador se asignará automáticamente según turno
+        </div>
         <div class="form-grid-2">
           <div class="fgroup"><label>Fecha</label><input class="finput" id="seg-visita-fecha" type="date"></div>
           <div class="fgroup"><label>Hora</label>
@@ -930,6 +933,13 @@ function llenarSelects(){
   // Captadora ve su nombre fijo
   if(cu.rol==='field_capturer'){
     document.getElementById('fgroup-captador').style.display='none';
+    document.getElementById('fgroup-cerrador').style.display='none';
+  }
+  if(cu.rol==='closer'){
+    document.getElementById('fgroup-cerrador').style.display='none';
+  }
+  // Solo admin puede ver y cambiar el cerrador
+  if(cu.rol!=='admin'){
     document.getElementById('fgroup-cerrador').style.display='none';
   }
   // Llenar filtro captador en todos
@@ -1497,6 +1507,7 @@ function selPill(btn,grupo){
   }else{
     btn.className='pill '+(val==='interesado'?'sel-ok':val==='frio'?'sel-no':val==='tiempo'?'sel-warn':'sel-neutral');
     document.getElementById('seg-visita-wrap').style.display=val==='interesado'?'':'none';
+    if(val==='interesado') consultarProximoCerrador();
   }
 }
 async function guardarIntento(){
@@ -1794,6 +1805,8 @@ async function renderAdmin(){
     const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos=allLeads.filter(l=>l.estado==='cerrado_perdido').length;
     const conVisita=allLeads.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    // Turnos de cerradores
+    const turnos=await verEstadoTurnos();
     el.innerHTML=`<div class="kpi-grid">
       <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Total leads</div></div>
       <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos}</div><div class="kpi-l">Activos</div></div>
@@ -1801,9 +1814,35 @@ async function renderAdmin(){
       <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos}</div><div class="kpi-l">Perdidos</div></div>
       <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita}</div><div class="kpi-l">En visita</div></div>
       <div class="kpi"><div class="kpi-n">${ganados?(ganados/(ganados+perdidos)*100).toFixed(1)+'%':'—'}</div><div class="kpi-l">Conversión</div></div>
+    </div>
+    <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
+          <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
+          <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
+      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">⚡ Cambiar turno manualmente</button>`:''}
     </div>`;
   }
 }
+async function cambiarTurnoManual(){
+  const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+  const actual=data?.ultimo_cerrador||'Gustavo Vaca';
+  const nuevo=actual==='David Gambarte'?'Gustavo Vaca':'David Gambarte';
+  if(!confirm(`El turno actual apunta a: ${actual==='David Gambarte'?'Gustavo (próximo)':'David (próximo)'}\n\n¿Quieres que la PRÓXIMA visita vaya a ${nuevo==='David Gambarte'?'Gustavo':'David'} en lugar de ${nuevo}?`)) return;
+  // Invertir manualmente
+  await sb.from('config_cerradores').update({ultimo_cerrador:nuevo}).eq('id',1);
+  toast('Turno actualizado — próxima visita: '+(nuevo==='David Gambarte'?'Gustavo Vaca':'David Gambarte'),'ok');
+  renderAdmin();
+}
+
 async function marcarPagado(id,tipo){
   const campo=tipo==='captador'?'pagado_captador':'pagado_cerrador';
   await sb.from('comisiones').update({[campo]:true}).eq('id',id);
@@ -1832,6 +1871,33 @@ function exportarCSV(){
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='leads_geat_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
+}
+
+// ── TURNO CERRADORES ──
+async function consultarProximoCerrador(){
+  const el = document.getElementById('seg-cerrador-info');
+  if(!el) return;
+  try{
+    // Leer el estado actual del turno sin modificarlo
+    const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+    if(!data) return;
+    const proximo = data.ultimo_cerrador==='David Gambarte' ? 'Gustavo Vaca' : 'David Gambarte';
+    el.innerHTML = `🎯 Se asignará automáticamente a: <strong style="color:var(--txt)">${proximo}</strong>`;
+  }catch(e){
+    el.textContent='El cerrador se asignará automáticamente según turno';
+  }
+}
+
+async function verEstadoTurnos(){
+  const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+  const{data:leads}=await sb.from('leads')
+    .select('cerrador')
+    .not('visita_fecha','is',null)
+    .eq('archivado',false);
+  const vDavid=(leads||[]).filter(l=>l.cerrador==='David Gambarte').length;
+  const vGustavo=(leads||[]).filter(l=>l.cerrador==='Gustavo Vaca').length;
+  const proximo=data?.ultimo_cerrador==='David Gambarte'?'Gustavo Vaca':'David Gambarte';
+  return{proximo,vDavid,vGustavo,total:data?.contador||0};
 }
 
 // ── CERRAR SHEETS ──
