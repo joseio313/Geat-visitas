@@ -49,7 +49,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .login-err{text-align:center;font-size:12px;color:var(--red);margin-top:12px;min-height:18px}
 
 /* ── APP LAYOUT ── */
-#app{display:none;height:100vh;flex-direction:column;overflow:hidden}
+#app{display:none;height:100vh;height:100dvh;flex-direction:column;overflow:hidden}
 
 /* TOP BAR */
 .topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--brd);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
@@ -64,12 +64,14 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .notif-badge.show{display:block}
 
 /* CONTENT */
-.content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:64px}
 .panel{display:none;padding:16px;min-height:calc(100vh - 52px - 56px)}
 .panel.active{display:block}
 
 /* BOTTOM NAV */
-.bottomnav{height:56px;background:var(--bg2);border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-around;flex-shrink:0;padding:0 4px}
+.bottomnav{height:56px;background:var(--bg2);border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-around;padding:0 4px;
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 4px;border-radius:var(--r);transition:all 0.15s;border:none;background:none;color:var(--txt3);font-family:var(--font)}
 .nav-item.active{color:var(--acc)}
 .nav-icon{font-size:18px;line-height:1}
@@ -162,7 +164,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .hist-nota{font-size:12px;color:var(--txt2);line-height:1.5}
 
 /* ── TOAST ── */
-#toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--brd2);border-radius:var(--r2);padding:10px 18px;font-size:13px;font-weight:500;z-index:800;opacity:0;transition:all 0.25s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+#toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--brd2);border-radius:var(--r2);padding:10px 18px;font-size:13px;font-weight:500;z-index:800;opacity:0;transition:all 0.25s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.ok{border-color:var(--green);color:var(--green)}
 #toast.err{border-color:var(--red);color:var(--red)}
@@ -317,7 +319,30 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div class="stat"><div class="stat-n" id="s-mes">—</div><div class="stat-l">Total activos</div></div>
       </div>
       <div id="inicio-notifs"></div>
-      <div id="inicio-agenda" style="margin-top:8px"></div>
+      <!-- Acciones rápidas -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="abrirNuevoLead()">
+          <div style="font-size:20px;margin-bottom:6px">➕</div>
+          <div style="font-size:13px;font-weight:500;color:var(--txt)">Nuevo lead</div>
+          <div style="font-size:11px;color:var(--txt3)">Registrar cliente</div>
+        </button>
+        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="iniciarGrabacion()">
+          <div style="font-size:20px;margin-bottom:6px">🎙</div>
+          <div style="font-size:13px;font-weight:500;color:var(--txt)">Voz</div>
+          <div style="font-size:11px;color:var(--txt3)">Registrar hablando</div>
+        </button>
+        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="sw('leads',document.querySelector('[data-nav=leads]'))">
+          <div style="font-size:20px;margin-bottom:6px">📋</div>
+          <div style="font-size:13px;font-weight:500;color:var(--txt)">Mis leads</div>
+          <div style="font-size:11px;color:var(--txt3)" id="qa-leads-count">—</div>
+        </button>
+        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="sw('agenda',document.querySelector('[data-nav=agenda]'))">
+          <div style="font-size:20px;margin-bottom:6px">📅</div>
+          <div style="font-size:13px;font-weight:500;color:var(--txt)">Mi agenda</div>
+          <div style="font-size:11px;color:var(--txt3)" id="qa-agenda-count">Ver actividades</div>
+        </button>
+      </div>
+      <div id="inicio-agenda" style="margin-top:4px"></div>
     </div>
 
     <!-- MIS LEADS / PIPELINE -->
@@ -874,14 +899,25 @@ async function initApp(){
   buildNav();
   // Botón reunión extra solo para admin y commercial_lead
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
-    document.getElementById('btn-reunion-extra').style.display='';
+    const btn=document.getElementById('btn-reunion-extra');
+    if(btn)btn.style.display='';
   }
-  // Llenar captador/cerrador en formulario
   llenarSelects();
+  // Mostrar inicio inmediatamente con estado de carga
+  document.getElementById('inicio-saludo').textContent=(new Date().getHours()<12?'Buenos días':new Date().getHours()<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
+  document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('inicio-agenda').innerHTML='<div class="loading"><span class="spin"></span>Cargando actividades...</div>';
+  // Cargar datos
   await loadLeads();
   renderInicio();
   iniciarRealtime();
   iniciarNotificaciones();
+  // Verificar notificaciones en BD
+  const{data:notifs}=await sb.from('notificaciones')
+    .select('id').eq('destinatario',cu.nombre).eq('leida',false).limit(1);
+  if(notifs&&notifs.length>0){
+    document.getElementById('notif-badge').classList.add('show');
+  }
 }
 
 function llenarSelects(){
@@ -975,10 +1011,31 @@ function renderInicio(){
   });
   document.getElementById('s-hoy').textContent=hoyLeads.length;
   document.getElementById('s-sem').textContent=semLeads.length;
-  document.getElementById('s-mes').textContent=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
+  const activos=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido');
+  document.getElementById('s-mes').textContent=activos.length;
+  // Accesos rápidos count
+  const qaLeads=document.getElementById('qa-leads-count');
+  if(qaLeads)qaLeads.textContent=activos.length+' activos';
 
-  // Actividades de hoy
+  // Actividades de hoy + visitas en oficina
   renderAgendaInicio();
+  // Notifs en inicio
+  renderNotifsInicio();
+}
+
+async function renderNotifsInicio(){
+  const{data}=await sb.from('notificaciones')
+    .select('*').eq('destinatario',cu.nombre).eq('leida',false)
+    .order('created_at',{ascending:false}).limit(3);
+  const items=data||[];
+  const el=document.getElementById('inicio-notifs');
+  if(!items.length){el.innerHTML='';return;}
+  el.innerHTML=`<div style="margin-bottom:12px">
+    ${items.map(n=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="sw('notif')">
+      <div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">${n.titulo}</strong>${n.mensaje?' — '+n.mensaje:''}</div>
+    </div>`).join('')}
+  </div>`;
 }
 
 async function renderAgendaInicio(){
