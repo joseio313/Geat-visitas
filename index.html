@@ -293,6 +293,77 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
 .audio-field-label{color:var(--gris4);min-width:100px;font-weight:600;text-transform:uppercase;font-size:10px}
 .audio-field-val{color:var(--blanco);flex:1}
 
+/* ── COLORES POR ETAPA ── */
+:root{
+  --c-nuevo:#E8F4FD;      --ct-nuevo:#1A6FA8;
+  --c-int1:#FFF3CD;       --ct-int1:#856404;
+  --c-int2:#FFE0B2;       --ct-int2:#7A3F00;
+  --c-int3:#FFCCBC;       --ct-int3:#7B2D00;
+  --c-seg:#E8F5E9;        --ct-seg:#2E7D32;
+  --c-visita:#C8E6C9;     --ct-visita:#1B5E20;
+  --c-vrealiz:#E3F2FD;    --ct-vrealiz:#0D47A1;
+  --c-scierre:#EDE7F6;    --ct-scierre:#4527A0;
+  --c-ganado:#E8F8EF;     --ct-ganado:#14532D;
+  --c-perdido:#FEECEC;    --ct-perdido:#7F1D1D;
+}
+.badge-etapa{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:0.04em}
+.etapa-nuevo{background:var(--c-nuevo);color:var(--ct-nuevo)}
+.etapa-int1{background:var(--c-int1);color:var(--ct-int1)}
+.etapa-int2{background:var(--c-int2);color:var(--ct-int2)}
+.etapa-int3{background:var(--c-int3);color:var(--ct-int3)}
+.etapa-seg{background:var(--c-seg);color:var(--ct-seg)}
+.etapa-visita{background:var(--c-visita);color:var(--ct-visita)}
+.etapa-vrealiz{background:var(--c-vrealiz);color:var(--ct-vrealiz)}
+.etapa-scierre{background:var(--c-scierre);color:var(--ct-scierre)}
+.etapa-ganado{background:var(--c-ganado);color:var(--ct-ganado)}
+.etapa-perdido{background:var(--c-perdido);color:var(--ct-perdido)}
+
+/* ── HISTORIAL ── */
+.historial-entrada{
+  border-left:3px solid var(--gris2);
+  padding:12px 14px;
+  margin-bottom:8px;
+  border-radius:0 var(--r) var(--r) 0;
+  background:var(--negro3);
+  position:relative;
+}
+.historial-entrada.editable-entry{border-left-color:var(--amarillo)}
+.historial-entrada.bloqueada{opacity:0.75}
+.historial-fecha{font-size:10px;color:var(--gris4);margin-bottom:4px}
+.historial-quien{font-size:11px;font-weight:600;color:var(--blanco);margin-bottom:4px}
+.historial-nota{font-size:12px;color:var(--gris5);line-height:1.5}
+.historial-edit-btn{
+  position:absolute;top:8px;right:8px;
+  background:none;border:1px solid var(--gris2);
+  border-radius:var(--r);padding:3px 8px;
+  font-size:10px;color:var(--amarillo);cursor:pointer;
+}
+
+/* ── AGENDA PERSONAL NUEVA ── */
+.agenda-item{
+  background:var(--negro2);
+  border:1px solid var(--gris1);
+  border-radius:var(--r2);
+  padding:12px 14px;
+  margin-bottom:6px;
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.agenda-item:hover{border-color:var(--gris3);background:var(--negro3)}
+.agenda-item.completada{opacity:0.5}
+.agenda-dot{
+  width:10px;height:10px;border-radius:50%;
+  flex-shrink:0;margin-top:4px;
+}
+.agenda-hora{font-size:11px;color:var(--gris4);font-weight:600;min-width:40px}
+.agenda-titulo{font-size:13px;font-weight:500;color:var(--blanco);margin-bottom:2px}
+.agenda-sub{font-size:11px;color:var(--gris4)}
+.agenda-atrasada{border-left:3px solid var(--rojo)!important;border-radius:0 var(--r) var(--r) 0}
+.agenda-hoy{border-left:3px solid var(--amarillo)!important;border-radius:0 var(--r) var(--r) 0}
+
 /* ── FLUJO DE VENTAS ── */
 .lead-pipeline-card{background:var(--negro2);border:1px solid var(--gris1);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:all 0.15s}
 .lead-pipeline-card:hover{background:var(--negro3);border-color:var(--gris3)}
@@ -930,33 +1001,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
       <div class="panel" id="pn-mi-agenda">
         <div class="page-header">
           <div>
-            <div class="page-title">📋 My Tasks & Schedule</div>
-            <div class="page-subtitle">Tu agenda personal — visitas, seguimientos y tareas</div>
+            <div class="page-title">Mi Agenda</div>
+            <div class="page-subtitle">Actividades personales del día</div>
           </div>
           <div class="page-actions">
             <button class="audio-btn btn-sm" onclick="iniciarGrabacion()">
-              <span class="rec-dot"></span> 🎙️ Voz
+              <span class="rec-dot"></span> Voz
             </button>
-            <button class="btn btn-primary btn-sm" onclick="abrirModalVisita()">+ Agendar visita</button>
           </div>
         </div>
-
-        <!-- Tabs tipo Google Tasks -->
-        <div class="inner-tabs" style="margin-bottom:20px">
-          <button class="inner-tab active" id="tasks-tab-hoy" onclick="setTaskTab('hoy',this)">📅 Hoy</button>
-          <button class="inner-tab" id="tasks-tab-semana" onclick="setTaskTab('semana',this)">📆 Esta semana</button>
-          <button class="inner-tab" id="tasks-tab-visitas" onclick="setTaskTab('visitas',this)">🤝 Mis visitas</button>
-          <button class="inner-tab" id="tasks-tab-pendientes" onclick="setTaskTab('pendientes',this)">⏰ Pendientes</button>
+        <div class="inner-tabs" style="margin-bottom:16px">
+          <button class="inner-tab active" onclick="setAgendaTab('hoy',this)">Hoy</button>
+          <button class="inner-tab" onclick="setAgendaTab('semana',this)">Esta semana</button>
+          <button class="inner-tab" onclick="setAgendaTab('atrasadas',this)">Atrasadas</button>
+          <button class="inner-tab" onclick="setAgendaTab('completadas',this)">Completadas</button>
         </div>
-
-        <!-- Resumen rápido del día -->
-        <div id="tasks-resumen" class="stats-grid" style="margin-bottom:16px"></div>
-
-        <!-- Lista de tareas -->
-        <div id="tasks-lista">
-          <div class="loading-state"><span class="spin"></span>Cargando tareas...</div>
+        <div id="agenda-stats" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
+        <div id="agenda-personal-list">
+          <div class="loading-state"><span class="spin"></span>Cargando agenda...</div>
         </div>
       </div>
+
+
       <!-- PANEL: ANALYTICS -->
       <div class="panel" id="pn-analytics">
         <div class="page-header">
@@ -1220,7 +1286,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--negro);color:var(--blanco
             <option value="bancario">Financiamiento bancario</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Medio de difusión</label>
+        <div class="form-group"><label class="form-label">Medio de difusión <span style="color:var(--rojo)">*</span></label>
           <select class="form-select" id="ml-medio-difusion" onchange="guardarBorrador()">
             <option value="">Seleccionar...</option>
             <option value="fan_page_geat">📘 Fan Page GEAT (video)</option>
@@ -1812,6 +1878,7 @@ function sw(tab){
 // ── DATA ──
 async function loadAll(){
   iniciarRealtime(); // Activar actualizaciones en tiempo real
+  iniciarNotificaciones(); // Activar notificaciones push
   // Admin ve datos frescos siempre (sin caché)
   await Promise.all([loadLeads(),loadCampanas()]);
   renderInicio();
@@ -3070,6 +3137,396 @@ function renderTeam(){
   if(cloEl)cloEl.innerHTML=closers.map(buildTeamCard).join('')||'<div style="color:var(--gris4)">Sin cerradores</div>';
 }
 
+// ── AGENDA PERSONAL ──
+let agendaTabActual = 'hoy';
+let agendaPersonalData = [];
+
+function setAgendaTab(tab, btn){
+  agendaTabActual = tab;
+  document.querySelectorAll('#pn-mi-agenda .inner-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderAgendaPersonal();
+}
+
+async function cargarAgendaPersonal(){
+  const{data}=await sb.from('agenda_personal')
+    .select('*,leads(nombre,celular,ciudad,estado)')
+    .eq('colaborador',cu.nombre)
+    .order('fecha_programada',{ascending:true})
+    .limit(200);
+  agendaPersonalData = data||[];
+  renderAgendaPersonal();
+  actualizarStatsAgenda();
+}
+
+function actualizarStatsAgenda(){
+  const hoyStr = new Date().toISOString().slice(0,10);
+  const pendientes = agendaPersonalData.filter(a=>
+    !a.completada && a.fecha_programada.slice(0,10)===hoyStr
+  ).length;
+  const atrasadas = agendaPersonalData.filter(a=>
+    !a.completada && a.fecha_programada.slice(0,10)<hoyStr
+  ).length;
+  
+  const el = document.getElementById('agenda-stats');
+  if(!el) return;
+  el.innerHTML=[
+    {l:'Hoy',v:pendientes,c:pendientes>0?'var(--amarillo)':'var(--gris4)'},
+    {l:'Atrasadas',v:atrasadas,c:atrasadas>0?'var(--rojo)':'var(--gris4)'},
+    {l:'Total pendientes',v:agendaPersonalData.filter(a=>!a.completada).length,c:'var(--gris4)'},
+  ].map(s=>`<div style="background:var(--negro3);border:1px solid var(--gris1);border-radius:var(--r);padding:8px 14px;text-align:center;min-width:80px">
+    <div style="font-size:11px;color:var(--gris4);margin-bottom:2px">${s.l}</div>
+    <div style="font-size:20px;font-weight:600;color:${s.c}">${s.v}</div>
+  </div>`).join('');
+}
+
+function renderAgendaPersonal(){
+  const el = document.getElementById('agenda-personal-list');
+  if(!el) return;
+  
+  const hoyStr = new Date().toISOString().slice(0,10);
+  const semanaStr = new Date(Date.now()+7*864e5).toISOString().slice(0,10);
+  
+  let items = [...agendaPersonalData];
+  if(agendaTabActual==='hoy') items=items.filter(a=>
+    !a.completada && a.fecha_programada.slice(0,10)===hoyStr
+  );
+  else if(agendaTabActual==='semana') items=items.filter(a=>
+    !a.completada && a.fecha_programada.slice(0,10)<=semanaStr
+  );
+  else if(agendaTabActual==='atrasadas') items=items.filter(a=>
+    !a.completada && a.fecha_programada.slice(0,10)<hoyStr
+  );
+  else if(agendaTabActual==='completadas') items=items.filter(a=>a.completada).slice(0,30);
+  
+  if(!items.length){
+    el.innerHTML=`<div class="empty-state">
+      <div class="empty-title">${agendaTabActual==='hoy'?'Sin actividades hoy':'Sin actividades en este periodo'}</div>
+      <div class="empty-sub">Las actividades aparecen automáticamente al registrar leads</div>
+    </div>`;
+    return;
+  }
+  
+  const tipoLabel={
+    intento_1:'1er intento',intento_2:'2do intento',intento_3:'3er intento',
+    seguimiento:'Seguimiento',seguimiento_cierre:'Seg. cierre',recordatorio:'Recordatorio'
+  };
+  
+  el.innerHTML=items.map(a=>{
+    const esSt = a.leads?.estado;
+    const estStyle = getEtapaStyle(esSt||'nuevo');
+    const fechaA = new Date(a.fecha_programada);
+    const esAtrasada = !a.completada && a.fecha_programada.slice(0,10)<hoyStr;
+    const esHoy = a.fecha_programada.slice(0,10)===hoyStr;
+    const hora = fechaA.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    
+    return `<div class="agenda-item ${esAtrasada?'agenda-atrasada':esHoy?'agenda-hoy':''} ${a.completada?'completada':''}"
+      onclick="abrirActividadAgenda(${a.id})">
+      <div class="agenda-dot" style="background:${estStyle.dot}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:600;color:var(--blanco)">${a.leads?.nombre||a.titulo}</span>
+          <span class="badge-etapa ${estStyle.cls}" style="font-size:9px">${estStyle.label}</span>
+          ${esAtrasada?'<span style="font-size:9px;color:var(--rojo);font-weight:600">ATRASADA</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--gris4);margin-bottom:4px">
+          ${tipoLabel[a.tipo]||a.tipo} · ${esHoy?hora:fechaA.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' '+hora}
+        </div>
+        ${a.nota?`<div style="font-size:11px;color:var(--gris5);font-style:italic">"${a.nota.slice(0,60)}${a.nota.length>60?'...':''}"</div>`:''}
+        ${a.leads?.celular?`<div style="display:flex;gap:6px;margin-top:6px">
+          <a href="https://wa.me/591${a.leads.celular.replace(/\D/g,'')}" target="_blank" 
+            onclick="event.stopPropagation()"
+            style="font-size:10px;padding:3px 8px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.3);border-radius:20px;color:#25d366;text-decoration:none">
+            WhatsApp
+          </a>
+          <button onclick="event.stopPropagation();completarActividad(${a.id})" 
+            style="font-size:10px;padding:3px 8px;background:rgba(245,196,0,0.1);border:1px solid var(--gris2);border-radius:20px;color:var(--amarillo);cursor:pointer">
+            Completar
+          </button>
+          <button onclick="event.stopPropagation();abrirPerderLead(${a.lead_id})"
+            style="font-size:10px;padding:3px 8px;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.2);border-radius:20px;color:var(--rojo);cursor:pointer">
+            Perder
+          </button>
+        </div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function completarActividad(id){
+  const nota = prompt('Nota del resultado (opcional):');
+  await sb.from('agenda_personal').update({
+    completada:true,
+    completada_en:new Date().toISOString(),
+    nota_resultado:nota||null
+  }).eq('id',id);
+  toast('Actividad completada ✓','success');
+  await cargarAgendaPersonal();
+}
+
+function abrirActividadAgenda(id){
+  const act = agendaPersonalData.find(a=>a.id===id);
+  if(!act) return;
+  if(act.lead_id) abrirModalLead(act.lead_id);
+}
+
+// ── HISTORIAL DE LEAD ──
+async function cargarHistorialLead(leadId){
+  const{data}=await sb.from('historial_lead')
+    .select('*')
+    .eq('lead_id',leadId)
+    .order('fecha_actividad',{ascending:false});
+  return data||[];
+}
+
+function renderHistorial(entradas, contenedorId, miRol){
+  const el = document.getElementById(contenedorId);
+  if(!el) return;
+  if(!entradas.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--gris4);padding:12px">Sin historial registrado aún.</div>';
+    return;
+  }
+  
+  const tipoLabel={
+    intento_contacto:'Intento de contacto',
+    nota_seguimiento:'Seguimiento',
+    visita:'Visita',
+    cierre:'Cierre',
+    perdida:'Pérdida',
+    reactivacion:'Reactivación'
+  };
+  
+  el.innerHTML=entradas.map(e=>{
+    const esEditable = e.editable && e.colaborador===cu.nombre;
+    const fecha = new Date(e.fecha_actividad).toLocaleString('es-BO',{
+      day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'
+    });
+    const estStyle = getEtapaStyle(e.etapa);
+    
+    return `<div class="historial-entrada ${esEditable?'editable-entry':''} ${!e.editable?'bloqueada':''}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="badge-etapa ${estStyle.cls}" style="font-size:9px">${estStyle.label}</span>
+        <span style="font-size:10px;color:var(--gris4)">${tipoLabel[e.tipo_actividad]||e.tipo_actividad}</span>
+        ${esEditable?'<span style="font-size:9px;color:var(--amarillo);margin-left:auto">● editable</span>':''}
+      </div>
+      <div class="historial-quien">${e.colaborador} <span style="font-weight:400;color:var(--gris4)">(${e.rol_colaborador})</span></div>
+      <div class="historial-fecha">${fecha}</div>
+      ${e.nota?`<div class="historial-nota">"${e.nota}"</div>`:''}
+      ${e.resultado?`<div style="font-size:11px;color:var(--gris4);margin-top:4px">Resultado: <strong style="color:var(--blanco)">${e.resultado}</strong></div>`:''}
+      ${e.motivo_perdida?`<div style="font-size:11px;color:var(--rojo);margin-top:4px">Motivo pérdida: ${e.motivo_perdida}</div>`:''}
+      ${e.fecha_proxima?`<div style="font-size:11px;color:var(--azul);margin-top:4px">Próximo: ${new Date(e.fecha_proxima).toLocaleDateString('es-BO')}</div>`:''}
+      ${esEditable?`<button class="historial-edit-btn" onclick="editarHistorialEntrada(${e.id})">Editar</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function editarHistorialEntrada(id){
+  const nota = prompt('Editar nota:');
+  if(nota===null) return;
+  await sb.from('historial_lead').update({nota}).eq('id',id);
+  toast('Nota actualizada ✓','success');
+}
+
+// Registrar en historial cuando se hace una acción
+async function registrarEnHistorial(leadId, etapa, tipoActividad, resultado, nota, motivoPerdida, fechaProxima){
+  const lead = allLeads.find(l=>l.id===leadId);
+  await sb.from('historial_lead').insert([{
+    lead_id:leadId,
+    colaborador:cu.nombre,
+    rol_colaborador:cu.rol,
+    etapa,
+    tipo_actividad:tipoActividad,
+    resultado:resultado||null,
+    nota:nota||null,
+    motivo_perdida:motivoPerdida||null,
+    fecha_actividad:new Date().toISOString(),
+    fecha_proxima:fechaProxima||null,
+    editable:true
+  }]);
+}
+
+// ── WEB PUSH NOTIFICATIONS ──
+async function solicitarPermisoNotificaciones(){
+  if(!('Notification' in window)){
+    toast('Tu navegador no soporta notificaciones','error');
+    return false;
+  }
+  if(Notification.permission==='granted') return true;
+  if(Notification.permission==='denied'){
+    toast('Notificaciones bloqueadas. Actívalas en la configuración del navegador.','error');
+    return false;
+  }
+  const perm = await Notification.requestPermission();
+  return perm==='granted';
+}
+
+function enviarNotificacion(titulo, cuerpo, iconoUrl){
+  if(Notification.permission!=='granted') return;
+  const n = new Notification(titulo,{
+    body: cuerpo,
+    icon: iconoUrl||'https://joseio313.github.io/Geat-visitas/favicon.ico',
+    badge: iconoUrl,
+    tag: 'geat-crm',
+    requireInteraction: false,
+  });
+  n.onclick = ()=>{ window.focus(); n.close(); };
+  setTimeout(()=>n.close(), 8000);
+}
+
+// Verificar actividades próximas cada 5 minutos
+async function verificarNotificacionesPendientes(){
+  if(Notification.permission!=='granted') return;
+  const ahora = new Date();
+  const en15min = new Date(ahora.getTime()+15*60000);
+  
+  const{data}=await sb.from('agenda_personal')
+    .select('*,leads(nombre)')
+    .eq('colaborador',cu.nombre)
+    .eq('completada',false)
+    .gte('fecha_programada',ahora.toISOString())
+    .lte('fecha_programada',en15min.toISOString());
+  
+  (data||[]).forEach(act=>{
+    const hora = new Date(act.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    enviarNotificacion(
+      'Actividad próxima — GEAT CRM',
+      `${hora}: ${act.leads?.nombre||act.titulo}`,
+    );
+  });
+}
+
+// Iniciar verificación de notificaciones
+function iniciarNotificaciones(){
+  solicitarPermisoNotificaciones().then(ok=>{
+    if(ok){
+      verificarNotificacionesPendientes();
+      setInterval(verificarNotificacionesPendientes, 5*60000);
+    }
+  });
+}
+
+// ── AGENDA GRUPAL ──
+async function cargarAgendaGrupal(){
+  const ahora = new Date();
+  const en30dias = new Date(ahora.getTime()+30*864e5);
+  const{data}=await sb.from('agenda_grupal')
+    .select('*')
+    .gte('fecha_inicio',ahora.toISOString())
+    .lte('fecha_inicio',en30dias.toISOString())
+    .order('fecha_inicio',{ascending:true});
+  return data||[];
+}
+
+async function crearReunionExtraordinaria(){
+  if(cu.rol!=='admin'&&cu.rol!=='commercial_lead'){
+    toast('Solo el Admin o Commercial Lead pueden crear reuniones extraordinarias','error');
+    return;
+  }
+  
+  const existing = document.getElementById('mini-modal-flujo');
+  if(existing) existing.remove();
+  
+  const modal = document.createElement('div');
+  modal.id='mini-modal-flujo';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  modal.innerHTML=`
+    <div style="background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:85vh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:600;color:var(--blanco);margin-bottom:20px">
+        📅 Nueva reunion extraordinaria
+      </div>
+      <div style="display:grid;gap:12px">
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Titulo</label>
+          <input type="text" id="re-titulo" class="form-input" placeholder="Ej: Reunion de equipo semanal"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Descripcion</label>
+          <textarea id="re-desc" class="form-textarea" placeholder="Detalles de la reunion..." style="min-height:60px"></textarea></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Fecha</label>
+            <input type="date" id="re-fecha" class="form-input" min="${new Date().toISOString().slice(0,10)}"></div>
+          <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Hora</label>
+            <input type="time" id="re-hora" class="form-input" value="09:00"></div>
+        </div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--gris4);display:block;margin-bottom:6px">Sala</label>
+          <select class="form-select" id="re-sala">
+            <option value="sala_principal">Sala Principal</option>
+            <option value="gerencia">Gerencia</option>
+            <option value="otra">Otra ubicacion</option>
+          </select></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button onclick="guardarReunionExtraordinaria()" class="btn btn-primary" style="flex:1">Crear reunion</button>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+async function guardarReunionExtraordinaria(){
+  const titulo=document.getElementById('re-titulo')?.value;
+  const desc=document.getElementById('re-desc')?.value;
+  const fecha=document.getElementById('re-fecha')?.value;
+  const hora=document.getElementById('re-hora')?.value||'09:00';
+  const sala=document.getElementById('re-sala')?.value;
+  
+  if(!titulo||!fecha){toast('Titulo y fecha son obligatorios','error');return;}
+  
+  await sb.from('agenda_grupal').insert([{
+    tipo:'reunion_extraordinaria',
+    titulo,
+    descripcion:desc||null,
+    sala,
+    fecha_inicio:fecha+'T'+hora+':00',
+    fecha_fin:fecha+'T'+(parseInt(hora)+1)+':00:00',
+    creado_por:cu.nombre
+  }]);
+  
+  document.getElementById('mini-modal-flujo')?.remove();
+  toast('Reunion creada ✓','success');
+  cargarAgendaReal();
+}
+
+// ── HISTORIAL: Pestaña dentro del modal de lead ──
+let historialModalLeadId = null;
+async function verHistorialLead(leadId){
+  historialModalLeadId = leadId;
+  const lead = allLeads.find(l=>l.id===leadId);
+  if(!lead) return;
+  
+  // Solo puede ver el historial: el captador del lead, el cerrador asignado, admin, commercial_lead
+  const puedeVer = cu.rol==='admin'||cu.rol==='commercial_lead'||
+    lead.captador===cu.nombre||lead.cerrador===cu.nombre;
+  
+  if(!puedeVer){
+    toast('No tienes acceso al historial de este lead','error');
+    return;
+  }
+  
+  const existing=document.getElementById('mini-modal-flujo');
+  if(existing) existing.remove();
+  
+  const modal=document.createElement('div');
+  modal.id='mini-modal-flujo';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  modal.innerHTML=`
+    <div style="background:var(--negro2);border:1px solid var(--gris2);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:90vh;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:600;color:var(--blanco)">Historial de ${lead.nombre}</div>
+          <div style="font-size:12px;color:var(--gris4)">${lead.celular} · ${lead.captador||'Sin captador'}</div>
+        </div>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" 
+          style="background:none;border:none;color:var(--gris4);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div id="historial-modal-content" style="overflow-y:auto;flex:1">
+        <div class="loading-state"><span class="spin"></span>Cargando historial...</div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  
+  const entradas = await cargarHistorialLead(leadId);
+  renderHistorial(entradas,'historial-modal-content',cu.rol);
+}
+
 // ── PAPELERA DE PERDIDOS ──
 async function cargarPapelera(){
   const motivo = document.getElementById('pap-motivo')?.value||'';
@@ -4312,6 +4769,23 @@ async function cargarHistorico(){
     </div>`;
 }
 
+// ── COLORES POR ETAPA ──
+function getEtapaStyle(estado){
+  const map = {
+    nuevo:              {bg:'#E8F4FD',tc:'#1A6FA8',label:'Nuevo',             cls:'etapa-nuevo',  dot:'#1A6FA8'},
+    intento_1:          {bg:'#FFF3CD',tc:'#856404',label:'Intento 1',          cls:'etapa-int1',   dot:'#856404'},
+    intento_2:          {bg:'#FFE0B2',tc:'#7A3F00',label:'Intento 2',          cls:'etapa-int2',   dot:'#7A3F00'},
+    intento_3:          {bg:'#FFCCBC',tc:'#7B2D00',label:'Intento 3',          cls:'etapa-int3',   dot:'#7B2D00'},
+    en_seguimiento:     {bg:'#E8F5E9',tc:'#2E7D32',label:'Seguimiento',        cls:'etapa-seg',    dot:'#2E7D32'},
+    visita_agendada:    {bg:'#C8E6C9',tc:'#1B5E20',label:'Visita agendada',    cls:'etapa-visita', dot:'#1B5E20'},
+    visita_realizada:   {bg:'#E3F2FD',tc:'#0D47A1',label:'Visita realizada',   cls:'etapa-vrealiz',dot:'#0D47A1'},
+    seguimiento_cierre: {bg:'#EDE7F6',tc:'#4527A0',label:'Seg. cierre',        cls:'etapa-scierre',dot:'#4527A0'},
+    cerrado_ganado:     {bg:'#E8F8EF',tc:'#14532D',label:'Ganado',             cls:'etapa-ganado', dot:'#14532D'},
+    cerrado_perdido:    {bg:'#FEECEC',tc:'#7F1D1D',label:'Perdido',            cls:'etapa-perdido',dot:'#7F1D1D'},
+  };
+  return map[estado] || {bg:'#F1EFE8',tc:'#444441',label:estado||'—',cls:'',dot:'#888'};
+}
+
 // ── PIPELINE DE VENTAS ──
 let etapaTabActual = 'todos';
 
@@ -4361,17 +4835,8 @@ function renderLeadsPipeline(leads){
     return;
   }
 
-  const estadoInfo = {
-    nuevo: {label:'Nuevo', color:'var(--azul)', icon:'🆕'},
-    en_seguimiento: {label:'Seguimiento', color:'var(--amarillo)', icon:'🔄'},
-    visita_agendada: {label:'Visita agendada', color:'#2ecc71', icon:'📅'},
-    visita_realizada: {label:'Visita realizada', color:'#27ae60', icon:'✅'},
-    cerrado_ganado: {label:'Ganado', color:'#00b894', icon:'🏆'},
-    cerrado_perdido: {label:'Perdido', color:'var(--rojo)', icon:'❌'},
-  };
-
   el.innerHTML = leads.map(l => {
-    const est = estadoInfo[l.estado] || {label:l.estado, color:'var(--gris3)', icon:'•'};
+    const est = getEtapaStyle(l.estado);
     const hoyStr = new Date().toISOString().slice(0,10);
     const esHoy = l.proximo_contacto && l.proximo_contacto.slice(0,10) === hoyStr;
     const vencido = l.proximo_contacto && l.proximo_contacto.slice(0,10) < hoyStr;
@@ -4386,14 +4851,14 @@ function renderLeadsPipeline(leads){
       <!-- Cabecera del lead -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:18px">${est.icon}</span>
+          <span style="width:10px;height:10px;border-radius:50%;background:${est.dot};display:inline-block;flex-shrink:0"></span>
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--blanco)">${l.nombre||'Sin nombre'}</div>
             <div style="font-size:11px;color:var(--gris4)">${l.celular||'—'} ${l.ciudad?'· '+l.ciudad:''}</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;background:${est.color}20;color:${est.color}">${est.label}</span>
+          <span class="badge-etapa ${est.cls}">${est.label}</span>
           ${l.financiamiento?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--gris1);color:var(--gris4)">${l.financiamiento==='bancario'?'🏦 Banco':'💵 Contado'}</span>`:''}
           ${l.visito_oficina?'<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(46,204,113,0.15);color:var(--verde)">🏢 Visitó</span>':''}
         </div>
@@ -4582,11 +5047,34 @@ async function guardarIntento(leadId){
   
   await sb.from('leads').update(updateData).eq('id', leadId);
   
+  // Registrar en historial acumulable
+  await registrarEnHistorial(
+    leadId,
+    _resultadoIntentoSel==='contesto'?'en_seguimiento':`intento_${numIntento}`,
+    'intento_contacto',
+    _resultadoIntentoSel,
+    nota,
+    null,
+    proxFecha
+  );
+  // Crear próxima actividad en agenda personal si no contestó
+  if(_resultadoIntentoSel!=='contesto' && proxFecha){
+    await sb.from('agenda_personal').insert([{
+      colaborador:cu.nombre,
+      lead_id:leadId,
+      tipo:`intento_${Math.min(numIntento+1,3)}`,
+      titulo:`Intento ${numIntento+1}: ${l.nombre}`,
+      fecha_programada:proxFecha+'T09:00:00',
+      nota:`Reagendar luego de intento ${numIntento} (${_resultadoIntentoSel})`
+    }]);
+  }
+  
   _resultadoIntentoSel = null;
   document.getElementById('mini-modal-flujo')?.remove();
   toast('Intento registrado ✓','success');
   await loadLeads();
   filtrarLeads();
+  cargarAgendaPersonal();
 }
 
 // Modal registrar seguimiento
@@ -4713,12 +5201,35 @@ async function guardarSeguimiento(leadId){
   
   await sb.from('leads').update(updateData).eq('id', leadId);
   
+  // Registrar en historial
+  await registrarEnHistorial(
+    leadId,
+    visitaFecha?'visita_agendada':'en_seguimiento',
+    'nota_seguimiento',
+    _resultadoSegSel,
+    nota,
+    null,
+    proxFecha||visitaFecha
+  );
+  // Crear próxima actividad en agenda personal
+  if(proxFecha&&!visitaFecha){
+    await sb.from('agenda_personal').insert([{
+      colaborador:cu.nombre,
+      lead_id:leadId,
+      tipo:'seguimiento',
+      titulo:`Seguimiento: ${allLeads.find(x=>x.id===leadId)?.nombre||''}`,
+      fecha_programada:proxFecha+'T09:00:00',
+      nota
+    }]);
+  }
+  
   _resultadoSegSel = null;
   document.getElementById('mini-modal-flujo')?.remove();
   toast(visitaFecha?'Seguimiento y visita registrados ✓':'Seguimiento registrado ✓','success');
   await loadLeads();
   filtrarLeads();
-  if(visitaFecha) cargarAgendaReal(); // actualizar agenda
+  cargarAgendaPersonal();
+  if(visitaFecha) cargarAgendaReal();
 }
 
 function abrirAgendarVisita(leadId){
