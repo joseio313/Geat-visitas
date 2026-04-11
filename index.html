@@ -361,7 +361,8 @@ async function initLogin(){
     if(!colaboradores.length){document.getElementById('login-err').textContent='Sin colaboradores activos en la base de datos';}
   }catch(e){console.error('initLogin catch:',e);document.getElementById('login-err').textContent='Error: '+e.message;}
 }
-function resetPin(){pinVal='';document.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));document.getElementById('login-err').textContent='';}
+}catch(e){document.getElementById('login-err').textContent='Error: '+e.message;}
+}function resetPin(){pinVal='';document.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));document.getElementById('login-err').textContent='';}
 function addPin(d){if(pinVal.length>=4)return;pinVal+=d;document.getElementById('d'+(pinVal.length-1)).classList.add('filled');if(pinVal.length===4)checkPin();}
 function delPin(){if(!pinVal.length)return;document.getElementById('d'+(pinVal.length-1)).classList.remove('filled');pinVal=pinVal.slice(0,-1);}
 function checkPin(){
