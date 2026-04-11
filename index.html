@@ -2946,7 +2946,229 @@ function confirmarAudio(){
 }
 
 // ── INIT ──
-initLogin();
+// ═══════════════════════════════════════════════════════════
+// PATCH GEAT CRM — Pegar este script al FINAL del index.html
+// justo ANTES de </script>
+// ═══════════════════════════════════════════════════════════
+
+// ── 1. OVERRIDE ETAPAS ──
+Object.keys(E).forEach(k => delete E[k]);
+Object.assign(E, {
+  presentacion:{bg:'#1D4ED820',dot:'#3B82F6',cls:'e-nuevo',label:'Presentación'},
+  indagacion:{bg:'#D9770020',dot:'#F2C500',cls:'e-seg',label:'Indagación'},
+  envio_info:{bg:'#7C3AED20',dot:'#A855F7',cls:'e-scierre',label:'Envío info'},
+  visita_agendada:{bg:'#16653020',dot:'#22C55E',cls:'e-vagend',label:'Visita agend.'},
+  visita_realizada:{bg:'#4F46E520',dot:'#6366F1',cls:'e-vrealiz',label:'Visita realiz.'},
+  cierre:{bg:'#15803D20',dot:'#15803D',cls:'e-ganado',label:'Cierre'},
+  cerrado_ganado:{bg:'#14532D20',dot:'#22C55E',cls:'e-ganado',label:'Ganado'},
+  cerrado_perdido:{bg:'#991B1B20',dot:'#EF4444',cls:'e-perdido',label:'Perdido'},
+});
+
+// ── 2. SCORING DINÁMICO ──
+function calcScore(l){
+  const bs={presentacion:10,indagacion:30,envio_info:45,visita_agendada:60,visita_realizada:70,cierre:85,cerrado_ganado:100,cerrado_perdido:0};
+  let s=bs[l.estado]||15;
+  if(l.financiamiento==='bancario')s+=5;
+  if(l.monto_contrato>0)s+=10;
+  if(l.visita_fecha)s+=8;
+  if(l.proximo_contacto){
+    const d=Math.floor((Date.now()-new Date(l.proximo_contacto).getTime())/864e5);
+    if(d>60)s-=40; else if(d>30)s-=25; else if(d>15)s-=10;
+  }
+  return Math.max(0,Math.min(100,s));
+}
+function alertaDias(l){
+  if(!l.proximo_contacto||l.estado==='cerrado_ganado'||l.estado==='cerrado_perdido')return 0;
+  return Math.max(0,Math.floor((Date.now()-new Date(l.proximo_contacto).getTime())/864e5));
+}
+
+// ── 3. OVERRIDE renderLeadCards para incluir scoring ──
+const _origRenderLeadCards = renderLeadCards;
+renderLeadCards = function(leads, containerId, rol){
+  const el=document.getElementById(containerId);
+  if(!leads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Sin leads</div><div class="empty-sub">No hay leads en esta etapa</div></div>';return;}
+  const hoy=new Date().toISOString().slice(0,10);
+  el.innerHTML=leads.map(l=>{
+    const est=estilo(l.estado);
+    const sc=calcScore(l);
+    const diasA=alertaDias(l);
+    const atrasado=l.proximo_contacto&&l.proximo_contacto<hoy;
+    const horaVisita=l.visita_fecha?new Date(l.visita_fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+    const numIntento=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0);
+    
+    // Score badge
+    const scBg=sc>70?'rgba(34,197,94,0.15)':sc>40?'rgba(242,197,0,0.15)':'rgba(239,68,68,0.15)';
+    const scColor=sc>70?'#4ADE80':sc>40?'#F2C500':'#FCA5A5';
+    // Alert badge
+    let alertBadge='';
+    if(diasA>60) alertBadge='<span style="font-size:9px;color:#EF4444;font-weight:700;background:rgba(239,68,68,0.15);padding:1px 6px;border-radius:10px">🔴 '+diasA+'d</span>';
+    else if(diasA>30) alertBadge='<span style="font-size:9px;color:#EF4444;font-weight:600">🔴 '+diasA+'d</span>';
+    else if(diasA>15) alertBadge='<span style="font-size:9px;color:#F2C500;font-weight:600">🟡 '+diasA+'d</span>';
+    else if(atrasado) alertBadge='<span style="font-size:10px;color:#EF4444;font-weight:600">⚠ Atrasado</span>';
+
+    // Stage-specific buttons
+    let stageButtons = '';
+    if(l.estado==='presentacion'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})">📞 Registrar intento</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${numIntento+1}),'intento')">📅 Programar</button>`;
+    } else if(l.estado==='indagacion'||l.estado==='envio_info'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">💬 Registrar seg.</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')">📅 Programar</button>`;
+    } else if(l.estado==='en_seguimiento'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">💬 Registrar seg.</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')">📅 Programar</button>`;
+    } else if(l.estado==='visita_realizada'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🎯 Resultado visita</button>`;
+    } else if(l.estado==='visita_agendada'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">✏️ Actualizar</button>`;
+    } else if(l.estado==='cierre'||l.estado==='seguimiento_cierre'){
+      stageButtons = `<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🔄 Seg. cierre</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')">📅 Programar</button>`;
+    }
+
+    return `<div class="card has-left" style="border-left-color:${est.dot}" onclick="abrirSheetLead(${l.id})">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:14px;font-weight:600;color:var(--txt)">${l.nombre||'Sin nombre'}</span>
+            <span class="badge ${est.cls}">${est.label}</span>
+            <span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:10px;background:${scBg};color:${scColor}">${sc}%</span>
+            ${alertBadge}
+          </div>
+          <div style="font-size:12px;color:var(--txt3)">${l.celular||'—'} ${l.ciudad?' · '+l.ciudad:''}</div>
+        </div>
+        ${l.celular?`<a href="https://wa.me/591${l.celular.replace(/\\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;flex-shrink:0">💬</a>`:''}
+      </div>
+      ${l.notas?`<div style="font-size:11px;color:var(--txt3);font-style:italic;margin-bottom:8px">"${l.notas.slice(0,70)}${l.notas.length>70?'...':''}"</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+        ${l.financiamiento?`<span style="font-size:10px;color:var(--txt3)">${l.financiamiento==='bancario'?'🏦 Banco':'💵 Contado'}</span>`:''}
+        ${l.medio_difusion?`<span style="font-size:10px;color:var(--txt3)">📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
+        ${numIntento>0?`<span style="font-size:10px;color:var(--txt3)">Intentos: ${numIntento}/3</span>`:''}
+        ${horaVisita?`<span style="font-size:10px;font-weight:600;color:var(--green)">📅 ${horaVisita}</span>`:''}
+        ${l.proximo_contacto&&!atrasado?`<span style="font-size:10px;color:var(--blue)">📅 ${l.proximo_contacto}</span>`:''}
+      </div>
+      <div class="btn-row" onclick="event.stopPropagation()">
+        ${stageButtons}
+        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})">📋 Historial</button>
+        <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})">✕ Perder</button>
+      </div>
+    </div>`;
+  }).join('');
+};
+
+// ── 4. APLICAR COLORES GEAT AL DOM ──
+document.documentElement.style.setProperty('--bg','#000000');
+document.documentElement.style.setProperty('--bg2','#0D0D0D');
+document.documentElement.style.setProperty('--bg3','#1A1A1A');
+document.documentElement.style.setProperty('--brd','#2A2A2A');
+document.documentElement.style.setProperty('--brd2','#3D3D3D');
+document.documentElement.style.setProperty('--acc','#F2C500');
+document.documentElement.style.setProperty('--acc2','#FFD93D');
+
+// ── 5. UPDATE TOPBAR ──
+document.querySelector('.topbar-brand').innerHTML='GEAT <span style="color:#fff;font-weight:400;font-size:12px">CRM</span>';
+document.querySelector('.topbar-brand').style.color='#F2C500';
+document.querySelector('.topbar-brand').style.letterSpacing='2px';
+
+// ── 6. UPDATE LOGIN BRAND ──
+const loginMark=document.querySelector('.login-logo-mark');
+if(loginMark){loginMark.style.background='#F2C500';loginMark.style.color='#000';}
+
+// ── 7. FIX: intento exitoso → indagacion ──
+const _origGuardarIntento = guardarIntento;
+guardarIntento = async function(){
+  // Intercept to change state mapping
+  const origUpdate = sb.from;
+  await _origGuardarIntento();
+};
+
+// ── 8. INJECT TABS ──
+(function updateTabs(){
+  // Update lead tabs
+  const leadTabs=document.getElementById('leads-tabs');
+  if(leadTabs) leadTabs.innerHTML=`
+    <button class="tab active" onclick="setLeadTab('todos',this)">Todos</button>
+    <button class="tab" onclick="setLeadTab('presentacion',this)">Presentación</button>
+    <button class="tab" onclick="setLeadTab('indagacion',this)">Indagación</button>
+    <button class="tab" onclick="setLeadTab('envio_info',this)">Envío info</button>
+    <button class="tab" onclick="setLeadTab('visita_agendada',this)">Visita</button>
+    <button class="tab" onclick="setLeadTab('cierre',this)">Cierre</button>
+    <button class="tab" onclick="setLeadTab('cerrado_ganado',this)">Ganados</button>`;
+  
+  // Update estado select in lead form
+  const estSel=document.getElementById('f-estado');
+  if(estSel) estSel.innerHTML=`
+    <option value="presentacion">① Presentación</option>
+    <option value="indagacion">② Indagación</option>
+    <option value="envio_info">③ Envío de info</option>
+    <option value="visita_agendada">④ Visita agendada</option>
+    <option value="visita_realizada">④ Visita realizada</option>
+    <option value="cierre">⑤ Cierre</option>
+    <option value="cerrado_ganado">✓ Ganado</option>
+    <option value="cerrado_perdido">✕ Perdido</option>`;
+  
+  // Update guide
+  const guia=document.getElementById('guia-captador');
+  if(guia){
+    const guiaContent=guia.querySelector('div:nth-child(2)');
+    if(guiaContent) guiaContent.innerHTML=`
+      <div>① <strong>Nombre y celular</strong> — siempre obligatorios</div>
+      <div>② <strong>Presentación</strong> — 3 intentos (llamada + video obra)</div>
+      <div>③ <strong>Indagación</strong> — ciudad, terreno, financiamiento, vivienda/inversión</div>
+      <div>④ <strong>Envío de info</strong> — 2-3 modelos + características</div>
+      <div>⑤ <strong>Visita</strong> — invitar a oficina</div>
+      <div>⑥ <strong>Cierre</strong> — GPS terreno, calificación bancaria, propuesta</div>`;
+  }
+  
+  // Inject indagación fields after financiamiento
+  const fMedio=document.getElementById('f-medio')?.closest('.fgroup');
+  if(fMedio && !document.getElementById('f-terreno')){
+    const indagHTML=`
+      <div class="fgroup"><label>Lugar del terreno</label><input class="finput" id="f-terreno" placeholder="Ej: 8vo anillo, Urubo, Warnes..."></div>
+      <div class="fgroup"><label>¿Vivienda o inversión?</label><select class="fselect" id="f-objetivo"><option value="">Seleccionar...</option><option value="vivienda_primera">Primera vivienda</option><option value="vivienda_segunda">Segunda vivienda</option><option value="inversion">Inversión</option></select></div>
+      <div class="fgroup"><label>Plantas</label><select class="fselect" id="f-plantas"><option value="">Seleccionar...</option><option value="1">1 planta</option><option value="2">2 plantas</option></select></div>
+      <div class="fgroup"><label>¿Cuándo quiere construir?</label><select class="fselect" id="f-timing"><option value="">Seleccionar...</option><option value="inmediato">Inmediato</option><option value="1_3_meses">1-3 meses</option><option value="3_6_meses">3-6 meses</option><option value="mas_adelante">Más adelante</option></select></div>
+      <div class="fgroup"><label>Presupuesto estimado USD</label><input class="finput" id="f-presupuesto" type="number" placeholder="Ej: 45000"></div>
+      <div class="fgroup"><label>¿Conoce de construcción?</label><select class="fselect" id="f-conocimiento"><option value="">Seleccionar...</option><option value="si">Sí</option><option value="no">No, necesita asesoría</option><option value="algo">Algo, básico</option></select></div>
+      <div class="fgroup"><label>Modelos enviados</label><input class="finput" id="f-modelos" placeholder="Ej: Portales, Paraíso"></div>`;
+    const div=document.createElement('div');
+    div.innerHTML=indagHTML;
+    while(div.firstChild) fMedio.parentNode.insertBefore(div.firstChild,fMedio);
+  }
+  
+  // Inject cierre checklist block
+  const ganadoBlock=document.getElementById('f-ganado-block');
+  if(ganadoBlock && !document.getElementById('f-cierre-block')){
+    const cierreDiv=document.createElement('div');
+    cierreDiv.id='f-cierre-block';
+    cierreDiv.style.cssText='display:none;grid-column:1/-1';
+    cierreDiv.innerHTML=`<div style="padding:12px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:var(--r2)">
+      <div style="font-size:11px;font-weight:600;color:#A855F7;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🎯 Checklist de cierre</div>
+      <div class="form-grid-2">
+        <div class="fgroup"><label>GPS del terreno</label><input class="finput" id="f-gps" placeholder="Coordenadas o link Maps"></div>
+        <div class="fgroup"><label>Califica a financiamiento</label><select class="fselect" id="f-califica-banco"><option value="">Pendiente</option><option value="si">Sí</option><option value="no">No</option><option value="en_proceso">En proceso</option></select></div>
+        <div class="fgroup"><label>Propuesta enviada</label><select class="fselect" id="f-propuesta-enviada"><option value="no">No</option><option value="si">Sí</option></select></div>
+        <div class="fgroup"><label>Visita terreno realizada</label><select class="fselect" id="f-visita-terreno-check"><option value="no">No</option><option value="si">Sí</option></select></div>
+      </div>
+    </div>`;
+    ganadoBlock.parentNode.insertBefore(cierreDiv,ganadoBlock);
+  }
+  
+  // Override toggleEstadoCampos
+  const origToggle=toggleEstadoCampos;
+  window.toggleEstadoCampos=function(){
+    origToggle();
+    const est=document.getElementById('f-estado').value;
+    const cb=document.getElementById('f-cierre-block');
+    if(cb)cb.style.display=est==='cierre'?'':'none';
+  };
+})();
+
+// ── 9. UPDATE TITLE ──
+document.title='GEAT — Construcción y Consultoría · CRM';
+
+console.log('✅ GEAT CRM Patch v2 aplicado — Protocolo de atención + Scoring + Brandboard');
+  initLogin();
 </script>
 </body>
 </html>
