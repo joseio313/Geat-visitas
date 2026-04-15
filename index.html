@@ -431,7 +431,7 @@ function llenarSelects(){
 }
 async function loadLeads(){
   const{data}=await sb.from('leads').select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,proximo_contacto,medio_difusion,monto_contrato,visito_oficina').eq('archivado',false).order('created_at',{ascending:false}).limit(500);
-  allLeads=datos||[];
+  allLeads=data||[];
 }
 
 function renderInicio(){
