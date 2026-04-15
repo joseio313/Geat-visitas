@@ -17,7 +17,7 @@
   --brd:#334155;--brd2:#475569;
   --txt:#F1F5F9;--txt2:#94A3B8;--txt3:#64748B;
   --acc:#F59E0B;--acc2:#FCD34D;
-  --blue:#3B82F6;--green:#22C55E;--red:#EF4444;--purple:#A855F7;
+  --azul:#3B82F6;--verde:#22C55E;--rojo:#EF4444;--morado:#A855F7;
   --r:10px;--r2:14px;--r3:18px;
   --shadow:0 4px 24px rgba(0,0,0,0.4);
   --font:'Inter',system-ui,sans-serif;
@@ -58,7 +58,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .notif-badge.show{display:block}
 .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:64px}
 .panel{display:none;padding:16px;min-height:calc(100vh - 52px - 56px)}
-.panel.active{display:block}
+.panel.activo{display:block}
 .bottomnav{height:56px;background:var(--bg2);border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-around;padding:0 4px;position:fixed;bottom:0;left:0;right:0;z-index:100;padding-bottom:env(safe-area-inset-bottom,0px)}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 4px;border-radius:var(--r);transition:all 0.15s;border:none;background:none;color:var(--txt3);font-family:var(--font)}
 .nav-item.active{color:var(--acc)}
@@ -92,7 +92,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .form-grid{display:grid;gap:12px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fgroup label{display:block;font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px}
-.fgroup label span.req{color:var(--red)}
+.fgroup etiqueta span.req{color:var(--red)}
 .finput,.fselect,.ftextarea{width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-family:var(--font);font-size:13px;outline:none;transition:border 0.15s}
 .finput:focus,.fselect:focus,.ftextarea:focus{border-color:var(--acc)}
 .ftextarea{resize:vertical;min-height:72px}
@@ -179,7 +179,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .cal-personal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--brd)}
 .cal-nav{display:flex;gap:6px;align-items:center}
 .cal-nav button{width:28px;height:28px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
-.cal-nav button:hover{background:var(--bg3);border-color:var(--brd2)}
+..cal-nav button:hover{background:var(--bg3);border-color:var(--brd2)}
 .cal-mes-titulo{font-size:14px;font-weight:600;min-width:140px;text-align:center}
 .cal-dias-header{display:grid;grid-template-columns:repeat(7,1fr);background:var(--bg3);border-bottom:1px solid var(--brd)}
 .cal-dia-h{padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em}
@@ -189,7 +189,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .cal-celda.otro-mes{background:var(--bg);opacity:0.5}
 .cal-celda.hoy{background:#1E293B}
 .cal-celda.hoy .cal-num{background:var(--acc);color:#000;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
-.cal-celda.seleccionada{background:#1E3A5F}
+..cal-celda.seleccionada{background:#1E3A5F}
 .cal-num{font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:3px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
 .cal-evento-mini{border-radius:3px;padding:2px 5px;font-size:9px;font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer}
 .cal-evento-mini:hover{opacity:0.85}
@@ -284,6 +284,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" onclick="setTodosTab('visita_agendada',this)">Visita</button>
         <button class="tab" onclick="setTodosTab('cerrado_ganado',this)">Ganados</button>
         <button class="tab" onclick="setTodosTab('cerrado_perdido',this)">Perdidos</button>
+        <button class="tab" onclick="setTodosTab('visito_oficina',this)">🏢 Visitaron</button>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
         <div class="search-wrap" style="flex:1;margin:0"><span class="search-ico">🔍</span><input class="search-inp" id="todos-q" placeholder="Buscar..." oninput="renderTodos()"></div>
@@ -293,14 +294,14 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
     <div class="panel" id="pn-agenda"><div class="ph"><div><div class="ph-title">Agenda</div></div></div><div id="agenda-content"><div class="loading"><span class="spin"></span>Cargando...</div></div></div>
     <div class="panel" id="pn-notif"><div class="ph"><div><div class="ph-title">Notificaciones</div></div><button class="btn btn-sm btn-ghost" onclick="marcarTodasLeidas()">Marcar leídas</button></div><div id="notif-list"></div></div>
-    <div class="panel" id="pn-admin"><div class="ph"><div class="ph-title">Admin</div></div><div id="admin-content"></div></div>
+    <div class="panel" id="pn-admin"><div class="ph"><div class="ph-title">Administrador</div></div><div id="admin-content"></div></div>
   </div>
   <div class="bottomnav" id="bottomnav"></div>
 </div>
 <div id="toast"></div>
 <div id="audio-overlay">
   <div class="audio-box">
-    <div id="audio-st-rec" style="display:none"><div style="font-size:28px;margin-bottom:6px">🎙</div><div style="font-size:15px;font-weight:600;margin-bottom:4px">Escuchando...</div><div style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="audio-hint">Habla con claridad</div><div class="audio-waves"><span></span><span></span><span></span><span></span><span></span></div><div id="audio-timer" style="font-size:12px;color:var(--acc);margin-bottom:16px">0:00</div><button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="detenerGrabacion()">⏹ Detener</button><button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button></div>
+    <div id="audio-st-rec" style="display:none"><div style="font-size:28px;margin-bottom:6px">🎙</div><div style="font-size:15px;font-weight:600;margin-bottom:4px">Escuchando...</div><div style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="audio-hint">Habla con claridad</div><div class="audio-waves"><span></span><span></span><span></span><span></span><span></span></div><div id="audio-timer" style="font-size:12px;color:var(--acc);margin-bottom:16px">0:00</div><button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="detenerGrabacion()">⏹ Cancelar</button><button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button></div>
     <div id="audio-st-proc" style="display:none"><div class="audio-spinner"></div><div style="font-size:14px;font-weight:500;margin-bottom:6px">Procesando...</div><div style="font-size:11px;color:var(--txt3)" id="audio-proc-msg">Analizando con IA</div></div>
     <div id="audio-st-result" style="display:none"><div style="font-size:28px;margin-bottom:6px">✅</div><div style="font-size:14px;font-weight:600;margin-bottom:4px" id="audio-res-title">Datos detectados</div><div style="font-size:11px;color:var(--txt3);font-style:italic;margin-bottom:10px" id="audio-transcripcion"></div><div class="audio-result-card" id="audio-campos"></div><div id="audio-faltantes" style="display:none;margin-top:10px;padding:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r);font-size:12px;color:var(--red)"></div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-primary" style="flex:1" id="btn-audio-confirm" onclick="confirmarAudio()">Confirmar y guardar</button><button class="btn btn-ghost" onclick="cancelarAudio()">Cancelar</button></div></div>
     <div id="audio-st-err" style="display:none"><div style="font-size:28px;margin-bottom:6px">❌</div><div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:14px;white-space:pre-line" id="audio-err-msg">Error</div><button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px" onclick="iniciarGrabacion()">Reintentar</button><button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button></div>
@@ -322,14 +323,15 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div class="fgroup" id="fgroup-cerrador"><label>Cerrador</label><select class="fselect" id="f-cerrador"></select></div>
         <div class="fgroup"><label>Estado</label><select class="fselect" id="f-estado"><option value="nuevo">Nuevo</option><option value="en_seguimiento">En seguimiento</option><option value="visita_agendada">Visita agendada</option><option value="cerrado_ganado">Ganado</option><option value="cerrado_perdido">Perdido</option></select></div>
         <div class="fgroup"><label>Próximo contacto</label><input class="finput" id="f-proximo" type="date"></div>
+        <div class="fgroup"><label>¿Visitó oficina?</label><select class="fselect" id="f-visito-oficina"><option value="">No</option><option value="si">Sí</option></select></div>
         <div class="fgroup"><label>Notas</label><textarea class="ftextarea" id="f-notas" placeholder="Observaciones..."></textarea></div>
       </div>
     </div>
-    <div class="sheet-footer"><button class="btn btn-primary" style="flex:1" onclick="guardarLead()">Guardar lead</button><button class="btn btn-ghost" onclick="closeSheet('lead')">Cancelar</button></div>
+    <div class="sheet-footer"><button class="btn btn-primary" style="flex:1" onclick="guardarLead()">Guardar cliente potencial</button><button class="btn btn-ghost" onclick="closeSheet('lead')">Cancelar</button></div>
   </div>
 </div>
 <div class="sheet-overlay" id="sheet-hist" onclick="closeSheet('hist',event)">
-  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="hist-title">Historial</div><button class="sheet-close" onclick="closeSheet('hist')">✕</button></div><div class="sheet-body" id="hist-body"><div class="loading"><span class="spin"></span>Cargando...</div></div></div>
+  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="hist-title">Histórico</div><button class="sheet-close" onclick="closeSheet('hist')">✕</button></div><div class="sheet-body" id="hist-body"><div class="loading"><span class="spin"></span>Cargando...</div></div></div>
 </div>
 <script>
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
@@ -342,24 +344,40 @@ let pinVal='';
 const E={
   nuevo:{bg:'#1D4ED820',dot:'#3B82F6',cls:'e-nuevo',label:'Nuevo'},
   en_seguimiento:{bg:'#D9770020',dot:'#F59E0B',cls:'e-seg',label:'Seguimiento'},
-  visita_agendada:{bg:'#16653020',dot:'#22C55E',cls:'e-vagend',label:'Visita agend.'},
+  visita_agendada:{bg:'#16653020',dot:'#22C55E',cls:'e-vagend',label:'Visita agenda.'},
   visita_realizada:{bg:'#4F46E520',dot:'#6366F1',cls:'e-vrealiz',label:'Visita realiz.'},
   seguimiento_cierre:{bg:'#7C3AED20',dot:'#A855F7',cls:'e-scierre',label:'Seg. cierre'},
   cerrado_ganado:{bg:'#14532D20',dot:'#15803D',cls:'e-ganado',label:'Ganado'},
   cerrado_perdido:{bg:'#991B1B20',dot:'#EF4444',cls:'e-perdido',label:'Perdido'},
 };
 function estilo(est){return E[est]||{bg:'#33415520',dot:'#64748B',cls:'',label:est||'—'};}
+function nowTs(){const d=new Date();return d.toLocaleDateString('es-BO')+' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});}
 function toast(msg,tipo='ok'){const el=document.getElementById('toast');el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');setTimeout(()=>el.className='',2500);}
 
 async function initLogin(){
+  const errEl=document.getElementById('login-err');
+  errEl.textContent='Conectando...';
   try{
     const{data,error}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
-    if(error){console.error('Login error:',error);document.getElementById('login-err').textContent='Error de conexión: '+error.message;return;}
+    if(error){
+      console.error('initLogin error:',error);
+      errEl.textContent='Sin conexión. Verifica tu red.';
+      return;
+    }
     colaboradores=data||[];
     const sel=document.getElementById('login-user');
-    colaboradores.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.nombre+' — '+(c.cargo||c.rol);sel.appendChild(o);});
-    if(!colaboradores.length){document.getElementById('login-err').textContent='Sin colaboradores activos en la base de datos';}
-  }catch(e){console.error('initLogin catch:',e);document.getElementById('login-err').textContent='Error: '+e.message;}
+    colaboradores.forEach(c=>{
+      const o=document.createElement('option');
+      o.value=c.id;
+      o.textContent=c.nombre+' — '+(c.cargo||c.rol);
+      sel.appendChild(o);
+    });
+    errEl.textContent='';
+    if(!colaboradores.length){errEl.textContent='Sin colaboradores activos.';}
+  }catch(e){
+    console.error('initLogin catch:',e);
+    errEl.textContent='Error de conexión: '+e.message;
+  }
 }
 }catch(e){document.getElementById('login-err').textContent='Error: '+e.message;}
 }function resetPin(){pinVal='';document.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));document.getElementById('login-err').textContent='';}
@@ -377,12 +395,12 @@ function checkPin(){
 const NAVS={
   field_capturer:[{id:'inicio',icon:'🏠',label:'Inicio'},{id:'leads',icon:'📋',label:'Mis Leads'}],
   closer:[{id:'inicio',icon:'🏠',label:'Inicio'},{id:'leads',icon:'📋',label:'Mis Leads'}],
-  commercial_lead:[{id:'inicio',icon:'🏠',label:'Inicio'},{id:'todos',icon:'👥',label:'Todos'},{id:'admin',icon:'⚙',label:'Gestión'}],
+  comercial_lead:[{id:'inicio',icon:'🏠',label:'Inicio'},{id:'todos',icon:'👥',label:'Todos'},{id:'admin',icon:'⚙',label:'Gestión'}],
   admin:[{id:'inicio',icon:'🏠',label:'Inicio'},{id:'todos',icon:'👥',label:'Todos'},{id:'admin',icon:'⚙',label:'Admin'}],
 };
 function buildNav(){
   const nav=document.getElementById('bottomnav');
-  const items=NAVS[cu.rol]||NAVS.field_capturer;
+  elementos const=NAVS[cu.rol]||NAVS.field_capturer;
   nav.innerHTML=items.map(n=>`<button class="nav-item${n.id==='inicio'?' active':''}" data-nav="${n.id}" onclick="sw('${n.id}',this)"><div class="nav-icon">${n.icon}</div><div class="nav-label">${n.label}</div></button>`).join('');
 }
 function sw(id,btn){
@@ -396,7 +414,7 @@ function sw(id,btn){
 async function initApp(){
   document.getElementById('tb-user').textContent=cu.nombre;
   buildNav();llenarSelects();
-  const hora=new Date().getHours();
+  const hora = new Date().getHours();
   document.getElementById('inicio-saludo').textContent=(hora<12?'Buenos días':hora<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
   document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
   await loadLeads();renderInicio();
@@ -412,13 +430,13 @@ function llenarSelects(){
   if(todCap)todCap.innerHTML='<option value="">Todos</option>'+colaboradores.map(c=>`<option>${c.nombre}</option>`).join('');
 }
 async function loadLeads(){
-  const{data}=await sb.from('leads').select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,proximo_contacto,medio_difusion,monto_contrato').eq('archivado',false).order('created_at',{ascending:false}).limit(500);
-  allLeads=data||[];
+  const{data}=await sb.from('leads').select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,proximo_contacto,medio_difusion,monto_contrato,visito_oficina').eq('archivado',false).order('created_at',{ascending:false}).limit(500);
+  allLeads=datos||[];
 }
 
 function renderInicio(){
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy = new Date().toISOString().slice(0, 10);
   document.getElementById('s-hoy').textContent=misLeads.filter(l=>l.fecha_ingreso===hoy).length;
   document.getElementById('s-sem').textContent=misLeads.filter(l=>l.proximo_contacto&&l.proximo_contacto<hoy).length;
   document.getElementById('s-mes').textContent=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
@@ -442,7 +460,8 @@ function renderTodos(){
   const q=(document.getElementById('todos-q')?.value||'').toLowerCase();
   const cap=document.getElementById('todos-cap')?.value||'';
   let leads=[...allLeads];
-  if(todosTabActual!=='todos')leads=leads.filter(l=>l.estado===todosTabActual);
+  if(todosTabActual==='visito_oficina')leads=leads.filter(l=>l.visito_oficina);
+  else if(todosTabActual!=='todos')leads=leads.filter(l=>l.estado===todosTabActual);
   if(cap)leads=leads.filter(l=>l.captador===cap||l.cerrador===cap);
   if(q)leads=leads.filter(l=>['nombre','celular','ciudad','captador','cerrador','notas'].some(k=>l[k]&&l[k].toLowerCase().includes(q)));
   document.getElementById('todos-count').textContent=leads.length+' leads';
@@ -451,7 +470,7 @@ function renderTodos(){
 function renderLeadCards(leads,containerId){
   const el=document.getElementById(containerId);
   if(!leads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Sin leads</div></div>';return;}
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy = new Date().toISOString().slice(0, 10);
   el.innerHTML=leads.map(l=>{
     const est=estilo(l.estado);
     const atrasado=l.proximo_contacto&&l.proximo_contacto<hoy;
@@ -473,6 +492,7 @@ function renderLeadCards(leads,containerId){
         ${l.medio_difusion?`<span>📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
         ${l.proximo_contacto&&!atrasado?`<span style="color:var(--blue)">📅 ${l.proximo_contacto}</span>`:''}
         ${l.captador?`<span>👤 ${l.captador.split(' ')[0]}</span>`:''}
+        ${l.visito_oficina?'<span style="color:var(--green)">🏢 Visitó</span>':''}
       </div>
     </div>`;
   }).join('');
@@ -491,6 +511,7 @@ function abrirSheetLead(id){
   document.getElementById('f-proximo').value=l.proximo_contacto||'';
   if(l.captador)document.getElementById('f-captador').value=l.captador;
   if(l.cerrador)document.getElementById('f-cerrador').value=l.cerrador;
+  document.getElementById('f-visito-oficina').value=l.visito_oficina?'si':'';
   document.getElementById('sheet-lead').classList.add('open');
 }
 function abrirNuevoLead(){
@@ -507,7 +528,7 @@ async function guardarLead(){
   const celular=document.getElementById('f-celular').value.trim();
   if(!nombre){toast('Nombre obligatorio','error');return;}
   if(!celular){toast('Celular obligatorio','error');return;}
-  const data={nombre,celular,ciudad:document.getElementById('f-ciudad').value||'Santa Cruz',financiamiento:document.getElementById('f-financiamiento').value,medio_difusion:document.getElementById('f-medio').value||null,captador:document.getElementById('f-captador').value||(cu.rol==='field_capturer'?cu.nombre:null),cerrador:document.getElementById('f-cerrador').value||null,estado:document.getElementById('f-estado').value,notas:document.getElementById('f-notas').value||null,proximo_contacto:document.getElementById('f-proximo').value||null};
+  const data={nombre,celular,ciudad:document.getElementById('f-ciudad').value||'Santa Cruz',financiamiento:document.getElementById('f-financiamiento').value,medio_difusion:document.getElementById('f-medio').value||null,captador:document.getElementById('f-captador').value||(cu.rol==='field_capturer'?cu.nombre:null) ,cerrador:document.getElementById('f-cerrador').value||null,estado:document.getElementById('f-estado').value,notas:document.getElementById('f-notas').value||null,proximo_contacto:document.getElementById('f-proximo').value||null,visito_oficina:document.getElementById('f-visito-oficina').value==='si'};
   if(!editingLeadId)data.fecha_ingreso=new Date().toISOString().slice(0,10);
   closeSheet('lead');toast(editingLeadId?'Guardando...':'Registrando...');
   if(editingLeadId){await sb.from('leads').update(data).eq('id',editingLeadId);const i=allLeads.findIndex(l=>l.id===editingLeadId);if(i>-1)allLeads[i]={...allLeads[i],...data};}
