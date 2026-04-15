@@ -311,6 +311,18 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <!-- ADMIN -->
     <div class="panel" id="pn-admin">
       <div class="ph"><div class="ph-title">Admin</div></div>
+      <div id="admin-acceso-rapido" style="margin-bottom:14px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">&#9889; Ver como colaborador</div>
+        <div id="admin-quick-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+        <div id="admin-volver-btn" style="display:none;margin-top:8px">
+          <button class="btn btn-sm btn-red" style="width:100%" onclick="volverAdmin()">&#8617; Volver a mi cuenta (CEO)</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="setAdminTab('metricas',this)">Metricas</button>
+        <button class="tab" onclick="setAdminTab('equipo',this)">Equipo</button>
+        <button class="tab" onclick="setAdminTab('auditoria',this)">Auditoria</button>
+      </div>
       <div id="admin-content"><div class="loading"><span class="spin"></span>Cargando...</div></div>
     </div>
 
@@ -598,7 +610,7 @@ function initLogin() {
     for (var i = 0; i < colaboradores.length; i++) {
       var o = document.createElement('option');
       o.value = colaboradores[i].id;
-      o.textContent = colaboradores[i].nombre + ' - ' + (colaboradores[i].cargo || colaboradores[i].rol);
+      o.textContent = colaboradores[i].nombre + ' - ' + colaboradores[i].rol;
       sel.appendChild(o);
     }
     errEl.textContent = '';
@@ -638,6 +650,7 @@ function sw(id, btn) {
 }
 
 function initApp() {
+  if(cu.rol==='admin') cuReal=cu;
   document.getElementById('tb-user').textContent = cu.nombre.split(' ')[0];
   buildNav(); fillSelects();
   var h = new Date().getHours();
@@ -675,7 +688,7 @@ function myLeads() {
   return allLeads.filter(function(l) {
     if (cu.rol==='admin'||cu.rol==='commercial_lead') return true;
     if (cu.rol==='field_capturer') return l.captador===cu.nombre;
-    if (cu.rol==='closer') return l.cerrador===cu.nombre;
+    if (cu.rol==='closer') return l.cerrador===cu.nombre||(!l.cerrador&&(l.estado==='visita_agendada'||l.estado==='visita_realizada'||l.estado==='seguimiento_cierre'));
     return false;
   });
 }
@@ -1241,6 +1254,54 @@ function registrarCalPersonal(tipo,desc,leadId,leadNombre,fechaProg){
     fecha_actividad:new Date().toISOString(),
     fecha_programada:fechaProg||null
   }]).then(function(){}).catch(function(){});
+}
+
+
+var cuReal = null; // Guardar referencia al CEO real
+
+function buildAdminQuickAccess(){
+  if(cu.rol!=='admin') return;
+  cuReal = cuReal || cu; // primera vez
+  var grid = document.getElementById('admin-quick-grid');
+  if(!grid) return;
+  grid.innerHTML='';
+  for(var i=0;i<colaboradores.length;i++){
+    var c=colaboradores[i];
+    var esCurrent=(c.id===cu.id);
+    var color=colorCol(c.nombre);
+    var btn=document.createElement('button');
+    btn.style.cssText='padding:10px 6px;background:'+(esCurrent?color+'30':'var(--bg3)')+';border:2px solid '+(esCurrent?color:'var(--brd)')+';border-radius:var(--r);font-size:11px;font-weight:600;color:'+(esCurrent?color:'var(--txt2)')+';cursor:pointer;font-family:var(--font);text-align:center';
+    btn.innerHTML=c.nombre.split(' ')[0]+'<br><span style="font-size:9px;opacity:0.7">'+c.rol+'</span>';
+    (function(col){btn.onclick=function(){impersonarColaborador(col);};})(c);
+    grid.appendChild(btn);
+  }
+  var volverBtn=document.getElementById('admin-volver-btn');
+  if(volverBtn) volverBtn.style.display=(cu.id!==cuReal.id)?'block':'none';
+}
+
+function impersonarColaborador(col){
+  if(!cuReal) cuReal=cu;
+  registrarAuditoria('impersonacion',null,null,null,{viendo_como:col.nombre,admin:cuReal.nombre});
+  cu=col;
+  // Actualizar topbar
+  document.getElementById('tb-user').textContent=col.nombre.split(' ')[0];
+  var impBadge=document.getElementById('imp-badge');
+  if(impBadge){
+    if(col.id!==cuReal.id){impBadge.style.display='block';impBadge.textContent='&#128065; '+col.nombre.split(' ')[0];}
+    else impBadge.style.display='none';
+  }
+  // Rebuild nav segun rol del impersonado
+  buildNav();
+  fillSelects();
+  // Volver a inicio con datos del colaborador
+  sw('inicio',null);
+  buildAdminQuickAccess();
+  toast('Viendo como: '+col.nombre);
+}
+
+function volverAdmin(){
+  if(!cuReal) return;
+  impersonarColaborador(cuReal);
 }
 
 function getSiguienteCerrador(callback){
