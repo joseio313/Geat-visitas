@@ -189,7 +189,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
     <div class="login-card">
       <span class="login-label">Colaborador</span>
-      <select class="login-select" id="login-user" onchange="resetPin()">
+      <select class="login-select" id="login-user" onchange="onLoginUserChange()">
         <option value="">Seleccionar...</option>
       </select>
       <span class="pin-label">PIN de acceso</span>
@@ -213,6 +213,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="pin-btn pin-del" onclick="delPin()">&#9003;</button>
       </div>
       <div class="login-err" id="login-err"></div>
+      <div id="quick-access" style="display:none;margin-top:14px;background:var(--bg3);border-radius:var(--r);padding:12px">
+        <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">&#9889; Acceso rapido</div>
+        <div id="quick-btns" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -221,7 +225,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 <div id="app">
   <div class="topbar">
     <div class="topbar-brand">GEAT CRM</div>
-    <div class="topbar-user" id="tb-user"></div>
+    <div id="imp-badge" style="display:none;font-size:10px;color:var(--red);font-weight:600;background:rgba(239,68,68,0.1);padding:2px 8px;border-radius:20px"></div><div class="topbar-user" id="tb-user"></div>
     <button class="topbar-btn" onclick="elegirModoNuevoLead()" title="Nuevo lead">+</button>
   </div>
   <div class="content">
@@ -372,7 +376,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <option value="otro">Otro</option>
           </select>
         </div>
-        <div class="fgroup" id="fg-cap"><label>Captador</label><select class="fselect" id="f-captador"></select></div>
+        <div class="fgroup"><label>Captador</label><input class="finput" id="f-captador" disabled style="color:var(--txt2)"></div>
         <div class="fgroup" id="fg-cer"><label>Cerrador</label><select class="fselect" id="f-cerrador"></select></div>
         <div class="fgroup"><label>Estado</label>
           <select class="fselect" id="f-estado">
@@ -821,6 +825,9 @@ function guardarSeguimiento() {
     if(res.error){toast('Error: '+res.error.message,'error');return;}
     var prox = document.getElementById('seg-proximo').value;
     if(prox) sb.from('leads').update({proximo_contacto:prox}).eq('id',detalleId);
+    var lseg=null;for(var jj=0;jj<allLeads.length;jj++){if(allLeads[jj].id===detalleId){lseg=allLeads[jj];break;}}
+    registrarCalPersonal('seguimiento','Seguimiento: '+(lseg?lseg.nombre:''),detalleId,lseg?lseg.nombre:'',null);
+    registrarAuditoria('seguimiento','seguimientos',null,null,{lead_id:detalleId});
     toast('Seguimiento guardado');
     cargarHistorial(detalleId);
   });
@@ -856,7 +863,13 @@ function abrirNuevoLead() {
   document.getElementById('f-ciudad').value='Santa Cruz';document.getElementById('f-financiamiento').value='recursos_propios';
   document.getElementById('f-medio').value='';document.getElementById('f-estado').value='nuevo';
   document.getElementById('f-notas').value='';document.getElementById('f-proximo').value='';document.getElementById('f-visito').value='';
-  if(cu.rol==='field_capturer') document.getElementById('f-captador').value=cu.nombre;
+  // Captador siempre = quien carga
+  document.getElementById('f-captador').value=cu.nombre;
+  // Cerrador: round-robin auto
+  getSiguienteCerrador(function(nombre){
+    var cer=document.getElementById('f-cerrador');
+    if(cer){for(var i=0;i<cer.options.length;i++){if(cer.options[i].text===nombre){cer.selectedIndex=i;break;}}}
+  });
   document.getElementById('sheet-lead').classList.add('open');
 }
 
@@ -865,18 +878,21 @@ function guardarLead() {
   var celular=document.getElementById('f-celular').value.trim();
   if(!nombre){toast('Nombre obligatorio','error');return;}
   if(!celular){toast('Celular obligatorio','error');return;}
-  var data={nombre:nombre,celular:celular,ciudad:document.getElementById('f-ciudad').value||'Santa Cruz',financiamiento:document.getElementById('f-financiamiento').value,medio_difusion:document.getElementById('f-medio').value||null,captador:document.getElementById('f-captador').value||(cu.rol==='field_capturer'?cu.nombre:null),cerrador:document.getElementById('f-cerrador').value||null,estado:document.getElementById('f-estado').value,notas:document.getElementById('f-notas').value||null,proximo_contacto:document.getElementById('f-proximo').value||null,visito_oficina:document.getElementById('f-visito').value==='si'};
+  var data={nombre:nombre,celular:celular,ciudad:document.getElementById('f-ciudad').value||'Santa Cruz',financiamiento:document.getElementById('f-financiamiento').value,medio_difusion:document.getElementById('f-medio').value||null,captador:cu.nombre,cerrador:document.getElementById('f-cerrador').value||null,estado:document.getElementById('f-estado').value,notas:document.getElementById('f-notas').value||null,proximo_contacto:document.getElementById('f-proximo').value||null,visito_oficina:document.getElementById('f-visito').value==='si'};
   closeSheet('lead'); toast('Guardando...');
   var eid=editingId;
   if(eid) {
     sb.from('leads').update(data).eq('id',eid).then(function(){
       for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===eid){Object.assign(allLeads[i],data);break;}}
+      registrarAuditoria('edicion_lead','leads',eid,null,data);
       toast('Lead actualizado'); rerender();
     });
   } else {
     data.fecha_ingreso=new Date().toISOString().slice(0,10);
     sb.from('leads').insert([data]).select().then(function(res){
       if(res.data&&res.data[0]) allLeads.unshift(Object.assign({},data,{id:res.data[0].id}));
+      registrarAuditoria('nuevo_lead','leads',null,null,{nombre:data.nombre,captador:data.captador});
+      registrarCalPersonal('carga_lead','Lead: '+nombre,null,nombre,null);
       toast('Lead registrado'); rerender();
     });
   }
@@ -1055,9 +1071,15 @@ function procesarVoz() {
   var reader=new FileReader();
   reader.onloadend=function(){
     var b64=reader.result.split(',')[1];
+    if(!antropicKey){
+      document.getElementById('voz-st-proc').style.display='none';
+      document.getElementById('voz-st-err').style.display='block';
+      document.getElementById('voz-err-msg').textContent='API key no configurada. Pide al admin que configure anthropic_key en Supabase > app_config.';
+      return;
+    }
     fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','x-api-key':antropicKey,'anthropic-version':'2023-06-01'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
         max_tokens:500,
@@ -1195,6 +1217,83 @@ function exportCSV() {
 
 function closeSheet(name) { document.getElementById('sheet-'+name).classList.remove('open'); }
 function closeSheetBg(event,name) { if(event.target.id==='sheet-'+name) closeSheet(name); }
+
+
+// Round robin cerradores
+
+// Auditoria sistema
+function registrarAuditoria(accion,tabla,regId,datosAnt,datosNuev){
+  if(!cu) return;
+  sb.from('auditoria_sistema').insert([{
+    colaborador:cu.nombre,rol:cu.rol,accion:accion,
+    tabla_afectada:tabla||null,registro_id:regId||null,
+    datos_anteriores:datosAnt?JSON.stringify(datosAnt):null,
+    datos_nuevos:datosNuev?JSON.stringify(datosNuev):null
+  }]).then(function(){}).catch(function(){});
+}
+
+// Registro calendario personal
+function registrarCalPersonal(tipo,desc,leadId,leadNombre,fechaProg){
+  if(!cu) return;
+  sb.from('calendario_personal').insert([{
+    colaborador:cu.nombre,tipo:tipo,descripcion:desc,
+    lead_id:leadId||null,lead_nombre:leadNombre||null,
+    fecha_actividad:new Date().toISOString(),
+    fecha_programada:fechaProg||null
+  }]).then(function(){}).catch(function(){});
+}
+
+function getSiguienteCerrador(callback){
+  var cers=colaboradores.filter(function(c){return c.rol==='closer'||c.rol==='commercial_lead';});
+  if(!cers.length){callback('');return;}
+  sb.from('turno_cerradores').select('*').limit(1).then(function(res){
+    var ultimo=(res.data&&res.data[0])?res.data[0].ultimo_cerrador:'';
+    var idx=0;
+    for(var i=0;i<cers.length;i++){if(cers[i].nombre===ultimo){idx=(i+1)%cers.length;break;}}
+    var sig=cers[idx];
+    sb.from('turno_cerradores').update({ultimo_cerrador:sig.nombre,updated_at:new Date().toISOString()}).eq('id',1).then(function(){});
+    callback(sig.nombre);
+  }).catch(function(){callback(cers[0].nombre);});
+}
+
+
+function onLoginUserChange(){
+  resetPin();
+  var id=document.getElementById('login-user').value;
+  var qa=document.getElementById('quick-access');
+  var col=null;
+  for(var i=0;i<colaboradores.length;i++){if(colaboradores[i].id==id){col=colaboradores[i];break;}}
+  if(col&&col.rol==='admin'){
+    qa.style.display='block';
+    var qb=document.getElementById('quick-btns');
+    qb.innerHTML='';
+    for(var j=0;j<colaboradores.length;j++){
+      var c=colaboradores[j];
+      (function(cid,cobj){
+        var btn=document.createElement('button');
+        btn.style.cssText='padding:8px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);font-size:11px;font-weight:500;color:var(--txt2);cursor:pointer;text-align:center;font-family:var(--font);width:100%';
+        btn.textContent=cobj.nombre.split(' ')[0];
+        btn.onclick=function(){accesoRapido(cid);};
+        qb.appendChild(btn);
+      })(c.id,c);
+    }
+  } else {qa.style.display='none';}
+}
+
+function accesoRapido(colId){
+  var adminId=document.getElementById('login-user').value;
+  var adminCol=null;
+  for(var j=0;j<colaboradores.length;j++){if(colaboradores[j].id==adminId){adminCol=colaboradores[j];break;}}
+  if(!adminCol||adminCol.rol!=='admin'){return;}
+  var col=null;
+  for(var i=0;i<colaboradores.length;i++){if(colaboradores[i].id==colId){col=colaboradores[i];break;}}
+  if(!col) return;
+  cu=col;
+  registrarAuditoria('acceso_rapido',null,null,null,{accediendo_como:col.nombre,admin:adminCol.nombre});
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  initApp();
+}
 
 initLogin();
 </script>
