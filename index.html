@@ -242,6 +242,39 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .pill.sel-neutral{background:#1E3A5F20;border-color:#3B82F660;color:#93C5FD}
 .pill.sel-purple{background:#4C1D9520;border-color:#A855F760;color:#D8B4FE}
 
+/* ── CALENDARIO PERSONAL ── */
+.cal-personal{background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);overflow:hidden}
+.cal-personal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--brd)}
+.cal-nav{display:flex;gap:6px;align-items:center}
+.cal-nav button{width:28px;height:28px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+.cal-nav button:hover{background:var(--bg3);border-color:var(--brd2)}
+.cal-mes-titulo{font-size:14px;font-weight:600;min-width:140px;text-align:center}
+.cal-dias-header{display:grid;grid-template-columns:repeat(7,1fr);background:var(--bg3);border-bottom:1px solid var(--brd)}
+.cal-dia-h{padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em}
+.cal-grid-mes{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--brd)}
+.cal-celda{background:var(--bg2);min-height:72px;padding:4px;cursor:pointer;transition:background 0.1s;position:relative}
+.cal-celda:hover{background:var(--bg3)}
+.cal-celda.otro-mes{background:var(--bg);opacity:0.5}
+.cal-celda.hoy{background:#1E293B}
+.cal-celda.hoy .cal-num{background:var(--acc);color:#000;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cal-celda.seleccionada{background:#1E3A5F}
+.cal-num{font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:3px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cal-evento-mini{border-radius:3px;padding:2px 5px;font-size:9px;font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer}
+.cal-evento-mini:hover{opacity:0.85}
+.cal-mas{font-size:9px;color:var(--txt3);padding:1px 4px}
+
+/* ── DÍA DETALLE ── */
+.cal-dia-detalle{background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:16px;margin-top:12px}
+.cal-dia-detalle-titulo{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--txt)}
+.dia-evento-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--brd)}
+.dia-evento-row:last-child{border:none}
+.dia-evento-hora{font-size:11px;color:var(--txt3);min-width:38px;font-weight:500;margin-top:1px}
+.dia-evento-barra{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch;min-height:20px}
+.dia-evento-info{flex:1;min-width:0}
+.dia-evento-titulo{font-size:12px;font-weight:500;color:var(--txt);margin-bottom:2px}
+.dia-evento-sub{font-size:11px;color:var(--txt3)}
+.dia-evento-acciones{display:flex;gap:4px;flex-shrink:0}
+
 /* scrollbar global */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -307,42 +340,65 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 
     <!-- INICIO -->
     <div class="panel active" id="pn-inicio">
-      <div class="ph">
+      <!-- Header inicio -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div>
-          <div class="ph-title" id="inicio-saludo">Buenos días</div>
-          <div class="ph-sub" id="inicio-fecha">—</div>
+          <div style="font-size:17px;font-weight:600" id="inicio-saludo">Buenos días</div>
+          <div style="font-size:11px;color:var(--txt3)" id="inicio-fecha">—</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-ghost" onclick="iniciarGrabacion()">🎙 Voz</button>
+          <button class="btn btn-sm btn-primary" onclick="abrirNuevoLead()">+ Lead</button>
         </div>
       </div>
-      <div class="stats" id="inicio-stats">
-        <div class="stat"><div class="stat-n" id="s-hoy">—</div><div class="stat-l">Hoy</div></div>
-        <div class="stat"><div class="stat-n" id="s-sem">—</div><div class="stat-l">Semana</div></div>
-        <div class="stat"><div class="stat-n" id="s-mes">—</div><div class="stat-l">Total activos</div></div>
-      </div>
+
+      <!-- Notifs -->
       <div id="inicio-notifs"></div>
-      <!-- Acciones rápidas -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="abrirNuevoLead()">
-          <div style="font-size:20px;margin-bottom:6px">➕</div>
-          <div style="font-size:13px;font-weight:500;color:var(--txt)">Nuevo lead</div>
-          <div style="font-size:11px;color:var(--txt3)">Registrar cliente</div>
-        </button>
-        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="iniciarGrabacion()">
-          <div style="font-size:20px;margin-bottom:6px">🎙</div>
-          <div style="font-size:13px;font-weight:500;color:var(--txt)">Voz</div>
-          <div style="font-size:11px;color:var(--txt3)">Registrar hablando</div>
-        </button>
-        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="sw('leads',document.querySelector('[data-nav=leads]'))">
-          <div style="font-size:20px;margin-bottom:6px">📋</div>
-          <div style="font-size:13px;font-weight:500;color:var(--txt)">Mis leads</div>
-          <div style="font-size:11px;color:var(--txt3)" id="qa-leads-count">—</div>
-        </button>
-        <button class="card" style="text-align:left;border:none;cursor:pointer;padding:14px" onclick="sw('agenda',document.querySelector('[data-nav=agenda]'))">
-          <div style="font-size:20px;margin-bottom:6px">📅</div>
-          <div style="font-size:13px;font-weight:500;color:var(--txt)">Mi agenda</div>
-          <div style="font-size:11px;color:var(--txt3)" id="qa-agenda-count">Ver actividades</div>
-        </button>
+
+      <!-- MINI STATS -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
+        <div class="stat" style="padding:10px"><div class="stat-n" id="s-hoy" style="font-size:18px">—</div><div class="stat-l">Hoy</div></div>
+        <div class="stat" style="padding:10px"><div class="stat-n" id="s-sem" style="font-size:18px;color:var(--red)">—</div><div class="stat-l">Atrasadas</div></div>
+        <div class="stat" style="padding:10px"><div class="stat-n" id="s-mes" style="font-size:18px">—</div><div class="stat-l">Mes</div></div>
       </div>
-      <div id="inicio-agenda" style="margin-top:4px"></div>
+
+      <!-- CALENDARIO PERSONAL EN EL INICIO (tipo Google) -->
+      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);overflow:hidden;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--brd)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="navMesInicio(-1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">‹</button>
+            <div style="font-size:13px;font-weight:600;min-width:110px;text-align:center" id="inicio-cal-label">—</div>
+            <button onclick="navMesInicio(1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">›</button>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="tab active" id="inicio-view-dia" onclick="setInicioView('dia',this)" style="padding:4px 8px;font-size:10px">Día</button>
+            <button class="tab" id="inicio-view-sem" onclick="setInicioView('semana',this)" style="padding:4px 8px;font-size:10px">Semana</button>
+            <button class="tab" id="inicio-view-mes" onclick="setInicioView('mes',this)" style="padding:4px 8px;font-size:10px">Mes</button>
+          </div>
+        </div>
+        <!-- Grid días -->
+        <div id="inicio-cal-dias-header" style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--bg3);border-bottom:1px solid var(--brd);display:none">
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">L</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">M</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">X</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">J</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">V</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">S</div>
+          <div style="padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">D</div>
+        </div>
+        <div id="inicio-cal-grid"></div>
+      </div>
+
+      <!-- Detalle día seleccionado -->
+      <div id="inicio-dia-detalle" style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:14px;margin-bottom:12px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600" id="inicio-dia-titulo">—</div>
+          <button class="btn btn-sm btn-ghost" onclick="abrirNuevaActividad(inicioDiaSeleccionado)">+ Actividad</button>
+        </div>
+        <div id="inicio-dia-eventos"></div>
+      </div>
+
+      <div id="inicio-agenda"></div>
     </div>
 
     <!-- MIS LEADS / PIPELINE -->
@@ -374,20 +430,45 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <!-- AGENDA PERSONAL -->
     <div class="panel" id="pn-agenda">
       <div class="ph">
-        <div><div class="ph-title">Mi Agenda</div><div class="ph-sub">Actividades del día</div></div>
+        <div><div class="ph-title">Mi Calendario</div><div class="ph-sub" id="agenda-mes-label">—</div></div>
         <div class="ph-actions">
           <button class="btn btn-sm btn-ghost" id="btn-reunion-extra" onclick="crearReunionExtra()" style="display:none">+ Reunión</button>
+          <button class="btn btn-sm btn-primary" onclick="abrirNuevaActividad()">+ Actividad</button>
         </div>
       </div>
-      <div class="tabs">
-        <button class="tab active" onclick="setAgendaTab('hoy',this)">Hoy</button>
-        <button class="tab" onclick="setAgendaTab('semana',this)">Semana</button>
-        <button class="tab" onclick="setAgendaTab('atrasadas',this)">Atrasadas</button>
-        <button class="tab" onclick="setAgendaTab('completadas',this)">Completadas</button>
+      <!-- Calendario mes -->
+      <div class="cal-personal">
+        <div class="cal-personal-header">
+          <div class="cal-nav">
+            <button onclick="navMes(-1)">‹</button>
+            <div class="cal-mes-titulo" id="cal-mes-nombre">—</div>
+            <button onclick="navMes(1)">›</button>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="tab active" id="cal-view-dia-p" onclick="setCalView('dia',this)" style="padding:4px 8px;font-size:10px">Día</button>
+            <button class="tab" id="cal-view-mes" onclick="setCalView('mes',this)" style="padding:4px 8px;font-size:10px">Mes</button>
+            <button class="tab" id="cal-view-semana" onclick="setCalView('semana',this)" style="padding:4px 8px;font-size:10px">Semana</button>
+            <button class="tab" id="cal-view-anio" onclick="setCalView('anio',this)" style="padding:4px 8px;font-size:10px">Año</button>
+          </div>
+        </div>
+        <div class="cal-dias-header">
+          <div class="cal-dia-h">Lun</div>
+          <div class="cal-dia-h">Mar</div>
+          <div class="cal-dia-h">Mié</div>
+          <div class="cal-dia-h">Jue</div>
+          <div class="cal-dia-h">Vie</div>
+          <div class="cal-dia-h">Sáb</div>
+          <div class="cal-dia-h">Dom</div>
+        </div>
+        <div class="cal-grid-mes" id="cal-grid"></div>
       </div>
-      <div id="agenda-stats-row" class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
-      <div id="agenda-list"></div>
+      <!-- Detalle del día seleccionado -->
+      <div class="cal-dia-detalle" id="cal-dia-detalle" style="display:none">
+        <div class="cal-dia-detalle-titulo" id="cal-dia-detalle-titulo">—</div>
+        <div id="cal-dia-eventos"></div>
+      </div>
     </div>
+
 
     <!-- AGENDA GRUPAL / CALENDARIO -->
     <div class="panel" id="pn-calendario">
@@ -506,6 +587,19 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <button class="sheet-close" onclick="closeSheet('lead')">✕</button>
     </div>
     <div class="sheet-body">
+      <!-- Guía para captadores -->
+      <div id="guia-captador" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📋 Guía de registro</div>
+        <div style="font-size:12px;color:var(--txt2);line-height:1.8">
+          <div>① <strong>Nombre y celular</strong> — siempre obligatorios</div>
+          <div>② <strong>Ciudad</strong> — donde vive el cliente</div>
+          <div>③ <strong>¿Banco o contado?</strong> — preguntá antes de registrar</div>
+          <div>④ <strong>Medio de difusión</strong> — ¿de dónde llegó? (Facebook, TikTok, referido...)</div>
+          <div>⑤ <strong>Próximo contacto</strong> — agendá cuándo volver a llamarle</div>
+          <div>⑥ <strong>Notas</strong> — terreno, presupuesto, interés, lo que dijo</div>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Tip: también podés usar el botón 🎙 para dictar los datos por voz</div>
+      </div>
       <div class="form-grid">
         <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Nombre completo"></div>
         <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 76543210"></div>
@@ -619,17 +713,43 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   </div>
 </div>
 
-<!-- ══ SHEET: INTENTO ══ -->
+<!-- ══ SHEET: ACTIVIDAD (intento/seguimiento unificado) ══ -->
 <div class="sheet-overlay" id="sheet-intento" onclick="closeSheet('intento',event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
-      <div class="sheet-title" id="sheet-intento-title">Registrar intento</div>
+      <div>
+        <div class="sheet-title" id="sheet-intento-title">Registrar actividad</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:2px" id="intento-lead-info"></div>
+      </div>
       <button class="sheet-close" onclick="closeSheet('intento')">✕</button>
     </div>
     <div class="sheet-body">
-      <div style="font-size:12px;color:var(--txt3);margin-bottom:14px" id="intento-lead-info"></div>
-      <div class="fgroup" style="margin-bottom:14px">
+
+      <!-- HISTORIAL DEL LEAD (línea de tiempo) -->
+      <div id="intento-historial-wrap" style="margin-bottom:16px">
+        <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Historial del cliente</div>
+        <div id="intento-historial-content" style="max-height:200px;overflow-y:auto">
+          <div style="font-size:11px;color:var(--txt3);text-align:center;padding:12px">Sin historial previo</div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--brd);margin-bottom:16px"></div>
+
+      <!-- REGISTRAR LO QUE PASÓ HOY -->
+      <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px" id="intento-seccion-label">Registrar actividad de hoy</div>
+
+      <div class="fgroup" style="margin-bottom:12px">
+        <label>¿Qué tipo de actividad?</label>
+        <div class="pill-group" id="intento-tipo-pills">
+          <button class="pill" data-val="llamada" onclick="selPillTipo(this)">📞 Llamada</button>
+          <button class="pill" data-val="whatsapp" onclick="selPillTipo(this)">💬 WhatsApp</button>
+          <button class="pill" data-val="visita_terreno" onclick="selPillTipo(this)">📍 Visita terreno</button>
+          <button class="pill" data-val="envio_info" onclick="selPillTipo(this)">📄 Envío info</button>
+        </div>
+      </div>
+
+      <div class="fgroup" style="margin-bottom:12px">
         <label>Resultado</label>
         <div class="pill-group">
           <button class="pill" data-val="contesto" onclick="selPill(this,'intento')">✅ Contestó</button>
@@ -638,22 +758,44 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <button class="pill" data-val="apagado" onclick="selPill(this,'intento')">🔇 Apagado</button>
         </div>
       </div>
-      <div class="fgroup" style="margin-bottom:14px">
-        <label>Nota del intento</label>
-        <textarea class="ftextarea" id="intento-nota" placeholder="¿Qué pasó?" style="min-height:60px"></textarea>
+
+      <div class="fgroup" style="margin-bottom:12px">
+        <label>Nota de lo que pasó</label>
+        <textarea class="ftextarea" id="intento-nota" placeholder="Ej: Contestó, tiene terreno en 8vo anillo, trabaja en empresa privada, muy interesado en financiamiento bancario..." style="min-height:80px"></textarea>
       </div>
-      <div id="intento-prox-wrap" style="display:none">
-        <div class="fgroup" style="margin-bottom:8px">
-          <label>Programar próximo intento</label>
-          <input class="finput" id="intento-prox" type="date">
+
+      <!-- Pasó a seguimiento -->
+      <div id="intento-contesto-info" style="display:none;padding:10px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);font-size:12px;color:var(--green);margin-bottom:12px">
+        ✅ ¡Contestó! Pasará a <strong>Seguimiento</strong>. Programá el siguiente contacto abajo.
+      </div>
+
+      <!-- PROGRAMAR SIGUIENTE ACTIVIDAD -->
+      <div id="intento-prox-wrap" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:4px">
+        <div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📅 Programar siguiente contacto</div>
+        <div class="fgroup" style="margin-bottom:10px">
+          <label>¿Qué vas a hacer?</label>
+          <select class="fselect" id="intento-prox-tipo">
+            <option value="seguimiento">Seguimiento general</option>
+            <option value="envio_info">Envío de información</option>
+            <option value="coordinacion_visita">Coordinar visita a oficina</option>
+            <option value="visita_terreno">Visita al terreno</option>
+            <option value="llamada">Llamada de seguimiento</option>
+            <option value="intento_contacto">Nuevo intento de contacto</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="fgroup"><label>Fecha</label><input class="finput" id="intento-prox" type="date"></div>
+          <div class="fgroup"><label>Hora</label><input class="finput" id="intento-prox-hora" type="time" value="09:00"></div>
+        </div>
+        <div class="fgroup">
+          <label>Qué recordar / qué decirle</label>
+          <textarea class="ftextarea" id="intento-prox-nota" placeholder="Ej: Preguntar si consultó con su esposa. Llevar propuesta de Modelo Paraíso..." style="min-height:60px"></textarea>
         </div>
       </div>
-      <div id="intento-contesto-info" style="display:none;padding:10px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);font-size:12px;color:var(--green)">
-        ✅ El cliente contestó — pasará automáticamente a Seguimiento.
-      </div>
+
     </div>
     <div class="sheet-footer">
-      <button class="btn btn-primary" style="flex:1" onclick="guardarIntento()">Guardar intento</button>
+      <button class="btn btn-primary" style="flex:1" onclick="guardarIntento()">Guardar y programar</button>
       <button class="btn btn-ghost" onclick="closeSheet('intento')">Cancelar</button>
     </div>
   </div>
@@ -678,6 +820,29 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <button class="pill" data-val="frio" onclick="selPill(this,'seg')">❄️ Frío</button>
         </div>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="fgroup"><label>Tipo de seguimiento</label>
+          <select class="fselect" id="seg-tipo">
+            <option value="seguimiento_general">Seguimiento general</option>
+            <option value="contacto_inicial">Contacto inicial</option>
+            <option value="envio_informacion">Envío de información</option>
+            <option value="coordinacion_visita">Coordinación visita</option>
+            <option value="visita_terreno">Visita al terreno</option>
+            <option value="presentacion">Presentación</option>
+            <option value="reserva">Reserva</option>
+            <option value="firma_contrato">Firma de contrato</option>
+          </select>
+        </div>
+        <div class="fgroup"><label>Medio</label>
+          <select class="fselect" id="seg-medio">
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="llamada">📞 Llamada</option>
+            <option value="presencial">🤝 Presencial</option>
+            <option value="correo">📧 Correo</option>
+            <option value="visita_terreno">📍 Visita terreno</option>
+          </select>
+        </div>
+      </div>
       <div class="fgroup" style="margin-bottom:14px">
         <label>Notas del seguimiento</label>
         <textarea class="ftextarea" id="seg-nota" placeholder="¿Qué conversaron?"></textarea>
@@ -687,7 +852,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <input class="finput" id="seg-prox" type="date">
       </div>
       <div id="seg-visita-wrap" style="display:none;padding:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:10px">📅 Agendar visita a oficina</div>
+        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">📅 Agendar visita a oficina</div>
+        <div id="seg-cerrador-info" style="font-size:11px;color:var(--txt3);margin-bottom:10px;padding:6px 10px;background:rgba(59,130,246,0.1);border-radius:var(--r)">
+          🔄 El cerrador se asignará automáticamente según turno
+        </div>
         <div class="form-grid-2">
           <div class="fgroup"><label>Fecha</label><input class="finput" id="seg-visita-fecha" type="date"></div>
           <div class="fgroup"><label>Hora</label>
@@ -909,6 +1077,7 @@ async function initApp(){
   document.getElementById('inicio-agenda').innerHTML='<div class="loading"><span class="spin"></span>Cargando actividades...</div>';
   // Cargar datos
   await loadLeads();
+  await cargarAgendaPersonal(); // Carga eventos para el calendario de inicio
   renderInicio();
   iniciarRealtime();
   iniciarNotificaciones();
@@ -930,6 +1099,13 @@ function llenarSelects(){
   // Captadora ve su nombre fijo
   if(cu.rol==='field_capturer'){
     document.getElementById('fgroup-captador').style.display='none';
+    document.getElementById('fgroup-cerrador').style.display='none';
+  }
+  if(cu.rol==='closer'){
+    document.getElementById('fgroup-cerrador').style.display='none';
+  }
+  // Solo admin puede ver y cambiar el cerrador
+  if(cu.rol!=='admin'){
     document.getElementById('fgroup-cerrador').style.display='none';
   }
   // Llenar filtro captador en todos
@@ -996,6 +1172,129 @@ async function checkNotifsPendientes(){
 }
 
 // ── RENDER INICIO ──
+// ── INICIO CALENDARIO ──
+let inicioView = 'dia'; // 'dia' | 'semana' | 'mes'
+let inicioFecha = new Date();
+let inicioDiaSeleccionado = new Date().toISOString().slice(0,10);
+
+function setInicioView(view, btn){
+  inicioView = view;
+  document.querySelectorAll('#pn-inicio .tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderInicioCal();
+}
+
+function navMesInicio(dir){
+  if(inicioView==='dia'){
+    inicioFecha = new Date(inicioFecha.getTime() + dir*864e5);
+  } else if(inicioView==='semana'){
+    inicioFecha = new Date(inicioFecha.getTime() + dir*7*864e5);
+  } else {
+    inicioFecha = new Date(inicioFecha.getFullYear(), inicioFecha.getMonth()+dir, 1);
+  }
+  renderInicioCal();
+}
+
+function renderInicioCal(){
+  const hoy = new Date();
+  const hoyStr = hoy.toISOString().slice(0,10);
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const grid = document.getElementById('inicio-cal-grid');
+  const header = document.getElementById('inicio-cal-dias-header');
+  const label = document.getElementById('inicio-cal-label');
+  if(!grid) return;
+
+  if(inicioView === 'dia'){
+    if(header) header.style.display = 'none';
+    const dStr = inicioFecha.toISOString().slice(0,10);
+    const diaNom = inicioFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+    if(label) label.textContent = diaNom;
+    const evsDia = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
+    const esHoy = dStr === hoyStr;
+    grid.innerHTML = `<div style="padding:14px">
+      ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades este día<br>
+        <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar actividad</button></div>` :
+      evsDia.map(ev=>{
+        const hora = ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+        return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--brd);cursor:pointer;align-items:flex-start" onclick="${ev.lead_id?'abrirSheetLead('+ev.lead_id+')':''}">
+          <div style="font-size:11px;color:var(--txt3);min-width:36px;font-weight:500;margin-top:2px">${hora}</div>
+          <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
+            <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,40):''}</div>
+            ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:#25d366;text-decoration:none">💬 WhatsApp</a>`:''}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+            ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
+            ${ev.lead_id?`<button class="btn btn-sm btn-red" style="padding:4px 6px;font-size:10px" onclick="abrirPerder(${ev.lead_id})">✕</button>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+    inicioDiaSeleccionado = dStr;
+
+  } else if(inicioView === 'semana'){
+    if(header) header.style.display = 'grid';
+    const dayOfWeek = (inicioFecha.getDay()+6)%7;
+    const lunes = new Date(inicioFecha); lunes.setDate(inicioFecha.getDate()-dayOfWeek);
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+6);
+    if(label) label.textContent = lunes.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' – '+domingo.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'});
+    
+    let cells = '';
+    for(let i=0;i<7;i++){
+      const d = new Date(lunes); d.setDate(lunes.getDate()+i);
+      const dStr = d.toISOString().slice(0,10);
+      const esHoy = dStr===hoyStr;
+      const esSel = inicioDiaSeleccionado===dStr;
+      const evs = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+      cells += `<div style="min-height:100px;padding:4px;background:${esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer" onclick="selDiaInicio('${dStr}')">
+        <div style="font-size:11px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;margin-bottom:3px;
+          ${esHoy?'background:var(--acc);color:#000;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 3px':''}">${d.getDate()}</div>
+        ${evs.slice(0,3).map(ev=>`<div style="border-radius:3px;padding:2px 4px;font-size:9px;font-weight:500;margin-bottom:2px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.titulo.split(' ')[0]}</div>`).join('')}
+        ${evs.length>3?`<div style="font-size:8px;color:var(--txt3);padding:1px 4px">+${evs.length-3}</div>`:''}
+      </div>`;
+    }
+    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--brd)">${cells}</div>`;
+
+  } else { // mes
+    if(header) header.style.display = 'grid';
+    const anio=inicioFecha.getFullYear(), mes=inicioFecha.getMonth();
+    if(label) label.textContent = meses[mes]+' '+anio;
+    const primerDia=new Date(anio,mes,1);
+    const ultimoDia=new Date(anio,mes+1,0);
+    let ini=(primerDia.getDay()+6)%7;
+    let celdas=[];
+    for(let i=ini;i>0;i--) celdas.push({d:new Date(anio,mes,1-i),otro:true});
+    for(let d=1;d<=ultimoDia.getDate();d++) celdas.push({d:new Date(anio,mes,d),otro:false});
+    while(celdas.length%7!==0) { const l=celdas[celdas.length-1].d; celdas.push({d:new Date(l.getTime()+864e5),otro:true}); }
+    
+    const cells=celdas.map(c=>{
+      const dStr=c.d.toISOString().slice(0,10);
+      const esHoy=dStr===hoyStr;
+      const esSel=inicioDiaSeleccionado===dStr;
+      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+      return `<div style="min-height:60px;padding:3px;background:${c.otro?'var(--bg)':esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer;opacity:${c.otro?0.4:1}" onclick="selDiaInicio('${dStr}')">
+        <div style="font-size:10px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;width:18px;height:18px;border-radius:50%;margin:0 auto 2px;display:flex;align-items:center;justify-content:center;${esHoy?'background:var(--acc);color:#000':''}">${c.d.getDate()}</div>
+        ${evs.slice(0,2).map(ev=>`<div style="border-radius:2px;padding:1px 3px;font-size:8px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">${ev.titulo.split(' ')[0]}</div>`).join('')}
+        ${evs.length>2?`<div style="font-size:8px;color:var(--txt3)">+${evs.length-2}</div>`:''}
+      </div>`;
+    }).join('');
+    grid.innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--brd)">${cells}</div>`;
+  }
+}
+
+function selDiaInicio(dStr){
+  inicioDiaSeleccionado = dStr;
+  // Cambiar a vista día
+  inicioFecha = new Date(dStr+'T12:00:00');
+  setInicioView('dia', document.getElementById('inicio-view-dia'));
+  // Mostrar detalle
+  const det = document.getElementById('inicio-dia-detalle');
+  if(det) det.style.display = 'none'; // en vista día ya se muestra en el grid
+  document.getElementById('inicio-dia-titulo').textContent = new Date(dStr+'T12:00:00').toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+}
+
 function renderInicio(){
   const hora=new Date().getHours();
   document.getElementById('inicio-saludo').textContent=(hora<12?'Buenos días':hora<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
@@ -1137,101 +1436,433 @@ function renderLeadCards(leads,containerId,rol){
         ${l.proximo_contacto&&!atrasado?`<span style="font-size:10px;color:var(--blue)">📅 ${l.proximo_contacto}</span>`:''}
       </div>
       <div class="btn-row" onclick="event.stopPropagation()">
-        ${l.estado==='nuevo'?`<button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})">📞 Intento</button>`:''}
-        ${l.estado==='en_seguimiento'?`<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">📋 Seguimiento</button>`:''}
-        ${l.estado==='visita_realizada'?`<button class="btn btn-sm btn-ghost" onclick="abrirSheetLead(${l.id})">🎯 Resultado</button>`:''}
-        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})">📖 Historial</button>
+        ${l.estado==='nuevo'?`
+          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Registrar resultado del intento">📞 Registrar intento</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Programar cuándo llamar">📅 Programar</button>
+        `:l.estado==='en_seguimiento'?`
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">💬 Registrar seg.</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')" title="Programar próximo contacto">📅 Programar</button>
+        `:l.estado==='visita_realizada'?`
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🎯 Resultado visita</button>
+        `:l.estado==='visita_agendada'?`
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">✏️ Actualizar</button>
+        `:l.estado==='seguimiento_cierre'?`
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🔄 Seg. cierre</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')">📅 Programar</button>
+        `:''}
+        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo el historial del cliente">📋 Ver historial</button>
         <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})">✕ Perder</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// ── AGENDA PERSONAL ──
+// ── CALENDARIO PERSONAL ──
+let calFecha = new Date(); // mes/semana mostrado
+let calView = 'mes'; // 'mes' | 'semana'
+let calDiaSeleccionado = null;
+let calEventos = []; // todas las actividades del colaborador
+
 async function cargarAgendaPersonal(){
-  const{data}=await sb.from('agenda_personal')
+  // Cargar actividades de la agenda personal
+  const{data:activ}=await sb.from('agenda_personal')
     .select('*,leads(nombre,celular,estado)')
     .eq('colaborador',cu.nombre)
-    .order('fecha_programada',{ascending:true}).limit(200);
-  agendaData=data||[];
-  renderAgendaPanel();
+    .order('fecha_programada',{ascending:true})
+    .limit(500);
+  
+  // Cargar historial propio (lo que YA hizo) para mostrar en el calendario
+  const{data:hist}=await sb.from('historial_lead')
+    .select('*,leads!historial_lead_lead_id_fkey(nombre)')
+    .eq('colaborador',cu.nombre)
+    .gte('fecha_actividad', new Date(calFecha.getFullYear(),calFecha.getMonth()-1,1).toISOString())
+    .order('fecha_actividad',{ascending:true})
+    .limit(300);
+
+  calEventos = [
+    ...(activ||[]).map(a=>({
+      id:'ap_'+a.id,
+      raw_id:a.id,
+      tipo:'programado',
+      fecha:new Date(a.fecha_programada),
+      titulo:a.leads?.nombre||a.titulo,
+      sub:a.tipo?.replace(/_/g,' ')||'',
+      nota:a.nota,
+      completada:a.completada,
+      estado:a.leads?.estado||'nuevo',
+      lead_id:a.lead_id,
+      celular:a.leads?.celular,
+      color:a.completada?'#475569':getEtapaColor(a.leads?.estado||'nuevo'),
+    })),
+    ...(hist||[]).map(h=>({
+      id:'hl_'+h.id,
+      raw_id:h.id,
+      tipo:'realizado',
+      fecha:new Date(h.fecha_actividad),
+      titulo:h.leads?.nombre||'Actividad',
+      sub:h.tipo_actividad?.replace(/_/g,' ')||h.etapa,
+      nota:h.nota,
+      completada:true,
+      estado:h.etapa,
+      lead_id:h.lead_id,
+      color:'#334155', // gris para realizados
+    }))
+  ];
+  
+  renderCalendarioPersonal();
+  renderStatsAgenda();
+  // Si el panel inicio está activo, también actualizarlo
+  if(document.getElementById('pn-inicio')?.classList.contains('active')){
+    renderInicioCal();
+  }
 }
-function setAgendaTab(tab,btn){
-  agendaTabActual=tab;
+
+function getEtapaColor(estado){
+  const c=estilo(estado);return c.dot;
+}
+
+function setCalView(view,btn){
+  calView=view;
   document.querySelectorAll('#pn-agenda .tab').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  renderAgendaPanel();
+  if(view==='anio') renderCalAnio();
+  else if(view==='dia') renderCalDia();
+  else renderCalendarioPersonal();
 }
-function renderAgendaPanel(){
-  const hoy=new Date().toISOString().slice(0,10);
-  const sem=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
-  let items=[...agendaData];
-  if(agendaTabActual==='hoy')items=items.filter(a=>!a.completada&&a.fecha_programada.slice(0,10)===hoy);
-  else if(agendaTabActual==='semana')items=items.filter(a=>!a.completada&&a.fecha_programada.slice(0,10)<=sem);
-  else if(agendaTabActual==='atrasadas')items=items.filter(a=>!a.completada&&a.fecha_programada.slice(0,10)<hoy);
-  else items=items.filter(a=>a.completada).slice(0,30);
 
-  // Stats
-  const statsEl=document.getElementById('agenda-stats-row');
-  if(statsEl){
-    const pHoy=agendaData.filter(a=>!a.completada&&a.fecha_programada.slice(0,10)===hoy).length;
-    const pAtr=agendaData.filter(a=>!a.completada&&a.fecha_programada.slice(0,10)<hoy).length;
-    const pTot=agendaData.filter(a=>!a.completada).length;
-    statsEl.innerHTML=[
-      {l:'Hoy',v:pHoy,c:pHoy>0?'var(--acc)':''},
-      {l:'Atrasadas',v:pAtr,c:pAtr>0?'var(--red)':''},
-      {l:'Total',v:pTot,c:''},
-    ].map(s=>`<div class="stat"><div class="stat-n" style="color:${s.c||'var(--txt)'}">${s.v}</div><div class="stat-l">${s.l}</div></div>`).join('');
+function renderCalDia(){
+  const grid=document.getElementById('cal-grid');
+  const hdr=document.getElementById('inicio-cal-dias-header');
+  if(!grid)return;
+  // Ocultar header de días
+  const agHdr=document.querySelector('#pn-agenda .cal-dias-header');
+  if(agHdr)agHdr.style.display='none';
+  const dStr=calFecha.toISOString().slice(0,10);
+  const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
+  const diaNom=calFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('cal-mes-nombre').textContent=diaNom;
+  grid.innerHTML=`<div style="padding:14px">
+    ${!evsDia.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades<br>
+      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar</button></div>`:
+    evsDia.map(ev=>{
+      const hora=ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd);align-items:flex-start">
+        <div style="font-size:12px;color:var(--txt3);min-width:38px;font-weight:500">${hora}</div>
+        <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
+          <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,50):''}</div>
+        </div>
+        <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+          ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
+          ${ev.lead_id?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="abrirSheetLead(${ev.lead_id})">Ver</button>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+  // Resetear header de agenda
+  if(agHdr)agHdr.style.display='';
+  // Actualizar detalle
+  if(document.getElementById('cal-dia-detalle')){
+    calDiaSeleccionado=dStr;
+    seleccionarDia(dStr);
   }
+}
 
-  const el=document.getElementById('agenda-list');
-  if(!items.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Sin actividades</div><div class="empty-sub">Todo al día</div></div>';
-    return;
+function renderCalAnio(){
+  const grid=document.getElementById('cal-grid');
+  if(!grid)return;
+  const anio=calFecha.getFullYear();
+  document.getElementById('cal-mes-nombre').textContent='Año '+anio;
+  const agHdr=document.querySelector('#pn-agenda .cal-dias-header');
+  if(agHdr)agHdr.style.display='none';
+  
+  const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const hoy=new Date().toISOString().slice(0,7);
+  
+  grid.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px">
+    ${meses.map((m,i)=>{
+      const mesStr=anio+'-'+(i+1<10?'0'+(i+1):i+1);
+      const esMes=mesStr===hoy;
+      const evsM=calEventos.filter(e=>e.fecha.toISOString().slice(0,7)===mesStr);
+      return `<div style="background:${esMes?'rgba(245,158,11,0.1)':'var(--bg3)'};border:1px solid ${esMes?'var(--acc)':'var(--brd)'};border-radius:var(--r);padding:10px;cursor:pointer;text-align:center" onclick="irAMes(${anio},${i})">
+        <div style="font-size:12px;font-weight:${esMes?'700':'500'};color:${esMes?'var(--acc)':'var(--txt2)'};margin-bottom:4px">${m}</div>
+        ${evsM.length?`<div style="font-size:10px;color:var(--acc);font-weight:600">${evsM.length} act.</div>`:`<div style="font-size:10px;color:var(--txt3)">Sin actividades</div>`}
+      </div>`;
+    }).join('')}
+  </div>`;
+  if(agHdr)agHdr.style.display='';
+}
+
+function irAMes(anio,mes){
+  calFecha=new Date(anio,mes,1);
+  setCalView('mes',document.getElementById('cal-view-mes'));
+}
+
+function navMes(dir){
+  if(calView==='mes'){
+    calFecha=new Date(calFecha.getFullYear(),calFecha.getMonth()+dir,1);
+  } else {
+    calFecha=new Date(calFecha.getTime()+dir*7*864e5);
   }
-  el.innerHTML=items.map(a=>{
-    const est=estilo(a.leads?.estado);
-    const fechaA=new Date(a.fecha_programada);
-    const esHoy=a.fecha_programada.slice(0,10)===hoy;
-    const atrasada=!a.completada&&a.fecha_programada.slice(0,10)<hoy;
-    const hora=fechaA.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    const fechaLabel=esHoy?hora:fechaA.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' '+hora;
-    return `<div class="agenda-row ${atrasada?'agenda-late':esHoy?'agenda-today':''}" style="cursor:pointer" onclick="${a.lead_id?'abrirSheetLead('+a.lead_id+')':''}">
-      <div class="agenda-time">${fechaLabel}</div>
-      <div class="agenda-dot" style="background:${est.dot}"></div>
-      <div class="agenda-info">
-        <div class="agenda-name">${a.leads?.nombre||a.titulo}</div>
-        <div class="agenda-sub">${a.tipo.replace(/_/g,' ')}${a.nota?' · '+a.nota.slice(0,40):''}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
-        ${a.leads?.celular?`<a href="https://wa.me/591${a.leads.celular.replace(/\D/g,'')}" target="_blank" style="font-size:14px;text-decoration:none">💬</a>`:''}
-        <button class="btn btn-sm btn-ghost" onclick="completarActividad(${a.id})" style="padding:4px 8px">✓</button>
-        ${a.lead_id?`<button class="btn btn-sm btn-red" onclick="abrirPerder(${a.lead_id})" style="padding:4px 8px;font-size:10px">✕</button>`:''}
-      </div>
+  // Recargar si cambia el mes
+  cargarAgendaPersonal();
+}
+
+function renderCalendarioPersonal(){
+  const hoy=new Date();
+  const hoyStr=hoy.toISOString().slice(0,10);
+  
+  if(calView==='mes') renderCalMes(hoy,hoyStr);
+  else renderCalSemana(hoy,hoyStr);
+  
+  // Título
+  const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const tit=calView==='mes'
+    ?meses[calFecha.getMonth()]+' '+calFecha.getFullYear()
+    :'Semana del '+calFecha.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
+  document.getElementById('cal-mes-nombre').textContent=tit;
+  document.getElementById('agenda-mes-label').textContent=
+    meses[hoy.getMonth()]+' '+hoy.getFullYear()+' — '+cu.nombre.split(' ')[0];
+}
+
+function renderCalMes(hoy,hoyStr){
+  const grid=document.getElementById('cal-grid');
+  if(!grid)return;
+  
+  const anio=calFecha.getFullYear();
+  const mes=calFecha.getMonth();
+  const primerDia=new Date(anio,mes,1);
+  const ultimoDia=new Date(anio,mes+1,0);
+  
+  // Día de semana del primer día (lun=0)
+  let inicioGrid=(primerDia.getDay()+6)%7;
+  
+  let celdas=[];
+  // Días del mes anterior
+  for(let i=inicioGrid;i>0;i--){
+    const d=new Date(anio,mes,1-i);
+    celdas.push({fecha:d,otroMes:true});
+  }
+  // Días del mes actual
+  for(let d=1;d<=ultimoDia.getDate();d++){
+    celdas.push({fecha:new Date(anio,mes,d),otroMes:false});
+  }
+  // Completar hasta múltiplo de 7
+  while(celdas.length%7!==0){
+    const last=celdas[celdas.length-1].fecha;
+    celdas.push({fecha:new Date(last.getTime()+864e5),otroMes:true});
+  }
+  
+  grid.innerHTML=celdas.map(c=>{
+    const dStr=c.fecha.toISOString().slice(0,10);
+    const esHoy=dStr===hoyStr;
+    const esSel=calDiaSeleccionado===dStr;
+    const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+    const max=3;
+    
+    return `<div class="cal-celda ${c.otroMes?'otro-mes':''} ${esHoy?'hoy':''} ${esSel?'seleccionada':''}"
+      onclick="seleccionarDia('${dStr}')">
+      <div class="cal-num">${c.fecha.getDate()}</div>
+      ${evsDia.slice(0,max).map(ev=>`
+        <div class="cal-evento-mini" style="background:${ev.color}22;color:${ev.color};border-left:2px solid ${ev.color};${ev.completada&&ev.tipo==='realizado'?'opacity:0.6':''}"
+          onclick="event.stopPropagation();verEventoCal('${ev.id}')" title="${ev.titulo}">
+          ${ev.titulo.split(' ')[0]}
+        </div>`).join('')}
+      ${evsDia.length>max?`<div class="cal-mas">+${evsDia.length-max} más</div>`:''}
     </div>`;
   }).join('');
 }
-async function completarActividad(id){
-  await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',id);
-  toast('Actividad completada ✓');
-  cargarAgendaPersonal();
-}
-async function crearReunionExtra(){
-  const titulo=prompt('Título de la reunión extraordinaria:');
-  if(!titulo)return;
-  const fecha=prompt('Fecha (YYYY-MM-DD):',new Date().toISOString().slice(0,10));
-  if(!fecha)return;
-  const hora=prompt('Hora (HH:MM):','09:00')||'09:00';
-  await sb.from('agenda_grupal').insert([{
-    tipo:'reunion_extraordinaria',titulo,
-    fecha_inicio:fecha+'T'+hora+':00',
-    creado_por:cu.nombre
-  }]);
-  toast('Reunión creada ✓');
-  renderCalendario();
+
+function renderCalSemana(hoy,hoyStr){
+  const grid=document.getElementById('cal-grid');
+  if(!grid)return;
+  
+  // Semana: lunes de la semana de calFecha
+  const dia=(calFecha.getDay()+6)%7;
+  const lunes=new Date(calFecha);
+  lunes.setDate(calFecha.getDate()-dia);
+  
+  let celdas=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(lunes);
+    d.setDate(lunes.getDate()+i);
+    celdas.push(d);
+  }
+  
+  grid.innerHTML=celdas.map(d=>{
+    const dStr=d.toISOString().slice(0,10);
+    const esHoy=dStr===hoyStr;
+    const esSel=calDiaSeleccionado===dStr;
+    const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+    
+    return `<div class="cal-celda ${esHoy?'hoy':''} ${esSel?'seleccionada':''}" style="min-height:120px"
+      onclick="seleccionarDia('${dStr}')">
+      <div class="cal-num">${d.getDate()}</div>
+      ${evsDia.map(ev=>`
+        <div class="cal-evento-mini" style="background:${ev.color}22;color:${ev.color};border-left:2px solid ${ev.color}"
+          onclick="event.stopPropagation();verEventoCal('${ev.id}')" title="${ev.titulo}">
+          ${ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})} ${ev.titulo.slice(0,14)}
+        </div>`).join('')}
+    </div>`;
+  }).join('');
 }
 
-// ── CALENDARIO ──
+function seleccionarDia(dStr){
+  calDiaSeleccionado=dStr;
+  renderCalendarioPersonal(); // re-render para highlight
+  
+  const detalle=document.getElementById('cal-dia-detalle');
+  const tituloEl=document.getElementById('cal-dia-detalle-titulo');
+  const eventosEl=document.getElementById('cal-dia-eventos');
+  if(!detalle)return;
+  
+  const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr)
+    .sort((a,b)=>a.fecha-b.fecha);
+  
+  const fecha=new Date(dStr+'T12:00:00');
+  tituloEl.textContent=fecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  
+  if(!evsDia.length){
+    eventosEl.innerHTML=`<div style="font-size:12px;color:var(--txt3);padding:12px 0;text-align:center">Sin actividades este día
+      <br><button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar actividad</button>
+    </div>`;
+  } else {
+    eventosEl.innerHTML=evsDia.map(ev=>{
+      const hora=ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="dia-evento-row">
+        <div class="dia-evento-hora">${hora}</div>
+        <div class="dia-evento-barra" style="background:${ev.color}"></div>
+        <div class="dia-evento-info">
+          <div class="dia-evento-titulo">${ev.titulo}${ev.completada&&ev.tipo==='realizado'?' <span style="font-size:9px;color:var(--txt3)">(realizado)</span>':''}</div>
+          <div class="dia-evento-sub">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,50):''}</div>
+          ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" style="font-size:10px;color:#25d366;text-decoration:none">💬 ${ev.celular}</a>`:''}
+        </div>
+        <div class="dia-evento-acciones">
+          ${ev.tipo==='programado'&&!ev.completada?`
+            <button class="btn btn-sm btn-ghost" style="padding:4px 8px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>
+          `:''}
+          ${ev.lead_id?`
+            <button class="btn btn-sm btn-ghost" style="padding:4px 8px;font-size:10px" onclick="abrirSheetLead(${ev.lead_id})">Ver</button>
+            <button class="btn btn-sm btn-red" style="padding:4px 8px;font-size:10px" onclick="abrirPerder(${ev.lead_id})">✕</button>
+          `:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  detalle.style.display='';
+}
+
+function verEventoCal(id){
+  const ev=calEventos.find(e=>e.id===id);
+  if(!ev)return;
+  seleccionarDia(ev.fecha.toISOString().slice(0,10));
+}
+
+function renderStatsAgenda(){
+  const hoyStr=new Date().toISOString().slice(0,10);
+  const mesStr=new Date().toISOString().slice(0,7);
+  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)===hoyStr).length;
+  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)<hoyStr).length;
+  const realizados=calEventos.filter(e=>e.tipo==='realizado'&&e.fecha.toISOString().slice(0,7)===mesStr).length;
+  const el=document.getElementById('inicio-stats');
+  if(el){
+    document.getElementById('s-hoy').textContent=pHoy;
+    document.getElementById('s-sem').textContent=pAtr>0?`${pAtr}⚠`:'0';
+    document.getElementById('s-mes').textContent=realizados;
+  }
+}
+
+// Sheet nueva actividad manual
+function abrirNuevaActividad(fechaDefault){
+  const existing=document.getElementById('mini-modal-flujo');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='mini-modal-flujo';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  const hoy=fechaDefault||new Date().toISOString().slice(0,10);
+  modal.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:600px;margin:0 auto;padding:24px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div style="font-size:15px;font-weight:600">📅 Nueva actividad</div>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" style="background:none;border:none;color:var(--txt3);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:grid;gap:12px">
+        <div class="fgroup"><label>Título</label><input class="finput" id="nact-titulo" placeholder="Ej: Llamar a Carlos Mendoza"></div>
+        <div class="fgroup"><label>Tipo</label>
+          <select class="fselect" id="nact-tipo">
+            <option value="intento_1">Primer intento de contacto</option>
+            <option value="intento_2">Segundo intento</option>
+            <option value="intento_3">Tercer intento</option>
+            <option value="seguimiento">Seguimiento</option>
+            <option value="seguimiento_cierre">Seguimiento de cierre</option>
+            <option value="recordatorio">Recordatorio general</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="fgroup"><label>Fecha</label><input class="finput" id="nact-fecha" type="date" value="${hoy}"></div>
+          <div class="fgroup"><label>Hora</label><input class="finput" id="nact-hora" type="time" value="09:00"></div>
+        </div>
+        <div class="fgroup"><label>Nota</label><textarea class="ftextarea" id="nact-nota" placeholder="Qué tenés que hacer..." style="min-height:60px"></textarea></div>
+        <div class="fgroup"><label>Lead relacionado (opcional)</label>
+          <input class="finput" id="nact-busq" placeholder="Buscar cliente..." oninput="buscarLeadNact(this.value)">
+          <div id="nact-resultados" style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);margin-top:4px;display:none;max-height:120px;overflow-y:auto"></div>
+          <input type="hidden" id="nact-lead-id">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button onclick="guardarNuevaActividad()" class="btn btn-primary" style="flex:1">Guardar actividad</button>
+        <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+function buscarLeadNact(q){
+  const res=document.getElementById('nact-resultados');
+  if(!q||q.length<2){res.style.display='none';return;}
+  const found=allLeads.filter(l=>l.nombre?.toLowerCase().includes(q.toLowerCase())||l.celular?.includes(q)).slice(0,5);
+  if(!found.length){res.style.display='none';return;}
+  res.style.display='';
+  res.innerHTML=found.map(l=>`<div style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--brd)" 
+    onclick="selLeadNact(${l.id},'${l.nombre}')"
+    onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"
+    >${l.nombre} — ${l.celular}</div>`).join('');
+}
+
+function selLeadNact(id,nombre){
+  document.getElementById('nact-busq').value=nombre;
+  document.getElementById('nact-lead-id').value=id;
+  document.getElementById('nact-resultados').style.display='none';
+}
+
+async function guardarNuevaActividad(){
+  const titulo=document.getElementById('nact-titulo').value;
+  const fecha=document.getElementById('nact-fecha').value;
+  const hora=document.getElementById('nact-hora').value||'09:00';
+  const tipo=document.getElementById('nact-tipo').value;
+  const nota=document.getElementById('nact-nota').value||null;
+  const leadId=document.getElementById('nact-lead-id').value||null;
+  if(!titulo||!fecha){toast('Título y fecha obligatorios','error');return;}
+  await sb.from('agenda_personal').insert([{
+    colaborador:cu.nombre,lead_id:leadId?parseInt(leadId):null,
+    tipo,titulo,nota,fecha_programada:fecha+'T'+hora+':00'
+  }]);
+  document.getElementById('mini-modal-flujo')?.remove();
+  toast('Actividad guardada ✓');
+  await cargarAgendaPersonal();
+  if(fecha) seleccionarDia(fecha);
+}
+
+async function completarActividad(id){
+  await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',id);
+  toast('Completada ✓');
+  await cargarAgendaPersonal();
+}
+
+// ── CALENDARIO ──// ── CALENDARIO ──
 function setCalTab(tab,btn){
   calTabActual=tab;
   document.querySelectorAll('#pn-calendario .tab').forEach(b=>b.classList.remove('active'));
@@ -1327,6 +1958,8 @@ function abrirSheetLead(id){
   const l=allLeads.find(x=>x.id===id);
   if(!l)return;
   document.getElementById('sheet-lead-title').textContent=l.nombre||'Lead';
+  const guia=document.getElementById('guia-captador');
+  if(guia)guia.style.display='none'; // Ocultar guía al editar
   document.getElementById('f-nombre').value=l.nombre||'';
   document.getElementById('f-celular').value=l.celular||'';
   document.getElementById('f-ciudad').value=l.ciudad||'Santa Cruz';
@@ -1348,6 +1981,8 @@ function abrirSheetLead(id){
 function abrirNuevoLead(){
   editingLeadId=null;
   document.getElementById('sheet-lead-title').textContent='Nuevo lead';
+  const guia=document.getElementById('guia-captador');
+  if(guia)guia.style.display=''; // Mostrar guía al crear
   document.getElementById('f-nombre').value='';
   document.getElementById('f-celular').value='';
   document.getElementById('f-ciudad').value='Santa Cruz';
@@ -1467,24 +2102,66 @@ async function guardarLead(){
   if(active==='pn-todos')renderTodos();
   if(active==='pn-inicio')renderInicio();
   setTimeout(()=>loadLeads(),2000);
+  
+  // Si es un lead nuevo, ofrecer programar el primer intento inmediatamente
+  if(!editingLeadId && newId){
+    setTimeout(()=>{
+      if(confirm('✅ Lead registrado.\n\n¿Programar el primer intento de contacto ahora?')){
+        abrirProgramarIntento(newId, nombre, 1);
+      }
+    }, 300);
+  }
 }
 
 // ── SHEET INTENTO ──
-function abrirIntento(id){
+async function abrirIntento(id){
   const l=allLeads.find(x=>x.id===id);
   if(!l)return;
   intentoLeadId=id;
   selPillVal.intento=null;
+  selPillVal.intentoTipo=null;
   document.querySelectorAll('#sheet-intento .pill').forEach(p=>p.className='pill');
   document.getElementById('intento-nota').value='';
   document.getElementById('intento-prox').value='';
-  document.getElementById('intento-prox-wrap').style.display='none';
+  document.getElementById('intento-prox-hora').value='09:00';
+  document.getElementById('intento-prox-nota').value='';
+  document.getElementById('intento-prox-wrap').style.display='';
   document.getElementById('intento-contesto-info').style.display='none';
   const num=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
   document.getElementById('sheet-intento-title').textContent='Intento '+num+' de contacto';
-  document.getElementById('intento-lead-info').textContent=l.nombre+' · '+l.celular;
+  document.getElementById('intento-seccion-label').textContent='Registrar intento '+num;
+  document.getElementById('intento-lead-info').textContent=l.nombre+' · '+l.celular+(l.ciudad?' · '+l.ciudad:'');
   document.getElementById('sheet-intento').classList.add('open');
+  
+  // Cargar historial del lead en el sheet
+  document.getElementById('intento-historial-content').innerHTML='<div style="text-align:center;padding:8px;font-size:11px;color:var(--txt3)"><span class="spin"></span> Cargando...</div>';
+  const{data:hist}=await sb.from('historial_lead').select('*').eq('lead_id',id).order('fecha_actividad',{ascending:false}).limit(10);
+  const entradas=hist||[];
+  if(!entradas.length){
+    document.getElementById('intento-historial-content').innerHTML='<div style="font-size:11px;color:var(--txt3);padding:6px 0">Sin historial previo — este es el primer contacto</div>';
+  } else {
+    const tipoLabel={intento_contacto:'Intento',nota_seguimiento:'Seguimiento',visita:'Visita',perdida:'Pérdida'};
+    const est=estilo(l.estado);
+    document.getElementById('intento-historial-content').innerHTML=entradas.map(e=>{
+      const fecha=new Date(e.fecha_actividad).toLocaleDateString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      const dotColor=estilo(e.etapa).dot;
+      return `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--brd)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;margin-top:4px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;color:var(--txt3);margin-bottom:2px">${tipoLabel[e.tipo_actividad]||e.tipo_actividad} · ${e.colaborador} · ${fecha}</div>
+          ${e.resultado?`<div style="font-size:11px;font-weight:500;color:var(--txt2);margin-bottom:2px">→ ${e.resultado}</div>`:''}
+          ${e.nota?`<div style="font-size:11px;color:var(--txt3);font-style:italic">"${e.nota.slice(0,80)}${e.nota.length>80?'...':''}"</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
+function selPillTipo(btn){
+  selPillVal.intentoTipo=btn.dataset.val;
+  document.querySelectorAll('#intento-tipo-pills .pill').forEach(p=>p.className='pill');
+  btn.className='pill sel-neutral';
+}
+
 function selPill(btn,grupo){
   const val=btn.dataset.val;
   selPillVal[grupo]=val;
@@ -1497,6 +2174,7 @@ function selPill(btn,grupo){
   }else{
     btn.className='pill '+(val==='interesado'?'sel-ok':val==='frio'?'sel-no':val==='tiempo'?'sel-warn':'sel-neutral');
     document.getElementById('seg-visita-wrap').style.display=val==='interesado'?'':'none';
+    if(val==='interesado') consultarProximoCerrador();
   }
 }
 async function guardarIntento(){
@@ -1504,6 +2182,10 @@ async function guardarIntento(){
   if(!res){toast('Selecciona el resultado','error');return;}
   const nota=document.getElementById('intento-nota').value||null;
   const prox=document.getElementById('intento-prox').value||null;
+  const proxHora=document.getElementById('intento-prox-hora')?.value||'09:00';
+  const proxNota=document.getElementById('intento-prox-nota')?.value||null;
+  const proxTipo=document.getElementById('intento-prox-tipo')?.value||'intento_contacto';
+  const medioTipo=selPillVal.intentoTipo||'llamada';
   const l=allLeads.find(x=>x.id===intentoLeadId);
   if(!l)return;
   const num=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
@@ -1522,14 +2204,17 @@ async function guardarIntento(){
       colaborador:cu.nombre,lead_id:intentoLeadId,
       tipo:'intento_'+(num+1),
       titulo:'Intento '+(num+1)+': '+l.nombre,
-      fecha_programada:prox+'T09:00:00',nota
+      fecha_programada:prox+'T'+proxHora+':00',
+      nota:proxNota||nota
     }]);
+    await sb.from('leads').update({proximo_contacto:prox}).eq('id',intentoLeadId);
   }
   const i=allLeads.findIndex(x=>x.id===intentoLeadId);
   if(i>-1)allLeads[i]={...allLeads[i],...upd};
   closeSheet('intento');
   toast('Intento registrado ✓');
   renderLeads();cargarAgendaPersonal();
+  
 }
 
 // ── SHEET SEGUIMIENTO ──
@@ -1548,6 +2233,8 @@ function abrirSeguimiento(id){
 }
 async function guardarSeguimiento(){
   const nota=document.getElementById('seg-nota').value||null;
+  const tipoSeg=document.getElementById('seg-tipo')?.value||'seguimiento_general';
+  const medioSeg=document.getElementById('seg-medio')?.value||'whatsapp';
   const prox=document.getElementById('seg-prox').value||null;
   const vFecha=document.getElementById('seg-visita-fecha').value||null;
   const vHora=document.getElementById('seg-visita-hora').value||'09:00';
@@ -1560,8 +2247,8 @@ async function guardarSeguimiento(){
   if(vFecha){upd.estado='visita_agendada';upd.visita_fecha=vFecha+'T'+vHora+':00';upd.visita_sala=vSala;}
 
   await sb.from('leads').update(upd).eq('id',segLeadId);
-  await sb.from('seguimientos').insert([{lead_id:segLeadId,colaborador:cu.nombre,fecha_seguimiento:new Date().toISOString(),nota_previa:nota,resultado:selPillVal.seg,estado:'realizado'}]);
-  await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha);
+  await sb.from('seguimientos').insert([{lead_id:segLeadId,colaborador:cu.nombre,fecha_seguimiento:new Date().toISOString(),nota_previa:nota,resultado:selPillVal.seg,estado:'realizado',tipo:tipoSeg,medio:medioSeg}]);
+  await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha,tipoSeg,medioSeg);
 
   if(prox&&!vFecha){
     await sb.from('agenda_personal').insert([{
@@ -1589,6 +2276,17 @@ async function guardarSeguimiento(){
   closeSheet('seg');
   toast(vFecha?'Seguimiento y visita guardados ✓':'Seguimiento guardado ✓');
   renderLeads();cargarAgendaPersonal();
+  
+  // Si no agendó visita, ofrecer programar próximo seguimiento
+  if(!vFecha){
+    const l=allLeads.find(x=>x.id===segLeadId);
+    const nombre=l?.nombre||'el cliente';
+    setTimeout(()=>{
+      if(confirm('📅 ¿Programar el próximo contacto con '+nombre+'?')){
+        abrirProgramarIntento(segLeadId,nombre,1,'seguimiento');
+      }
+    },400);
+  }
 }
 
 // ── HISTORIAL ──
@@ -1614,7 +2312,7 @@ async function abrirHistorial(id){
     return `<div class="hist-entry${esEditable?' editable':''}">
       <div class="hist-meta">
         <span class="badge ${est.cls}" style="font-size:9px">${est.label}</span>
-        <span>${tipoLabel[e.tipo_actividad]||e.tipo_actividad}</span>
+        <span>${tipoLabel[e.tipo_actividad]||e.tipo_actividad}${e.tipo_seguimiento?' · '+e.tipo_seguimiento.replace(/_/g,' '):''}${e.medio_contacto?' via '+e.medio_contacto:''}</span>
         <span>${e.colaborador}</span>
         <span style="margin-left:auto">${fecha}</span>
         ${esEditable?`<button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:10px" onclick="editarHistorial(${e.id})">Editar</button>`:''}
@@ -1632,14 +2330,15 @@ async function editarHistorial(id){
   await sb.from('historial_lead').update({nota}).eq('id',id);
   toast('Nota actualizada ✓');
 }
-async function registrarHistorial(leadId,etapa,tipo,resultado,nota,motivo,fechaProx){
+async function registrarHistorial(leadId,etapa,tipo,resultado,nota,motivo,fechaProx,tipoSeg,medioContact){
   if(!leadId)return;
   await sb.from('historial_lead').insert([{
     lead_id:leadId,colaborador:cu.nombre,rol_colaborador:cu.rol,
     etapa,tipo_actividad:tipo,resultado:resultado||null,
     nota:nota||null,motivo_perdida:motivo||null,
     fecha_actividad:new Date().toISOString(),
-    fecha_proxima:fechaProx||null,editable:true
+    fecha_proxima:fechaProx||null,editable:true,
+    tipo_seguimiento:tipoSeg||null,medio_contacto:medioContact||null
   }]);
 }
 
@@ -1726,19 +2425,100 @@ function setAdminTab(tab,btn){
   if(btn)btn.classList.add('active');
   renderAdmin();
 }
+function impersonar(nombre,pin,rol){
+  if(!confirm('¿Ver el CRM como '+nombre+'?\n\nVas a ver exactamente lo que ve este colaborador.\nUsa el botón "Volver a Admin" para regresar.')) return;
+  
+  // Guardar sesión original
+  window._adminSession = {...cu};
+  
+  // Cambiar al colaborador
+  const col = colaboradores.find(c=>c.nombre===nombre);
+  if(!col) return;
+  cu = col;
+  
+  document.getElementById('tb-user').textContent = cu.nombre + ' (vista)';
+  
+  // Mostrar banner de impersonación
+  const banner = document.createElement('div');
+  banner.id = 'impersonar-banner';
+  banner.style.cssText = 'position:fixed;top:52px;left:0;right:0;background:var(--acc);color:#000;text-align:center;padding:6px;font-size:12px;font-weight:600;z-index:300;display:flex;align-items:center;justify-content:center;gap:12px';
+  banner.innerHTML = `Viendo CRM como: ${cu.nombre} <button onclick="salirImpersonar()" style="background:#000;color:var(--acc);border:none;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600">Volver a Admin</button>`;
+  document.body.appendChild(banner);
+  
+  // Ajustar el contenido para dar espacio al banner
+  document.querySelector('.content').style.paddingTop = '32px';
+  
+  // Reconstruir nav para ese rol
+  buildNav();
+  llenarSelects();
+  
+  // Ir a inicio
+  sw('inicio', document.querySelector('[data-nav="inicio"]'));
+  renderLeads();
+  cargarAgendaPersonal();
+}
+
+function salirImpersonar(){
+  if(!window._adminSession) return;
+  cu = window._adminSession;
+  window._adminSession = null;
+  
+  document.getElementById('tb-user').textContent = cu.nombre;
+  document.getElementById('impersonar-banner')?.remove();
+  document.querySelector('.content').style.paddingTop = '';
+  
+  buildNav();
+  llenarSelects();
+  sw('admin', document.querySelector('[data-nav="admin"]'));
+  renderAdmin();
+}
+
+function renderTablaMetricas(metricas){
+  const mes=new Date().toLocaleString('es-BO',{month:'long'});
+  let rows='';
+  (metricas||[]).forEach(m=>{
+    const nom=m.nombre.split(' ')[0];
+    rows+=`<tr style="border-bottom:1px solid var(--brd)">
+      <td style="padding:7px 8px;font-weight:500">${nom}<span style="font-size:9px;color:var(--txt3);margin-left:4px">${m.cargo||m.rol}</span></td>
+      <td style="text-align:center;padding:7px 4px;color:var(--acc)">${m.leads_mes||0}</td>
+      <td style="text-align:center;padding:7px 4px">${m.intentos_mes||0}</td>
+      <td style="text-align:center;padding:7px 4px">${m.seguimientos_mes||0}</td>
+      <td style="text-align:center;padding:7px 4px;color:var(--green)">${m.visitas_mes||0}</td>
+      <td style="text-align:center;padding:7px 4px;color:var(--acc);font-weight:600">${m.ventas_mes||0}</td>
+    </tr>`;
+  });
+  return `<div style="margin-top:16px">
+    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo — ${mes}</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--brd)">
+        <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
+        <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
+        <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
+        <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
+        <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
+        <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
 async function renderAdmin(){
   const el=document.getElementById('admin-content');
   el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
   if(adminTabActual==='equipo'){
     el.innerHTML=`<div style="margin-bottom:16px">
-      ${colaboradores.map(c=>`<div class="card">
+      ${colaboradores.map(c=>`<div class="card" style="cursor:default">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--acc)">${c.nombre.charAt(0)}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">${c.nombre}</div>
-            <div style="font-size:11px;color:var(--txt3)">${c.cargo||c.rol} · PIN: ${c.pin}</div>
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#000;flex-shrink:0">${c.nombre.charAt(0)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;margin-bottom:2px">${c.nombre}</div>
+            <div style="font-size:11px;color:var(--txt3)">${c.cargo||c.rol} · PIN: <strong style="color:var(--txt2)">${c.pin}</strong></div>
           </div>
-          <span class="badge ${c.activo?'e-ganado':'e-perdido'}" style="font-size:9px">${c.activo?'Activo':'Inactivo'}</span>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+            <span class="badge ${c.activo?'e-ganado':'e-perdido'}" style="font-size:9px">${c.activo?'Activo':'Inactivo'}</span>
+            ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 8px" onclick="impersonar('${c.nombre}','${c.pin}','${c.rol}')">👁 Ver como</button>`:''}
+          </div>
         </div>
       </div>`).join('')}
     </div>`;
@@ -1794,6 +2574,10 @@ async function renderAdmin(){
     const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos=allLeads.filter(l=>l.estado==='cerrado_perdido').length;
     const conVisita=allLeads.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    // Turnos de cerradores
+    const turnos=await verEstadoTurnos();
+    // Métricas de vendedores este mes
+    const{data:metricas}=await sb.from('metricas_vendedor').select('*');
     el.innerHTML=`<div class="kpi-grid">
       <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Total leads</div></div>
       <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos}</div><div class="kpi-l">Activos</div></div>
@@ -1801,9 +2585,54 @@ async function renderAdmin(){
       <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos}</div><div class="kpi-l">Perdidos</div></div>
       <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita}</div><div class="kpi-l">En visita</div></div>
       <div class="kpi"><div class="kpi-n">${ganados?(ganados/(ganados+perdidos)*100).toFixed(1)+'%':'—'}</div><div class="kpi-l">Conversión</div></div>
-    </div>`;
+    </div>
+    <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
+          <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
+          <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
+      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">⚡ Cambiar turno manualmente</button>`:''}
+    </div>
+    ${metricas&&metricas.length?`
+    <div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo — ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid var(--brd)">
+              <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`:''}`;
   }
 }
+async function cambiarTurnoManual(){
+  const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+  const actual=data?.ultimo_cerrador||'Gustavo Vaca';
+  const nuevo=actual==='David Gambarte'?'Gustavo Vaca':'David Gambarte';
+  if(!confirm(`El turno actual apunta a: ${actual==='David Gambarte'?'Gustavo (próximo)':'David (próximo)'}\n\n¿Quieres que la PRÓXIMA visita vaya a ${nuevo==='David Gambarte'?'Gustavo':'David'} en lugar de ${nuevo}?`)) return;
+  // Invertir manualmente
+  await sb.from('config_cerradores').update({ultimo_cerrador:nuevo}).eq('id',1);
+  toast('Turno actualizado — próxima visita: '+(nuevo==='David Gambarte'?'Gustavo Vaca':'David Gambarte'),'ok');
+  renderAdmin();
+}
+
 async function marcarPagado(id,tipo){
   const campo=tipo==='captador'?'pagado_captador':'pagado_cerrador';
   await sb.from('comisiones').update({[campo]:true}).eq('id',id);
@@ -1832,6 +2661,126 @@ function exportarCSV(){
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='leads_geat_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
+}
+
+// ── PROGRAMAR INTENTO/SEGUIMIENTO ──
+function abrirProgramarIntento(leadId, nombreCliente, numIntento, tipo='intento'){
+  const modal=document.createElement('div');
+  modal.id='modal-programar';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:600;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  const tipoLabel=tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento;
+  const placeholder=tipo==='seguimiento'
+    ?'Ej: Llamar para confirmar si revisó la información. Preguntar si tiene disponibilidad para visitar oficina...'
+    :'Ej: Llamar y preguntar por su disponibilidad. Mencionar que tenemos modelos desde $38,000 USD...';
+  modal.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r3) var(--r3) 0 0;width:100%;max-width:560px;margin:0 auto;max-height:88vh;display:flex;flex-direction:column">
+      <div style="width:40px;height:4px;background:var(--brd2);border-radius:2px;margin:12px auto 0"></div>
+      <div style="padding:16px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:15px;font-weight:600">📅 Programar ${tipoLabel}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">${nombreCliente}</div>
+        </div>
+        <button onclick="document.getElementById('modal-programar').remove()" style="background:var(--bg3);border:none;color:var(--txt3);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;flex:1">
+        <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r2);padding:12px;margin-bottom:16px;font-size:12px;color:var(--txt2);line-height:1.6">
+          <div style="font-weight:600;color:var(--acc);margin-bottom:4px">Qué vas a hacer:</div>
+          <div>Programá cuándo y cómo vas a contactar a este cliente. Esto aparecerá en tu calendario personal ese día.</div>
+        </div>
+        <div style="display:grid;gap:12px">
+          <div class="fgroup">
+            <label>¿Qué vas a hacer?</label>
+            <select class="fselect" id="prog-accion">
+              ${tipo==='intento'?`
+              <option value="llamada">📞 Llamada telefónica</option>
+              <option value="whatsapp">💬 Mensaje WhatsApp</option>
+              <option value="envio_info">📄 Enviar información por WhatsApp</option>
+              <option value="visita_terreno">📍 Visitar el terreno</option>
+              `:`
+              <option value="llamada">📞 Llamada de seguimiento</option>
+              <option value="whatsapp">💬 Mensaje WhatsApp</option>
+              <option value="coordinacion_visita">📅 Coordinar visita a oficina</option>
+              <option value="envio_info">📄 Enviar información adicional</option>
+              <option value="visita_terreno">📍 Visitar el terreno con el cliente</option>
+              `}
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fgroup"><label>Fecha <span style="color:var(--red)">*</span></label>
+              <input class="finput" id="prog-fecha" type="date" value="${new Date().toISOString().slice(0,10)}">
+            </div>
+            <div class="fgroup"><label>Hora</label>
+              <input class="finput" id="prog-hora" type="time" value="09:00">
+            </div>
+          </div>
+          <div class="fgroup">
+            <label>Qué recordar / qué decirle</label>
+            <textarea class="ftextarea" id="prog-nota" placeholder="${placeholder}" style="min-height:80px"></textarea>
+          </div>
+        </div>
+      </div>
+      <div style="padding:16px 20px;border-top:1px solid var(--brd);display:flex;gap:10px">
+        <button onclick="guardarProgramacion(${leadId},'${tipo}',${numIntento})" class="btn btn-primary" style="flex:1">Guardar programación</button>
+        <button onclick="document.getElementById('modal-programar').remove()" class="btn btn-ghost">Omitir</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+async function guardarProgramacion(leadId, tipo, numIntento){
+  const fecha=document.getElementById('prog-fecha').value;
+  const hora=document.getElementById('prog-hora').value||'09:00';
+  const nota=document.getElementById('prog-nota').value||null;
+  const accion=document.getElementById('prog-accion').value;
+  if(!fecha){toast('Selecciona una fecha','error');return;}
+  
+  const l=allLeads.find(x=>x.id===leadId);
+  const nombreCliente=l?.nombre||'Cliente';
+  
+  await sb.from('agenda_personal').insert([{
+    colaborador:cu.nombre,
+    lead_id:leadId,
+    tipo:tipo==='seguimiento'?accion:'intento_'+numIntento,
+    titulo:(tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento)+': '+nombreCliente,
+    nota,
+    fecha_programada:fecha+'T'+hora+':00'
+  }]);
+  
+  // Actualizar próximo contacto en el lead
+  await sb.from('leads').update({proximo_contacto:fecha}).eq('id',leadId);
+  
+  document.getElementById('modal-programar')?.remove();
+  toast('Programado para el '+new Date(fecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+'  ✓');
+  
+  if(calEventos!==undefined) cargarAgendaPersonal();
+}
+
+// ── TURNO CERRADORES ──
+async function consultarProximoCerrador(){
+  const el = document.getElementById('seg-cerrador-info');
+  if(!el) return;
+  try{
+    // Leer el estado actual del turno sin modificarlo
+    const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+    if(!data) return;
+    const proximo = data.ultimo_cerrador==='David Gambarte' ? 'Gustavo Vaca' : 'David Gambarte';
+    el.innerHTML = `🎯 Se asignará automáticamente a: <strong style="color:var(--txt)">${proximo}</strong>`;
+  }catch(e){
+    el.textContent='El cerrador se asignará automáticamente según turno';
+  }
+}
+
+async function verEstadoTurnos(){
+  const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
+  const{data:leads}=await sb.from('leads')
+    .select('cerrador')
+    .not('visita_fecha','is',null)
+    .eq('archivado',false);
+  const vDavid=(leads||[]).filter(l=>l.cerrador==='David Gambarte').length;
+  const vGustavo=(leads||[]).filter(l=>l.cerrador==='Gustavo Vaca').length;
+  const proximo=data?.ultimo_cerrador==='David Gambarte'?'Gustavo Vaca':'David Gambarte';
+  return{proximo,vDavid,vGustavo,total:data?.contador||0};
 }
 
 // ── CERRAR SHEETS ──
@@ -1875,7 +2824,7 @@ function usarSpeechAPI(){
   audioTimerInt=setInterval(()=>{
     const s=Math.floor((Date.now()-audioStartT)/1000);
     document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-    if(s>=90)srec.stop();
+    // Sin límite de tiempo automático — el usuario controla cuándo detener
   },1000);
   srec.onresult=async(e)=>{
     clearInterval(audioTimerInt);
@@ -1936,7 +2885,7 @@ function usarMediaRecorder(){
     audioTimerInt=setInterval(()=>{
       const s=Math.floor((Date.now()-audioStartT)/1000);
       document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-      if(s>=120)detenerGrabacion();
+      // Sin límite automático — tiempo indefinido
     },1000);
   }).catch(err=>{
     document.getElementById('audio-err-msg').textContent=
