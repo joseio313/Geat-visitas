@@ -482,6 +482,20 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="calendario-content"></div>
     </div>
 
+    <!-- GESTIÓN DE CIERRE (closers) -->
+    <div class="panel" id="pn-cierre">
+      <div class="ph">
+        <div><div class="ph-title">Gestión de Cierre</div><div class="ph-sub">Reuniones · Cotizaciones · Reservas</div></div>
+      </div>
+      <div class="tabs" id="cierre-tabs">
+        <button class="tab active" onclick="setCierreTab('reuniones',this)">Reuniones</button>
+        <button class="tab" onclick="setCierreTab('cotizaciones',this)">Cotizaciones</button>
+        <button class="tab" onclick="setCierreTab('propuestas',this)">Propuestas</button>
+        <button class="tab" onclick="setCierreTab('reservas',this)">Reservas</button>
+      </div>
+      <div id="cierre-content"><div class="loading"><span class="spin"></span>Cargando...</div></div>
+    </div>
+
     <!-- TODOS LOS LEADS (admin / commercial_lead) -->
     <div class="panel" id="pn-todos">
       <div class="ph">
@@ -1019,24 +1033,28 @@ function checkPin(){
 const NAVS={
   field_capturer:[
     {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'leads',icon:'📋',label:'Mis Leads'},
-    {id:'calendario',icon:'🗓',label:'Oficina'},
+    {id:'leads',icon:'📋',label:'Leads'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
   ],
   closer:[
     {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'leads',icon:'📋',label:'Mis Leads'},
-    {id:'calendario',icon:'🗓',label:'Oficina'},
+    {id:'leads',icon:'📋',label:'Leads'},
+    {id:'cierre',icon:'🎯',label:'Cierre'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
+    {id:'calendario',icon:'👥',label:'Equipo'},
   ],
   commercial_lead:[
     {id:'inicio',icon:'🏠',label:'Inicio'},
     {id:'todos',icon:'👥',label:'Todos'},
-    {id:'calendario',icon:'🗓',label:'Oficina'},
-    {id:'admin',icon:'⚙',label:'Gestión'},
+    {id:'cierre',icon:'🎯',label:'Cierre'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
+    {id:'admin',icon:'⚙',label:'Admin'},
   ],
   admin:[
     {id:'inicio',icon:'🏠',label:'Inicio'},
     {id:'todos',icon:'👥',label:'Todos'},
-    {id:'calendario',icon:'🗓',label:'Oficina'},
+    {id:'cierre',icon:'🎯',label:'Cierre'},
+    {id:'agenda',icon:'📅',label:'Agenda'},
     {id:'admin',icon:'⚙',label:'Admin'},
   ],
 };
@@ -2525,17 +2543,28 @@ async function renderAdmin(){
   el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
   if(adminTabActual==='equipo'){
     el.innerHTML=`<div style="margin-bottom:16px">
-      ${colaboradores.map(c=>`<div class="card" style="cursor:default">
+      <div style="background:var(--bg3);border-radius:var(--r2);padding:12px;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">⚡ Acceso rápido — 1 click</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${colaboradores.map(c=>{
+          const colors={admin:'#F59E0B',field_capturer:'#A855F7',commercial_lead:'#3B82F6',closer:'#22C55E'};
+          const col=colors[c.rol]||'#64748B';
+          return `<button onclick="impersonar('${c.nombre}','${c.pin}','${c.rol}')" style="padding:12px 8px;background:var(--bg2);border:2px solid var(--brd);border-radius:var(--r);cursor:pointer;text-align:center;transition:all 0.15s" onmouseover="this.style.borderColor='${col}'" onmouseout="this.style.borderColor='var(--brd)'">
+            <div style="width:36px;height:36px;border-radius:50%;background:${col}20;border:2px solid ${col};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:${col};margin:0 auto 6px">${c.nombre.charAt(0)}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--txt)">${c.nombre.split(' ')[0]}</div>
+            <div style="font-size:9px;color:var(--txt3);margin-top:1px">${c.rol}</div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+    ${colaboradores.map(c=>`<div class="card" style="cursor:default;padding:12px 14px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:40px;height:40px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#000;flex-shrink:0">${c.nombre.charAt(0)}</div>
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#000;flex-shrink:0">${c.nombre.charAt(0)}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;margin-bottom:2px">${c.nombre}</div>
-            <div style="font-size:11px;color:var(--txt3)">${c.cargo||c.rol} · PIN: <strong style="color:var(--txt2)">${c.pin}</strong></div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:1px">${c.nombre}</div>
+            <div style="font-size:11px;color:var(--txt3)">${c.rol} · PIN: <strong style="color:var(--acc)">${c.pin}</strong></div>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-            <span class="badge ${c.activo?'e-ganado':'e-perdido'}" style="font-size:9px">${c.activo?'Activo':'Inactivo'}</span>
-            ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 8px" onclick="impersonar('${c.nombre}','${c.pin}','${c.rol}')">👁 Ver como</button>`:''}
-          </div>
+          <span class="badge ${c.activo?'e-ganado':'e-perdido'}" style="font-size:9px">${c.activo?'Activo':'Inactivo'}</span>
         </div>
       </div>`).join('')}
     </div>`;
@@ -2582,18 +2611,62 @@ async function renderAdmin(){
   }else if(adminTabActual==='campanas'){
     const{data}=await sb.from('campanas').select('*').order('created_at',{ascending:false});
     const cams=data||[];
-    // Contar leads por campaña
-    el.innerHTML=cams.map(c=>{
-      const leadsC=allLeads.filter(l=>l.campana_id==c.id||l.medio_difusion===c.fuente).length;
-      return `<div class="card">
-        <div style="font-size:13px;font-weight:500;margin-bottom:4px">${c.nombre}</div>
-        <div style="display:flex;gap:12px;font-size:11px;color:var(--txt3);margin-bottom:6px">
-          <span>${c.plataforma||'—'}</span>
-          <span>Inv: $${c.inversion_usd||0} USD / ${c.inversion_bs||0} Bs</span>
+    // Filtros de período
+    const hoy=new Date();
+    const filtros={
+      dia:()=>{const d=new Date();d.setHours(0,0,0,0);return d.toISOString();},
+      semana:()=>{const d=new Date();d.setDate(d.getDate()-7);return d.toISOString();},
+      mes:()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString();},
+      anio:()=>{const d=new Date();d.setFullYear(d.getFullYear()-1);return d.toISOString();}
+    };
+    const periodoActual=window.campanaFiltro||'mes';
+    const desdeFecha=filtros[periodoActual]();
+    const leadsEnPeriodo=allLeads.filter(l=>l.fecha_ingreso&&l.fecha_ingreso>=desdeFecha.slice(0,10));
+    const ganados=leadsEnPeriodo.filter(l=>l.estado==='cerrado_ganado').length;
+    const perdidos=leadsEnPeriodo.filter(l=>l.estado==='cerrado_perdido').length;
+    const visitas=leadsEnPeriodo.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    const conversion=ganados+perdidos>0?((ganados/(ganados+perdidos))*100).toFixed(1)+'%':'—';
+    el.innerHTML=`
+    <div style="display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">
+      ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoActual===p?'active':''}" style="white-space:nowrap" onclick="window.campanaFiltro='${p}';setAdminTab('campanas',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'30 días':'Este año'}</button>`).join('')}
+    </div>
+    <div class="kpi-grid" style="margin-bottom:16px">
+      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${leadsEnPeriodo.length}</div><div class="kpi-l">Leads</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${visitas}</div><div class="kpi-l">Visitas</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados}</div><div class="kpi-l">Ganados</div></div>
+      <div class="kpi"><div class="kpi-n">${conversion}</div><div class="kpi-l">Conversión</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Por medio de difusión</div>
+    ${['fan_page_geat','fan_page_steffi','fan_page_genoveva','tiktok_steffi','tiktok_empresa','instagram','referido_cliente','contacto_propio','barrido_ruteo','otro'].map(medio=>{
+      const total=leadsEnPeriodo.filter(l=>l.medio_difusion===medio).length;
+      if(!total) return '';
+      const pct=leadsEnPeriodo.length?Math.round((total/leadsEnPeriodo.length)*100):0;
+      return `<div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;font-weight:500">${medio.replace(/_/g,' ')}</span>
+          <span style="font-size:12px;font-weight:600;color:var(--acc)">${total} leads</span>
         </div>
-        <div style="font-size:12px;color:var(--acc);font-weight:600">${leadsC} leads generados</div>
+        <div style="height:4px;background:var(--brd);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--acc);border-radius:2px;transition:width 0.4s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:3px">${pct}% del período</div>
       </div>`;
-    }).join('')||'<div class="empty"><div class="empty-icon">📢</div><div class="empty-title">Sin campañas</div></div>';
+    }).join('')||'<div class="empty"><div class="empty-icon">📊</div><div class="empty-title">Sin datos en este período</div></div>'}
+    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-top:16px;margin-bottom:10px">Campañas</div>
+    ${cams.map(c=>{
+      const leadsC=leadsEnPeriodo.filter(l=>l.campana_id==c.id||l.medio_difusion===c.fuente).length;
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:500">${c.nombre}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--acc)">${leadsC} leads</div>
+        </div>
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">
+          <span>${c.plataforma||'—'}</span>
+          <span>$${c.inversion_usd||0} USD</span>
+          ${leadsC&&c.inversion_usd?`<span style="color:var(--green)">$${Math.round(c.inversion_usd/leadsC)} por lead</span>`:''}
+        </div>
+      </div>`;
+    }).join('')||'<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Sin campañas registradas</div>'}`;
   }else if(adminTabActual==='papelera'){
     const{data}=await sb.from('leads_perdidos').select('*').order('fecha_perdida',{ascending:false}).limit(100);
     const items=data||[];
@@ -2997,7 +3070,393 @@ function confirmarAudio(){
 }
 
 // ── INIT ──
+
+// ══════════════════════════════════════
+// MÓDULO CIERRE — Reuniones, Cotizaciones, Propuestas, Reservas
+// ══════════════════════════════════════
+
+let cierreTabActual = 'reuniones';
+
+function setCierreTab(tab, btn){
+  cierreTabActual = tab;
+  document.querySelectorAll('#cierre-tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderCierre();
+}
+
+function renderCierre(){
+  const el = document.getElementById('cierre-content');
+  if(!el) return;
+  if(cierreTabActual==='reuniones') renderReuniones(el);
+  else if(cierreTabActual==='cotizaciones') renderCotizaciones(el);
+  else if(cierreTabActual==='propuestas') renderPropuestas(el);
+  else if(cierreTabActual==='reservas') renderReservas(el);
+}
+
+function llenarLeadSelects(){
+  const misL = allLeads.filter(l=>{
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    if(cu.rol==='admin') return true;
+    return false;
+  });
+  ['reu-lead-sel','cotiz-lead-sel','res-lead-sel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.innerHTML='<option value="">Seleccionar lead...</option>'+misL.map(l=>`<option value="${l.id}">${l.nombre} — ${l.celular||'—'}</option>`).join('');
+  });
+}
+
+function renderReuniones(el){
+  el.innerHTML=`
+    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetReunion()">+ Nueva Reunión</button>
+    <div id="reuniones-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
+  sb.from('reuniones_cerrador').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(50)
+    .then(({data})=>{
+      const rows=data||[];
+      const rl=document.getElementById('reuniones-list');
+      if(!rl) return;
+      if(!rows.length){rl.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones registradas</div></div>';return;}
+      rl.innerHTML=rows.map(r=>{
+        const lead=allLeads.find(l=>l.id===r.lead_id);
+        const colores={avance:'var(--blue)',revision_propuesta:'var(--purple)',cierre:'var(--green)'};
+        const col=colores[r.tipo]||'var(--acc)';
+        return `<div class="card has-left" style="border-left-color:${col};padding:12px 14px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+r.lead_id}</span>
+            <span class="badge" style="background:${col}20;color:${col};font-size:9px">Reunión ${r.numero_reunion}</span>
+          </div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">${r.tipo?.replace(/_/g,' ')} · ${r.fecha?new Date(r.fecha).toLocaleDateString('es-BO'):'Sin fecha'}</div>
+          ${r.resultado?`<div style="font-size:11px;color:var(--green);font-weight:500">✓ ${r.resultado}</div>`:'<div style="font-size:11px;color:var(--acc)">⏳ Pendiente</div>'}
+          ${r.notas?`<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"${r.notas.slice(0,80)}"</div>`:''}
+        </div>`;
+      }).join('');
+    }).catch(()=>{
+      const rl=document.getElementById('reuniones-list');
+      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones aún</div></div>';
+    });
+}
+
+function renderCotizaciones(el){
+  el.innerHTML=`
+    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetCotiz()">+ Nueva Cotización</button>
+    <div id="cotiz-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
+  sb.from('cotizaciones').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(50)
+    .then(({data})=>{
+      const rows=data||[];
+      const cl=document.getElementById('cotiz-list');
+      if(!cl) return;
+      if(!rows.length){cl.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin cotizaciones</div></div>';return;}
+      cl.innerHTML=rows.map(c=>{
+        const lead=allLeads.find(l=>l.id===c.lead_id);
+        const estadoCol={borrador:'var(--txt3)',enviada:'var(--blue)',aprobada:'var(--green)',rechazada:'var(--red)'}[c.estado]||'var(--txt3)';
+        return `<div class="card" style="padding:12px 14px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+c.lead_id}</span>
+            <span style="font-size:11px;font-weight:600;color:${estadoCol}">${c.estado}</span>
+          </div>
+          <div style="font-size:12px;font-weight:500;margin-bottom:4px">${c.titulo||'Sin título'}</div>
+          <div style="display:flex;gap:10px;font-size:11px;color:var(--txt3)">
+            ${c.metros_cuadrados?`<span>${c.metros_cuadrados} m²</span>`:''}
+            ${c.precio_estimado?`<span style="color:var(--acc);font-weight:600">$${Number(c.precio_estimado).toLocaleString()} USD</span>`:''}
+          </div>
+        </div>`;
+      }).join('');
+    }).catch(()=>{
+      const cl=document.getElementById('cotiz-list');
+      if(cl) cl.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin cotizaciones</div></div>';
+    });
+}
+
+function renderPropuestas(el){
+  el.innerHTML=`<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Propuestas</div><div class="empty-sub">Las propuestas se generan desde cotizaciones aprobadas</div></div>`;
+  sb.from('propuestas').select('*').order('created_at',{ascending:false}).limit(30)
+    .then(({data})=>{
+      const rows=data||[];
+      if(!rows.length) return;
+      el.innerHTML=rows.map(p=>{
+        const lead=allLeads.find(l=>l.id===p.lead_id);
+        return `<div class="card" style="border-left:3px solid var(--acc);padding:12px 14px;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px">${lead?.nombre||'Lead #'+p.lead_id}</div>
+          <div style="font-size:11px;color:var(--txt3)">Estado: ${p.estado}${p.reunion_fecha?' · Reunión: '+new Date(p.reunion_fecha).toLocaleDateString('es-BO'):''}</div>
+          ${p.notas?`<div style="font-size:11px;color:var(--txt2);margin-top:4px">${p.notas}</div>`:''}
+        </div>`;
+      }).join('');
+    }).catch(()=>{});
+}
+
+function renderReservas(el){
+  el.innerHTML=`
+    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetReserva()">+ Registrar Reserva</button>
+    <div id="reservas-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
+  sb.from('reservas').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(30)
+    .then(({data})=>{
+      const rows=data||[];
+      const rl=document.getElementById('reservas-list');
+      if(!rl) return;
+      const total=rows.reduce((s,r)=>s+(Number(r.monto_reserva)||0),0);
+      if(total>0){
+        rl.innerHTML=`<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);padding:12px;text-align:center;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:0.07em">Total reservas</div>
+          <div style="font-size:26px;font-weight:700;color:var(--green)">$${total.toLocaleString()} USD</div>
+        </div>`;
+      }
+      if(!rows.length){rl.innerHTML+='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas registradas</div></div>';return;}
+      rl.innerHTML+=(rows.map(r=>{
+        const lead=allLeads.find(l=>l.id===r.lead_id);
+        const estCol={pendiente:'var(--acc)',confirmada:'var(--green)',anulada:'var(--red)'}[r.estado]||'var(--txt3)';
+        return `<div class="card has-left" style="border-left-color:var(--green);padding:12px 14px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+r.lead_id}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--green)">$${Number(r.monto_reserva||0).toLocaleString()}</span>
+          </div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:3px">${r.fecha_reserva||'—'} · ${r.metodo_pago||'—'}</div>
+          <div style="font-size:11px;font-weight:600;color:${estCol}">${r.estado||'pendiente'}</div>
+          ${r.comprobante_url?`<div style="font-size:10px;color:var(--blue);margin-top:3px">📎 ${r.comprobante_url.slice(0,50)}</div>`:''}
+        </div>`;
+      }).join(''));
+    }).catch(()=>{
+      const rl=document.getElementById('reservas-list');
+      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div></div>';
+    });
+}
+
+function abrirSheetReunion(){
+  llenarLeadSelects();
+  document.getElementById('reu-notas').value='';
+  document.getElementById('reu-resultado').value='';
+  document.getElementById('reu-fecha').value='';
+  document.getElementById('sheet-reunion').classList.add('open');
+}
+
+function abrirSheetCotiz(){
+  llenarLeadSelects();
+  document.getElementById('cotiz-titulo').value='';
+  document.getElementById('cotiz-m2').value='';
+  document.getElementById('cotiz-precio').value='';
+  document.getElementById('cotiz-desc').value='';
+  document.getElementById('cotiz-estado').value='borrador';
+  document.getElementById('sheet-cotiz').classList.add('open');
+}
+
+function abrirSheetReserva(){
+  llenarLeadSelects();
+  document.getElementById('res-monto').value='';
+  document.getElementById('res-fecha').value=new Date().toISOString().slice(0,10);
+  document.getElementById('res-comprobante').value='';
+  document.getElementById('res-notas').value='';
+  document.getElementById('sheet-reserva').classList.add('open');
+}
+
+function guardarReunion(){
+  const leadId=document.getElementById('reu-lead-sel').value;
+  if(!leadId){toast('Selecciona un lead','error');return;}
+  const data={
+    lead_id:parseInt(leadId),cerrador:cu.nombre,
+    numero_reunion:parseInt(document.getElementById('reu-numero').value),
+    tipo:document.getElementById('reu-tipo').value,
+    fecha:document.getElementById('reu-fecha').value?new Date(document.getElementById('reu-fecha').value).toISOString():null,
+    resultado:document.getElementById('reu-resultado').value||null,
+    notas:document.getElementById('reu-notas').value||null
+  };
+  closeSheet('reunion');toast('Guardando reunión...');
+  sb.from('reuniones_cerrador').insert([data]).then(()=>{
+    toast('Reunión guardada ✓');renderCierre();
+  }).catch(e=>toast('Error: '+e.message,'error'));
+}
+
+function guardarCotizacion(){
+  const leadId=document.getElementById('cotiz-lead-sel').value;
+  if(!leadId){toast('Selecciona un lead','error');return;}
+  const data={
+    lead_id:parseInt(leadId),cerrador:cu.nombre,
+    titulo:document.getElementById('cotiz-titulo').value||null,
+    metros_cuadrados:document.getElementById('cotiz-m2').value||null,
+    precio_estimado:document.getElementById('cotiz-precio').value||null,
+    descripcion:document.getElementById('cotiz-desc').value||null,
+    estado:document.getElementById('cotiz-estado').value
+  };
+  closeSheet('cotiz');toast('Guardando cotización...');
+  sb.from('cotizaciones').insert([data]).then(()=>{
+    toast('Cotización guardada ✓');renderCierre();
+  }).catch(e=>toast('Error: '+e.message,'error'));
+}
+
+function guardarReserva(){
+  const leadId=document.getElementById('res-lead-sel').value;
+  if(!leadId){toast('Selecciona un lead','error');return;}
+  const data={
+    lead_id:parseInt(leadId),cerrador:cu.nombre,
+    monto_reserva:document.getElementById('res-monto').value||null,
+    fecha_reserva:document.getElementById('res-fecha').value||null,
+    metodo_pago:document.getElementById('res-metodo').value,
+    comprobante_url:document.getElementById('res-comprobante').value||null,
+    notas:document.getElementById('res-notas').value||null,
+    estado:'pendiente'
+  };
+  closeSheet('reserva');toast('Guardando reserva...');
+  sb.from('reservas').insert([data]).then(()=>{
+    toast('Reserva registrada ✓');renderCierre();
+  }).catch(e=>toast('Error: '+e.message,'error'));
+}
+
 initLogin();
 </script>
+
+<!-- ══ SHEET: NUEVA REUNIÓN CERRADOR ══ -->
+<div class="sheet-overlay" id="sheet-reunion" onclick="if(event.target===this)closeSheet('reunion')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Nueva Reunión</div>
+      <button class="sheet-close" onclick="closeSheet('reunion')">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-grid">
+        <div class="fgroup">
+          <label>Lead / Cliente</label>
+          <select class="fselect" id="reu-lead-sel"></select>
+        </div>
+        <div class="fgroup">
+          <label>Número de reunión</label>
+          <select class="fselect" id="reu-numero">
+            <option value="1">1ª reunión</option>
+            <option value="2">2ª reunión</option>
+            <option value="3">3ª reunión</option>
+            <option value="4">4ª reunión</option>
+            <option value="5">5ª reunión</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Tipo</label>
+          <select class="fselect" id="reu-tipo">
+            <option value="avance">Seguimiento / Avance</option>
+            <option value="revision_propuesta">Revisión de propuesta</option>
+            <option value="cierre">Reunión de cierre</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Fecha y hora</label>
+          <input type="datetime-local" class="finput" id="reu-fecha">
+        </div>
+        <div class="fgroup">
+          <label>Resultado</label>
+          <select class="fselect" id="reu-resultado">
+            <option value="">Pendiente</option>
+            <option value="positivo">Positivo — avanza</option>
+            <option value="requiere_propuesta">Requiere propuesta</option>
+            <option value="cerrado">Cerrado con éxito</option>
+            <option value="no_avanzo">No avanzó</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Notas</label>
+          <textarea class="finput" id="reu-notas" rows="3" style="resize:vertical;min-height:70px" placeholder="Qué se habló, acuerdos..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn btn-primary" style="flex:1" onclick="guardarReunion()">Guardar reunión</button>
+      <button class="btn btn-ghost" onclick="closeSheet('reunion')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SHEET: NUEVA COTIZACIÓN ══ -->
+<div class="sheet-overlay" id="sheet-cotiz" onclick="if(event.target===this)closeSheet('cotiz')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Nueva Cotización</div>
+      <button class="sheet-close" onclick="closeSheet('cotiz')">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-grid">
+        <div class="fgroup">
+          <label>Lead / Cliente</label>
+          <select class="fselect" id="cotiz-lead-sel"></select>
+        </div>
+        <div class="fgroup">
+          <label>Título del proyecto</label>
+          <input type="text" class="finput" id="cotiz-titulo" placeholder="Casa modelo Portales 120m²...">
+        </div>
+        <div class="fgroup">
+          <label>Metros cuadrados</label>
+          <input type="number" class="finput" id="cotiz-m2" placeholder="120">
+        </div>
+        <div class="fgroup">
+          <label>Precio estimado (USD)</label>
+          <input type="number" class="finput" id="cotiz-precio" placeholder="45600">
+        </div>
+        <div class="fgroup">
+          <label>Descripción / Detalles</label>
+          <textarea class="finput" id="cotiz-desc" rows="3" style="resize:vertical;min-height:70px" placeholder="Características, materiales, observaciones..."></textarea>
+        </div>
+        <div class="fgroup">
+          <label>Estado</label>
+          <select class="fselect" id="cotiz-estado">
+            <option value="borrador">Borrador</option>
+            <option value="enviada">Enviada al cliente</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn btn-primary" style="flex:1" onclick="guardarCotizacion()">Guardar cotización</button>
+      <button class="btn btn-ghost" onclick="closeSheet('cotiz')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SHEET: NUEVA RESERVA ══ -->
+<div class="sheet-overlay" id="sheet-reserva" onclick="if(event.target===this)closeSheet('reserva')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Registrar Reserva / Pago</div>
+      <button class="sheet-close" onclick="closeSheet('reserva')">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-grid">
+        <div class="fgroup">
+          <label>Lead / Cliente</label>
+          <select class="fselect" id="res-lead-sel"></select>
+        </div>
+        <div class="fgroup">
+          <label>Monto de reserva (USD)</label>
+          <input type="number" class="finput" id="res-monto" placeholder="1000">
+        </div>
+        <div class="fgroup">
+          <label>Fecha de reserva</label>
+          <input type="date" class="finput" id="res-fecha">
+        </div>
+        <div class="fgroup">
+          <label>Método de pago</label>
+          <select class="fselect" id="res-metodo">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia bancaria</option>
+            <option value="cheque">Cheque</option>
+            <option value="qr">Pago QR</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>URL / foto del comprobante</label>
+          <input type="text" class="finput" id="res-comprobante" placeholder="https://... o descripción del comprobante">
+        </div>
+        <div class="fgroup">
+          <label>Notas adicionales</label>
+          <textarea class="finput" id="res-notas" rows="2" style="resize:vertical;min-height:56px" placeholder="Observaciones..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn btn-primary" style="flex:1" onclick="guardarReserva()">Registrar reserva</button>
+      <button class="btn btn-ghost" onclick="closeSheet('reserva')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
