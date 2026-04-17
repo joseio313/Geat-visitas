@@ -812,7 +812,6 @@ input, select, textarea { font-family: var(--sans); }
       <option value="ceo">José Miguel — CEO</option>
       <option value="jefe">Gustavo — Jefe Comercial</option>
       <option value="captadora_genoveva">Genoveva — Captadora</option>
-      <option value="captadora_marialuisa">María Luisa — Captadora</option>
       <option value="captadora_steffy">Steffy — Captadora</option>
       <option value="cerrador_david">David — Cerrador</option>
     </select>
@@ -858,7 +857,7 @@ input, select, textarea { font-family: var(--sans); }
 
 const PINS = {
   ceo: '0001', jefe: '0002',
-  captadora_genoveva: '1001', captadora_marialuisa: '1002', captadora_steffy: '1003',
+  captadora_genoveva: '1001', captadora_steffy: '1003',
   cerrador_david: '2001'
 };
 
@@ -866,7 +865,6 @@ const USERS = {
   ceo: { name: 'José Miguel', role: 'CEO', color: '#d97706', canEdit:true, canSeeAll:true, canCapture:true, canClose:false, captureChannels: ['all'] },
   jefe: { name: 'Gustavo', role: 'Jefe Comercial', color: '#2563eb', canEdit:false, canSeeAll:true, canCapture:true, canClose:false, captureChannels: ['organic','referral'] },
   captadora_genoveva: { name: 'Genoveva', role: 'Captadora', color: '#7c3aed', canEdit:true, canSeeAll:false, canCapture:true, canClose:false, captureChannels: ['all'] },
-  captadora_marialuisa: { name: 'María Luisa', role: 'Captadora', color: '#7c3aed', canEdit:true, canSeeAll:false, canCapture:true, canClose:false, captureChannels: ['all'] },
   captadora_steffy: { name: 'Steffy', role: 'Captadora', color: '#7c3aed', canEdit:true, canSeeAll:false, canCapture:true, canClose:false, captureChannels: ['all'] },
   cerrador_david: { name: 'David', role: 'Cerrador', color: '#16a34a', canEdit:true, canSeeAll:false, canCapture:true, canClose:true, captureChannels: ['all'] }
 };
@@ -886,10 +884,10 @@ function initLeads() {
       {date:'2026-03-01', text:'Propuesta enviada USD 45.000', by:'David'},
       {date:'2026-03-15', text:'CERRADO — firma de contrato', by:'David'}
     ]},
-    { id:nextId++, name:'Carola Áñez', phone:'71234567', channel:'referral', stage:'proposal', assignedTo:'captadora_marialuisa', closedBy:null, amount:62000, notes:'Duplex 150m² Urubo', history:[
-      {date:'2026-03-05', text:'Referida por cliente anterior', by:'María Luisa'},
-      {date:'2026-03-08', text:'Llamada — quiere duplex con piscina', by:'María Luisa'},
-      {date:'2026-03-20', text:'Visita a terreno Urubo', by:'María Luisa'},
+    { id:nextId++, name:'Carola Áñez', phone:'71234567', channel:'referral', stage:'proposal', assignedTo:'captadora_genoveva', closedBy:null, amount:62000, notes:'Duplex 150m² Urubo', history:[
+      {date:'2026-03-05', text:'Referida por cliente anterior', by:'Genoveva'},
+      {date:'2026-03-08', text:'Llamada — quiere duplex con piscina', by:'Genoveva'},
+      {date:'2026-03-20', text:'Visita a terreno Urubo', by:'Genoveva'},
       {date:'2026-04-01', text:'Propuesta en revisión USD 62.000', by:'David'}
     ]},
     { id:nextId++, name:'Fermín Áviles', phone:'69876543', channel:'paid', stage:'qualified', assignedTo:'captadora_steffy', closedBy:null, amount:38000, notes:'Casa económica 80m²', history:[
@@ -901,8 +899,8 @@ function initLeads() {
       {date:'2026-04-05', text:'Contactó por WhatsApp orgánico', by:'Genoveva'},
       {date:'2026-04-07', text:'Llamada — quiere planos para terreno propio', by:'Genoveva'}
     ]},
-    { id:nextId++, name:'Roberto Méndez', phone:'70112233', channel:'paid', stage:'new', assignedTo:'captadora_marialuisa', closedBy:null, amount:0, notes:'', history:[
-      {date:'2026-04-10', text:'Lead captado Facebook Ads — sin contactar aún', by:'María Luisa'}
+    { id:nextId++, name:'Roberto Méndez', phone:'70112233', channel:'paid', stage:'new', assignedTo:'captadora_genoveva', closedBy:null, amount:0, notes:'', history:[
+      {date:'2026-04-10', text:'Lead captado Facebook Ads — sin contactar aún', by:'Genoveva'}
     ]},
     { id:nextId++, name:'Lucía Peredo', phone:'73445566', channel:'referral', stage:'contacted', assignedTo:'captadora_genoveva', closedBy:null, amount:0, notes:'Referida por Omar Núñez', history:[
       {date:'2026-04-09', text:'Omar la recomendó — llamada inicial hecha', by:'Genoveva'}
@@ -933,7 +931,7 @@ const tutSteps = [
     <div class="tut-visual">
       <div class="tut-role-box"><div class="tut-role-name">José Miguel <span class="tut-role-badge" style="background:#fef3c7;color:#b45309;">CEO</span></div><div class="tut-role-desc">Ve todo. Puede editar cualquier cosa. Tiene el control total del sistema.</div></div>
       <div class="tut-role-box"><div class="tut-role-name">Gustavo <span class="tut-role-badge" style="background:#dbeafe;color:#2563eb;">JEFE COMERCIAL</span></div><div class="tut-role-desc">Ve todo lo que hace el equipo pero <strong>no puede editar</strong> sus registros. Puede captar leads propios pero solo de contactos orgánicos o referidos (no de publicidad paga). Supervisa sin interferir.</div></div>
-      <div class="tut-role-box"><div class="tut-role-name">Genoveva / María Luisa / Steffy <span class="tut-role-badge" style="background:#ede9fe;color:#7c3aed;">CAPTADORA</span></div><div class="tut-role-desc">Solo ve sus propios leads. Registra leads nuevos (grabando voz o escribiendo), hace seguimiento con llamadas y visitas, y los pasa a cierre cuando están listos.</div></div>
+      <div class="tut-role-box"><div class="tut-role-name">Genoveva / Steffy <span class="tut-role-badge" style="background:#ede9fe;color:#7c3aed;">CAPTADORA</span></div><div class="tut-role-desc">Solo ve sus propios leads. Registra leads nuevos (grabando voz o escribiendo), hace seguimiento con llamadas y visitas, y los pasa a cierre cuando están listos.</div></div>
       <div class="tut-role-box"><div class="tut-role-name">David <span class="tut-role-badge" style="background:#dcfce7;color:#15803d;">CERRADOR</span></div><div class="tut-role-desc">Recibe los leads calificados. Envía propuestas, negocia y cierra contratos. Solo ve los leads que le fueron derivados.</div></div>
     </div>`
   },
@@ -1271,7 +1269,7 @@ function filterLeadsTable() {
 // ═══════════ TEAM VIEW ═══════════
 
 function renderTeam() {
-  const teamMembers = ['captadora_genoveva','captadora_marialuisa','captadora_steffy','cerrador_david'];
+  const teamMembers = ['captadora_genoveva','captadora_steffy','cerrador_david'];
 
   document.getElementById('main-content').innerHTML = `
     <div class="section-header"><div class="section-title">Rendimiento del equipo</div></div>
