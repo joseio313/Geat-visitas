@@ -413,7 +413,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         </div>
         <div class="ph-actions">
           <button class="btn btn-sm btn-ghost" onclick="iniciarGrabacion()">🎙</button>
-          <button class="btn btn-sm btn-primary" onclick="abrirNuevoLead()">+ Nuevo</button>
+          <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
       </div>
       <div class="tabs" id="leads-tabs">
@@ -501,13 +501,109 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="cierre-content"><div class="loading"><span class="spin"></span>Cargando...</div></div>
     </div>
 
+    <!-- BUSQUEDA AVANZADA (todos los roles) -->
+    <div class="panel" id="pn-busqueda">
+      <div class="ph">
+        <div><div class="ph-title">Buscar</div><div class="ph-sub" id="busq-count">—</div></div>
+        <button class="btn btn-sm btn-ghost" onclick="limpiarBusqueda()">Limpiar</button>
+      </div>
+
+      <!-- Barra de busqueda -->
+      <div class="search-wrap" style="margin-bottom:14px">
+        <span class="search-ico">&#128269;</span>
+        <input class="search-inp" id="busq-q" placeholder="Nombre, celular, ciudad..." oninput="ejecutarBusqueda()">
+      </div>
+
+      <!-- Filtros en acordeon -->
+      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);overflow:hidden;margin-bottom:12px">
+
+        <!-- Periodo -->
+        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Periodo de ingreso</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="tab" id="bf-hoy" onclick="setBusqFecha('hoy',this)">Hoy</button>
+            <button class="tab" id="bf-semana" onclick="setBusqFecha('semana',this)">Esta semana</button>
+            <button class="tab" id="bf-mes" onclick="setBusqFecha('mes',this)">Este mes</button>
+            <button class="tab" id="bf-anio" onclick="setBusqFecha('anio',this)">Este a&#241;o</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <div style="flex:1">
+              <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Desde</div>
+              <input type="date" class="finput" id="busq-desde" style="font-size:12px;padding:7px 10px" onchange="ejecutarBusqueda()">
+            </div>
+            <div style="flex:1">
+              <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Hasta</div>
+              <input type="date" class="finput" id="busq-hasta" style="font-size:12px;padding:7px 10px" onchange="ejecutarBusqueda()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Estado / Color -->
+        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Estado del lead</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado','cerrado_perdido'].map(est=>{
+              const e=estilo(est);
+              return `<button class="badge ${e.cls}" id="bf-est-${est}" onclick="toggleBusqEst('${est}',this)" style="cursor:pointer;opacity:0.5;padding:4px 10px">${e.label}</button>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Financiamiento -->
+        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Financiamiento</div>
+          <div style="display:flex;gap:6px">
+            <button class="tab" id="bf-contado" onclick="toggleBusqFin('recursos_propios',this)">Contado</button>
+            <button class="tab" id="bf-banco" onclick="toggleBusqFin('bancario',this)">Bancario</button>
+          </div>
+        </div>
+
+        <!-- Medio / Red social -->
+        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Medio de difusion</div>
+          <select class="fselect" id="busq-medio" style="font-size:12px;padding:8px 10px" onchange="ejecutarBusqueda()">
+            <option value="">Todos los medios</option>
+            <option value="fan_page_geat">Fan Page GEAT</option>
+            <option value="fan_page_steffi">Fan Page Steffi</option>
+            <option value="fan_page_genoveva">Fan Page Genoveva</option>
+            <option value="tiktok_steffi">TikTok Steffi</option>
+            <option value="tiktok_empresa">TikTok Empresa</option>
+            <option value="instagram">Instagram</option>
+            <option value="referido_cliente">Referido de cliente</option>
+            <option value="contacto_propio">Contacto propio</option>
+            <option value="barrido_ruteo">Barrido/Ruteo</option>
+          </select>
+        </div>
+
+        <!-- Ciudad -->
+        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Ciudad</div>
+          <input type="text" class="finput" id="busq-ciudad" placeholder="Santa Cruz, Warnes..." style="font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
+        </div>
+
+        <!-- m2 -->
+        <div style="padding:12px 14px">
+          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Metros cuadrados (rango)</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" class="finput" id="busq-m2min" placeholder="Min" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
+            <span style="color:var(--txt3)">-</span>
+            <input type="number" class="finput" id="busq-m2max" placeholder="Max" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Resultados -->
+      <div id="busq-results"></div>
+    </div>
+
     <!-- TODOS LOS LEADS (admin / commercial_lead) -->
     <div class="panel" id="pn-todos">
       <div class="ph">
         <div><div class="ph-title">Todos los Leads</div><div class="ph-sub" id="todos-count">—</div></div>
         <div class="ph-actions">
           <button class="btn btn-sm btn-ghost" onclick="exportarCSV()">↗ CSV</button>
-          <button class="btn btn-sm btn-primary" onclick="abrirNuevoLead()">+ Nuevo</button>
+          <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
       </div>
       <div class="tabs">
@@ -546,9 +642,23 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" onclick="setAdminTab('campanas',this)">Campañas</button>
         <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
         <button class="tab" onclick="setAdminTab('stats',this)">Stats</button>
-        <button class="tab" onclick="setAdminTab('auditoria',this)">🔍 Auditoría</button>
+        <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
       </div>
       <div id="admin-content"></div>
+    </div>
+
+    <!-- NOTAS PERSONALES (privadas) -->
+    <div class="panel" id="pn-notas">
+      <div class="ph">
+        <div>
+          <div class="ph-title">Mis Notas</div>
+          <div class="ph-sub">Privadas &#183; Solo t&#250; las ves</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="nuevaNota()">+ Nueva</button>
+      </div>
+      <div id="notas-list">
+        <div class="loading"><span class="spin"></span>Cargando...</div>
+      </div>
     </div>
 
   </div><!-- /content -->
@@ -599,6 +709,54 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:14px;white-space:pre-line" id="audio-err-msg">Error</div>
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px" onclick="iniciarGrabacion()">Reintentar</button>
       <button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SHEET: ELECCION MODO NUEVO LEAD ══ -->
+<div class="sheet-overlay" id="sheet-modo-lead" onclick="if(event.target===this)closeSheet('modo-lead')">
+  <div class="sheet" style="max-height:85vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Nuevo Lead</div>
+      <button class="sheet-close" onclick="closeSheet('modo-lead')">x</button>
+    </div>
+    <div class="sheet-body">
+      <p style="font-size:13px;color:var(--txt3);margin-bottom:20px">Como quieres registrar al cliente?</p>
+      <div style="background:var(--bg3);border:2px solid var(--acc);border-radius:var(--r2);padding:16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="width:42px;height:42px;background:var(--acc);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">&#127908;</div>
+          <div>
+            <div style="font-size:14px;font-weight:600">Por Audio</div>
+            <div style="font-size:11px;color:var(--txt3)">Dicta los datos con tu voz. Mas rapido.</div>
+          </div>
+        </div>
+        <div style="background:var(--bg2);border-radius:var(--r);padding:12px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Guia — que decir:</div>
+          <div style="font-size:11px;color:var(--txt);font-style:italic;line-height:1.8;margin-bottom:10px">"El cliente se llama Juan Perez, su celular es 76543210, vive en Santa Cruz, quiere financiamiento bancario, tiene terreno en Warnes, presupuesto de 45000 dolares, quiere construir a fin de anio, lo contacte por Fan Page GEAT"</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Nombre completo</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Celular</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Ciudad/zona</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Contado o banco</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Lugar del terreno</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Presupuesto</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Cuando construye</div>
+            <div style="font-size:10px;color:var(--txt3)">&#10003; Como llego (red social)</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="closeSheet('modo-lead');iniciarGrabacion()">&#127908; Iniciar grabacion</button>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r2);padding:16px;cursor:pointer" onclick="closeSheet('modo-lead');abrirNuevoLead()">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;background:var(--bg2);border:1px solid var(--brd);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">&#9998;</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600">Manual</div>
+            <div style="font-size:11px;color:var(--txt3)">Llenar el formulario campo por campo.</div>
+          </div>
+          <div style="color:var(--txt3);font-size:20px">&#8250;</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -749,8 +907,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
-      <div>
-        <div class="sheet-title" id="sheet-intento-title">Registrar actividad</div>
+      <button onclick="closeSheet('intento')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
+      <div class="sheet-title" id="sheet-intento-title">Registrar actividad</div>
+      <button class="sheet-close" onclick="closeSheet('intento')">&#x2715;</button>
+    </div>
         <div style="font-size:11px;color:var(--txt3);margin-top:2px" id="intento-lead-info"></div>
       </div>
       <button class="sheet-close" onclick="closeSheet('intento')">✕</button>
@@ -837,7 +997,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
+      <button onclick="closeSheet('seg')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Seguimiento</div>
+      <button class="sheet-close" onclick="closeSheet('seg')">&#x2715;</button>
+    </div>
       <button class="sheet-close" onclick="closeSheet('seg')">✕</button>
     </div>
     <div class="sheet-body">
@@ -923,7 +1086,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
+      <button onclick="closeSheet('hist')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title" id="hist-title">Historial</div>
+      <button class="sheet-close" onclick="closeSheet('hist')">&#x2715;</button>
+    </div>
       <button class="sheet-close" onclick="closeSheet('hist')">✕</button>
     </div>
     <div class="sheet-body" id="hist-body">
@@ -1051,30 +1217,36 @@ function checkPin(){
 // -- NAV --
 const NAVS={
   field_capturer:[
-    {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'leads',icon:'📋',label:'Leads'},
-    {id:'agenda',icon:'📅',label:'Agenda'},
+    {id:'inicio',icon:'&#127968;',label:'Inicio'},
+    {id:'leads',icon:'&#128203;',label:'Leads'},
+    {id:'agenda',icon:'&#128197;',label:'Agenda'},
+    {id:'notas',icon:'&#128221;',label:'Notas'},
+    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   closer:[
-    {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'leads',icon:'📋',label:'Leads'},
-    {id:'cierre',icon:'🎯',label:'Cierre'},
-    {id:'agenda',icon:'📅',label:'Agenda'},
-    {id:'calendario',icon:'👥',label:'Equipo'},
+    {id:'inicio',icon:'&#127968;',label:'Inicio'},
+    {id:'leads',icon:'&#128203;',label:'Leads'},
+    {id:'cierre',icon:'&#127919;',label:'Cierre'},
+    {id:'agenda',icon:'&#128197;',label:'Agenda'},
+    {id:'notas',icon:'&#128221;',label:'Notas'},
+    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   commercial_lead:[
-    {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'todos',icon:'👥',label:'Todos'},
-    {id:'cierre',icon:'🎯',label:'Cierre'},
-    {id:'agenda',icon:'📅',label:'Agenda'},
-    {id:'admin',icon:'⚙',label:'Admin'},
+    {id:'inicio',icon:'&#127968;',label:'Inicio'},
+    {id:'todos',icon:'&#128101;',label:'Todos'},
+    {id:'cierre',icon:'&#127919;',label:'Cierre'},
+    {id:'agenda',icon:'&#128197;',label:'Agenda'},
+    {id:'admin',icon:'&#9881;',label:'Admin'},
+    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   admin:[
-    {id:'inicio',icon:'🏠',label:'Inicio'},
-    {id:'todos',icon:'👥',label:'Todos'},
-    {id:'cierre',icon:'🎯',label:'Cierre'},
-    {id:'agenda',icon:'📅',label:'Agenda'},
-    {id:'admin',icon:'⚙',label:'Admin'},
+    {id:'inicio',icon:'&#127968;',label:'Inicio'},
+    {id:'todos',icon:'&#128101;',label:'Todos'},
+    {id:'cierre',icon:'&#127919;',label:'Cierre'},
+    {id:'agenda',icon:'&#128197;',label:'Agenda'},
+    {id:'admin',icon:'&#9881;',label:'Admin'},
+    {id:'notas',icon:'&#128221;',label:'Notas'},
+    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
 };
 function buildNav(){
@@ -1096,6 +1268,8 @@ function sw(id,btn){
   // Cargar al cambiar de panel
   if(id==='leads')renderLeads();
   if(id==='todos')renderTodos();
+  if(id==='notas')renderNotas();
+  if(id==='busqueda')iniciarBusqueda();
   // pn-agenda eliminado - el calendario personal está en el inicio
   if(id==='calendario')renderCalendario();
   if(id==='notif')renderNotifs();
@@ -2025,6 +2199,10 @@ function abrirSheetLead(id){
   document.getElementById('f-nombre').readOnly = false; // siempre editable en diseño
   document.getElementById('sheet-lead').classList.add('open');
 }
+function elegirModoNuevoLead(){
+  document.getElementById('sheet-modo-lead').classList.add('open');
+}
+
 function abrirNuevoLead(){
   editingLeadId=null;
   document.getElementById('sheet-lead-title').textContent='Nuevo lead';
@@ -2563,6 +2741,12 @@ function renderTablaMetricas(metricas){
 }
 
 async function renderAdmin(){
+  // Mostrar/ocultar tabs segun rol
+  const tabAuditoria = document.getElementById('tab-auditoria');
+  if(tabAuditoria) tabAuditoria.style.display = cu.rol==='admin' ? '' : 'none';
+
+  // Gustavo (commercial_lead) NO puede ver perfil del CEO
+  // Se maneja en el grid de acceso rapido
   const el=document.getElementById('admin-content');
   el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
   if(adminTabActual==='equipo'){
@@ -2570,7 +2754,11 @@ async function renderAdmin(){
       <div style="background:var(--bg3);border-radius:var(--r2);padding:12px;margin-bottom:14px">
       <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">[!] Acceso rápido - 1 click</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        ${colaboradores.map(c=>{
+        ${colaboradores.filter(c=>{
+          // Gustavo no puede ver al CEO
+          if(cu.rol==='commercial_lead' && c.rol==='admin') return false;
+          return true;
+        }).map(c=>{
           const colors={admin:'#F59E0B',field_capturer:'#A855F7',commercial_lead:'#3B82F6',closer:'#22C55E'};
           const col=colors[c.rol]||'#64748B';
           return `<button onclick="impersonar('${c.nombre}','${c.pin}','${c.rol}')" style="padding:12px 8px;background:var(--bg2);border:2px solid var(--brd);border-radius:var(--r);cursor:pointer;text-align:center;transition:all 0.15s" onmouseover="this.style.borderColor='${col}'" onmouseout="this.style.borderColor='var(--brd)'">
@@ -3575,6 +3763,170 @@ function regrabarFaltantes(){
   iniciarGrabacion();
 }
 
+
+// ══════════════════════════════════════
+// NOTAS PERSONALES PRIVADAS
+// ══════════════════════════════════════
+let notasData = [];
+
+function renderNotas(){
+  const el = document.getElementById('notas-list');
+  if(!el) return;
+  // Cargar desde localStorage por ahora (privado por colaborador)
+  const key = 'geat_notas_' + cu.nombre;
+  try { notasData = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){ notasData=[]; }
+  if(!notasData.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Tus notas son privadas. Nadie mas las ve.</div></div>';
+    return;
+  }
+  el.innerHTML = notasData.map((n,i)=>`
+    <div class="card" style="padding:13px 15px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:600;color:var(--acc)">${n.titulo||'Sin titulo'}</div>
+        <div style="display:flex;gap:6px">
+          <span style="font-size:10px;color:var(--txt3)">${n.fecha||''}</span>
+          <button onclick="eliminarNota(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0">&#10005;</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">${n.texto||''}</div>
+    </div>`).join('');
+}
+
+function nuevaNota(){
+  const titulo = prompt('Titulo de la nota:');
+  if(!titulo) return;
+  const texto = prompt('Contenido:');
+  if(texto===null) return;
+  const key = 'geat_notas_' + cu.nombre;
+  try { notasData = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){ notasData=[]; }
+  notasData.unshift({titulo, texto, fecha: new Date().toLocaleDateString('es-BO')});
+  localStorage.setItem(key, JSON.stringify(notasData));
+  renderNotas();
+  toast('Nota guardada');
+}
+
+function eliminarNota(idx){
+  if(!confirm('Eliminar esta nota?')) return;
+  const key = 'geat_notas_' + cu.nombre;
+  notasData.splice(idx,1);
+  localStorage.setItem(key, JSON.stringify(notasData));
+  renderNotas();
+}
+
+// ══════════════════════════════════════
+// BUSQUEDA AVANZADA
+// ══════════════════════════════════════
+let busqEstados = new Set();
+let busqFinanciamiento = '';
+let busqFechaTipo = '';
+
+function iniciarBusqueda(){
+  ejecutarBusqueda();
+}
+
+function limpiarBusqueda(){
+  document.getElementById('busq-q').value='';
+  document.getElementById('busq-desde').value='';
+  document.getElementById('busq-hasta').value='';
+  document.getElementById('busq-medio').value='';
+  document.getElementById('busq-ciudad').value='';
+  document.getElementById('busq-m2min').value='';
+  document.getElementById('busq-m2max').value='';
+  busqEstados.clear();
+  busqFinanciamiento='';
+  busqFechaTipo='';
+  document.querySelectorAll('#pn-busqueda .tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('[id^="bf-est-"]').forEach(b=>b.style.opacity='0.5');
+  ejecutarBusqueda();
+}
+
+function setBusqFecha(tipo, btn){
+  busqFechaTipo = busqFechaTipo===tipo ? '' : tipo;
+  document.querySelectorAll('#bf-hoy,#bf-semana,#bf-mes,#bf-anio').forEach(b=>b.classList.remove('active'));
+  if(busqFechaTipo) btn.classList.add('active');
+  const hoy = new Date();
+  const desdes = {
+    hoy: new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()),
+    semana: new Date(hoy.getTime()-7*86400000),
+    mes: new Date(hoy.getFullYear(),hoy.getMonth(),1),
+    anio: new Date(hoy.getFullYear(),0,1),
+  };
+  if(busqFechaTipo && desdes[busqFechaTipo]){
+    document.getElementById('busq-desde').value = desdes[busqFechaTipo].toISOString().slice(0,10);
+    document.getElementById('busq-hasta').value = hoy.toISOString().slice(0,10);
+  } else {
+    document.getElementById('busq-desde').value='';
+    document.getElementById('busq-hasta').value='';
+  }
+  ejecutarBusqueda();
+}
+
+function toggleBusqEst(est, btn){
+  if(busqEstados.has(est)){ busqEstados.delete(est); btn.style.opacity='0.5'; }
+  else { busqEstados.add(est); btn.style.opacity='1'; }
+  ejecutarBusqueda();
+}
+
+function toggleBusqFin(tipo, btn){
+  busqFinanciamiento = busqFinanciamiento===tipo ? '' : tipo;
+  document.querySelectorAll('#bf-contado,#bf-banco').forEach(b=>b.classList.remove('active'));
+  if(busqFinanciamiento) btn.classList.add('active');
+  ejecutarBusqueda();
+}
+
+function ejecutarBusqueda(){
+  const q = (document.getElementById('busq-q')?.value||'').toLowerCase();
+  const desde = document.getElementById('busq-desde')?.value||'';
+  const hasta = document.getElementById('busq-hasta')?.value||'';
+  const medio = document.getElementById('busq-medio')?.value||'';
+  const ciudad = (document.getElementById('busq-ciudad')?.value||'').toLowerCase();
+  const m2min = parseFloat(document.getElementById('busq-m2min')?.value)||0;
+  const m2max = parseFloat(document.getElementById('busq-m2max')?.value)||0;
+
+  // Filtrar segun rol
+  let base = cu.rol==='admin'||cu.rol==='commercial_lead' ? allLeads :
+    cu.rol==='field_capturer' ? allLeads.filter(l=>l.captador===cu.nombre) :
+    cu.rol==='closer' ? allLeads.filter(l=>l.cerrador===cu.nombre) : [];
+
+  let resultados = base.filter(l=>{
+    if(q && !['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>l[k]&&l[k].toLowerCase().includes(q))) return false;
+    if(desde && l.fecha_ingreso && l.fecha_ingreso < desde) return false;
+    if(hasta && l.fecha_ingreso && l.fecha_ingreso > hasta) return false;
+    if(busqEstados.size>0 && !busqEstados.has(l.estado)) return false;
+    if(busqFinanciamiento && l.financiamiento!==busqFinanciamiento) return false;
+    if(medio && l.medio_difusion!==medio) return false;
+    if(ciudad && !(l.ciudad||'').toLowerCase().includes(ciudad)) return false;
+    if(m2min && (parseFloat(l.metros_cuadrados)||0) < m2min) return false;
+    if(m2max && (parseFloat(l.metros_cuadrados)||0) > m2max) return false;
+    return true;
+  });
+
+  const countEl = document.getElementById('busq-count');
+  if(countEl) countEl.textContent = resultados.length + ' resultados';
+
+  const resEl = document.getElementById('busq-results');
+  if(resEl) resEl.innerHTML = renderLeadCards(resultados,'busq-results',cu.rol);
+}
+
+// ══════════════════════════════════════
+// CALENDARIO PERSONAL AUTOMATICO
+// Cada seguimiento con fecha proxima se registra automaticamente
+// ══════════════════════════════════════
+function registrarEnCalendario(tipo, descripcion, fechaISO, leadId){
+  // Guardar en tabla calendario_personal via Supabase
+  // Por ahora log local
+  console.log('[Calendario]', tipo, descripcion, fechaISO);
+  // Al conectar BD:
+  // sb.from('calendario_personal').insert([{
+  //   colaborador: cu.nombre,
+  //   tipo: tipo,
+  //   descripcion: descripcion,
+  //   fecha_actividad: fechaISO,
+  //   lead_id: leadId||null
+  // }]);
+}
+
+
 initLogin();
 </script>
 
@@ -3583,7 +3935,10 @@ initLogin();
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
+      <button onclick="closeSheet('reunion')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Nueva Reunión</div>
+      <button class="sheet-close" onclick="closeSheet('reunion')">&#x2715;</button>
+    </div>
       <button class="sheet-close" onclick="closeSheet('reunion')">✕</button>
     </div>
     <div class="sheet-body">
@@ -3657,7 +4012,10 @@ initLogin();
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
+      <button onclick="closeSheet('cotiz')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Nueva Cotización</div>
+      <button class="sheet-close" onclick="closeSheet('cotiz')">&#x2715;</button>
+    </div>
       <button class="sheet-close" onclick="closeSheet('cotiz')">✕</button>
     </div>
     <div class="sheet-body">
@@ -3713,7 +4071,10 @@ initLogin();
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
+      <button onclick="closeSheet('reserva')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Registrar Reserva / Pago</div>
+      <button class="sheet-close" onclick="closeSheet('reserva')">&#x2715;</button>
+    </div>
       <button class="sheet-close" onclick="closeSheet('reserva')">✕</button>
     </div>
     <div class="sheet-body">
