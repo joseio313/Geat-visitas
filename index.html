@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -94,6 +95,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .e-scierre{background:#7C3AED20;color:#D8B4FE}
 .e-ganado{background:#14532D20;color:#4ADE80}
 .e-perdido{background:#991B1B20;color:#FCA5A5}
+.e-reservado{background:#78350F20;color:#FCD34D}
+.e-tramite{background:#1E3A5F20;color:#93C5FD}
 
 /* ── STATS ROW ── */
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
@@ -487,11 +490,13 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="ph">
         <div><div class="ph-title">Gestión de Cierre</div><div class="ph-sub">Reuniones · Cotizaciones · Reservas</div></div>
       </div>
-      <div class="tabs" id="cierre-tabs">
+      <div class="tabs" id="cierre-tabs" style="overflow-x:auto;scrollbar-width:none">
         <button class="tab active" onclick="setCierreTab('reuniones',this)">Reuniones</button>
         <button class="tab" onclick="setCierreTab('cotizaciones',this)">Cotizaciones</button>
         <button class="tab" onclick="setCierreTab('propuestas',this)">Propuestas</button>
         <button class="tab" onclick="setCierreTab('reservas',this)">Reservas</button>
+        <button class="tab" onclick="setCierreTab('financiamiento',this)">🏦 Financiamiento</button>
+        <button class="tab" onclick="setCierreTab('pagos',this)">💳 Pagos</button>
       </div>
       <div id="cierre-content"><div class="loading"><span class="spin"></span>Cargando...</div></div>
     </div>
@@ -535,12 +540,13 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <!-- ADMIN -->
     <div class="panel" id="pn-admin">
       <div class="ph"><div class="ph-title">Admin</div></div>
-      <div class="tabs">
+      <div class="tabs" style="overflow-x:auto;scrollbar-width:none">
         <button class="tab active" onclick="setAdminTab('equipo',this)">Equipo</button>
         <button class="tab" onclick="setAdminTab('comisiones',this)">Comisiones</button>
         <button class="tab" onclick="setAdminTab('campanas',this)">Campañas</button>
         <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
         <button class="tab" onclick="setAdminTab('stats',this)">Stats</button>
+        <button class="tab" onclick="setAdminTab('auditoria',this)">🔍 Auditoría</button>
       </div>
       <div id="admin-content"></div>
     </div>
@@ -558,18 +564,23 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 <!-- ══ AUDIO OVERLAY ══ -->
 <div id="audio-overlay">
   <div class="audio-box">
+    <!-- Progreso de pasos -->
+    <div id="audio-pasos" style="display:none;margin-bottom:14px">
+      <div style="display:flex;gap:4px;justify-content:center;margin-bottom:8px" id="audio-pasos-dots"></div>
+      <div style="font-size:10px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:0.1em;text-align:center" id="audio-paso-label">Paso 1</div>
+    </div>
     <div id="audio-st-rec" style="display:none">
       <div style="font-size:28px;margin-bottom:6px">🎙</div>
       <div style="font-size:15px;font-weight:600;margin-bottom:4px">Escuchando...</div>
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:4px" id="audio-hint">Habla con claridad</div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:8px;background:var(--bg3);border-radius:var(--r);padding:10px;text-align:left;line-height:1.6" id="audio-hint">Habla con claridad</div>
       <div class="audio-waves"><span></span><span></span><span></span><span></span><span></span></div>
       <div id="audio-timer" style="font-size:12px;color:var(--acc);margin-bottom:16px">0:00</div>
-      <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="detenerGrabacion()">⏹ Detener</button>
-      <button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button>
+      <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="detenerGrabacion()">⏹ Detener y procesar</button>
+      <button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar todo</button>
     </div>
     <div id="audio-st-proc" style="display:none">
       <div class="audio-spinner"></div>
-      <div style="font-size:14px;font-weight:500;margin-bottom:6px">Procesando...</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:6px">Procesando con IA...</div>
       <div style="font-size:11px;color:var(--txt3)" id="audio-proc-msg">Analizando con IA</div>
     </div>
     <div id="audio-st-result" style="display:none">
@@ -615,6 +626,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Tip: también podés usar el botón 🎙 para dictar los datos por voz</div>
       </div>
       <div class="form-grid">
+        <div id="fgroup-readonly-notice" style="display:none;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r);margin-bottom:4px">
+          <div style="font-size:11px;color:var(--acc);font-weight:600">📌 Modo edición</div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:2px">Solo puedes agregar información nueva. Los datos originales no se modifican.</div>
+        </div>
         <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Nombre completo"></div>
         <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 76543210"></div>
         <div class="fgroup"><label>Ciudad</label><input class="finput" id="f-ciudad" placeholder="Santa Cruz" value="Santa Cruz"></div>
@@ -641,8 +656,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <option value="otro">Otro</option>
           </select>
         </div>
-        <div class="fgroup" id="fgroup-captador"><label>Captador</label>
-          <select class="fselect" id="f-captador"></select>
+        <div class="fgroup" id="fgroup-captador"><label>Captador <span style="font-size:9px;color:var(--green)">(automático)</span></label>
+          <input class="finput" id="f-captador" readonly style="color:var(--txt2);cursor:not-allowed;background:var(--bg3)" placeholder="Se asigna automáticamente">
         </div>
         <div class="fgroup" id="fgroup-cerrador"><label>Cerrador</label>
           <select class="fselect" id="f-cerrador"></select>
@@ -654,7 +669,9 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <option value="visita_agendada">Visita agendada</option>
             <option value="visita_realizada">Visita realizada</option>
             <option value="seguimiento_cierre">Seg. de cierre</option>
-            <option value="cerrado_ganado">Ganado</option>
+            <option value="reservado">💰 Reservado (pago inicial)</option>
+            <option value="en_tramite">📋 En trámite bancario</option>
+            <option value="cerrado_ganado">🏆 Ganado (contrato + 40%)</option>
             <option value="cerrado_perdido">Perdido</option>
           </select>
         </div>
@@ -941,13 +958,13 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   </div>
 </div>
 
-<script>
+<script charset="utf-8">
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
 const AUDIO_URL='https://jsacnpgpnvoslrpurfxc.supabase.co/functions/v1/geat-audio';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
-// ── ESTADO GLOBAL ──
+// -- ESTADO GLOBAL --
 let cu=null; // colaborador actual
 let colaboradores=[];
 let allLeads=[];
@@ -965,7 +982,7 @@ let perderLeadId=null;
 let selPillVal={intento:null,seg:null};
 let audioData=null; // datos del último proceso de audio
 
-// ── ETAPAS ──
+// -- ETAPAS --
 const E={
   // Colores exactos según Gustavo: rosa=nuevo, amarillo=seg, verde=visita, rojo=perdido
   nuevo:{bg:'#FCE7F320',dot:'#EC4899',cls:'e-nuevo',label:'Nuevo'},           // Rosa
@@ -973,19 +990,21 @@ const E={
   visita_agendada:{bg:'#DCFCE720',dot:'#22C55E',cls:'e-vagend',label:'Visita agend.'}, // Verde claro
   visita_realizada:{bg:'#14532D20',dot:'#15803D',cls:'e-vrealiz',label:'Visita realiz.'}, // Verde oscuro
   seguimiento_cierre:{bg:'#7C3AED20',dot:'#A855F7',cls:'e-scierre',label:'Seg. cierre'}, // Morado
-  cerrado_ganado:{bg:'#BBF7D020',dot:'#16A34A',cls:'e-ganado',label:'Ganado'}, // Verde brillante
+  reservado:{bg:'#78350F20',dot:'#F59E0B',cls:'e-reservado',label:'Reservado [R]'}, // Ámbar
+  en_tramite:{bg:'#1E3A5F20',dot:'#3B82F6',cls:'e-tramite',label:'Trámite bancario'}, // Azul
+  cerrado_ganado:{bg:'#BBF7D020',dot:'#16A34A',cls:'e-ganado',label:'Ganado [V]'}, // Verde brillante
   cerrado_perdido:{bg:'#FEE2E220',dot:'#EF4444',cls:'e-perdido',label:'Perdido'}, // Rojo
 };
-function estilo(est){return E[est]||{bg:'#33415520',dot:'#64748B',cls:'',label:est||'—'};}
+function estilo(est){return E[est]||{bg:'#33415520',dot:'#64748B',cls:'',label:est||'-'};}
 
-// ── TOAST ──
+// -- TOAST --
 function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
   setTimeout(()=>el.className='',2500);
 }
 
-// ── LOGIN ──
+// -- LOGIN --
 let pinVal='';
 async function initLogin(){
   const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
@@ -993,7 +1012,7 @@ async function initLogin(){
   const sel=document.getElementById('login-user');
   colaboradores.forEach(c=>{
     const o=document.createElement('option');
-    o.value=c.id;o.textContent=c.nombre+' — '+(c.cargo||c.rol);
+    o.value=c.id;o.textContent=c.nombre+' - '+(c.cargo||c.rol);
     sel.appendChild(o);
   });
 }
@@ -1029,7 +1048,7 @@ function checkPin(){
   }
 }
 
-// ── NAV ──
+// -- NAV --
 const NAVS={
   field_capturer:[
     {id:'inicio',icon:'🏠',label:'Inicio'},
@@ -1077,13 +1096,13 @@ function sw(id,btn){
   // Cargar al cambiar de panel
   if(id==='leads')renderLeads();
   if(id==='todos')renderTodos();
-  // pn-agenda eliminado — el calendario personal está en el inicio
+  // pn-agenda eliminado - el calendario personal está en el inicio
   if(id==='calendario')renderCalendario();
   if(id==='notif')renderNotifs();
   if(id==='admin')renderAdmin();
 }
 
-// ── INIT ──
+// -- INIT --
 async function initApp(){
   document.getElementById('tb-user').textContent=cu.nombre;
   buildNav();
@@ -1137,7 +1156,7 @@ function llenarSelects(){
   }
 }
 
-// ── LOAD LEADS ──
+// -- LOAD LEADS --
 async function loadLeads(){
   const{data}=await sb.from('leads')
     .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado')
@@ -1148,7 +1167,7 @@ async function loadLeads(){
   return allLeads;
 }
 
-// ── REALTIME ──
+// -- REALTIME --
 let rtChannel=null;
 function iniciarRealtime(){
   if(rtChannel)return;
@@ -1168,7 +1187,7 @@ function iniciarRealtime(){
     }).subscribe();
 }
 
-// ── NOTIFICACIONES PUSH ──
+// -- NOTIFICACIONES PUSH --
 function iniciarNotificaciones(){
   if(!('Notification' in window))return;
   Notification.requestPermission().then(p=>{
@@ -1186,15 +1205,15 @@ async function checkNotifsPendientes(){
     .lte('fecha_programada',en15.toISOString());
   (data||[]).forEach(a=>{
     const hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    new Notification('GEAT CRM — Actividad próxima',{
+    new Notification('GEAT CRM - Actividad próxima',{
       body:`${hora}: ${a.leads?.nombre||a.titulo}`,
       tag:'geat-'+a.id
     });
   });
 }
 
-// ── RENDER INICIO ──
-// ── INICIO CALENDARIO ──
+// -- RENDER INICIO --
+// -- INICIO CALENDARIO --
 let inicioView = 'dia'; // 'dia' | 'semana' | 'mes'
 let inicioFecha = new Date();
 let inicioDiaSeleccionado = new Date().toISOString().slice(0,10);
@@ -1244,8 +1263,8 @@ function renderInicioCal(){
           <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
-            <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,40):''}</div>
-            ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:#25d366;text-decoration:none">💬 WhatsApp</a>`:''}
+            <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' - '+ev.nota.slice(0,40):''}</div>
+            ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:#25d366;text-decoration:none">[W] WhatsApp</a>`:''}
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
             ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
@@ -1261,7 +1280,7 @@ function renderInicioCal(){
     const dayOfWeek = (inicioFecha.getDay()+6)%7;
     const lunes = new Date(inicioFecha); lunes.setDate(inicioFecha.getDate()-dayOfWeek);
     const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+6);
-    if(label) label.textContent = lunes.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' – '+domingo.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'});
+    if(label) label.textContent = lunes.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' - '+domingo.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'});
     
     let cells = '';
     for(let i=0;i<7;i++){
@@ -1354,7 +1373,7 @@ async function renderNotifsInicio(){
   el.innerHTML=`<div style="margin-bottom:12px">
     ${items.map(n=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="sw('notif')">
       <div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>
-      <div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">${n.titulo}</strong>${n.mensaje?' — '+n.mensaje:''}</div>
+      <div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">${n.titulo}</strong>${n.mensaje?' - '+n.mensaje:''}</div>
     </div>`).join('')}
   </div>`;
 }
@@ -1378,14 +1397,14 @@ async function renderAgendaInicio(){
       <div class="agenda-dot" style="background:${est.dot}"></div>
       <div class="agenda-info">
         <div class="agenda-name">${a.leads?.nombre||a.titulo}</div>
-        <div class="agenda-sub">${a.tipo.replace(/_/g,' ')} · ${a.leads?.celular||'—'}</div>
+        <div class="agenda-sub">${a.tipo.replace(/_/g,' ')} · ${a.leads?.celular||'-'}</div>
       </div>
       <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirIntento(${a.lead_id})">📞</button>
     </div>`;
   }).join('');
 }
 
-// ── RENDER LEADS ──
+// -- RENDER LEADS --
 function setLeadTab(tab,btn){
   leadTabActual=tab;
   document.querySelectorAll('#pn-leads .tab').forEach(b=>b.classList.remove('active'));
@@ -1405,7 +1424,7 @@ function renderLeads(){
   renderLeadCards(leads,'leads-list',cu.rol);
 }
 
-// ── RENDER TODOS ──
+// -- RENDER TODOS --
 function setTodosTab(tab,btn){
   todosTabActual=tab;
   document.querySelectorAll('#pn-todos .tab').forEach(b=>b.classList.remove('active'));
@@ -1423,7 +1442,7 @@ function renderTodos(){
   renderLeadCards(leads,'todos-list',cu.rol);
 }
 
-// ── RENDER LEAD CARDS ──
+// -- RENDER LEAD CARDS --
 function renderLeadCards(leads,containerId,rol){
   const el=document.getElementById(containerId);
   if(!leads.length){
@@ -1445,13 +1464,13 @@ function renderLeadCards(leads,containerId,rol){
             <span class="badge ${est.cls}">${est.label}</span>
             ${atrasado?'<span style="font-size:10px;color:var(--red);font-weight:600">⚠ Atrasado</span>':''}
           </div>
-          <div style="font-size:12px;color:var(--txt3)">${l.celular||'—'} ${l.ciudad?' · '+l.ciudad:''}</div>
+          <div style="font-size:12px;color:var(--txt3)">${l.celular||'-'} ${l.ciudad?' · '+l.ciudad:''}</div>
         </div>
-        ${l.celular?`<a href="https://wa.me/591${l.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;flex-shrink:0">💬</a>`:''}
+        ${l.celular?`<a href="https://wa.me/591${l.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;flex-shrink:0">[W]</a>`:''}
       </div>
       ${l.notas?`<div style="font-size:11px;color:var(--txt3);font-style:italic;margin-bottom:8px">"${l.notas.slice(0,70)}${l.notas.length>70?'...':''}"</div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-        ${l.financiamiento?`<span style="font-size:10px;color:var(--txt3)">${l.financiamiento==='bancario'?'🏦 Banco':'💵 Contado'}</span>`:''}
+        ${l.financiamiento?`<span style="font-size:10px;color:var(--txt3)">${l.financiamiento==='bancario'?'[B] Banco':'💵 Contado'}</span>`:''}
         ${l.medio_difusion?`<span style="font-size:10px;color:var(--txt3)">📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
         ${numIntento>0?`<span style="font-size:10px;color:var(--txt3)">Intentos: ${numIntento}/3</span>`:''}
         ${horaVisita?`<span style="font-size:10px;font-weight:600;color:var(--green)">📅 ${horaVisita}</span>`:''}
@@ -1462,10 +1481,10 @@ function renderLeadCards(leads,containerId,rol){
           <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Registrar resultado del intento">📞 Registrar intento</button>
           <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Programar cuándo llamar">📅 Programar</button>
         `:l.estado==='en_seguimiento'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">💬 Registrar seg.</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">[W] Registrar seg.</button>
           <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')" title="Programar próximo contacto">📅 Programar</button>
         `:l.estado==='visita_realizada'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🎯 Resultado visita</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">[O] Resultado visita</button>
         `:l.estado==='visita_agendada'?`
           <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">✏️ Actualizar</button>
         `:l.estado==='seguimiento_cierre'?`
@@ -1480,7 +1499,7 @@ function renderLeadCards(leads,containerId,rol){
   }).join('');
 }
 
-// ── CALENDARIO PERSONAL ──
+// -- CALENDARIO PERSONAL --
 let calFecha = new Date(); // mes/semana mostrado
 let calView = 'mes'; // 'mes' | 'semana'
 let calDiaSeleccionado = null;
@@ -1574,7 +1593,7 @@ function renderCalDia(){
         <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
-          <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,50):''}</div>
+          <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' - '+ev.nota.slice(0,50):''}</div>
         </div>
         <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
           ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
@@ -1647,7 +1666,7 @@ function renderCalendarioPersonal(){
     :'Semana del '+calFecha.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
   document.getElementById('cal-mes-nombre').textContent=tit;
   document.getElementById('agenda-mes-label').textContent=
-    meses[hoy.getMonth()]+' '+hoy.getFullYear()+' — '+cu.nombre.split(' ')[0];
+    meses[hoy.getMonth()]+' '+hoy.getFullYear()+' - '+cu.nombre.split(' ')[0];
 }
 
 function renderCalMes(hoy,hoyStr){
@@ -1759,8 +1778,8 @@ function seleccionarDia(dStr){
         <div class="dia-evento-barra" style="background:${ev.color}"></div>
         <div class="dia-evento-info">
           <div class="dia-evento-titulo">${ev.titulo}${ev.completada&&ev.tipo==='realizado'?' <span style="font-size:9px;color:var(--txt3)">(realizado)</span>':''}</div>
-          <div class="dia-evento-sub">${ev.sub||''}${ev.nota?' — '+ev.nota.slice(0,50):''}</div>
-          ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" style="font-size:10px;color:#25d366;text-decoration:none">💬 ${ev.celular}</a>`:''}
+          <div class="dia-evento-sub">${ev.sub||''}${ev.nota?' - '+ev.nota.slice(0,50):''}</div>
+          ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" style="font-size:10px;color:#25d366;text-decoration:none">[W] ${ev.celular}</a>`:''}
         </div>
         <div class="dia-evento-acciones">
           ${ev.tipo==='programado'&&!ev.completada?`
@@ -1852,7 +1871,7 @@ function buscarLeadNact(q){
   res.innerHTML=found.map(l=>`<div style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--brd)" 
     onclick="selLeadNact(${l.id},'${l.nombre}')"
     onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"
-    >${l.nombre} — ${l.celular}</div>`).join('');
+    >${l.nombre} - ${l.celular}</div>`).join('');
 }
 
 function selLeadNact(id,nombre){
@@ -1885,7 +1904,7 @@ async function completarActividad(id){
   await cargarAgendaPersonal();
 }
 
-// ── CALENDARIO ──// ── CALENDARIO ──
+// -- CALENDARIO --// -- CALENDARIO --
 function setCalTab(tab,btn){
   calTabActual=tab;
   document.querySelectorAll('#pn-calendario .tab').forEach(b=>b.classList.remove('active'));
@@ -1975,7 +1994,7 @@ async function renderCalendario(){
   }
 }
 
-// ── SHEET LEAD (ver + editar) ──
+// -- SHEET LEAD (ver + editar) --
 function abrirSheetLead(id){
   editingLeadId=id;
   const l=allLeads.find(x=>x.id===id);
@@ -1999,6 +2018,11 @@ function abrirSheetLead(id){
     document.getElementById('f-visita-hora').value=vf.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
   }
   toggleEstadoCampos();
+  // Mostrar aviso readonly en modo edición
+  document.getElementById('fgroup-readonly-notice').style.display = id ? 'block' : 'none';
+  // En edición, nombre y celular son readonly
+  const isEdit = !!id;
+  document.getElementById('f-nombre').readOnly = false; // siempre editable en diseño
   document.getElementById('sheet-lead').classList.add('open');
 }
 function abrirNuevoLead(){
@@ -2129,14 +2153,14 @@ async function guardarLead(){
   // Si es un lead nuevo, ofrecer programar el primer intento inmediatamente
   if(!editingLeadId && newId){
     setTimeout(()=>{
-      if(confirm('✅ Lead registrado.\n\n¿Programar el primer intento de contacto ahora?')){
+      if(confirm('[OK] Lead registrado.\n\n¿Programar el primer intento de contacto ahora?')){
         abrirProgramarIntento(newId, nombre, 1);
       }
     }, 300);
   }
 }
 
-// ── SHEET INTENTO ──
+// -- SHEET INTENTO --
 async function abrirIntento(id){
   const l=allLeads.find(x=>x.id===id);
   if(!l)return;
@@ -2161,7 +2185,7 @@ async function abrirIntento(id){
   const{data:hist}=await sb.from('historial_lead').select('*').eq('lead_id',id).order('fecha_actividad',{ascending:false}).limit(10);
   const entradas=hist||[];
   if(!entradas.length){
-    document.getElementById('intento-historial-content').innerHTML='<div style="font-size:11px;color:var(--txt3);padding:6px 0">Sin historial previo — este es el primer contacto</div>';
+    document.getElementById('intento-historial-content').innerHTML='<div style="font-size:11px;color:var(--txt3);padding:6px 0">Sin historial previo - este es el primer contacto</div>';
   } else {
     const tipoLabel={intento_contacto:'Intento',nota_seguimiento:'Seguimiento',visita:'Visita',perdida:'Pérdida'};
     const est=estilo(l.estado);
@@ -2246,7 +2270,7 @@ async function guardarIntento(){
   
 }
 
-// ── SHEET SEGUIMIENTO ──
+// -- SHEET SEGUIMIENTO --
 function abrirSeguimiento(id){
   const l=allLeads.find(x=>x.id===id);
   if(!l)return;
@@ -2324,13 +2348,13 @@ async function guardarSeguimiento(){
   }
 }
 
-// ── HISTORIAL ──
+// -- HISTORIAL --
 async function abrirHistorial(id){
   const l=allLeads.find(x=>x.id===id);
   // Verificar acceso
   const puedeVer=cu.rol==='admin'||cu.rol==='commercial_lead'||l?.captador===cu.nombre||l?.cerrador===cu.nombre;
   if(!puedeVer){toast('Sin acceso al historial de este lead','error');return;}
-  document.getElementById('hist-title').textContent='Historial — '+(l?.nombre||'Lead');
+  document.getElementById('hist-title').textContent='Historial - '+(l?.nombre||'Lead');
   document.getElementById('hist-body').innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
   document.getElementById('sheet-hist').classList.add('open');
   const{data}=await sb.from('historial_lead').select('*').eq('lead_id',id).order('fecha_actividad',{ascending:false});
@@ -2377,7 +2401,7 @@ async function registrarHistorial(leadId,etapa,tipo,resultado,nota,motivo,fechaP
   }]);
 }
 
-// ── PERDER LEAD ──
+// -- PERDER LEAD --
 const MOTIVOS_PERDIDA=[
   'No contestó llamadas ni mensajes','Dejó de contestar','Falta de presupuesto',
   'Era de otro departamento','Precio elevado','Quiere crédito directo',
@@ -2420,7 +2444,7 @@ async function confirmarPerder(){
   renderLeads();
 }
 
-// ── NOTIFICACIONES ──
+// -- NOTIFICACIONES --
 async function renderNotifs(){
   const{data}=await sb.from('notificaciones')
     .select('*').eq('destinatario',cu.nombre)
@@ -2435,7 +2459,7 @@ async function renderNotifs(){
     const fecha=new Date(n.created_at).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
     return `<div class="notif-item" onclick="marcarLeida(${n.id})">
       <div class="notif-dot ${n.leida?'read':''}"></div>
-      <div class="notif-text"><strong>${n.titulo}</strong>${n.mensaje?' — '+n.mensaje:''}</div>
+      <div class="notif-text"><strong>${n.titulo}</strong>${n.mensaje?' - '+n.mensaje:''}</div>
       <div class="notif-time">${fecha}</div>
     </div>`;
   }).join('');
@@ -2453,7 +2477,7 @@ async function marcarTodasLeidas(){
   renderNotifs();
 }
 
-// ── ADMIN ──
+// -- ADMIN --
 function setAdminTab(tab,btn){
   adminTabActual=tab;
   document.querySelectorAll('#pn-admin .tab').forEach(b=>b.classList.remove('active'));
@@ -2523,7 +2547,7 @@ function renderTablaMetricas(metricas){
     </tr>`;
   });
   return `<div style="margin-top:16px">
-    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo — ${mes}</div>
+    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${mes}</div>
     <div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">
       <thead><tr style="border-bottom:1px solid var(--brd)">
         <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
@@ -2544,7 +2568,7 @@ async function renderAdmin(){
   if(adminTabActual==='equipo'){
     el.innerHTML=`<div style="margin-bottom:16px">
       <div style="background:var(--bg3);border-radius:var(--r2);padding:12px;margin-bottom:14px">
-      <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">⚡ Acceso rápido — 1 click</div>
+      <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">[!] Acceso rápido - 1 click</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
         ${colaboradores.map(c=>{
           const colors={admin:'#F59E0B',field_capturer:'#A855F7',commercial_lead:'#3B82F6',closer:'#22C55E'};
@@ -2586,16 +2610,16 @@ async function renderAdmin(){
       <div class="kpi"><div class="kpi-n">${Math.round(m2Mes)}</div><div class="kpi-l">m² este mes</div></div>
     </div>
     <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Ventas registradas</div>
-    ${!vList.length?'<div class="empty"><div class="empty-icon">🏆</div><div class="empty-title">Sin ventas aún</div></div>':
+    ${!vList.length?'<div class="empty"><div class="empty-icon">[V]</div><div class="empty-title">Sin ventas aún</div></div>':
     vList.map(v=>`<div class="card" style="padding:12px 14px;margin-bottom:6px">
       <div style="font-size:13px;font-weight:600;margin-bottom:3px">${v.nombre_cliente}</div>
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${v.codigo_venta||'—'} · ${v.fecha_venta||'—'}</div>
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${v.codigo_venta||'-'} · ${v.fecha_venta||'-'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;margin-bottom:4px">
         <span style="color:var(--acc);font-weight:600">$${Number(v.monto_usd||0).toLocaleString()} USD</span>
         ${v.metros_cuadrados?`<span style="color:var(--blue)">${v.metros_cuadrados} m²</span>`:''}
         ${v.modelo_casa?`<span style="color:var(--txt3)">${v.modelo_casa}</span>`:''}
       </div>
-      <div style="font-size:10px;color:var(--txt3)">Cap: ${v.captador||'—'} · Cer: ${v.cerrador||'—'}</div>
+      <div style="font-size:10px;color:var(--txt3)">Cap: ${v.captador||'-'} · Cer: ${v.cerrador||'-'}</div>
     </div>`).join('')}
     ${cList.filter(c=>!c.pagado_captador||!c.pagado_cerrador).length?`
     <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:16px 0 10px">Comisiones pendientes</div>
@@ -2625,7 +2649,7 @@ async function renderAdmin(){
     const ganados=leadsEnPeriodo.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos=leadsEnPeriodo.filter(l=>l.estado==='cerrado_perdido').length;
     const visitas=leadsEnPeriodo.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
-    const conversion=ganados+perdidos>0?((ganados/(ganados+perdidos))*100).toFixed(1)+'%':'—';
+    const conversion=ganados+perdidos>0?((ganados/(ganados+perdidos))*100).toFixed(1)+'%':'-';
     el.innerHTML=`
     <div style="display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">
       ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoActual===p?'active':''}" style="white-space:nowrap" onclick="window.campanaFiltro='${p}';setAdminTab('campanas',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'30 días':'Este año'}</button>`).join('')}
@@ -2651,7 +2675,7 @@ async function renderAdmin(){
         </div>
         <div style="font-size:10px;color:var(--txt3);margin-top:3px">${pct}% del período</div>
       </div>`;
-    }).join('')||'<div class="empty"><div class="empty-icon">📊</div><div class="empty-title">Sin datos en este período</div></div>'}
+    }).join('')||'<div class="empty"><div class="empty-icon">[2]</div><div class="empty-title">Sin datos en este período</div></div>'}
     <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-top:16px;margin-bottom:10px">Campañas</div>
     ${cams.map(c=>{
       const leadsC=leadsEnPeriodo.filter(l=>l.campana_id==c.id||l.medio_difusion===c.fuente).length;
@@ -2661,12 +2685,31 @@ async function renderAdmin(){
           <div style="font-size:13px;font-weight:600;color:var(--acc)">${leadsC} leads</div>
         </div>
         <div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">
-          <span>${c.plataforma||'—'}</span>
+          <span>${c.plataforma||'-'}</span>
           <span>$${c.inversion_usd||0} USD</span>
           ${leadsC&&c.inversion_usd?`<span style="color:var(--green)">$${Math.round(c.inversion_usd/leadsC)} por lead</span>`:''}
         </div>
       </div>`;
     }).join('')||'<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Sin campañas registradas</div>'}`;
+  }else if(adminTabActual==='auditoria'){
+    // Combinar log local + datos de BD (cuando esté conectado)
+    const log = window._auditLog || [];
+    const acciones_riesgo = ['edicion_lead','eliminacion','exportacion','impersonacion','cambio_pin'];
+    el.innerHTML = `
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Registro de acciones · ${log.length} entradas</div>
+    ${!log.length ? '<div class="empty"><div class="empty-icon">[A]</div><div class="empty-title">Sin registros en esta sesión</div><div class="empty-sub">Las acciones se registran automáticamente</div></div>' :
+    log.map(r=>{
+      const esRiesgo = acciones_riesgo.includes(r.accion);
+      const hora = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}) : '';
+      return `<div style="padding:10px;background:var(--bg3);border-radius:var(--r);margin-bottom:6px;border-left:3px solid ${esRiesgo?'var(--red)':'var(--brd2)'}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:12px;font-weight:600;color:${esRiesgo?'var(--red)':'var(--txt)'}">${r.accion}</span>
+          <span style="font-size:10px;color:var(--txt3)">${hora}</span>
+        </div>
+        <div style="font-size:11px;color:var(--txt3)">${r.colaborador} · ${r.rol}${r.tabla_afectada?' · '+r.tabla_afectada:''}</div>
+        ${r.datos_nuevos?`<div style="font-size:10px;color:var(--txt3);margin-top:2px;font-style:italic">${r.datos_nuevos.slice(0,80)}</div>`:''}
+      </div>`;
+    }).join('')}`;
   }else if(adminTabActual==='papelera'){
     const{data}=await sb.from('leads_perdidos').select('*').order('fecha_perdida',{ascending:false}).limit(100);
     const items=data||[];
@@ -2674,8 +2717,8 @@ async function renderAdmin(){
     items.map(l=>`<div class="card">
       <div style="display:flex;align-items:flex-start;gap:10px">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:500;margin-bottom:3px">${l.nombre_cliente||'—'}</div>
-          <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">${l.celular||'—'} · ${l.captador||'—'}</div>
+          <div style="font-size:13px;font-weight:500;margin-bottom:3px">${l.nombre_cliente||'-'}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">${l.celular||'-'} · ${l.captador||'-'}</div>
           <span class="badge e-perdido" style="font-size:9px">${l.motivo_perdida}</span>
           <div style="font-size:10px;color:var(--txt3);margin-top:4px">${new Date(l.fecha_perdida).toLocaleDateString('es-BO')}</div>
         </div>
@@ -2683,7 +2726,22 @@ async function renderAdmin(){
       </div>
     </div>`).join('');
   }else if(adminTabActual==='stats'){
-    const total=allLeads.length;
+    // Filtro por persona
+    const personaFiltro = window.adminPersonaFiltro || '';
+    const periodoFiltro = window.adminPeriodoFiltro || 'mes';
+    const ahora = new Date();
+    const desde = {
+      dia: new Date(ahora.getFullYear(),ahora.getMonth(),ahora.getDate()).toISOString().slice(0,10),
+      semana: new Date(ahora.getTime()-7*86400000).toISOString().slice(0,10),
+      mes: new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString().slice(0,10),
+      anio: new Date(ahora.getFullYear(),0,1).toISOString().slice(0,10),
+    }[periodoFiltro];
+    const leadsFiltrados = allLeads.filter(l=>{
+      const enPeriodo = !l.fecha_ingreso || l.fecha_ingreso >= desde;
+      const esPersona = !personaFiltro || l.captador===personaFiltro || l.cerrador===personaFiltro;
+      return enPeriodo && esPersona;
+    });
+    const total=leadsFiltrados.length;
     const activos=allLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
     const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos=allLeads.filter(l=>l.estado==='cerrado_perdido').length;
@@ -2692,13 +2750,27 @@ async function renderAdmin(){
     const turnos=await verEstadoTurnos();
     // Métricas de vendedores este mes
     const{data:metricas}=await sb.from('metricas_vendedor').select('*');
-    el.innerHTML=`<div class="kpi-grid">
-      <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Total leads</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos}</div><div class="kpi-l">Activos</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados}</div><div class="kpi-l">Ganados</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos}</div><div class="kpi-l">Perdidos</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita}</div><div class="kpi-l">En visita</div></div>
-      <div class="kpi"><div class="kpi-n">${ganados?(ganados/(ganados+perdidos)*100).toFixed(1)+'%':'—'}</div><div class="kpi-l">Conversión</div></div>
+    const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
+    const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
+    const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
+    const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    el.innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':' Año'}</button>`).join('')}
+    </div>
+    <div style="margin-bottom:12px">
+      <select style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window.adminPersonaFiltro=this.value;setAdminTab('stats',null)">
+        <option value="">Todos los colaboradores</option>
+        ${colaboradores.map(c=>`<option value="${c.nombre}" ${personaFiltro===c.nombre?'selected':''}>${c.nombre} · ${c.rol}</option>`).join('')}
+      </select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Leads</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos2}</div><div class="kpi-l">Activos</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados2}</div><div class="kpi-l">Ganados</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos2}</div><div class="kpi-l">Perdidos</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
+      <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
     </div>
     <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
       <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
@@ -2713,11 +2785,11 @@ async function renderAdmin(){
         </div>
       </div>
       <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
-      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">⚡ Cambiar turno manualmente</button>`:''}
+      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
     </div>
     ${metricas&&metricas.length?`
     <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo — ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
       <div style="overflow-x:auto">
         <table style="width:100%;font-size:11px;border-collapse:collapse">
           <thead>
@@ -2736,6 +2808,30 @@ async function renderAdmin(){
     </div>`:''}`;
   }
 }
+
+// ══════════════════════════════════════
+// AUDITORÍA DEL SISTEMA
+// ══════════════════════════════════════
+
+function registrarAuditoria(accion, tabla, regId, datosAnt, datosNuev){
+  if(!cu) return;
+  // Guardar en Supabase (solo diseño por ahora - conectar en v50)
+  const registro = {
+    colaborador: cu.nombre,
+    rol: cu.rol,
+    accion: accion,
+    tabla_afectada: tabla || null,
+    registro_id: regId || null,
+    datos_anteriores: datosAnt ? JSON.stringify(datosAnt) : null,
+    datos_nuevos: datosNuev ? JSON.stringify(datosNuev) : null,
+    timestamp: new Date().toISOString()
+  };
+  // Log local mientras no hay BD conectada
+  if(!window._auditLog) window._auditLog = [];
+  window._auditLog.unshift(registro);
+  if(window._auditLog.length > 100) window._auditLog.pop();
+}
+
 async function cambiarTurnoManual(){
   const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
   const actual=data?.ultimo_cerrador||'Gustavo Vaca';
@@ -2743,7 +2839,7 @@ async function cambiarTurnoManual(){
   if(!confirm(`El turno actual apunta a: ${actual==='David Gambarte'?'Gustavo (próximo)':'David (próximo)'}\n\n¿Quieres que la PRÓXIMA visita vaya a ${nuevo==='David Gambarte'?'Gustavo':'David'} en lugar de ${nuevo}?`)) return;
   // Invertir manualmente
   await sb.from('config_cerradores').update({ultimo_cerrador:nuevo}).eq('id',1);
-  toast('Turno actualizado — próxima visita: '+(nuevo==='David Gambarte'?'Gustavo Vaca':'David Gambarte'),'ok');
+  toast('Turno actualizado - próxima visita: '+(nuevo==='David Gambarte'?'Gustavo Vaca':'David Gambarte'),'ok');
   renderAdmin();
 }
 
@@ -2772,7 +2868,7 @@ async function reactivarLead(leadId,perdidoId){
   renderAdmin();
 }
 
-// ── EXPORTAR CSV ──
+// -- EXPORTAR CSV --
 function exportarCSV(){
   const leads=allLeads.filter(l=>{
     if(todosTabActual!=='todos')return l.estado===todosTabActual;
@@ -2787,7 +2883,7 @@ function exportarCSV(){
   a.click();
 }
 
-// ── PROGRAMAR INTENTO/SEGUIMIENTO ──
+// -- PROGRAMAR INTENTO/SEGUIMIENTO --
 function abrirProgramarIntento(leadId, nombreCliente, numIntento, tipo='intento'){
   const modal=document.createElement('div');
   modal.id='modal-programar';
@@ -2817,12 +2913,12 @@ function abrirProgramarIntento(leadId, nombreCliente, numIntento, tipo='intento'
             <select class="fselect" id="prog-accion">
               ${tipo==='intento'?`
               <option value="llamada">📞 Llamada telefónica</option>
-              <option value="whatsapp">💬 Mensaje WhatsApp</option>
+              <option value="whatsapp">[W] Mensaje WhatsApp</option>
               <option value="envio_info">📄 Enviar información por WhatsApp</option>
               <option value="visita_terreno">📍 Visitar el terreno</option>
               `:`
               <option value="llamada">📞 Llamada de seguimiento</option>
-              <option value="whatsapp">💬 Mensaje WhatsApp</option>
+              <option value="whatsapp">[W] Mensaje WhatsApp</option>
               <option value="coordinacion_visita">📅 Coordinar visita a oficina</option>
               <option value="envio_info">📄 Enviar información adicional</option>
               <option value="visita_terreno">📍 Visitar el terreno con el cliente</option>
@@ -2880,7 +2976,7 @@ async function guardarProgramacion(leadId, tipo, numIntento){
   if(calEventos!==undefined) cargarAgendaPersonal();
 }
 
-// ── TURNO CERRADORES ──
+// -- TURNO CERRADORES --
 async function consultarProximoCerrador(){
   const el = document.getElementById('seg-cerrador-info');
   if(!el) return;
@@ -2889,7 +2985,7 @@ async function consultarProximoCerrador(){
     const{data}=await sb.from('config_cerradores').select('*').eq('id',1).single();
     if(!data) return;
     const proximo = data.ultimo_cerrador==='David Gambarte' ? 'Gustavo Vaca' : 'David Gambarte';
-    el.innerHTML = `🎯 Se asignará automáticamente a: <strong style="color:var(--txt)">${proximo}</strong>`;
+    el.innerHTML = `[O] Se asignará automáticamente a: <strong style="color:var(--txt)">${proximo}</strong>`;
   }catch(e){
     el.textContent='El cerrador se asignará automáticamente según turno';
   }
@@ -2907,13 +3003,13 @@ async function verEstadoTurnos(){
   return{proximo,vDavid,vGustavo,total:data?.contador||0};
 }
 
-// ── CERRAR SHEETS ──
+// -- CERRAR SHEETS --
 function closeSheet(name,event){
   if(event&&event.target.id!=='sheet-'+name)return;
   document.getElementById('sheet-'+name).classList.remove('open');
 }
 
-// ── AUDIO ──
+// -- AUDIO --
 let srec=null,mRec=null,audioChunks=[];
 let audioTimerInt=null,audioStartT=null;
 let audioDatos=null;
@@ -2948,7 +3044,7 @@ function usarSpeechAPI(){
   audioTimerInt=setInterval(()=>{
     const s=Math.floor((Date.now()-audioStartT)/1000);
     document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-    // Sin límite de tiempo automático — el usuario controla cuándo detener
+    // Sin límite de tiempo automático - el usuario controla cuándo detener
   },1000);
   srec.onresult=async(e)=>{
     clearInterval(audioTimerInt);
@@ -3009,7 +3105,7 @@ function usarMediaRecorder(){
     audioTimerInt=setInterval(()=>{
       const s=Math.floor((Date.now()-audioStartT)/1000);
       document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-      // Sin límite automático — tiempo indefinido
+      // Sin límite automático - tiempo indefinido
     },1000);
   }).catch(err=>{
     document.getElementById('audio-err-msg').textContent=
@@ -3054,7 +3150,7 @@ function confirmarAudio(){
       const leads=allLeads.filter(l=>l.nombre?.toLowerCase().includes(q.toLowerCase())||l.celular?.includes(q));
       if(leads.length===1){abrirSheetLead(leads[0].id);return;}
     }
-    toast('Búsqueda: "'+q+'" — usa el buscador','ok');
+    toast('Búsqueda: "'+q+'" - usa el buscador','ok');
     return;
   }
   // Abrir formulario de nuevo lead con datos
@@ -3069,10 +3165,10 @@ function confirmarAudio(){
   },200);
 }
 
-// ── INIT ──
+// -- INIT --
 
 // ══════════════════════════════════════
-// MÓDULO CIERRE — Reuniones, Cotizaciones, Propuestas, Reservas
+// MÓDULO CIERRE - Reuniones, Cotizaciones, Propuestas, Reservas
 // ══════════════════════════════════════
 
 let cierreTabActual = 'reuniones';
@@ -3091,6 +3187,114 @@ function renderCierre(){
   else if(cierreTabActual==='cotizaciones') renderCotizaciones(el);
   else if(cierreTabActual==='propuestas') renderPropuestas(el);
   else if(cierreTabActual==='reservas') renderReservas(el);
+  else if(cierreTabActual==='financiamiento') renderFinanciamiento(el);
+  else if(cierreTabActual==='pagos') renderPagos(el);
+}
+
+function renderFinanciamiento(el){
+  // Selector de lead
+  const misL = allLeads.filter(l=>cu.rol==='closer'?l.cerrador===cu.nombre:true);
+  el.innerHTML=`
+    <div class="fgroup" style="margin-bottom:14px">
+      <label>Seleccionar cliente</label>
+      <select class="fselect" id="fin-lead-sel" onchange="cargarFinanciamiento(this.value)">
+        <option value="">Seleccionar...</option>
+        ${misL.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div id="fin-content">
+      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px">Pasos del trámite bancario</div>
+        ${[
+          {num:1, titulo:'Firmar contrato con GEAT', desc:'El cliente firma el contrato de construcción con GEAT en notaría', icono:'[1]'},
+          {num:2, titulo:'GEAT envía presupuesto bancario', desc:'El equipo prepara y envía el presupuesto al banco del cliente', icono:'[2]'},
+          {num:3, titulo:'Banco aprueba el crédito', desc:'El banco evalúa y aprueba el financiamiento del cliente', icono:'[OK]'},
+          {num:4, titulo:'Firma contrato banco + propietario', desc:'Se firma el contrato entre el banco, el propietario y GEAT', icono:'[B]'},
+          {num:5, titulo:'Desembolso y pago a GEAT', desc:'El banco desembolsa el monto y GEAT recibe el pago. Inicio de obra.', icono:'[R]'},
+        ].map(p=>`
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--brd)">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--bg3);border:2px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${p.icono}</div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600;margin-bottom:2px">Paso ${p.num}: ${p.titulo}</div>
+              <div style="font-size:11px;color:var(--txt3)">${p.desc}</div>
+            </div>
+            <div>
+              <select style="padding:4px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:20px;font-size:10px;color:var(--txt3)" onchange="actualizarPasoFin(${p.num},this.value)">
+                <option value="pendiente">⏳ Pendiente</option>
+                <option value="en_proceso">🔄 En proceso</option>
+                <option value="completado">[OK] Completado</option>
+              </select>
+            </div>
+          </div>`).join('')}
+        <div style="margin-top:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt3);margin-bottom:8px">Notas del trámite</div>
+          <textarea class="finput" rows="2" style="resize:vertical;min-height:56px" placeholder="Banco, contacto, observaciones..."></textarea>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:10px">Guardar estado del trámite</button>
+      </div>
+    </div>`;
+}
+
+function actualizarPasoFin(paso, estado){
+  // Al conectar BD: actualizar estado del paso en tabla financiamientos
+  toast('Paso '+paso+' marcado como: '+estado);
+}
+
+function cargarFinanciamiento(leadId){
+  if(!leadId) return;
+  const lead = allLeads.find(l=>l.id==leadId);
+  if(lead) toast('Cargando trámite de: '+lead.nombre);
+}
+
+function renderPagos(el){
+  const misL = allLeads.filter(l=>cu.rol==='closer'?l.cerrador===cu.nombre:true);
+  el.innerHTML=`
+    <div class="fgroup" style="margin-bottom:14px">
+      <label>Seleccionar cliente</label>
+      <select class="fselect" id="pag-lead-sel" onchange="cargarPagos(this.value)">
+        <option value="">Seleccionar...</option>
+        ${misL.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div id="pag-content">
+      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Pagos al contado</div>
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Distribución estándar: 40% - 40% - 20%</div>
+        ${[
+          {lbl:'1er pago', pct:'40%', desc:'Al firmar contrato'},
+          {lbl:'2do pago', pct:'40%', desc:'Avance de obra'},
+          {lbl:'3er pago', pct:'20%', desc:'Antes de entrega de casa'},
+        ].map((p,i)=>`
+          <div style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <div>
+                <div style="font-size:12px;font-weight:600">${p.lbl} - <span style="color:var(--acc)">${p.pct}</span></div>
+                <div style="font-size:10px;color:var(--txt3)">${p.desc}</div>
+              </div>
+              <select style="padding:4px 8px;background:var(--bg2);border:1px solid var(--brd);border-radius:20px;font-size:10px;color:var(--txt3)">
+                <option value="pendiente">⏳ Pendiente</option>
+                <option value="parcial">🔄 Parcial</option>
+                <option value="pagado">[OK] Pagado</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px">
+              <input type="number" class="finput" placeholder="Monto USD" style="flex:1">
+              <input type="date" class="finput" style="flex:1">
+            </div>
+          </div>`).join('')}
+        <div style="margin-top:8px;padding:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:var(--r)">
+          <div style="font-size:10px;color:var(--txt3);font-weight:600;margin-bottom:2px">Para financiamiento bancario</div>
+          <div style="font-size:11px;color:var(--txt2)">Los pagos varían según políticas de cada banco. Registrar según acuerdo específico con el banco del cliente.</div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px">Guardar pagos</button>
+      </div>
+    </div>`;
+}
+
+function cargarPagos(leadId){
+  if(!leadId) return;
+  const lead = allLeads.find(l=>l.id==leadId);
+  if(lead) toast('Cargando pagos de: '+lead.nombre);
 }
 
 function llenarLeadSelects(){
@@ -3103,7 +3307,7 @@ function llenarLeadSelects(){
   ['reu-lead-sel','cotiz-lead-sel','res-lead-sel'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
-    el.innerHTML='<option value="">Seleccionar lead...</option>'+misL.map(l=>`<option value="${l.id}">${l.nombre} — ${l.celular||'—'}</option>`).join('');
+    el.innerHTML='<option value="">Seleccionar lead...</option>'+misL.map(l=>`<option value="${l.id}">${l.nombre} - ${l.celular||'-'}</option>`).join('');
   });
 }
 
@@ -3201,7 +3405,7 @@ function renderReservas(el){
           <div style="font-size:26px;font-weight:700;color:var(--green)">$${total.toLocaleString()} USD</div>
         </div>`;
       }
-      if(!rows.length){rl.innerHTML+='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas registradas</div></div>';return;}
+      if(!rows.length){rl.innerHTML+='<div class="empty"><div class="empty-icon">[R]</div><div class="empty-title">Sin reservas registradas</div></div>';return;}
       rl.innerHTML+=(rows.map(r=>{
         const lead=allLeads.find(l=>l.id===r.lead_id);
         const estCol={pendiente:'var(--acc)',confirmada:'var(--green)',anulada:'var(--red)'}[r.estado]||'var(--txt3)';
@@ -3210,14 +3414,14 @@ function renderReservas(el){
             <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+r.lead_id}</span>
             <span style="font-size:14px;font-weight:700;color:var(--green)">$${Number(r.monto_reserva||0).toLocaleString()}</span>
           </div>
-          <div style="font-size:11px;color:var(--txt3);margin-bottom:3px">${r.fecha_reserva||'—'} · ${r.metodo_pago||'—'}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:3px">${r.fecha_reserva||'-'} · ${r.metodo_pago||'-'}</div>
           <div style="font-size:11px;font-weight:600;color:${estCol}">${r.estado||'pendiente'}</div>
           ${r.comprobante_url?`<div style="font-size:10px;color:var(--blue);margin-top:3px">📎 ${r.comprobante_url.slice(0,50)}</div>`:''}
         </div>`;
       }).join(''));
     }).catch(()=>{
       const rl=document.getElementById('reservas-list');
-      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div></div>';
+      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">[R]</div><div class="empty-title">Sin reservas</div></div>';
     });
 }
 
@@ -3246,6 +3450,64 @@ function abrirSheetReserva(){
   document.getElementById('res-comprobante').value='';
   document.getElementById('res-notas').value='';
   document.getElementById('sheet-reserva').classList.add('open');
+}
+
+
+// ══════════════════════════════════════
+// SOLICITUD AL GRUPO DE ARQUITECTURA
+// ══════════════════════════════════════
+
+function toggleTerrenoInfo(val){
+  const el = document.getElementById('reu-terreno-info');
+  if(el) el.style.display = val==='visita_terreno' ? 'block' : 'none';
+}
+
+function enviarArquitectura(){
+  const leadId = document.getElementById('cotiz-lead-sel').value;
+  const lead = allLeads.find(l=>l.id==leadId);
+  const titulo = document.getElementById('cotiz-titulo').value || 'Sin título';
+  const m2 = document.getElementById('cotiz-m2').value || '-';
+  const precio = document.getElementById('cotiz-precio').value || '-';
+  const desc = document.getElementById('cotiz-desc').value || '';
+
+  const cliente = lead ? lead.nombre : 'Cliente';
+  const celular = lead ? lead.celular : '-';
+  const ciudad = lead ? (lead.ciudad||'Santa Cruz') : 'Santa Cruz';
+  const cerrador = cu.nombre;
+
+  // Armar mensaje pre-formateado para el grupo
+  var nl = String.fromCharCode(10);
+  var msg = [
+    'SOLICITUD DE PROPUESTA - GEAT',
+    '',
+    'Cliente: ' + cliente,
+    'Celular: ' + celular,
+    'Ciudad/Zona: ' + ciudad,
+    '',
+    'Proyecto: ' + titulo,
+    'Metros cuadrados: ' + m2 + ' m2',
+    'Presupuesto estimado: $' + precio + ' USD',
+    '',
+    desc ? 'Detalles: ' + desc : '',
+    'Cerrador: ' + cerrador,
+    'Fecha: ' + new Date().toLocaleDateString('es-BO'),
+    '',
+    'Solicitud generada desde GEAT CRM'
+  ].filter(Boolean).join(nl);
+
+  // Abrir WhatsApp Business al grupo
+  // El grupo "Diseño Arquitectónico para Ventas" - usar link de invitación
+  // Por ahora abre wa.me con el mensaje listo para copiar al grupo
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+  toast('Requerimiento armado - pégalo en el grupo de Arquitectura ✓');
+}
+
+function guardarReunionYReserva(){
+  guardarReunion();
+  setTimeout(()=>{
+    abrirSheetReserva();
+  }, 500);
 }
 
 function guardarReunion(){
@@ -3300,6 +3562,19 @@ function guardarReserva(){
   }).catch(e=>toast('Error: '+e.message,'error'));
 }
 
+
+function regrabarFaltantes(){
+  // Volver al paso 1 de grabación para completar datos faltantes
+  document.getElementById('audio-st-result').style.display = 'none';
+  document.getElementById('audio-st-err').style.display = 'none';
+  if(window._vozFaltantes && window._vozFaltantes.length > 0){
+    document.getElementById('audio-hint').textContent = 'Dicta solo los datos que faltan: ' + window._vozFaltantes.join(', ');
+  }
+  document.getElementById('audio-st-rec').style.display = 'block';
+  // Reiniciar grabación
+  iniciarGrabacion();
+}
+
 initLogin();
 </script>
 
@@ -3328,12 +3603,19 @@ initLogin();
           </select>
         </div>
         <div class="fgroup">
-          <label>Tipo</label>
-          <select class="fselect" id="reu-tipo">
-            <option value="avance">Seguimiento / Avance</option>
+          <label>Tipo de reunión</label>
+          <select class="fselect" id="reu-tipo" onchange="toggleTerrenoInfo(this.value)">
+            <option value="primera_reunion">1ª Reunión — Presentación en oficina</option>
+            <option value="visita_terreno">🏗 Visita al terreno (paso clave)</option>
             <option value="revision_propuesta">Revisión de propuesta</option>
+            <option value="negociacion">Negociación</option>
             <option value="cierre">Reunión de cierre</option>
+            <option value="seguimiento">Seguimiento general</option>
           </select>
+        </div>
+        <div class="fgroup" id="reu-terreno-info" style="display:none;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);padding:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px">🏗 Visita al terreno</div>
+          <div style="font-size:11px;color:var(--txt3)">Esta visita es el paso más importante antes del cierre. El cerrador lleva la propuesta y evalúa el terreno con el cliente.</div>
         </div>
         <div class="fgroup">
           <label>Fecha y hora</label>
@@ -3353,11 +3635,19 @@ initLogin();
           <label>Notas</label>
           <textarea class="finput" id="reu-notas" rows="3" style="resize:vertical;min-height:70px" placeholder="Qué se habló, acuerdos..."></textarea>
         </div>
+        <div class="fgroup">
+          <label>¿Se llevó propuesta a esta reunión?</label>
+          <select class="fselect" id="reu-con-propuesta">
+            <option value="">No</option>
+            <option value="si">Sí — se presentó propuesta</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="sheet-footer">
+    <div class="sheet-footer" style="flex-wrap:wrap;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="guardarReunion()">Guardar reunión</button>
-      <button class="btn btn-ghost" onclick="closeSheet('reunion')">Cancelar</button>
+      <button class="btn" style="width:100%;background:rgba(34,197,94,0.1);border-color:var(--green);color:var(--green)" onclick="guardarReunionYReserva()">💰 Guardar + Registrar Reserva</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="closeSheet('reunion')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -3400,6 +3690,14 @@ initLogin();
             <option value="aprobada">Aprobada</option>
             <option value="rechazada">Rechazada</option>
           </select>
+        </div>
+        <!-- Botón solicitud a arquitectura -->
+        <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);padding:12px">
+          <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px">📐 Solicitud a Arquitectura</div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Envía los datos del requerimiento al grupo "Diseño Arquitectónico para Ventas" en WhatsApp Business</div>
+          <button class="btn btn-sm" style="width:100%;background:rgba(37,211,102,0.1);border-color:rgba(37,211,102,0.3);color:var(--green)" onclick="enviarArquitectura()">
+            💬 Enviar requerimiento al grupo
+          </button>
         </div>
       </div>
     </div>
