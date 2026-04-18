@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0F172A">
-<title>GEAT CRM</title>
+<title>GEAT CRM v50</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -401,6 +401,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div id="inicio-dia-eventos"></div>
       </div>
 
+      <div id="inicio-hoy-contactos" style="margin-bottom:12px"></div>
       <div id="inicio-agenda"></div>
     </div>
 
@@ -501,100 +502,106 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="cierre-content"><div class="loading"><span class="spin"></span>Cargando...</div></div>
     </div>
 
-    <!-- BUSQUEDA AVANZADA (todos los roles) -->
+    <!-- BUSQUEDA AVANZADA — sheet desde abajo -->
     <div class="panel" id="pn-busqueda">
-      <div class="ph">
-        <div><div class="ph-title">Buscar</div><div class="ph-sub" id="busq-count">—</div></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-size:16px;font-weight:600">Buscar</div>
+          <div style="font-size:12px;color:var(--txt3)" id="busq-count">—</div>
+        </div>
         <button class="btn btn-sm btn-ghost" onclick="limpiarBusqueda()">Limpiar</button>
       </div>
 
-      <!-- Barra de busqueda -->
-      <div class="search-wrap" style="margin-bottom:14px">
-        <span class="search-ico">&#128269;</span>
-        <input class="search-inp" id="busq-q" placeholder="Nombre, celular, ciudad..." oninput="ejecutarBusqueda()">
+      <!-- Barra principal -->
+      <div style="position:relative;margin-bottom:12px">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:14px">&#128269;</span>
+        <input id="busq-q" class="search-inp" style="padding-left:36px;font-size:15px;height:46px" placeholder="Nombre, celular, ciudad..." oninput="ejecutarBusqueda()">
       </div>
 
-      <!-- Filtros en acordeon -->
+      <!-- Chips rapidos fila 1: Periodos -->
+      <div style="display:flex;gap:6px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
+        <button id="bq-hoy" class="tab" onclick="setBusqFecha('hoy',this)" style="white-space:nowrap;font-size:11px">Hoy</button>
+        <button id="bq-sem" class="tab" onclick="setBusqFecha('semana',this)" style="white-space:nowrap;font-size:11px">Esta semana</button>
+        <button id="bq-mes" class="tab" onclick="setBusqFecha('mes',this)" style="white-space:nowrap;font-size:11px">Este mes</button>
+        <button id="bq-anio" class="tab" onclick="setBusqFecha('anio',this)" style="white-space:nowrap;font-size:11px">Este año</button>
+      </div>
+
+      <!-- Chips rapidos fila 2: Estados -->
+      <div style="display:flex;gap:6px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px" id="busq-estados-chips">
+        <button class="badge e-nuevo" id="bq-nuevo" onclick="toggleBusqEst('nuevo',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Nuevo</button>
+        <button class="badge e-seg" id="bq-en_seguimiento" onclick="toggleBusqEst('en_seguimiento',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Seguimiento</button>
+        <button class="badge e-vagend" id="bq-visita_agendada" onclick="toggleBusqEst('visita_agendada',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Visita agend.</button>
+        <button class="badge e-vrealiz" id="bq-visita_realizada" onclick="toggleBusqEst('visita_realizada',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Visita realiz.</button>
+        <button class="badge e-scierre" id="bq-seguimiento_cierre" onclick="toggleBusqEst('seguimiento_cierre',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Seg. cierre</button>
+        <button class="badge e-reservado" id="bq-reservado" onclick="toggleBusqEst('reservado',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Reservado</button>
+        <button class="badge e-ganado" id="bq-cerrado_ganado" onclick="toggleBusqEst('cerrado_ganado',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Ganado</button>
+        <button class="badge e-perdido" id="bq-cerrado_perdido" onclick="toggleBusqEst('cerrado_perdido',this)" style="cursor:pointer;opacity:0.55;padding:5px 10px;white-space:nowrap">Perdido</button>
+      </div>
+
+      <!-- Chips fila 3: Financiamiento -->
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="bq-contado" class="tab" onclick="toggleBusqFin('recursos_propios',this)" style="font-size:11px">Contado</button>
+        <button id="bq-banco" class="tab" onclick="toggleBusqFin('bancario',this)" style="font-size:11px">Bancario</button>
+      </div>
+
+      <!-- Filtros expandibles -->
       <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);overflow:hidden;margin-bottom:12px">
-
-        <!-- Periodo -->
-        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Periodo de ingreso</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="tab" id="bf-hoy" onclick="setBusqFecha('hoy',this)">Hoy</button>
-            <button class="tab" id="bf-semana" onclick="setBusqFecha('semana',this)">Esta semana</button>
-            <button class="tab" id="bf-mes" onclick="setBusqFecha('mes',this)">Este mes</button>
-            <button class="tab" id="bf-anio" onclick="setBusqFecha('anio',this)">Este a&#241;o</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <div style="flex:1">
-              <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Desde</div>
-              <input type="date" class="finput" id="busq-desde" style="font-size:12px;padding:7px 10px" onchange="ejecutarBusqueda()">
+        <button onclick="toggleFiltrosAvanzados()" style="width:100%;padding:11px 14px;background:none;border:none;color:var(--txt2);font-size:12px;font-weight:500;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span>Filtros avanzados</span>
+          <span id="fa-arrow" style="font-size:16px;transition:transform 0.2s">&#8964;</span>
+        </button>
+        <div id="filtros-avanzados" style="display:none;border-top:1px solid var(--brd)">
+          <!-- Rango de fechas manual -->
+          <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+            <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Rango de fechas</div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1">
+                <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Desde</div>
+                <input type="date" class="finput" id="busq-desde" style="font-size:12px;padding:8px 10px" onchange="ejecutarBusqueda()">
+              </div>
+              <div style="flex:1">
+                <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Hasta</div>
+                <input type="date" class="finput" id="busq-hasta" style="font-size:12px;padding:8px 10px" onchange="ejecutarBusqueda()">
+              </div>
             </div>
-            <div style="flex:1">
-              <div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Hasta</div>
-              <input type="date" class="finput" id="busq-hasta" style="font-size:12px;padding:7px 10px" onchange="ejecutarBusqueda()">
+          </div>
+          <!-- Medio -->
+          <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+            <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Medio de difusion</div>
+            <select class="fselect" id="busq-medio" style="font-size:12px;padding:8px 10px" onchange="ejecutarBusqueda()">
+              <option value="">Todos los medios</option>
+              <option value="fan_page_geat">Fan Page GEAT</option>
+              <option value="fan_page_steffi">Fan Page Steffi</option>
+              <option value="fan_page_genoveva">Fan Page Genoveva</option>
+              <option value="tiktok_steffi">TikTok Steffi</option>
+              <option value="tiktok_empresa">TikTok Empresa</option>
+              <option value="instagram">Instagram</option>
+              <option value="referido_cliente">Referido cliente</option>
+              <option value="contacto_propio">Contacto propio</option>
+              <option value="barrido_ruteo">Barrido/Ruteo</option>
+            </select>
+          </div>
+          <!-- Ciudad -->
+          <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
+            <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Ciudad</div>
+            <input type="text" class="finput" id="busq-ciudad" placeholder="Santa Cruz, Warnes, Urubo..." style="font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
+          </div>
+          <!-- m2 -->
+          <div style="padding:12px 14px">
+            <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Metros cuadrados</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" class="finput" id="busq-m2min" placeholder="Min" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
+              <span style="color:var(--txt3)">a</span>
+              <input type="number" class="finput" id="busq-m2max" placeholder="Max" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
             </div>
           </div>
         </div>
-
-        <!-- Estado / Color -->
-        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Estado del lead</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado','cerrado_perdido'].map(est=>{
-              const e=estilo(est);
-              return `<button class="badge ${e.cls}" id="bf-est-${est}" onclick="toggleBusqEst('${est}',this)" style="cursor:pointer;opacity:0.5;padding:4px 10px">${e.label}</button>`;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- Financiamiento -->
-        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Financiamiento</div>
-          <div style="display:flex;gap:6px">
-            <button class="tab" id="bf-contado" onclick="toggleBusqFin('recursos_propios',this)">Contado</button>
-            <button class="tab" id="bf-banco" onclick="toggleBusqFin('bancario',this)">Bancario</button>
-          </div>
-        </div>
-
-        <!-- Medio / Red social -->
-        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Medio de difusion</div>
-          <select class="fselect" id="busq-medio" style="font-size:12px;padding:8px 10px" onchange="ejecutarBusqueda()">
-            <option value="">Todos los medios</option>
-            <option value="fan_page_geat">Fan Page GEAT</option>
-            <option value="fan_page_steffi">Fan Page Steffi</option>
-            <option value="fan_page_genoveva">Fan Page Genoveva</option>
-            <option value="tiktok_steffi">TikTok Steffi</option>
-            <option value="tiktok_empresa">TikTok Empresa</option>
-            <option value="instagram">Instagram</option>
-            <option value="referido_cliente">Referido de cliente</option>
-            <option value="contacto_propio">Contacto propio</option>
-            <option value="barrido_ruteo">Barrido/Ruteo</option>
-          </select>
-        </div>
-
-        <!-- Ciudad -->
-        <div style="padding:12px 14px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Ciudad</div>
-          <input type="text" class="finput" id="busq-ciudad" placeholder="Santa Cruz, Warnes..." style="font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
-        </div>
-
-        <!-- m2 -->
-        <div style="padding:12px 14px">
-          <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Metros cuadrados (rango)</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="number" class="finput" id="busq-m2min" placeholder="Min" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
-            <span style="color:var(--txt3)">-</span>
-            <input type="number" class="finput" id="busq-m2max" placeholder="Max" style="flex:1;font-size:12px;padding:8px 10px" oninput="ejecutarBusqueda()">
-          </div>
-        </div>
-
       </div>
 
       <!-- Resultados -->
-      <div id="busq-results"></div>
+      <div id="busq-results">
+        <div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">Escribe para buscar o selecciona un filtro</div>
+      </div>
     </div>
 
     <!-- TODOS LOS LEADS (admin / commercial_lead) -->
@@ -1306,6 +1313,7 @@ async function initApp(){
   document.getElementById('inicio-agenda').innerHTML='<div class="loading"><span class="spin"></span>Cargando actividades...</div>';
   // Cargar datos
   await loadLeads();
+  renderContactosHoy(); // Mostrar atrasados y contactos de hoy
   await cargarAgendaPersonal(); // Carga eventos para el calendario de inicio
   renderInicio();
   iniciarRealtime();
@@ -1662,7 +1670,15 @@ function renderLeadCards(leads,containerId,rol){
         ${l.medio_difusion?`<span style="font-size:10px;color:var(--txt3)">📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
         ${numIntento>0?`<span style="font-size:10px;color:var(--txt3)">Intentos: ${numIntento}/3</span>`:''}
         ${horaVisita?`<span style="font-size:10px;font-weight:600;color:var(--green)">📅 ${horaVisita}</span>`:''}
-        ${l.proximo_contacto&&!atrasado?`<span style="font-size:10px;color:var(--blue)">📅 ${l.proximo_contacto}</span>`:''}
+        ${(function(){
+          if(!l.proximo_contacto) return '';
+          var hoy2=new Date().toISOString().slice(0,10);
+          var man=new Date(); man.setDate(man.getDate()+1); var man2=man.toISOString().slice(0,10);
+          if(l.proximo_contacto<hoy2) return '<span style="font-size:10px;color:var(--red);font-weight:600">ATRASADO: '+l.proximo_contacto+'</span>';
+          if(l.proximo_contacto===hoy2) return '<span style="font-size:10px;color:var(--acc);font-weight:700">HOY &#8203;&#128197;</span>';
+          if(l.proximo_contacto===man2) return '<span style="font-size:10px;color:var(--acc)">Manana</span>';
+          return '<span style="font-size:10px;color:var(--blue)">'+l.proximo_contacto+'</span>';
+        })()}
       </div>
       <div class="btn-row" onclick="event.stopPropagation()">
         ${l.estado==='nuevo'?`
@@ -2278,19 +2294,15 @@ function toggleEstadoCampos(){
 }
 
 // Validacion de etapa - evitar saltos criticos
-async function validarCambioEtapa(estadoActual, estadoNuevo, numIntentos){
-  var flujo = ['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado'];
-  var idxAct = flujo.indexOf(estadoActual);
-  var idxNuevo = flujo.indexOf(estadoNuevo);
-  // Si salta directamente de nuevo a ganado sin pasar por visita
+function validarCambioEtapa(estadoActual, estadoNuevo, numIntentos){
+  // Solo emite alerta — nunca bloquea el proceso
+  // La venta no puede caerse por el CRM
   if(estadoActual==='nuevo' && estadoNuevo==='cerrado_ganado'){
-    return confirm('ATENCION: Estas marcando este lead como Ganado sin haber registrado visita ni seguimiento. Confirmas?');
+    toast('AVISO: Lead pasado a Ganado sin visita previa registrada', 'error');
+  } else if(estadoActual==='nuevo' && (estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada') && (!numIntentos||numIntentos===0)){
+    toast('Aviso: Sin intentos de contacto previos registrados', 'error');
   }
-  // Si es nuevo y quiere pasar a visita sin intentos
-  if(estadoActual==='nuevo' && (estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada') && numIntentos===0){
-    return confirm('No hay intentos de contacto registrados para este lead. Deseas continuar?');
-  }
-  return true;
+  return true; // siempre permite continuar
 }
 
 async function guardarLead(){
@@ -3989,24 +4001,22 @@ function iniciarBusqueda(){
 }
 
 function limpiarBusqueda(){
-  document.getElementById('busq-q').value='';
-  document.getElementById('busq-desde').value='';
-  document.getElementById('busq-hasta').value='';
-  document.getElementById('busq-medio').value='';
-  document.getElementById('busq-ciudad').value='';
-  document.getElementById('busq-m2min').value='';
-  document.getElementById('busq-m2max').value='';
+  var ids = ['busq-q','busq-desde','busq-hasta','busq-medio','busq-ciudad','busq-m2min','busq-m2max'];
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   busqEstados.clear();
   busqFinanciamiento='';
   busqFechaTipo='';
-  document.querySelectorAll('#pn-busqueda .tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('[id^="bf-est-"]').forEach(b=>b.style.opacity='0.5');
-  ejecutarBusqueda();
+  document.querySelectorAll('#pn-busqueda .tab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('#busq-estados-chips button').forEach(function(b){b.style.opacity='0.55';b.style.transform='';});
+  var res = document.getElementById('busq-results');
+  if(res) res.innerHTML='<div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">Escribe para buscar o selecciona un filtro</div>';
+  var cnt = document.getElementById('busq-count');
+  if(cnt) cnt.textContent='—';
 }
 
 function setBusqFecha(tipo, btn){
   busqFechaTipo = busqFechaTipo===tipo ? '' : tipo;
-  document.querySelectorAll('#bf-hoy,#bf-semana,#bf-mes,#bf-anio').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#bq-hoy,#bq-sem,#bq-mes,#bq-anio').forEach(function(b){b.classList.remove('active');});
   if(busqFechaTipo) btn.classList.add('active');
   const hoy = new Date();
   const desdes = {
@@ -4026,14 +4036,30 @@ function setBusqFecha(tipo, btn){
 }
 
 function toggleBusqEst(est, btn){
-  if(busqEstados.has(est)){ busqEstados.delete(est); btn.style.opacity='0.5'; }
-  else { busqEstados.add(est); btn.style.opacity='1'; }
+  if(busqEstados.has(est)){
+    busqEstados.delete(est);
+    btn.style.opacity='0.55';
+    btn.style.transform='';
+  } else {
+    busqEstados.add(est);
+    btn.style.opacity='1';
+    btn.style.transform='scale(1.05)';
+  }
   ejecutarBusqueda();
+}
+
+function toggleFiltrosAvanzados(){
+  var div = document.getElementById('filtros-avanzados');
+  var arrow = document.getElementById('fa-arrow');
+  if(!div) return;
+  var open = div.style.display !== 'none';
+  div.style.display = open ? 'none' : 'block';
+  if(arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
 }
 
 function toggleBusqFin(tipo, btn){
   busqFinanciamiento = busqFinanciamiento===tipo ? '' : tipo;
-  document.querySelectorAll('#bf-contado,#bf-banco').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#bq-contado,#bq-banco').forEach(function(b){b.classList.remove('active');});
   if(busqFinanciamiento) btn.classList.add('active');
   ejecutarBusqueda();
 }
@@ -4168,6 +4194,69 @@ async function guardarPagos(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+
+
+// ══════════════════════════════════════
+// LEADS CON CONTACTO PARA HOY — Panel Inicio
+// ══════════════════════════════════════
+function renderContactosHoy(){
+  var el = document.getElementById('inicio-hoy-contactos');
+  if(!el) return;
+  var hoy = new Date().toISOString().slice(0,10);
+  var man = new Date(); man.setDate(man.getDate()+1);
+  var manStr = man.toISOString().slice(0,10);
+  // Filtrar segun rol
+  var base = cu.rol==='admin'||cu.rol==='commercial_lead' ? allLeads :
+    cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
+    cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
+  var atrasados = base.filter(function(l){
+    return l.proximo_contacto && l.proximo_contacto < hoy &&
+           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
+  });
+  var paraHoy = base.filter(function(l){
+    return l.proximo_contacto === hoy &&
+           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
+  });
+  var paraManana = base.filter(function(l){
+    return l.proximo_contacto === manStr &&
+           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
+  });
+  var html = '';
+  if(atrasados.length > 0){
+    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">ATRASADOS ('+atrasados.length+')</div>';
+    atrasados.slice(0,5).forEach(function(l){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1)" onclick="abrirSheetLead('+l.id+')" style="cursor:pointer">';
+      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+l.proximo_contacto+' &middot; '+(l.captador||l.cerrador||'').split(' ')[0]+'</div></div>';
+      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">[W]</a>';
+      html += '</div>';
+    });
+    if(atrasados.length > 5) html += '<div style="font-size:10px;color:var(--red);margin-top:4px">+' + (atrasados.length-5) + ' mas atrasados</div>';
+    html += '</div>';
+  }
+  if(paraHoy.length > 0){
+    html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">CONTACTAR HOY ('+paraHoy.length+')</div>';
+    paraHoy.forEach(function(l){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(245,158,11,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
+      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+(estilo(l.estado).label)+'</div></div>';
+      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">[W]</a>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if(paraManana.length > 0){
+    html += '<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">Manana ('+paraManana.length+')</div>';
+    paraManana.slice(0,3).forEach(function(l){
+      html += '<div style="font-size:12px;color:var(--txt2);padding:4px 0">'+l.nombre+' &middot; <span style="color:var(--txt3)">'+(estilo(l.estado).label)+'</span></div>';
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
 
 initLogin();
 </script>
