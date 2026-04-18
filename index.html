@@ -913,11 +913,15 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
         <div style="font-size:11px;color:var(--txt3);margin-top:2px" id="intento-lead-info"></div>
       </div>
-      <button class="sheet-close" onclick="closeSheet('intento')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('intento')">&#x2715;</button>
     </div>
     <div class="sheet-body">
 
-      <!-- HISTORIAL DEL LEAD (línea de tiempo) -->
+      <!-- GUIA DE SCRIPT POR INTENTO -->
+      <div id="intento-guia-script" style="display:none;background:var(--bg3);border-left:3px solid var(--acc);border-radius:0 var(--r) var(--r) 0;padding:12px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px" id="intento-guia-titulo">Guia — 1er Intento</div>
+        <div style="font-size:12px;color:var(--txt2);line-height:1.7;font-style:italic" id="intento-guia-texto"></div>
+      </div>
       <div id="intento-historial-wrap" style="margin-bottom:16px">
         <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Historial del cliente</div>
         <div id="intento-historial-content" style="max-height:200px;overflow-y:auto">
@@ -1127,7 +1131,9 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 <script charset="utf-8">
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
-const AUDIO_URL='https://jsacnpgpnvoslrpurfxc.supabase.co/functions/v1/geat-audio';
+const AUDIO_URL=''; // No se usa - usamos Anthropic directamente
+let ANTHROPIC_KEY = ''; // Se carga desde Supabase al iniciar
+let WA_ARQUITECTURA = 'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
 // -- ESTADO GLOBAL --
@@ -1181,6 +1187,14 @@ async function initLogin(){
     o.value=c.id;o.textContent=c.nombre+' - '+(c.cargo||c.rol);
     sel.appendChild(o);
   });
+  // Cargar API key de Anthropic y link de WhatsApp
+  try{
+    const {data:cfg} = await sb.from('app_config').select('anthropic_key,whatsapp_arquitectura').eq('key','html_0').limit(1).single();
+    if(cfg){
+      ANTHROPIC_KEY = cfg.anthropic_key || '';
+      WA_ARQUITECTURA = cfg.whatsapp_arquitectura || WA_ARQUITECTURA;
+    }
+  }catch(e){ console.log('Config:', e.message); }
 }
 function resetPin(){
   pinVal='';
@@ -1680,6 +1694,17 @@ let calDiaSeleccionado = null;
 let calEventos = []; // todas las actividades del colaborador
 
 async function cargarAgendaPersonal(){
+  // Tambien cargar seguimientos programados automaticamente
+  let seguimientosAuto = [];
+  try{
+    const {data:segAuto} = await sb.from('calendario_personal')
+      .select('*')
+      .eq('colaborador', cu.nombre)
+      .order('fecha_programada',{ascending:true});
+    seguimientosAuto = (segAuto||[]).filter(function(s){ return s.fecha_programada; });
+  }catch(e){ console.log('Cal personal:', e.message); }
+  // Agregar a agendaData despues de cargar
+
   // Cargar actividades de la agenda personal
   const{data:activ}=await sb.from('agenda_personal')
     .select('*,leads(nombre,celular,estado)')
@@ -2170,6 +2195,9 @@ async function renderCalendario(){
 
 // -- SHEET LEAD (ver + editar) --
 function abrirSheetLead(id){
+  // Cerradores: solo pueden VER datos originales, no editarlos
+  const esCerrador = cu.rol==='closer';
+  const esLead = !!id; // true si es edicion, false si es nuevo
   editingLeadId=id;
   const l=allLeads.find(x=>x.id===id);
   if(!l)return;
@@ -2197,6 +2225,23 @@ function abrirSheetLead(id){
   // En edición, nombre y celular son readonly
   const isEdit = !!id;
   document.getElementById('f-nombre').readOnly = false; // siempre editable en diseño
+  // Bloquear campos para cerradores en leads existentes
+  const camposOriginales = ['f-nombre','f-celular','f-ciudad','f-financiamiento','f-medio','f-captador'];
+  camposOriginales.forEach(function(fid){
+    var el = document.getElementById(fid);
+    if(el){
+      el.readOnly = esCerrador && esLead;
+      el.disabled = esCerrador && esLead && el.tagName==='SELECT';
+      if(esCerrador && esLead) el.style.opacity='0.6';
+      else el.style.opacity='';
+    }
+  });
+  // Mostrar aviso si es cerrador
+  var aviso = document.getElementById('fgroup-readonly-notice');
+  if(aviso) aviso.style.display = (esCerrador && esLead)?'block':'none';
+  if(aviso && esCerrador && esLead){
+    aviso.innerHTML = '<div style="font-size:11px;color:var(--acc);font-weight:600">Vista del cerrador</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">Los datos originales son de solo lectura. Puedes agregar notas adicionales.</div>';
+  }
   document.getElementById('sheet-lead').classList.add('open');
 }
 function elegirModoNuevoLead(){
@@ -2231,6 +2276,23 @@ function toggleEstadoCampos(){
   document.getElementById('f-ganado-block').style.display=est==='cerrado_ganado'?'':'none';
   document.getElementById('f-perdido-block').style.display=est==='cerrado_perdido'?'':'none';
 }
+
+// Validacion de etapa - evitar saltos criticos
+async function validarCambioEtapa(estadoActual, estadoNuevo, numIntentos){
+  var flujo = ['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado'];
+  var idxAct = flujo.indexOf(estadoActual);
+  var idxNuevo = flujo.indexOf(estadoNuevo);
+  // Si salta directamente de nuevo a ganado sin pasar por visita
+  if(estadoActual==='nuevo' && estadoNuevo==='cerrado_ganado'){
+    return confirm('ATENCION: Estas marcando este lead como Ganado sin haber registrado visita ni seguimiento. Confirmas?');
+  }
+  // Si es nuevo y quiere pasar a visita sin intentos
+  if(estadoActual==='nuevo' && (estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada') && numIntentos===0){
+    return confirm('No hay intentos de contacto registrados para este lead. Deseas continuar?');
+  }
+  return true;
+}
+
 async function guardarLead(){
   const nombre=document.getElementById('f-nombre').value.trim();
   const celular=document.getElementById('f-celular').value.trim();
@@ -2357,6 +2419,11 @@ async function abrirIntento(id){
   document.getElementById('intento-seccion-label').textContent='Registrar intento '+num;
   document.getElementById('intento-lead-info').textContent=l.nombre+' · '+l.celular+(l.ciudad?' · '+l.ciudad:'');
   document.getElementById('sheet-intento').classList.add('open');
+  // Mostrar guia del script segun numero de intento
+  var numSig = (l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+
+               (l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+
+               (l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
+  mostrarGuiaIntento(Math.min(numSig,3));
   
   // Cargar historial del lead en el sheet
   document.getElementById('intento-historial-content').innerHTML='<div style="text-align:center;padding:8px;font-size:11px;color:var(--txt3)"><span class="spin"></span> Cargando...</div>';
@@ -3276,11 +3343,39 @@ function usarMediaRecorder(){
         r.onload=()=>res(r.result.split(',')[1]);
         r.onerror=rej;r.readAsDataURL(blob);
       });
-      document.getElementById('audio-proc-msg').textContent='Enviando audio...';
+      document.getElementById('audio-proc-msg').textContent='Analizando con IA...';
       try{
-        const resp=await fetch(AUDIO_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({audio_base64:b64,mime_type:mime})});
-        const datos=await resp.json();
-        audioDatos=datos;mostrarResultadoAudio(datos);
+        if(!ANTHROPIC_KEY) throw new Error('API key no configurada');
+        const resp = await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'x-api-key': ANTHROPIC_KEY,
+            'anthropic-version':'2023-06-01'
+          },
+          body: JSON.stringify({
+            model:'claude-sonnet-4-20250514',
+            max_tokens:1000,
+            messages:[{
+              role:'user',
+              content:[
+                {type:'text',text:`Eres un asistente que extrae datos de clientes de grabaciones de vendedores bolivianos de construccion.
+Extrae los datos y responde SOLO con este JSON valido:
+{"accion":"nuevo_lead","datos":{"nombre":null,"celular":null,"ciudad":null,"financiamiento":null,"lugar_terreno":null,"presupuesto":null,"cuando_construir":null,"medio_difusion":null,"notas":null},"transcripcion":"texto del audio","campos_faltantes":[]}
+Para financiamiento usa solo: "recursos_propios" o "bancario".
+Para medio_difusion usa solo: fan_page_geat, fan_page_steffi, fan_page_genoveva, tiktok_steffi, tiktok_empresa, instagram, referido_cliente, contacto_propio, barrido_ruteo, otro.
+campos_faltantes = lista de campos criticos que faltan (nombre, celular).
+Si no escuchas un campo pon null. No inventes.`},
+                {type:'document',source:{type:'base64',media_type:mime,data:b64}}
+              ]
+            }]
+          })
+        });
+        if(!resp.ok) throw new Error('Error API '+ resp.status);
+        const apiData = await resp.json();
+        const texto = apiData.content?.[0]?.text||'{}';
+        const datos = JSON.parse(texto.replace(/```json|```/g,'').trim());
+        audioDatos=datos; mostrarResultadoAudio(datos);
       }catch(err){
         document.getElementById('audio-err-msg').textContent='Error: '+err.message;
         setAudioSt('err');
@@ -3303,9 +3398,25 @@ function usarMediaRecorder(){
 }
 async function procesarAudioTexto(texto){
   try{
-    const resp=await fetch(AUDIO_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcripcion_texto:texto})});
-    const datos=await resp.json();
-    audioDatos=datos;mostrarResultadoAudio(datos);
+    if(!ANTHROPIC_KEY) throw new Error('API key no configurada');
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:800,
+        messages:[{role:'user',content:`Extrae datos de clientes de esta transcripcion de un vendedor boliviano de construccion.
+Transcripcion: "${texto}"
+Responde SOLO con JSON:
+{"accion":"nuevo_lead","datos":{"nombre":null,"celular":null,"ciudad":null,"financiamiento":null,"lugar_terreno":null,"presupuesto":null,"cuando_construir":null,"medio_difusion":null,"notas":null},"transcripcion":"${texto}","campos_faltantes":[]}
+financiamiento: "recursos_propios" o "bancario". No inventes datos.`}]
+      })
+    });
+    if(!resp.ok) throw new Error('Error API '+resp.status);
+    const apiData = await resp.json();
+    const textoResp = apiData.content?.[0]?.text||'{}';
+    const datos = JSON.parse(textoResp.replace(/```json|```/g,'').trim());
+    audioDatos=datos; mostrarResultadoAudio(datos);
   }catch(err){
     document.getElementById('audio-err-msg').textContent='Error: '+err.message;
     setAudioSt('err');
@@ -3423,9 +3534,28 @@ function renderFinanciamiento(el){
     </div>`;
 }
 
-function actualizarPasoFin(paso, estado){
-  // Al conectar BD: actualizar estado del paso en tabla financiamientos
-  toast('Paso '+paso+' marcado como: '+estado);
+async function actualizarPasoFin(paso, estado){
+  const leadId = document.getElementById('fin-lead-sel')?.value;
+  if(!leadId){ toast('Selecciona un cliente primero','error'); return; }
+  try {
+    const campo = `paso_${paso}_estado`;
+    const campoFecha = `paso_${paso}_fecha`;
+    const updates = {
+      [campo]: estado,
+      [campoFecha]: estado==='completado' ? new Date().toISOString() : null,
+      lead_id: parseInt(leadId),
+      cerrador: cu.nombre,
+      updated_at: new Date().toISOString()
+    };
+    // Upsert segun lead_id
+    const {data:existing} = await sb.from('financiamiento_tramite').select('id').eq('lead_id',leadId).limit(1).single().catch(()=>({data:null}));
+    if(existing?.id){
+      await sb.from('financiamiento_tramite').update(updates).eq('id',existing.id);
+    } else {
+      await sb.from('financiamiento_tramite').insert([updates]);
+    }
+    toast('Paso '+paso+': '+estado);
+  } catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 function cargarFinanciamiento(leadId){
@@ -3453,7 +3583,7 @@ function renderPagos(el){
           {lbl:'2do pago', pct:'40%', desc:'Avance de obra'},
           {lbl:'3er pago', pct:'20%', desc:'Antes de entrega de casa'},
         ].map((p,i)=>`
-          <div style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:8px">
+          <div class="pago-card" style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
               <div>
                 <div style="font-size:12px;font-weight:600">${p.lbl} - <span style="color:var(--acc)">${p.pct}</span></div>
@@ -3474,7 +3604,7 @@ function renderPagos(el){
           <div style="font-size:10px;color:var(--txt3);font-weight:600;margin-bottom:2px">Para financiamiento bancario</div>
           <div style="font-size:11px;color:var(--txt2)">Los pagos varían según políticas de cada banco. Registrar según acuerdo específico con el banco del cliente.</div>
         </div>
-        <button class="btn btn-primary" style="width:100%;margin-top:12px">Guardar pagos</button>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="guardarPagos()">Guardar pagos</button>
       </div>
     </div>`;
 }
@@ -3651,44 +3781,66 @@ function toggleTerrenoInfo(val){
 }
 
 function enviarArquitectura(){
-  const leadId = document.getElementById('cotiz-lead-sel').value;
-  const lead = allLeads.find(l=>l.id==leadId);
-  const titulo = document.getElementById('cotiz-titulo').value || 'Sin título';
-  const m2 = document.getElementById('cotiz-m2').value || '-';
-  const precio = document.getElementById('cotiz-precio').value || '-';
-  const desc = document.getElementById('cotiz-desc').value || '';
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  var lead = allLeads.find(function(l){return l.id==leadId;});
+  var titulo = (document.getElementById('cotiz-titulo')&&document.getElementById('cotiz-titulo').value)||'Sin titulo';
+  var m2 = (document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value)||'-';
+  var precio = (document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value)||'-';
+  var desc = (document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value)||'';
+  var cliente = lead?lead.nombre:'Cliente';
+  var celular = lead?lead.celular:'-';
+  var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
+  var lineas = [
+    '*SOLICITUD DE PROPUESTA - GEAT*','',
+    '*Cliente:* '+cliente,'*Celular:* '+celular,'*Ciudad:* '+ciudad,'',
+    '*Proyecto:* '+titulo,'*m2:* '+m2+' m2','*Presupuesto:* $'+precio+' USD',
+    desc?'*Detalles:* '+desc:'','',
+    '*Cerrador:* '+cu.nombre,'*Fecha:* '+new Date().toLocaleDateString('es-BO'),'',
+    '_Solicitud generada desde GEAT CRM_'
+  ].filter(function(x){return x!==false;}).join('\n');
 
-  const cliente = lead ? lead.nombre : 'Cliente';
-  const celular = lead ? lead.celular : '-';
-  const ciudad = lead ? (lead.ciudad||'Santa Cruz') : 'Santa Cruz';
-  const cerrador = cu.nombre;
+  var url = 'https://wa.me/?text='+encodeURIComponent(lineas);
+  var grupo = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
 
-  // Armar mensaje pre-formateado para el grupo
-  var nl = String.fromCharCode(10);
-  var msg = [
-    'SOLICITUD DE PROPUESTA - GEAT',
-    '',
-    'Cliente: ' + cliente,
-    'Celular: ' + celular,
-    'Ciudad/Zona: ' + ciudad,
-    '',
-    'Proyecto: ' + titulo,
-    'Metros cuadrados: ' + m2 + ' m2',
-    'Presupuesto estimado: $' + precio + ' USD',
-    '',
-    desc ? 'Detalles: ' + desc : '',
-    'Cerrador: ' + cerrador,
-    'Fecha: ' + new Date().toLocaleDateString('es-BO'),
-    '',
-    'Solicitud generada desde GEAT CRM'
-  ].filter(Boolean).join(nl);
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#1E293B;border:1px solid #334155;border-radius:14px;padding:22px;width:100%;max-width:340px';
 
-  // Abrir WhatsApp Business al grupo
-  // El grupo "Diseño Arquitectónico para Ventas" - usar link de invitación
-  // Por ahora abre wa.me con el mensaje listo para copiar al grupo
-  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
-  window.open(url, '_blank');
-  toast('Requerimiento armado - pégalo en el grupo de Arquitectura ✓');
+  var btnGrupo = document.createElement('button');
+  btnGrupo.textContent = 'Abrir grupo Arquitectura';
+  btnGrupo.style.cssText = 'width:100%;padding:13px;background:#22C55E;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;display:block';
+  btnGrupo.onclick = function(){ window.open(grupo,'_blank'); overlay.remove(); };
+
+  var btnMsg = document.createElement('button');
+  btnMsg.textContent = 'Abrir WhatsApp con mensaje';
+  btnMsg.style.cssText = 'width:100%;padding:12px;background:#334155;border:1px solid #475569;border-radius:10px;color:#F1F5F9;font-size:13px;cursor:pointer;margin-bottom:12px;display:block';
+  btnMsg.onclick = function(){ window.open(url,'_blank'); overlay.remove(); };
+
+  var preview = document.createElement('div');
+  preview.style.cssText = 'background:#0F172A;border-radius:8px;padding:10px;margin-bottom:12px;max-height:120px;overflow-y:auto;font-size:10px;color:#94A3B8;white-space:pre-wrap;line-height:1.5';
+  preview.textContent = lineas;
+
+  var btnCancel = document.createElement('button');
+  btnCancel.textContent = 'Cancelar';
+  btnCancel.style.cssText = 'width:100%;padding:10px;background:none;border:1px solid #334155;border-radius:10px;color:#94A3B8;font-size:13px;cursor:pointer';
+  btnCancel.onclick = function(){ overlay.remove(); };
+
+  var titulo_el = document.createElement('div');
+  titulo_el.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:6px';
+  titulo_el.textContent = 'Solicitud lista';
+  var sub_el = document.createElement('div');
+  sub_el.style.cssText = 'font-size:11px;color:#94A3B8;margin-bottom:16px';
+  sub_el.textContent = 'Requerimiento para grupo de Arquitectura';
+
+  box.appendChild(titulo_el);
+  box.appendChild(sub_el);
+  box.appendChild(btnGrupo);
+  box.appendChild(btnMsg);
+  box.appendChild(preview);
+  box.appendChild(btnCancel);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
 }
 
 function guardarReunionYReserva(){
@@ -3769,48 +3921,60 @@ function regrabarFaltantes(){
 // ══════════════════════════════════════
 let notasData = [];
 
-function renderNotas(){
+async function renderNotas(){
   const el = document.getElementById('notas-list');
   if(!el) return;
-  // Cargar desde localStorage por ahora (privado por colaborador)
-  const key = 'geat_notas_' + cu.nombre;
-  try { notasData = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){ notasData=[]; }
-  if(!notasData.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Tus notas son privadas. Nadie mas las ve.</div></div>';
-    return;
-  }
-  el.innerHTML = notasData.map((n,i)=>`
-    <div class="card" style="padding:13px 15px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:11px;font-weight:600;color:var(--acc)">${n.titulo||'Sin titulo'}</div>
-        <div style="display:flex;gap:6px">
-          <span style="font-size:10px;color:var(--txt3)">${n.fecha||''}</span>
-          <button onclick="eliminarNota(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0">&#10005;</button>
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try {
+    const {data} = await sb.from('notas_personales')
+      .select('*')
+      .eq('colaborador', cu.nombre)
+      .order('created_at',{ascending:false});
+    notasData = data || [];
+    if(!notasData.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Tus notas son privadas. Nadie mas las ve.</div></div>';
+      return;
+    }
+    el.innerHTML = notasData.map(n=>`
+      <div class="card" style="padding:13px 15px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:600;color:var(--acc)">${n.titulo||'Sin titulo'}</div>
+          <div style="display:flex;gap:6px">
+            <span style="font-size:10px;color:var(--txt3)">${n.created_at?new Date(n.created_at).toLocaleDateString('es-BO'):''}</span>
+            <button onclick="eliminarNota(${n.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0">&#10005;</button>
+          </div>
         </div>
-      </div>
-      <div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">${n.texto||''}</div>
-    </div>`).join('');
+        <div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">${n.texto||''}</div>
+      </div>`).join('');
+  } catch(e){
+    el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas aun</div></div>';
+  }
 }
 
-function nuevaNota(){
+async function nuevaNota(){
   const titulo = prompt('Titulo de la nota:');
   if(!titulo) return;
   const texto = prompt('Contenido:');
   if(texto===null) return;
-  const key = 'geat_notas_' + cu.nombre;
-  try { notasData = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){ notasData=[]; }
-  notasData.unshift({titulo, texto, fecha: new Date().toLocaleDateString('es-BO')});
-  localStorage.setItem(key, JSON.stringify(notasData));
-  renderNotas();
-  toast('Nota guardada');
+  try {
+    await sb.from('notas_personales').insert([{
+      colaborador: cu.nombre,
+      titulo: titulo,
+      texto: texto,
+      privada: true
+    }]);
+    toast('Nota guardada');
+    renderNotas();
+  } catch(e){ toast('Error al guardar: '+e.message,'error'); }
 }
 
-function eliminarNota(idx){
+async function eliminarNota(id){
   if(!confirm('Eliminar esta nota?')) return;
-  const key = 'geat_notas_' + cu.nombre;
-  notasData.splice(idx,1);
-  localStorage.setItem(key, JSON.stringify(notasData));
-  renderNotas();
+  try {
+    await sb.from('notas_personales').delete().eq('id',id).eq('colaborador',cu.nombre);
+    toast('Nota eliminada');
+    renderNotas();
+  } catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // ══════════════════════════════════════
@@ -3912,18 +4076,96 @@ function ejecutarBusqueda(){
 // CALENDARIO PERSONAL AUTOMATICO
 // Cada seguimiento con fecha proxima se registra automaticamente
 // ══════════════════════════════════════
-function registrarEnCalendario(tipo, descripcion, fechaISO, leadId){
-  // Guardar en tabla calendario_personal via Supabase
-  // Por ahora log local
-  console.log('[Calendario]', tipo, descripcion, fechaISO);
-  // Al conectar BD:
-  // sb.from('calendario_personal').insert([{
-  //   colaborador: cu.nombre,
-  //   tipo: tipo,
-  //   descripcion: descripcion,
-  //   fecha_actividad: fechaISO,
-  //   lead_id: leadId||null
-  // }]);
+function registrarEnCalendario(tipo, descripcion, fechaISO, leadId, leadNombre){
+  if(!cu) return;
+  sb.from('calendario_personal').insert([{
+    colaborador: cu.nombre,
+    tipo: tipo,
+    descripcion: descripcion,
+    fecha_actividad: new Date().toISOString(),
+    fecha_programada: fechaISO||null,
+    lead_id: leadId||null,
+    lead_nombre: leadNombre||null
+  }]).then(()=>{}).catch(e=>console.log('Cal error:',e.message));
+}
+
+
+
+// ══════════════════════════════════════
+// GUIA DE SCRIPTS POR INTENTO — Protocolo GEAT
+// ══════════════════════════════════════
+var SCRIPTS_INTENTO = {
+  1: {
+    titulo: 'Guia - 1er Intento de Contacto',
+    texto: 'Muy buenas tardes Sr/a [NOMBRE], le saluda [TU NOMBRE], asesor/a comercial de Grupo GEAT Constructora y Consultoria. Me gustaria conversar con su persona ya que solicito informacion de las construcciones y beneficios que brindamos. Nos avisa su disponibilidad de tiempo para llamarlo, o desea recibir informacion por escrito? Quedo atento/a a su respuesta.'
+  },
+  2: {
+    titulo: 'Guia - 2do Intento de Contacto',
+    texto: 'Muy buenas tardes Sr/a [NOMBRE], le escribimos nuevamente de la constructora Grupo GEAT. Quisieramos conversar con su persona sobre la solicitud de informacion. Tal vez se ha encontrado ocupado/a por eso no hemos tenido respuesta. Nos podria avisar en que momento tiene disponibilidad de tiempo para poder brindarle informacion por favor, o en caso contrario si no gustaria, nos hace saber. Quedo atento/a a su respuesta.'
+  },
+  3: {
+    titulo: 'Guia - 3er Intento (Ultimo)',
+    texto: 'Muy buenas tardes [NOMBRE], la estuvimos llamando un par de veces. En esta ocasion lo vamos a dejar para una proxima oportunidad. En todo caso si aun le interesa saber los beneficios que estamos brindando este mes para las construcciones, puede responder a este mensaje. En caso contrario quedamos atentos a una proxima solicitud de su persona. Que tenga un excelente dia.'
+  }
+};
+
+function mostrarGuiaIntento(numIntento){
+  var guiaDiv = document.getElementById('intento-guia-script');
+  var guiaTit = document.getElementById('intento-guia-titulo');
+  var guiaTxt = document.getElementById('intento-guia-texto');
+  if(!guiaDiv || !numIntento || numIntento > 3) {
+    if(guiaDiv) guiaDiv.style.display='none';
+    return;
+  }
+  var script = SCRIPTS_INTENTO[numIntento];
+  if(script && guiaTit && guiaTxt){
+    guiaTit.textContent = script.titulo;
+    guiaTxt.textContent = script.texto;
+    guiaDiv.style.display='block';
+  }
+}
+
+
+
+// ══════════════════════════════════════
+// GUARDAR PAGOS EN SUPABASE
+// ══════════════════════════════════════
+async function guardarPagos(){
+  var leadId = document.getElementById('pag-lead-sel')&&document.getElementById('pag-lead-sel').value;
+  if(!leadId){ toast('Selecciona un cliente','error'); return; }
+  var pagos = [];
+  var configs = [
+    {num:1, pct:'40%', desc:'Al firmar contrato'},
+    {num:2, pct:'40%', desc:'Avance de obra'},
+    {num:3, pct:'20%', desc:'Antes de entrega'}
+  ];
+  // Leer los campos dinamicamente
+  var cards = document.querySelectorAll('#pag-content .pago-card');
+  cards.forEach(function(card, i){
+    var cfg = configs[i]||{};
+    var selectEl = card.querySelector('select');
+    var montoEl = card.querySelectorAll('input')[0];
+    var fechaEl = card.querySelectorAll('input')[1];
+    pagos.push({
+      lead_id: parseInt(leadId),
+      cerrador: cu.nombre,
+      numero_pago: i+1,
+      porcentaje: cfg.pct||'',
+      descripcion: cfg.desc||'',
+      monto_usd: montoEl&&montoEl.value?parseFloat(montoEl.value):null,
+      fecha_pago: fechaEl&&fechaEl.value?fechaEl.value:null,
+      estado: selectEl?selectEl.value:'pendiente'
+    });
+  });
+  try{
+    // Upsert por lead_id y numero_pago
+    for(var p of pagos){
+      if(p.monto_usd||p.fecha_pago){
+        await sb.from('pagos_cliente').upsert([p],{onConflict:'lead_id,numero_pago'});
+      }
+    }
+    toast('Pagos guardados');
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 
