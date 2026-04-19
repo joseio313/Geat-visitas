@@ -417,16 +417,67 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
       </div>
+
+      <!-- BUSCADOR INTEGRADO -->
+      <div style="position:relative;margin-bottom:8px;display:flex;gap:6px">
+        <div style="position:relative;flex:1">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);pointer-events:none">&#128269;</span>
+          <input class="search-inp" id="leads-q" style="padding-left:34px" placeholder="Buscar nombre, celular, ciudad..." oninput="renderLeads();if(this.value) abrirFiltrosLeads()">
+        </div>
+        <button id="btn-filtros-leads" onclick="toggleFiltrosLeads()" style="padding:0 12px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:4px">
+          <span>&#9776;</span>
+          <span id="filtros-leads-count" style="display:none;background:var(--acc);color:#000;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700">0</span>
+        </button>
+      </div>
+
+      <!-- PANEL FILTROS EXPANDIBLE (oculto por defecto) -->
+      <div id="filtros-leads-panel" style="display:none;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:10px">
+
+        <!-- Chips periodo -->
+        <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Periodo de ingreso</div>
+        <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
+          <button class="tab" id="lf-hoy" onclick="setLeadFecha('hoy',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Hoy</button>
+          <button class="tab" id="lf-sem" onclick="setLeadFecha('semana',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Semana</button>
+          <button class="tab" id="lf-mes" onclick="setLeadFecha('mes',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Mes</button>
+          <button class="tab" id="lf-anio" onclick="setLeadFecha('anio',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Año</button>
+        </div>
+
+        <!-- Chips estado -->
+        <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Estado</div>
+        <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
+          <button class="badge e-nuevo" id="lf-nuevo" onclick="toggleLeadEst('nuevo',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Nuevo</button>
+          <button class="badge e-seg" id="lf-en_seguimiento" onclick="toggleLeadEst('en_seguimiento',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Seguimiento</button>
+          <button class="badge e-vagend" id="lf-visita_agendada" onclick="toggleLeadEst('visita_agendada',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Visita agend.</button>
+          <button class="badge e-vrealiz" id="lf-visita_realizada" onclick="toggleLeadEst('visita_realizada',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Visita realiz.</button>
+          <button class="badge e-scierre" id="lf-seguimiento_cierre" onclick="toggleLeadEst('seguimiento_cierre',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Seg. cierre</button>
+          <button class="badge e-reservado" id="lf-reservado" onclick="toggleLeadEst('reservado',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Reservado</button>
+          <button class="badge e-ganado" id="lf-cerrado_ganado" onclick="toggleLeadEst('cerrado_ganado',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Ganado</button>
+          <button class="badge e-perdido" id="lf-cerrado_perdido" onclick="toggleLeadEst('cerrado_perdido',this)" style="cursor:pointer;opacity:0.55;padding:4px 9px;white-space:nowrap;font-size:10px">Perdido</button>
+        </div>
+
+        <!-- Financiamiento + Ciudad en fila -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="tab" id="lf-contado" onclick="toggleLeadFin('recursos_propios',this)" style="font-size:10px;padding:4px 9px">Contado</button>
+          <button class="tab" id="lf-banco" onclick="toggleLeadFin('bancario',this)" style="font-size:10px;padding:4px 9px">Bancario</button>
+          <input id="lf-ciudad" class="search-inp" placeholder="Ciudad..." style="flex:1;font-size:11px;padding:5px 10px" oninput="renderLeads();actualizarContFiltros()">
+        </div>
+
+        <!-- m2 y limpiar -->
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="lf-m2min" class="search-inp" placeholder="m2 min" style="flex:1;font-size:11px;padding:5px 10px" oninput="renderLeads();actualizarContFiltros()">
+          <span style="color:var(--txt3);font-size:11px">—</span>
+          <input type="number" id="lf-m2max" class="search-inp" placeholder="m2 max" style="flex:1;font-size:11px;padding:5px 10px" oninput="renderLeads();actualizarContFiltros()">
+          <button onclick="limpiarFiltrosLeads()" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:11px;white-space:nowrap">Limpiar</button>
+        </div>
+      </div>
+
+      <!-- Tabs de estado rápido -->
       <div class="tabs" id="leads-tabs">
         <button class="tab active" onclick="setLeadTab('todos',this)">Todos</button>
         <button class="tab" onclick="setLeadTab('nuevo',this)">Nuevos</button>
         <button class="tab" onclick="setLeadTab('en_seguimiento',this)">Seguimiento</button>
         <button class="tab" onclick="setLeadTab('visita_agendada',this)">Visita</button>
         <button class="tab" onclick="setLeadTab('cerrado_ganado',this)">Ganados</button>
-      </div>
-      <div class="search-wrap">
-        <span class="search-ico">🔍</span>
-        <input class="search-inp" id="leads-q" placeholder="Buscar nombre, celular, ciudad..." oninput="renderLeads()">
       </div>
       <div id="leads-list"></div>
     </div>
@@ -1242,7 +1293,6 @@ const NAVS={
     {id:'leads',icon:'&#128203;',label:'Leads'},
     {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
-    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   closer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -1250,7 +1300,6 @@ const NAVS={
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
     {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
-    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   commercial_lead:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -1258,7 +1307,6 @@ const NAVS={
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
     {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'admin',icon:'&#9881;',label:'Admin'},
-    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
   admin:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -1267,7 +1315,6 @@ const NAVS={
     {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'admin',icon:'&#9881;',label:'Admin'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
-    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
   ],
 };
 function buildNav(){
@@ -1290,7 +1337,6 @@ function sw(id,btn){
   if(id==='leads')renderLeads();
   if(id==='todos')renderTodos();
   if(id==='notas')renderNotas();
-  if(id==='busqueda')iniciarBusqueda();
   // pn-agenda eliminado - el calendario personal está en el inicio
   if(id==='calendario')renderCalendario();
   if(id==='notif')renderNotifs();
@@ -1608,13 +1654,32 @@ function setLeadTab(tab,btn){
   renderLeads();
 }
 function renderLeads(){
-  const q=(document.getElementById('leads-q')?.value||'').toLowerCase();
-  let leads=allLeads.filter(l=>{
-    if(cu.rol==='field_capturer')return l.captador===cu.nombre;
-    if(cu.rol==='closer')return l.cerrador===cu.nombre;
+  var q=(document.getElementById('leads-q')?.value||'').toLowerCase();
+  var hoy=new Date().toISOString().slice(0,10);
+  var desdeFecha='';
+  if(leadFiltroFecha){
+    var d=new Date();
+    if(leadFiltroFecha==='hoy') desdeFecha=hoy;
+    else if(leadFiltroFecha==='semana'){d.setDate(d.getDate()-7);desdeFecha=d.toISOString().slice(0,10);}
+    else if(leadFiltroFecha==='mes'){d.setMonth(d.getMonth()-1);desdeFecha=d.toISOString().slice(0,10);}
+    else if(leadFiltroFecha==='anio'){d.setFullYear(d.getFullYear()-1);desdeFecha=d.toISOString().slice(0,10);}
+  }
+  var ciudadF=(document.getElementById('lf-ciudad')?.value||'').toLowerCase();
+  var m2min=parseFloat(document.getElementById('lf-m2min')?.value)||0;
+  var m2max=parseFloat(document.getElementById('lf-m2max')?.value)||0;
+  var leads=allLeads.filter(function(l){
+    if(cu.rol==='field_capturer'&&l.captador!==cu.nombre) return false;
+    if(cu.rol==='closer'&&l.cerrador!==cu.nombre) return false;
+    if(leadTabActual!=='todos'&&l.estado!==leadTabActual) return false;
+    if(q&&!['nombre','celular','ciudad','notas','captador','cerrador'].some(function(k){return l[k]&&l[k].toLowerCase().includes(q);})) return false;
+    if(leadFiltroEstados.size>0&&!leadFiltroEstados.has(l.estado)) return false;
+    if(leadFiltroFin&&l.financiamiento!==leadFiltroFin) return false;
+    if(desdeFecha&&l.fecha_ingreso&&l.fecha_ingreso<desdeFecha) return false;
+    if(ciudadF&&!(l.ciudad||'').toLowerCase().includes(ciudadF)) return false;
+    if(m2min&&(parseFloat(l.metros_cuadrados)||0)<m2min) return false;
+    if(m2max&&(parseFloat(l.metros_cuadrados)||0)>m2max) return false;
     return true;
   });
-  if(leadTabActual!=='todos')leads=leads.filter(l=>l.estado===leadTabActual);
   if(q)leads=leads.filter(l=>['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>l[k]&&l[k].toLowerCase().includes(q)));
   document.getElementById('leads-count').textContent=leads.length+' lead'+(leads.length!==1?'s':'');
   renderLeadCards(leads,'leads-list',cu.rol);
@@ -4257,6 +4322,89 @@ function renderContactosHoy(){
   }
   el.innerHTML = html;
 }
+
+
+// ══════════════════════════════════════
+// FILTROS INTEGRADOS EN PANEL LEADS
+// ══════════════════════════════════════
+var leadFiltroEstados = new Set();
+var leadFiltroFin = '';
+var leadFiltroFecha = '';
+
+function toggleFiltrosLeads(){
+  var panel = document.getElementById('filtros-leads-panel');
+  if(!panel) return;
+  var open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  var btn = document.getElementById('btn-filtros-leads');
+  if(btn) btn.style.borderColor = open ? 'var(--brd)' : 'var(--acc)';
+  if(btn) btn.style.color = open ? 'var(--txt3)' : 'var(--acc)';
+}
+
+function abrirFiltrosLeads(){
+  var panel = document.getElementById('filtros-leads-panel');
+  if(panel) panel.style.display = 'block';
+}
+
+function setLeadFecha(tipo, btn){
+  leadFiltroFecha = leadFiltroFecha===tipo ? '' : tipo;
+  document.querySelectorAll('#lf-hoy,#lf-sem,#lf-mes,#lf-anio').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFecha) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+
+function toggleLeadEst(est, btn){
+  if(leadFiltroEstados.has(est)){
+    leadFiltroEstados.delete(est);
+    btn.style.opacity='0.55'; btn.style.transform='';
+  } else {
+    leadFiltroEstados.add(est);
+    btn.style.opacity='1'; btn.style.transform='scale(1.04)';
+  }
+  actualizarContFiltros();
+  renderLeads();
+}
+
+function toggleLeadFin(tipo, btn){
+  leadFiltroFin = leadFiltroFin===tipo ? '' : tipo;
+  document.querySelectorAll('#lf-contado,#lf-banco').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFin) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+
+function actualizarContFiltros(){
+  var cont = 0;
+  if(leadFiltroFecha) cont++;
+  cont += leadFiltroEstados.size;
+  if(leadFiltroFin) cont++;
+  var ciudad = document.getElementById('lf-ciudad');
+  if(ciudad && ciudad.value) cont++;
+  var m2min = document.getElementById('lf-m2min');
+  var m2max = document.getElementById('lf-m2max');
+  if(m2min && m2min.value) cont++;
+  if(m2max && m2max.value) cont++;
+  var cntEl = document.getElementById('filtros-leads-count');
+  if(cntEl){
+    cntEl.style.display = cont>0 ? 'inline' : 'none';
+    cntEl.textContent = cont;
+  }
+}
+
+function limpiarFiltrosLeads(){
+  leadFiltroEstados.clear();
+  leadFiltroFin = '';
+  leadFiltroFecha = '';
+  var ids = ['leads-q','lf-ciudad','lf-m2min','lf-m2max'];
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  document.querySelectorAll('#filtros-leads-panel .tab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('[id^="lf-"][class*="badge"]').forEach(function(b){b.style.opacity='0.55';b.style.transform='';});
+  var cntEl = document.getElementById('filtros-leads-count');
+  if(cntEl) cntEl.style.display='none';
+  renderLeads();
+}
+
 
 initLogin();
 </script>
