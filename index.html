@@ -701,6 +701,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
         <button class="tab" onclick="setAdminTab('stats',this)">Stats</button>
         <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
+        <button class="tab admin-only" id="tab-ceo" onclick="setAdminTab('ceo',this)" style="display:none">Panel CEO</button>
       </div>
       <div id="admin-content"></div>
     </div>
@@ -1242,7 +1243,14 @@ async function initLogin(){
   const sel=document.getElementById('login-user');
   colaboradores.forEach(c=>{
     const o=document.createElement('option');
-    o.value=c.id;o.textContent=c.nombre+' - '+(c.cargo||c.rol);
+    o.value=c.id;
+    var cargoDisplay = {
+      'admin':'CEO',
+      'commercial_lead':'Jefe Comercial',
+      'field_capturer':'Captadora',
+      'closer':'Asesor de Cierre'
+    }[c.rol]||c.rol;
+    o.textContent=c.nombre+' — '+cargoDisplay;
     sel.appendChild(o);
   });
   // Cargar API key de Anthropic y link de WhatsApp
@@ -2604,6 +2612,8 @@ function abrirSeguimiento(id){
   document.getElementById('seg-visita-fecha').value='';
   document.getElementById('seg-visita-wrap').style.display='none';
   document.getElementById('seg-lead-info').textContent=l.nombre+' · '+l.celular;
+  var horaEl = document.getElementById('hora-seg-auto');
+  if(horaEl) horaEl.textContent = new Date().toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sheet-seg').classList.add('open');
 }
 async function guardarSeguimiento(){
@@ -2806,6 +2816,32 @@ function setAdminTab(tab,btn){
   if(btn)btn.classList.add('active');
   renderAdmin();
 }
+function impersonarPorId(colId){
+  // Buscar colaborador por ID - sin exponer PIN en HTML
+  var col = colaboradores.find(function(c){ return c.id==colId; });
+  if(!col) return;
+  // Solo admin puede impersonar
+  if(cu.rol!=='admin'){ toast('Sin permiso','error'); return; }
+  // CEO no puede ser impersonado por nadie
+  if(col.rol==='admin' && cu.id===col.id){
+    // Es el mismo admin — no hacer nada
+    return;
+  }
+  _adminSession = Object.assign({}, cu);
+  cu = col;
+  document.getElementById('tb-user').textContent = cu.nombre.split(' ')[0];
+  var banner = document.createElement('div');
+  banner.id = 'impersonar-banner';
+  banner.style.cssText = 'position:fixed;top:52px;left:0;right:0;background:var(--acc);color:#000;text-align:center;padding:6px;font-size:12px;font-weight:600;z-index:300;display:flex;align-items:center;justify-content:center;gap:12px';
+  banner.innerHTML = 'Viendo CRM como: ' + cu.nombre + ' <button onclick="salirImpersonar()" style="background:#000;color:var(--acc);border:none;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600">Volver a Admin</button>';
+  document.body.appendChild(banner);
+  document.querySelector('.content').style.paddingTop = '32px';
+  buildNav(); llenarSelects();
+  sw('inicio', document.querySelector('[data-nav="inicio"]'));
+  renderLeads(); cargarAgendaPersonal();
+  registrarAuditoria('impersonacion',null,null,null,{viendo_como:col.nombre});
+}
+
 function impersonar(nombre,pin,rol){
   if(!confirm('¿Ver el CRM como '+nombre+'?\n\nVas a ver exactamente lo que ve este colaborador.\nUsa el botón "Volver a Admin" para regresar.')) return;
   
@@ -2905,7 +2941,7 @@ async function renderAdmin(){
         }).map(c=>{
           const colors={admin:'#F59E0B',field_capturer:'#A855F7',commercial_lead:'#3B82F6',closer:'#22C55E'};
           const col=colors[c.rol]||'#64748B';
-          return `<button onclick="impersonar('${c.nombre}','${c.pin}','${c.rol}')" style="padding:12px 8px;background:var(--bg2);border:2px solid var(--brd);border-radius:var(--r);cursor:pointer;text-align:center;transition:all 0.15s" onmouseover="this.style.borderColor='${col}'" onmouseout="this.style.borderColor='var(--brd)'">
+          return `<button onclick="impersonarPorId(${c.id})" style="padding:12px 8px;background:var(--bg2);border:2px solid var(--brd);border-radius:var(--r);cursor:pointer;text-align:center;transition:all 0.15s" onmouseover="this.style.borderColor='${col}'" onmouseout="this.style.borderColor='var(--brd)'">
             <div style="width:36px;height:36px;border-radius:50%;background:${col}20;border:2px solid ${col};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:${col};margin:0 auto 6px">${c.nombre.charAt(0)}</div>
             <div style="font-size:11px;font-weight:600;color:var(--txt)">${c.nombre.split(' ')[0]}</div>
             <div style="font-size:9px;color:var(--txt3);margin-top:1px">${c.rol}</div>
@@ -2918,7 +2954,7 @@ async function renderAdmin(){
           <div style="width:38px;height:38px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#000;flex-shrink:0">${c.nombre.charAt(0)}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;margin-bottom:1px">${c.nombre}</div>
-            <div style="font-size:11px;color:var(--txt3)">${c.rol} · PIN: <strong style="color:var(--acc)">${c.pin}</strong></div>
+            <div style="font-size:11px;color:var(--txt3)">${c.rol}</div>
           </div>
           <span class="badge ${c.activo?'e-ganado':'e-perdido'}" style="font-size:9px">${c.activo?'Activo':'Inactivo'}</span>
         </div>
@@ -3023,6 +3059,8 @@ async function renderAdmin(){
         </div>
       </div>`;
     }).join('')||'<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Sin campañas registradas</div>'}`;
+  }else if(adminTabActual==='ceo'){
+    renderPanelCEO(el);
   }else if(adminTabActual==='auditoria'){
     // Combinar log local + datos de BD (cuando esté conectado)
     const log = window._auditLog || [];
@@ -4403,6 +4441,92 @@ function limpiarFiltrosLeads(){
   var cntEl = document.getElementById('filtros-leads-count');
   if(cntEl) cntEl.style.display='none';
   renderLeads();
+}
+
+
+
+// ══════════════════════════════════════
+// PANEL CEO — Datos exclusivos del CEO
+// ══════════════════════════════════════
+async function renderPanelCEO(el){
+  el.innerHTML = '<div class="loading"><span class="spin"></span>Cargando panel CEO...</div>';
+  var hoy = new Date().toISOString().slice(0,10);
+  var mesActual = new Date().toISOString().slice(0,7);
+
+  // Metricas de actividad por colaborador
+  var porColaborador = {};
+  colaboradores.forEach(function(c){
+    if(!c.activo) return;
+    var misLeads = allLeads.filter(function(l){
+      return l.captador===c.nombre||l.cerrador===c.nombre;
+    });
+    var atrasados = misLeads.filter(function(l){
+      return l.proximo_contacto && l.proximo_contacto < hoy &&
+             l.estado!=='cerrado_ganado' && l.estado!=='cerrado_perdido';
+    });
+    var ganados = misLeads.filter(function(l){return l.estado==='cerrado_ganado';});
+    var sinActividad = misLeads.filter(function(l){
+      return !l.proximo_contacto && l.estado!=='cerrado_ganado' && l.estado!=='cerrado_perdido';
+    });
+    porColaborador[c.nombre] = {
+      rol: c.rol, total: misLeads.length,
+      atrasados: atrasados.length, ganados: ganados.length,
+      sinActividad: sinActividad.length
+    };
+  });
+
+  // Dias sin lead nuevo por captador
+  var captadores = colaboradores.filter(function(c){return c.rol==='field_capturer'||c.rol==='commercial_lead';});
+
+  var html = '';
+
+  // Resumen ejecutivo
+  html += '<div style="background:var(--bg3);border-radius:var(--r2);padding:14px;margin-bottom:14px">';
+  html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Resumen Ejecutivo — '+hoy+'</div>';
+  html += '<div class="kpi-grid" style="margin-bottom:10px">';
+  var totalActivos = allLeads.filter(function(l){return l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';}).length;
+  var totalGanados = allLeads.filter(function(l){return l.estado==='cerrado_ganado';}).length;
+  var totalAtrasados = allLeads.filter(function(l){return l.proximo_contacto&&l.proximo_contacto<hoy&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';}).length;
+  var totalReservados = allLeads.filter(function(l){return l.estado==='reservado';}).length;
+  html += '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+totalActivos+'</div><div class="kpi-l">Activos</div></div>';
+  html += '<div class="kpi"><div class="kpi-n" style="color:var(--green)">'+totalGanados+'</div><div class="kpi-l">Ganados</div></div>';
+  html += '<div class="kpi"><div class="kpi-n" style="color:var(--red)">'+totalAtrasados+'</div><div class="kpi-l">Atrasados</div></div>';
+  html += '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+totalReservados+'</div><div class="kpi-l">Reservados</div></div>';
+  html += '</div></div>';
+
+  // Performance por colaborador
+  html += '<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Performance del equipo</div>';
+  Object.keys(porColaborador).forEach(function(nombre){
+    var d = porColaborador[nombre];
+    var colores = {admin:'var(--acc)',field_capturer:'var(--purple)',commercial_lead:'var(--blue)',closer:'var(--green)'};
+    var col = colores[d.rol]||'var(--txt3)';
+    html += '<div style="background:var(--bg2);border:1px solid var(--brd);border-left:3px solid '+col+';border-radius:var(--r);padding:11px 13px;margin-bottom:6px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html += '<div style="font-size:13px;font-weight:600">'+nombre.split(' ')[0]+'<span style="font-size:10px;color:var(--txt3);margin-left:6px">'+d.rol+'</span></div>';
+    if(d.atrasados>0) html += '<span style="font-size:10px;font-weight:600;color:var(--red);background:rgba(239,68,68,0.1);padding:2px 8px;border-radius:10px">'+d.atrasados+' atrasados</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:14px;font-size:11px">';
+    html += '<span>Leads: <b>'+d.total+'</b></span>';
+    html += '<span style="color:var(--green)">Ganados: <b>'+d.ganados+'</b></span>';
+    if(d.sinActividad>0) html += '<span style="color:var(--acc)">Sin fecha: <b>'+d.sinActividad+'</b></span>';
+    html += '</div></div>';
+  });
+
+  // Leads sin cerrador asignado
+  var sinCerrador = allLeads.filter(function(l){
+    return !l.cerrador && l.estado!=='cerrado_ganado' && l.estado!=='cerrado_perdido' && l.estado!=='nuevo';
+  });
+  if(sinCerrador.length>0){
+    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r);padding:11px;margin-top:10px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px">Sin cerrador asignado ('+sinCerrador.length+')</div>';
+    sinCerrador.slice(0,5).forEach(function(l){
+      html += '<div style="font-size:11px;color:var(--txt2);padding:3px 0">'+l.nombre+' — '+l.estado+'</div>';
+    });
+    if(sinCerrador.length>5) html += '<div style="font-size:10px;color:var(--red)">+'+(sinCerrador.length-5)+' mas</div>';
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
 }
 
 
