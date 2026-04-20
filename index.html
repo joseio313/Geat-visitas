@@ -655,6 +655,47 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       </div>
     </div>
 
+    <!-- PANEL TECNICO — Solicitudes de propuesta -->
+    <div class="panel" id="pn-tecnico-upload">
+      <div class="ph">
+        <div><div class="ph-title">Subir Propuesta</div><div class="ph-sub">Selecciona la solicitud y sube el archivo</div></div>
+      </div>
+      <div class="fgroup" style="margin-bottom:14px">
+        <label>Solicitud pendiente</label>
+        <select class="fselect" id="tec-solicitud-sel" onchange="cargarSolicitudTecnica(this.value)">
+          <option value="">Cargando solicitudes...</option>
+        </select>
+      </div>
+      <div id="tec-detalle-solicitud" style="display:none;background:var(--bg3);border-radius:var(--r2);padding:14px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--acc);margin-bottom:8px">Detalle de la solicitud</div>
+        <div id="tec-info-solicitud"></div>
+      </div>
+      <div class="fgroup">
+        <label>Subir archivo (PDF o imagen)</label>
+        <div id="tec-drop-zone" style="border:2px dashed var(--brd);border-radius:var(--r2);padding:32px;text-align:center;cursor:pointer;transition:all 0.2s" onclick="document.getElementById('tec-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--acc)'" ondragleave="this.style.borderColor='var(--brd)'" ondrop="handleTecDrop(event)">
+          <div style="font-size:28px;margin-bottom:8px">&#128228;</div>
+          <div style="font-size:13px;font-weight:500;margin-bottom:4px">Toca para seleccionar archivo</div>
+          <div style="font-size:11px;color:var(--txt3)">PDF, JPG o PNG — max 50MB</div>
+          <input type="file" id="tec-file-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="previewTecFile(this)">
+        </div>
+      </div>
+      <div id="tec-preview" style="display:none;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:6px">Archivo seleccionado:</div>
+        <div id="tec-preview-info" style="background:var(--bg3);border-radius:var(--r);padding:10px;font-size:12px;display:flex;align-items:center;gap:10px"></div>
+      </div>
+      <div class="fgroup">
+        <label>Notas para el cerrador (opcional)</label>
+        <textarea class="fselect" id="tec-notas" rows="2" style="resize:vertical;min-height:60px" placeholder="Observaciones tecnicas, materiales sugeridos..."></textarea>
+      </div>
+      <div id="tec-progress" style="display:none;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Subiendo...</div>
+        <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+          <div id="tec-progress-bar" style="height:100%;width:0%;background:var(--acc);border-radius:3px;transition:width 0.3s"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="subirPropuestaTecnica()">Subir propuesta</button>
+    </div>
+
     <!-- TODOS LOS LEADS (admin / commercial_lead) -->
     <div class="panel" id="pn-todos">
       <div class="ph">
@@ -1324,6 +1365,10 @@ const NAVS={
     {id:'admin',icon:'&#9881;',label:'Admin'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
+  tecnico:[
+    {id:'inicio',icon:'&#128196;',label:'Solicitudes'},
+    {id:'tecnico-upload',icon:'&#128228;',label:'Subir'},
+  ],
 };
 function buildNav(){
   const nav=document.getElementById('bottomnav');
@@ -1343,6 +1388,7 @@ function sw(id,btn){
   else{const b=document.querySelector(`[data-nav="${id}"]`);if(b)b.classList.add('active');}
   // Cargar al cambiar de panel
   if(id==='leads')renderLeads();
+  if(id==='tecnico-upload')cargarSelectSolicitudes();
   if(id==='todos')renderTodos();
   if(id==='notas')renderNotas();
   // pn-agenda eliminado - el calendario personal está en el inicio
@@ -2452,6 +2498,12 @@ async function guardarLead(){
   }
   // Registrar venta si ganado
   if(estado==='cerrado_ganado'&&(editingLeadId||newId)){
+    // Calcular comision automaticamente
+    var precioVenta = parseFloat(document.getElementById('f-monto')&&document.getElementById('f-monto').value)||0;
+    var m2Venta = parseFloat(document.getElementById('f-metros')&&document.getElementById('f-metros').value)||0;
+    if(precioVenta>0){
+      calcularYGuardarComision(editingLeadId||newId, precioVenta, m2Venta);
+    }
     sb.from('ventas').insert([{
       lead_id:editingLeadId||newId,nombre_cliente:nombre,
       codigo_venta:data.codigo_venta,monto_usd:data.monto_contrato,
@@ -2961,125 +3013,58 @@ async function renderAdmin(){
       </div>`).join('')}
     </div>`;
   }else if(adminTabActual==='comisiones'){
-    const[{data:ventas},{data:comis}]=await Promise.all([
-      sb.from('ventas').select('*').order('fecha_venta',{ascending:false}),
-      sb.from('comisiones').select('*').order('created_at',{ascending:false})
-    ]);
-    const vList=ventas||[], cList=comis||[];
-    const mesStr=new Date().toISOString().slice(0,7);
-    const ventasMes=vList.filter(v=>v.fecha_venta?.startsWith(mesStr));
-    const totalMes=ventasMes.reduce((s,v)=>s+(Number(v.monto_usd)||0),0);
-    const m2Mes=ventasMes.reduce((s,v)=>s+(Number(v.metros_cuadrados)||0),0);
-    el.innerHTML=`
-    <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${vList.length}</div><div class="kpi-l">Total ventas</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${ventasMes.length}</div><div class="kpi-l">Este mes</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">$${Math.round(totalMes/1000)}k</div><div class="kpi-l">USD este mes</div></div>
-      <div class="kpi"><div class="kpi-n">${Math.round(m2Mes)}</div><div class="kpi-l">m² este mes</div></div>
-    </div>
-    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Ventas registradas</div>
-    ${!vList.length?'<div class="empty"><div class="empty-icon">[V]</div><div class="empty-title">Sin ventas aún</div></div>':
-    vList.map(v=>`<div class="card" style="padding:12px 14px;margin-bottom:6px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:3px">${v.nombre_cliente}</div>
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:5px">${v.codigo_venta||'-'} · ${v.fecha_venta||'-'}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;margin-bottom:4px">
-        <span style="color:var(--acc);font-weight:600">$${Number(v.monto_usd||0).toLocaleString()} USD</span>
-        ${v.metros_cuadrados?`<span style="color:var(--blue)">${v.metros_cuadrados} m²</span>`:''}
-        ${v.modelo_casa?`<span style="color:var(--txt3)">${v.modelo_casa}</span>`:''}
-      </div>
-      <div style="font-size:10px;color:var(--txt3)">Cap: ${v.captador||'-'} · Cer: ${v.cerrador||'-'}</div>
-    </div>`).join('')}
-    ${cList.filter(c=>!c.pagado_captador||!c.pagado_cerrador).length?`
-    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:16px 0 10px">Comisiones pendientes</div>
-    ${cList.filter(c=>!c.pagado_captador||!c.pagado_cerrador).map(c=>`<div class="card" style="padding:12px 14px;margin-bottom:6px">
-      <div style="font-size:12px;font-weight:500;margin-bottom:6px">${c.nombre_cliente}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span style="color:var(--acc);font-weight:600;font-size:12px">$${Number(c.monto_contrato||0).toLocaleString()}</span>
-        ${!c.pagado_captador?`<button class="btn btn-sm btn-ghost" onclick="marcarPagado(${c.id},'captador')" style="font-size:10px">Pagar captador</button>`:'<span style="font-size:10px;color:var(--green)">✓ Cap</span>'}
-        ${!c.pagado_cerrador?`<button class="btn btn-sm btn-ghost" onclick="marcarPagado(${c.id},'cerrador')" style="font-size:10px">Pagar cerrador</button>`:'<span style="font-size:10px;color:var(--green)">✓ Cer</span>'}
-      </div>
-    </div>`).join('')}`:''}
-    `;
+    renderComisiones(el);
   }else if(adminTabActual==='campanas'){
-    const{data}=await sb.from('campanas').select('*').order('created_at',{ascending:false});
-    const cams=data||[];
-    // Filtros de período
-    const hoy=new Date();
-    const filtros={
-      dia:()=>{const d=new Date();d.setHours(0,0,0,0);return d.toISOString();},
-      semana:()=>{const d=new Date();d.setDate(d.getDate()-7);return d.toISOString();},
-      mes:()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString();},
-      anio:()=>{const d=new Date();d.setFullYear(d.getFullYear()-1);return d.toISOString();}
-    };
-    const periodoActual=window.campanaFiltro||'mes';
-    const desdeFecha=filtros[periodoActual]();
-    const leadsEnPeriodo=allLeads.filter(l=>l.fecha_ingreso&&l.fecha_ingreso>=desdeFecha.slice(0,10));
-    const ganados=leadsEnPeriodo.filter(l=>l.estado==='cerrado_ganado').length;
-    const perdidos=leadsEnPeriodo.filter(l=>l.estado==='cerrado_perdido').length;
-    const visitas=leadsEnPeriodo.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
-    const conversion=ganados+perdidos>0?((ganados/(ganados+perdidos))*100).toFixed(1)+'%':'-';
-    el.innerHTML=`
-    <div style="display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">
-      ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoActual===p?'active':''}" style="white-space:nowrap" onclick="window.campanaFiltro='${p}';setAdminTab('campanas',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'30 días':'Este año'}</button>`).join('')}
-    </div>
-    <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${leadsEnPeriodo.length}</div><div class="kpi-l">Leads</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${visitas}</div><div class="kpi-l">Visitas</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados}</div><div class="kpi-l">Ganados</div></div>
-      <div class="kpi"><div class="kpi-n">${conversion}</div><div class="kpi-l">Conversión</div></div>
-    </div>
-    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Por medio de difusión</div>
-    ${['fan_page_geat','fan_page_steffi','fan_page_genoveva','tiktok_steffi','tiktok_empresa','instagram','referido_cliente','contacto_propio','barrido_ruteo','otro'].map(medio=>{
-      const total=leadsEnPeriodo.filter(l=>l.medio_difusion===medio).length;
-      if(!total) return '';
-      const pct=leadsEnPeriodo.length?Math.round((total/leadsEnPeriodo.length)*100):0;
-      return `<div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:12px;font-weight:500">${medio.replace(/_/g,' ')}</span>
-          <span style="font-size:12px;font-weight:600;color:var(--acc)">${total} leads</span>
-        </div>
-        <div style="height:4px;background:var(--brd);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:var(--acc);border-radius:2px;transition:width 0.4s"></div>
-        </div>
-        <div style="font-size:10px;color:var(--txt3);margin-top:3px">${pct}% del período</div>
-      </div>`;
-    }).join('')||'<div class="empty"><div class="empty-icon">[2]</div><div class="empty-title">Sin datos en este período</div></div>'}
-    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-top:16px;margin-bottom:10px">Campañas</div>
-    ${cams.map(c=>{
-      const leadsC=leadsEnPeriodo.filter(l=>l.campana_id==c.id||l.medio_difusion===c.fuente).length;
-      return `<div class="card">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:13px;font-weight:500">${c.nombre}</div>
-          <div style="font-size:13px;font-weight:600;color:var(--acc)">${leadsC} leads</div>
-        </div>
-        <div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">
-          <span>${c.plataforma||'-'}</span>
-          <span>$${c.inversion_usd||0} USD</span>
-          ${leadsC&&c.inversion_usd?`<span style="color:var(--green)">$${Math.round(c.inversion_usd/leadsC)} por lead</span>`:''}
-        </div>
-      </div>`;
-    }).join('')||'<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Sin campañas registradas</div>'}`;
-  }else if(adminTabActual==='ceo'){
-    renderPanelCEO(el);
-  }else if(adminTabActual==='auditoria'){
-    // Combinar log local + datos de BD (cuando esté conectado)
-    const log = window._auditLog || [];
-    const acciones_riesgo = ['edicion_lead','eliminacion','exportacion','impersonacion','cambio_pin'];
-    el.innerHTML = `
-    <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Registro de acciones · ${log.length} entradas</div>
-    ${!log.length ? '<div class="empty"><div class="empty-icon">[A]</div><div class="empty-title">Sin registros en esta sesión</div><div class="empty-sub">Las acciones se registran automáticamente</div></div>' :
-    log.map(r=>{
-      const esRiesgo = acciones_riesgo.includes(r.accion);
-      const hora = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}) : '';
-      return `<div style="padding:10px;background:var(--bg3);border-radius:var(--r);margin-bottom:6px;border-left:3px solid ${esRiesgo?'var(--red)':'var(--brd2)'}">
-        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
-          <span style="font-size:12px;font-weight:600;color:${esRiesgo?'var(--red)':'var(--txt)'}">${r.accion}</span>
-          <span style="font-size:10px;color:var(--txt3)">${hora}</span>
-        </div>
-        <div style="font-size:11px;color:var(--txt3)">${r.colaborador} · ${r.rol}${r.tabla_afectada?' · '+r.tabla_afectada:''}</div>
-        ${r.datos_nuevos?`<div style="font-size:10px;color:var(--txt3);margin-top:2px;font-style:italic">${r.datos_nuevos.slice(0,80)}</div>`:''}
-      </div>`;
-    }).join('')}`;
+    // Datos basicos de campanas desde BD
+    var hoyC=new Date().toISOString().slice(0,10);
+    var mesActC=new Date().toISOString().slice(0,7);
+    var periodoC=window.campanaFiltro||'mes';
+    var desdeC={
+      dia:hoyC, semana:new Date(Date.now()-7*864e5).toISOString().slice(0,10),
+      mes:new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10),
+      anio:new Date().getFullYear()+'-01-01'
+    }[periodoC]||hoyC;
+    var leadsP=allLeads.filter(function(l){return l.fecha_ingreso&&l.fecha_ingreso>=desdeC;});
+    var ganadosP=leadsP.filter(function(l){return l.estado==='cerrado_ganado';}).length;
+    var visitasP=leadsP.filter(function(l){return l.estado==='visita_agendada'||l.estado==='visita_realizada';}).length;
+    var convP=ganadosP+leadsP.filter(function(l){return l.estado==='cerrado_perdido';}).length;
+    convP=convP>0?((ganadosP/convP)*100).toFixed(1)+'%':'—';
+    // Medios
+    var medios={};
+    leadsP.forEach(function(l){var m=l.medio_difusion||'otro';medios[m]=(medios[m]||0)+1;});
+    var mediosSorted=Object.entries(medios).sort(function(a,b){return b[1]-a[1];});
+    el.innerHTML=
+      '<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none">'+
+      ['dia','semana','mes','anio'].map(function(p){
+        var lbl=p==='dia'?'Hoy':p==='semana'?'7 dias':p==='mes'?'30 dias':'Ano';
+        var act=periodoC===p?' active':'';
+        var btn=document.createElement('button');
+        btn.className='tab'+act; btn.textContent=lbl;
+        btn.style.cssText='white-space:nowrap;font-size:11px';
+        btn.onclick=(function(pp){return function(){window.campanaFiltro=pp;setAdminTab('campanas',null);};})(p);
+        return btn.outerHTML;
+      }).join('')+'</div>'+
+      '<div class="kpi-grid" style="margin-bottom:14px">'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+leadsP.length+'</div><div class="kpi-l">Leads</div></div>'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--blue)">'+visitasP+'</div><div class="kpi-l">Visitas</div></div>'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--green)">'+ganadosP+'</div><div class="kpi-l">Ganados</div></div>'+
+      '<div class="kpi"><div class="kpi-n">'+convP+'</div><div class="kpi-l">Conversion</div></div>'+
+      '</div>'+
+      '<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Por medio de difusion</div>'+
+      mediosSorted.filter(function(m){return m[1]>0;}).map(function(m){
+        var pct=leadsP.length?Math.round((m[1]/leadsP.length)*100):0;
+        return '<div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:5px">'+
+          '<span style="font-size:12px">'+m[0].replace(/_/g,' ')+'</span>'+
+          '<span style="font-size:12px;font-weight:600;color:var(--acc)">'+m[1]+'</span></div>'+
+          '<div style="height:4px;background:var(--brd);border-radius:2px;overflow:hidden">'+
+          '<div style="height:100%;width:'+pct+'%;background:var(--acc);border-radius:2px"></div></div>'+
+          '<div style="font-size:10px;color:var(--txt3);margin-top:2px">'+pct+'% del periodo</div></div>';
+      }).join('')+
+      '<div style="margin-top:14px;padding:12px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r2);text-align:center">'+
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Agente de Marketing</div>'+
+      '<div style="font-size:12px;font-weight:500;color:var(--txt2)">Se integrara automaticamente cuando este disponible</div>'+
+      '</div>';
   }else if(adminTabActual==='papelera'){
     const{data}=await sb.from('leads_perdidos').select('*').order('fecha_perdida',{ascending:false}).limit(100);
     const items=data||[];
@@ -3806,21 +3791,209 @@ function renderCotizaciones(el){
 }
 
 function renderPropuestas(el){
-  el.innerHTML=`<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Propuestas</div><div class="empty-sub">Las propuestas se generan desde cotizaciones aprobadas</div></div>`;
-  sb.from('propuestas').select('*').order('created_at',{ascending:false}).limit(30)
-    .then(({data})=>{
-      const rows=data||[];
-      if(!rows.length) return;
-      el.innerHTML=rows.map(p=>{
-        const lead=allLeads.find(l=>l.id===p.lead_id);
-        return `<div class="card" style="border-left:3px solid var(--acc);padding:12px 14px;margin-bottom:6px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:3px">${lead?.nombre||'Lead #'+p.lead_id}</div>
-          <div style="font-size:11px;color:var(--txt3)">Estado: ${p.estado}${p.reunion_fecha?' · Reunión: '+new Date(p.reunion_fecha).toLocaleDateString('es-BO'):''}</div>
-          ${p.notas?`<div style="font-size:11px;color:var(--txt2);margin-top:4px">${p.notas}</div>`:''}
-        </div>`;
-      }).join('');
-    }).catch(()=>{});
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  sb.from('solicitudes_propuesta').select('*').order('created_at',{ascending:false}).limit(50)
+    .then(function(r){
+      var rows=r.data||[];
+
+      // Panel generador de imagen SIEMPRE visible arriba
+      var genPanel = '<div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r2);padding:14px;margin-bottom:14px">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Generar requerimiento para Arquitectura</div>' +
+        '<div class="fgroup" style="margin-bottom:8px"><label>Lead / Cliente</label>' +
+        '<select class="fselect" id="prop-lead-sel" style="font-size:12px" onchange="actualizarDatosPropLead(this.value)">' +
+        '<option value="">Seleccionar lead...</option>' +
+        allLeads.filter(function(l){return cu.rol==='closer'?l.cerrador===cu.nombre:true;})
+          .map(function(l){return '<option value="'+l.id+'">'+l.nombre+'</option>';}).join('') +
+        '</select></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+        '<div class="fgroup"><label>m2</label><input class="finput" id="prop-m2" type="number" placeholder="120" style="font-size:12px"></div>' +
+        '<div class="fgroup"><label>Precio USD</label><input class="finput" id="prop-precio" type="number" placeholder="45000" style="font-size:12px"></div>' +
+        '</div>' +
+        '<div class="fgroup" style="margin-bottom:8px"><label>Descripcion / Detalles</label>' +
+        '<textarea class="finput" id="prop-desc" rows="2" style="resize:vertical;min-height:56px;font-size:12px" placeholder="Modelo, plantas, caracteristicas..."></textarea>' +
+        '</div>' +
+
+        // Preview canvas
+        '<div id="prop-canvas-wrap" style="display:none;margin-bottom:10px">' +
+        '<canvas id="prop-canvas" width="800" height="560" style="width:100%;border-radius:var(--r);border:1px solid var(--brd)"></canvas>' +
+        '</div>' +
+
+        '<div style="display:flex;gap:8px">' +
+        '<button class="btn btn-primary" style="flex:1" onclick="generarImagenReq()">Generar imagen</button>' +
+        '<button id="btn-enviar-grupo" class="btn" style="flex:1;background:rgba(37,211,102,0.1);border-color:rgba(37,211,102,0.4);color:var(--green);display:none" onclick="enviarReqAlGrupo()">' +
+        'Enviar al grupo WA</button>' +
+        '</div>' +
+        '</div>';
+
+      // Lista de solicitudes existentes
+      var lista = '';
+      if(!rows.length){
+        lista='<div class="empty"><div class="empty-icon">&#128196;</div><div class="empty-title">Sin solicitudes aun</div></div>';
+      } else {
+        lista='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Historial de solicitudes</div>';
+        rows.forEach(function(p){
+          var estCol={pendiente:'var(--acc)',en_proceso:'var(--blue)',entregado:'var(--green)'}[p.estado]||'var(--txt3)';
+          lista+='<div class="card has-left" style="border-left-color:'+estCol+';padding:11px 13px;margin-bottom:6px">';
+          lista+='<div style="display:flex;justify-content:space-between;margin-bottom:3px">';
+          lista+='<span style="font-size:13px;font-weight:600">'+(p.nombre_cliente||'Cliente')+'</span>';
+          lista+='<span style="font-size:10px;font-weight:600;color:'+estCol+'">'+p.estado+'</span></div>';
+          lista+='<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">'+(p.metros_cuadrados||'-')+' m² · '+(p.ciudad||'')+'</div>';
+          if(p.notas_tecnica) lista+='<div style="font-size:11px;color:var(--txt2);font-style:italic;margin-bottom:4px">"'+p.notas_tecnica+'"</div>';
+          if(p.archivo_url) lista+='<a href="'+p.archivo_url+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--r);font-size:11px;font-weight:600;color:var(--green);text-decoration:none">&#128228; Ver propuesta</a>';
+          lista+='</div>';
+        });
+      }
+
+      el.innerHTML = genPanel + lista;
+    }).catch(function(e){
+      el.innerHTML='<div class="empty"><div class="et">Error: '+e.message+'</div></div>';
+    });
 }
+
+function actualizarDatosPropLead(leadId){
+  var lead = allLeads.find(function(l){return l.id==leadId;});
+  if(!lead) return;
+  if(lead.metros_cuadrados) document.getElementById('prop-m2').value=lead.metros_cuadrados;
+}
+
+function generarImagenReq(){
+  var leadId = document.getElementById('prop-lead-sel').value;
+  var lead = allLeads.find(function(l){return l.id==leadId;});
+  var m2 = document.getElementById('prop-m2').value||'-';
+  var precio = document.getElementById('prop-precio').value||'-';
+  var desc = document.getElementById('prop-desc').value||'';
+  var cliente = lead?lead.nombre:'Cliente';
+  var celular = lead?lead.celular:'-';
+  var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
+  var financ = lead?(lead.financiamiento==='bancario'?'Financiamiento bancario':'Al contado'):'';
+  var fecha = new Date().toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  var canvas = document.getElementById('prop-canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width=800; canvas.height=560;
+
+  // Fondo
+  ctx.fillStyle='#0F172A'; ctx.fillRect(0,0,800,560);
+
+  // Barra dorada
+  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,0,800,6);
+
+  // Logo
+  ctx.fillStyle='#F59E0B';
+  ctx.beginPath(); ctx.roundRect(28,22,56,56,8); ctx.fill();
+  ctx.fillStyle='#000'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
+  ctx.fillText('G',56,60);
+
+  // Empresa
+  ctx.fillStyle='#F59E0B'; ctx.font='bold 20px Arial'; ctx.textAlign='left';
+  ctx.fillText('GEAT',100,44);
+  ctx.fillStyle='#64748B'; ctx.font='10px Arial';
+  ctx.fillText('CONSTRUCCION Y CONSULTORIA',100,60);
+
+  // Titulo
+  ctx.fillStyle='#F1F5F9'; ctx.font='bold 22px Arial'; ctx.textAlign='center';
+  ctx.fillText('SOLICITUD DE PROPUESTA',400,110);
+  ctx.strokeStyle='#F59E0B'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(50,124); ctx.lineTo(750,124); ctx.stroke();
+
+  // Datos cliente
+  var col1=[['Cliente:',cliente],['Celular:',celular],['Ciudad:',ciudad],['Financiamiento:',financ]];
+  ctx.textAlign='left';
+  col1.forEach(function(d,i){
+    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,155+i*28);
+    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],180,155+i*28);
+  });
+
+  // Separador
+  ctx.strokeStyle='#334155'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(50,268); ctx.lineTo(750,268); ctx.stroke();
+
+  // Proyecto
+  ctx.fillStyle='#F59E0B'; ctx.font='bold 13px Arial'; ctx.textAlign='left';
+  ctx.fillText('ESPECIFICACIONES',60,295);
+  var col2=[['Metros cuadrados:',m2+' m²'],['Presupuesto est.:','$'+precio+' USD'],['Cerrador:',cu.nombre]];
+  col2.forEach(function(d,i){
+    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,320+i*26);
+    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],220,320+i*26);
+  });
+
+  // Descripcion
+  if(desc){
+    ctx.fillStyle='#64748B'; ctx.font='11px Arial'; ctx.fillText('Detalles:',60,410);
+    ctx.fillStyle='#CBD5E1'; ctx.font='11px Arial';
+    var words=desc.split(' '), line='', y=428;
+    words.forEach(function(w){
+      var t=line+w+' ';
+      if(ctx.measureText(t).width>680){ctx.fillText(line,60,y);y+=16;line=w+' ';}
+      else line=t;
+    });
+    if(line) ctx.fillText(line,60,y);
+  }
+
+  // Footer
+  ctx.fillStyle='#475569'; ctx.font='11px Arial'; ctx.textAlign='left';
+  ctx.fillText('Fecha: '+fecha,60,535);
+  ctx.textAlign='right';
+  ctx.fillText('GEAT Construccion y Consultoria',740,535);
+  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,554,800,6);
+
+  // Mostrar canvas y boton
+  document.getElementById('prop-canvas-wrap').style.display='block';
+  document.getElementById('btn-enviar-grupo').style.display='block';
+  // Guardar datos para envio
+  window._propImgLead = lead;
+  window._propImgM2 = m2;
+  window._propImgPrecio = precio;
+  window._propImgDesc = desc;
+
+  toast('Imagen generada — ahora enviala al grupo');
+}
+
+function enviarReqAlGrupo(){
+  var canvas = document.getElementById('prop-canvas');
+  if(!canvas){ toast('Genera la imagen primero','error'); return; }
+
+  // Descargar imagen automaticamente
+  var link = document.createElement('a');
+  link.href = canvas.toDataURL('image/png');
+  var nombre = window._propImgLead ? window._propImgLead.nombre.replace(/\s/g,'_') : 'cliente';
+  link.download = 'GEAT_req_'+nombre+'.png';
+  link.click();
+
+  // Abrir grupo WhatsApp inmediatamente
+  var grupo = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
+  setTimeout(function(){ window.open(grupo,'_blank'); }, 500);
+
+  // Guardar solicitud en BD
+  var lead = window._propImgLead;
+  if(lead){
+    guardarSolicitudArquitectura(lead.id,{
+      nombre_cliente:lead.nombre, ciudad:lead.ciudad||'',
+      metros_cuadrados:window._propImgM2||null,
+      precio_estimado:window._propImgPrecio||null,
+      descripcion:window._propImgDesc||''
+    });
+  }
+  toast('Imagen descargada • Grupo de WhatsApp abierto');
+}
+
+
+async function enviarSolicitudArquitectura(){
+  // Generar solicitud a arquitectura y guardar en BD
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  var lead = leadId&&allLeads.find(function(l){return l.id==leadId;});
+  if(!lead){ toast('Selecciona un lead en Cotizaciones primero','error'); return; }
+  await guardarSolicitudArquitectura(leadId, {
+    nombre_cliente: lead.nombre,
+    ciudad: lead.ciudad||'',
+    metros_cuadrados: document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value||null,
+    precio_estimado: document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value||null,
+    descripcion: document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||''
+  });
+  toast('Solicitud enviada a Arquitectura');
+  renderCierre();
+}
+
 
 function renderReservas(el){
   el.innerHTML=`
@@ -3905,57 +4078,172 @@ function enviarArquitectura(){
   var cliente = lead?lead.nombre:'Cliente';
   var celular = lead?lead.celular:'-';
   var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
-  var lineas = [
-    '*SOLICITUD DE PROPUESTA - GEAT*','',
-    '*Cliente:* '+cliente,'*Celular:* '+celular,'*Ciudad:* '+ciudad,'',
-    '*Proyecto:* '+titulo,'*m2:* '+m2+' m2','*Presupuesto:* $'+precio+' USD',
-    desc?'*Detalles:* '+desc:'','',
-    '*Cerrador:* '+cu.nombre,'*Fecha:* '+new Date().toLocaleDateString('es-BO'),'',
-    '_Solicitud generada desde GEAT CRM_'
-  ].filter(function(x){return x!==false;}).join('\n');
+  var financ = lead?(lead.financiamiento==='bancario'?'Financiamiento bancario':'Al contado'):'';
+  var fecha = new Date().toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  var url = 'https://wa.me/?text='+encodeURIComponent(lineas);
-  var grupo = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
+  // Generar imagen con Canvas
+  var canvas = document.createElement('canvas');
+  canvas.width = 800; canvas.height = 600;
+  var ctx = canvas.getContext('2d');
 
-  var overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#1E293B;border:1px solid #334155;border-radius:14px;padding:22px;width:100%;max-width:340px';
+  // Fondo negro GEAT
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(0,0,800,600);
 
+  // Barra dorada superior
+  ctx.fillStyle = '#F59E0B';
+  ctx.fillRect(0,0,800,8);
+
+  // Logo G
+  ctx.fillStyle = '#F59E0B';
+  ctx.beginPath();
+  ctx.roundRect(30,30,60,60,10);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('G',60,72);
+
+  // Nombre empresa
+  ctx.fillStyle = '#F59E0B';
+  ctx.font = 'bold 22px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('GEAT', 105, 52);
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = '12px Arial';
+  ctx.fillText('CONSTRUCCION Y CONSULTORIA', 105, 72);
+
+  // Titulo solicitud
+  ctx.fillStyle = '#F1F5F9';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('SOLICITUD DE PROPUESTA', 400, 135);
+
+  // Linea separadora
+  ctx.strokeStyle = '#F59E0B';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(50,150); ctx.lineTo(750,150);
+  ctx.stroke();
+
+  // Datos del cliente
+  var datos = [
+    ['Cliente:', cliente],
+    ['Celular:', celular],
+    ['Ciudad:', ciudad],
+    ['Financiamiento:', financ],
+  ];
+  ctx.textAlign = 'left';
+  datos.forEach(function(d,i){
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '13px Arial';
+    ctx.fillText(d[0], 60, 185+i*32);
+    ctx.fillStyle = '#F1F5F9';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText(d[1], 210, 185+i*32);
+  });
+
+  // Separador
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(50,320); ctx.lineTo(750,320);
+  ctx.stroke();
+
+  // Datos del proyecto
+  ctx.fillStyle = '#F59E0B';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('ESPECIFICACIONES DEL PROYECTO', 60, 350);
+
+  var proyecto = [
+    ['Modelo/Titulo:', titulo],
+    ['Metros cuadrados:', m2+' m²'],
+    ['Presupuesto est.:', '$'+precio+' USD'],
+  ];
+  proyecto.forEach(function(d,i){
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '13px Arial';
+    ctx.fillText(d[0], 60, 380+i*30);
+    ctx.fillStyle = '#F1F5F9';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText(d[1], 230, 380+i*30);
+  });
+
+  if(desc){
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '12px Arial';
+    ctx.fillText('Detalles:', 60, 475);
+    ctx.fillStyle = '#CBD5E1';
+    // Texto con wrap basico
+    var words = desc.split(' ');
+    var line = '';
+    var y = 495;
+    words.forEach(function(w){
+      var test = line+w+' ';
+      if(ctx.measureText(test).width > 680){
+        ctx.fillText(line, 60, y); y+=18; line=w+' ';
+      } else { line=test; }
+    });
+    if(line) ctx.fillText(line, 60, y);
+  }
+
+  // Footer
+  ctx.fillStyle = '#475569';
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Cerrador: '+cu.nombre, 60, 575);
+  ctx.textAlign = 'right';
+  ctx.fillText(fecha, 740, 575);
+
+  // Barra dorada inferior
+  ctx.fillStyle = '#F59E0B';
+  ctx.fillRect(0,592,800,8);
+
+  // Convertir canvas a imagen y compartir/descargar
+  var dataUrl = canvas.toDataURL('image/png');
+
+  // Mostrar modal con preview y opciones
+  var modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+
+  var preview = document.createElement('img');
+  preview.src = dataUrl;
+  preview.style.cssText = 'max-width:100%;max-height:55vh;border-radius:8px;border:2px solid #F59E0B;margin-bottom:16px';
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px';
+
+  // Boton descargar imagen
+  var btnDl = document.createElement('a');
+  btnDl.href = dataUrl;
+  btnDl.download = 'GEAT_solicitud_'+cliente.replace(/\s/g,'_')+'.png';
+  btnDl.style.cssText = 'padding:13px;background:#F59E0B;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none';
+  btnDl.textContent = 'Descargar imagen';
+
+  // Boton abrir grupo WhatsApp
+  var grupoLink = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
   var btnGrupo = document.createElement('button');
+  btnGrupo.style.cssText = 'padding:13px;background:#22C55E;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:600;cursor:pointer';
   btnGrupo.textContent = 'Abrir grupo Arquitectura';
-  btnGrupo.style.cssText = 'width:100%;padding:13px;background:#22C55E;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;display:block';
-  btnGrupo.onclick = function(){ window.open(grupo,'_blank'); overlay.remove(); };
+  btnGrupo.onclick = function(){ window.open(grupoLink,'_blank'); };
 
-  var btnMsg = document.createElement('button');
-  btnMsg.textContent = 'Abrir WhatsApp con mensaje';
-  btnMsg.style.cssText = 'width:100%;padding:12px;background:#334155;border:1px solid #475569;border-radius:10px;color:#F1F5F9;font-size:13px;cursor:pointer;margin-bottom:12px;display:block';
-  btnMsg.onclick = function(){ window.open(url,'_blank'); overlay.remove(); };
-
-  var preview = document.createElement('div');
-  preview.style.cssText = 'background:#0F172A;border-radius:8px;padding:10px;margin-bottom:12px;max-height:120px;overflow-y:auto;font-size:10px;color:#94A3B8;white-space:pre-wrap;line-height:1.5';
-  preview.textContent = lineas;
+  var instruccion = document.createElement('div');
+  instruccion.style.cssText = 'font-size:11px;color:#94A3B8;text-align:center;padding:8px;line-height:1.6';
+  instruccion.textContent = 'Descarga la imagen y luego enviala al grupo de WhatsApp de Arquitectura';
 
   var btnCancel = document.createElement('button');
-  btnCancel.textContent = 'Cancelar';
-  btnCancel.style.cssText = 'width:100%;padding:10px;background:none;border:1px solid #334155;border-radius:10px;color:#94A3B8;font-size:13px;cursor:pointer';
-  btnCancel.onclick = function(){ overlay.remove(); };
+  btnCancel.style.cssText = 'padding:10px;background:none;border:1px solid #334155;border-radius:10px;color:#94A3B8;font-size:13px;cursor:pointer';
+  btnCancel.textContent = 'Cerrar';
+  btnCancel.onclick = function(){ modal.remove(); };
 
-  var titulo_el = document.createElement('div');
-  titulo_el.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:6px';
-  titulo_el.textContent = 'Solicitud lista';
-  var sub_el = document.createElement('div');
-  sub_el.style.cssText = 'font-size:11px;color:#94A3B8;margin-bottom:16px';
-  sub_el.textContent = 'Requerimiento para grupo de Arquitectura';
-
-  box.appendChild(titulo_el);
-  box.appendChild(sub_el);
-  box.appendChild(btnGrupo);
-  box.appendChild(btnMsg);
-  box.appendChild(preview);
-  box.appendChild(btnCancel);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
+  btnRow.appendChild(btnDl);
+  btnRow.appendChild(btnGrupo);
+  btnRow.appendChild(instruccion);
+  btnRow.appendChild(btnCancel);
+  modal.appendChild(preview);
+  modal.appendChild(btnRow);
+  document.body.appendChild(modal);
 }
 
 function guardarReunionYReserva(){
@@ -3977,9 +4265,22 @@ function guardarReunion(){
     notas:document.getElementById('reu-notas').value||null
   };
   closeSheet('reunion');toast('Guardando reunión...');
-  sb.from('reuniones_cerrador').insert([data]).then(()=>{
-    toast('Reunión guardada ✓');renderCierre();
-  }).catch(e=>toast('Error: '+e.message,'error'));
+  sb.from('reuniones_cerrador').insert([data]).then(function(){
+    toast('Reunion guardada');
+    // Agregar a agenda grupal si tiene fecha
+    if(data.fecha){
+      var lReu=allLeads.find(function(l){return l.id===data.lead_id;});
+      var tit='Reunion'+(lReu?' con '+lReu.nombre:'')+' - '+data.tipo;
+      sb.from('agenda_grupal').insert([{
+        titulo:tit,
+        colaborador:cu.nombre,
+        rol_colaborador:cu.rol,
+        fecha_actividad:data.fecha,
+        lead_id:data.lead_id||null
+      }]).then(function(){}).catch(function(){});
+    }
+    renderCierre();
+  }).catch(function(e){toast('Error: '+e.message,'error');});
 }
 
 function guardarCotizacion(){
@@ -4526,7 +4827,411 @@ async function renderPanelCEO(el){
     html += '</div>';
   }
 
-  el.innerHTML = html;
+  // Tramites atascados
+  checkTramitesBanner(el).then(function(tramBanner){
+    el.innerHTML = (tramBanner||'') + html;
+  });
+}
+
+
+
+// ══════════════════════════════════════
+// MODULO TECNICO — Subir propuestas
+// ══════════════════════════════════════
+var tecFileSeleccionado = null;
+var tecSolicitudActual = null;
+
+async function cargarSelectSolicitudes(){
+  var sel = document.getElementById('tec-solicitud-sel');
+  if(!sel) return;
+  try{
+    var {data} = await sb.from('solicitudes_propuesta')
+      .select('*')
+      .in('estado',['pendiente','en_proceso'])
+      .order('created_at',{ascending:false});
+    var items = data||[];
+    if(!items.length){
+      sel.innerHTML='<option value="">Sin solicitudes pendientes</option>';
+      return;
+    }
+    sel.innerHTML='<option value="">Seleccionar solicitud...</option>'+
+      items.map(function(s){
+        return '<option value="'+s.id+'">'+
+          s.nombre_cliente+' — '+s.metros_cuadrados+'m2 — '+s.estado+
+          '</option>';
+      }).join('');
+  }catch(e){ sel.innerHTML='<option value="">Error cargando</option>'; }
+}
+
+function cargarSolicitudTecnica(id){
+  if(!id){ document.getElementById('tec-detalle-solicitud').style.display='none'; return; }
+  sb.from('solicitudes_propuesta').select('*').eq('id',id).single().then(function(r){
+    if(!r.data) return;
+    tecSolicitudActual = r.data;
+    var d = r.data;
+    var el = document.getElementById('tec-info-solicitud');
+    el.innerHTML = [
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px">',
+      '<span style="color:var(--txt3)">Cliente</span><span style="font-weight:600">'+d.nombre_cliente+'</span>',
+      '<span style="color:var(--txt3)">Ciudad</span><span>'+d.ciudad+'</span>',
+      '<span style="color:var(--txt3)">m2</span><span style="color:var(--acc);font-weight:600">'+d.metros_cuadrados+' m²</span>',
+      '<span style="color:var(--txt3)">Presupuesto</span><span>$'+d.precio_estimado+' USD</span>',
+      '<span style="color:var(--txt3)">Cerrador</span><span>'+d.cerrador+'</span>',
+      (d.descripcion?'<span style="color:var(--txt3)">Detalles</span><span style="font-style:italic">'+d.descripcion+'</span>':''),
+      '</div>'
+    ].join('');
+    document.getElementById('tec-detalle-solicitud').style.display='block';
+  });
+}
+
+function handleTecDrop(e){
+  e.preventDefault();
+  var files = e.dataTransfer.files;
+  if(files.length>0) previewTecFile({files:files});
+  document.getElementById('tec-drop-zone').style.borderColor='var(--brd)';
+}
+
+function previewTecFile(input){
+  var file = input.files&&input.files[0];
+  if(!file) return;
+  tecFileSeleccionado = file;
+  var isImg = file.type.startsWith('image/');
+  var sizeStr = (file.size/1024/1024).toFixed(2)+' MB';
+  var preview = document.getElementById('tec-preview');
+  var info = document.getElementById('tec-preview-info');
+  var icono = isImg?'&#128444;':'&#128196;';
+  info.innerHTML = '<span style="font-size:24px">'+icono+'</span>'+
+    '<div><div style="font-weight:600">'+file.name+'</div><div style="font-size:10px;color:var(--txt3)">'+sizeStr+'</div></div>'+
+    (isImg?'<img src="'+URL.createObjectURL(file)+'" style="height:50px;border-radius:4px;margin-left:auto">':'');
+  preview.style.display='block';
+}
+
+async function subirPropuestaTecnica(){
+  if(!tecFileSeleccionado){ toast('Selecciona un archivo','error'); return; }
+  if(!tecSolicitudActual){ toast('Selecciona una solicitud','error'); return; }
+  var progress = document.getElementById('tec-progress');
+  var bar = document.getElementById('tec-progress-bar');
+  progress.style.display='block';
+  bar.style.width='20%';
+  try{
+    var file = tecFileSeleccionado;
+    var ext = file.name.split('.').pop();
+    var path = 'solicitud_'+tecSolicitudActual.id+'_'+Date.now()+'.'+ext;
+    bar.style.width='50%';
+    // Subir a Supabase Storage
+    var {data:uploadData, error:uploadErr} = await sb.storage
+      .from('propuestas')
+      .upload(path, file, {cacheControl:'3600', upsert:true});
+    if(uploadErr) throw uploadErr;
+    bar.style.width='80%';
+    // URL publica del archivo
+    var {data:urlData} = sb.storage.from('propuestas').getPublicUrl(path);
+    var publicUrl = urlData.publicUrl;
+    // Actualizar solicitud en BD
+    await sb.from('solicitudes_propuesta').update({
+      archivo_url: publicUrl,
+      archivo_nombre: file.name,
+      estado: 'entregado',
+      fecha_entrega: new Date().toISOString(),
+      notas_tecnica: document.getElementById('tec-notas').value||null
+    }).eq('id',tecSolicitudActual.id);
+    bar.style.width='100%';
+    toast('Propuesta subida correctamente');
+    if(tecSolicitudActual && tecSolicitudActual.cerrador){
+      sb.from('notificaciones_internas').insert([{
+        para: tecSolicitudActual.cerrador, de: 'Arquitectura GEAT',
+        tipo: 'propuesta_lista', titulo: 'Propuesta lista',
+        mensaje: 'La propuesta de '+tecSolicitudActual.nombre_cliente+' esta lista.',
+        lead_id: tecSolicitudActual.lead_id
+      }]).then(function(){}).catch(function(){});
+    }
+    setTimeout(function(){
+      progress.style.display='none';
+      bar.style.width='0%';
+      tecFileSeleccionado=null;
+      tecSolicitudActual=null;
+      document.getElementById('tec-preview').style.display='none';
+      document.getElementById('tec-notas').value='';
+      document.getElementById('tec-detalle-solicitud').style.display='none';
+      cargarSelectSolicitudes();
+    },1500);
+  }catch(err){
+    progress.style.display='none';
+    toast('Error al subir: '+err.message,'error');
+  }
+}
+
+// Guardar solicitud desde cotizacion
+async function guardarSolicitudArquitectura(leadId, datos){
+  try{
+    await sb.from('solicitudes_propuesta').insert([{
+      lead_id: leadId,
+      cerrador: cu.nombre,
+      nombre_cliente: datos.nombre_cliente,
+      ciudad: datos.ciudad,
+      metros_cuadrados: datos.metros_cuadrados||null,
+      precio_estimado: datos.precio_estimado||null,
+      descripcion: datos.descripcion||null,
+      estado: 'pendiente'
+    }]);
+  }catch(e){ console.log('Solicitud arq error:', e.message); }
+}
+
+
+
+// ══════════════════════════════════════
+// ALERTAS TRAMITE BANCARIO
+// ══════════════════════════════════════
+async function checkTramitesAtascados(){
+  try{
+    var {data} = await sb.from('tramites_atascados').select('*');
+    var atascados = data||[];
+    if(atascados.length === 0) return;
+
+    // Mostrar alerta en topbar
+    var existing = document.getElementById('alerta-tramite-banner');
+    if(existing) existing.remove();
+
+    var banner = document.createElement('div');
+    banner.id = 'alerta-tramite-banner';
+    banner.style.cssText = 'background:rgba(239,68,68,0.1);border-bottom:1px solid rgba(239,68,68,0.3);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--red)';
+
+    var pasos = ['Firma GEAT','Ppto bancario','Aprobacion','Firma contrato','Desembolso'];
+    var msgs = atascados.map(function(t){
+      return t.nombre_cliente + ' — Paso ' + t.paso_atascado + ': ' + (pasos[t.paso_atascado-1]||'');
+    }).join(' | ');
+
+    banner.innerHTML = '<span>&#9888; Tramite bancario atascado: ' + msgs + '</span>' +
+      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">&#x2715;</button>';
+
+    var content = document.querySelector('.content');
+    if(content) content.parentNode.insertBefore(banner, content);
+
+    // Toast para el cerrador
+    if(cu.rol==='closer'||cu.rol==='commercial_lead'){
+      var mioAtascado = atascados.find(function(t){return t.cerrador===cu.nombre;});
+      if(mioAtascado){
+        toast('ALERTA: Tramite de '+mioAtascado.nombre_cliente+' lleva mas de 7 dias en Paso '+mioAtascado.paso_atascado, 'error');
+      }
+    }
+  }catch(e){ console.log('checkTramites:', e.message); }
+}
+
+// Agregar en panel CEO
+async function checkTramitesBanner(el){
+  try{
+    var {data} = await sb.from('tramites_atascados').select('*');
+    var items = data||[];
+    if(!items.length) return '';
+    var pasos = ['Firma GEAT','Ppto bancario','Aprobacion credito','Firma contrato','Desembolso'];
+    var html = '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:14px">';
+    html += '<div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">TRAMITES BANCARIOS ATASCADOS (' + items.length + ')</div>';
+    items.forEach(function(t){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1)">';
+      html += '<div><div style="font-size:12px;font-weight:500">' + t.nombre_cliente + '</div>';
+      html += '<div style="font-size:10px;color:var(--red)">Paso ' + t.paso_atascado + ': ' + (pasos[(t.paso_atascado||1)-1]||'') + ' — mas de 7 dias</div></div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">' + (t.cerrador||'') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }catch(e){ return ''; }
+}
+
+
+
+// ══════════════════════════════════════
+// COMISIONES AUTOMATICAS POR m2
+// Captador: 0.5% del precio total
+// Cerrador: 1.0% del precio total
+// ══════════════════════════════════════
+var COMISION_CAPTADOR_PCT = 0.005;
+var COMISION_CERRADOR_PCT = 0.010;
+
+async function calcularYGuardarComision(leadId, precioUSD, m2){
+  var lead = allLeads.find(function(l){return l.id===leadId;});
+  if(!lead) return;
+  var comCaptador = Math.round(precioUSD * COMISION_CAPTADOR_PCT);
+  var comCerrador = Math.round(precioUSD * COMISION_CERRADOR_PCT);
+  try{
+    await sb.from('comisiones_calculadas').upsert([{
+      lead_id: leadId,
+      captador: lead.captador,
+      cerrador: lead.cerrador,
+      metros_cuadrados: m2||null,
+      precio_usd: precioUSD,
+      comision_captador_pct: COMISION_CAPTADOR_PCT*100,
+      comision_cerrador_pct: COMISION_CERRADOR_PCT*100,
+      comision_captador_usd: comCaptador,
+      comision_cerrador_usd: comCerrador,
+      estado: 'pendiente',
+      fecha_venta: new Date().toISOString().slice(0,10)
+    }],{onConflict:'lead_id'});
+    toast('Comision calculada: Cap $'+comCaptador+' / Cerr $'+comCerrador);
+  }catch(e){ console.log('Comision error:', e.message); }
+}
+
+async function renderComisiones(el){
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando comisiones...</div>';
+  try{
+    var {data} = await sb.from('comisiones_calculadas')
+      .select('*')
+      .order('created_at',{ascending:false});
+    var items = data||[];
+    var totalPendCap = items.filter(function(c){return !c.pagado_captador;})
+      .reduce(function(s,c){return s+(c.comision_captador_usd||0);},0);
+    var totalPendCer = items.filter(function(c){return !c.pagado_cerrador;})
+      .reduce(function(s,c){return s+(c.comision_cerrador_usd||0);},0);
+
+    var html = '<div class="kpi-grid" style="margin-bottom:14px">'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+items.length+'</div><div class="kpi-l">Ventas</div></div>'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--red)">$'+totalPendCap+'</div><div class="kpi-l">Pend. captadores</div></div>'+
+      '<div class="kpi"><div class="kpi-n" style="color:var(--red)">$'+totalPendCer+'</div><div class="kpi-l">Pend. cerradores</div></div>'+
+      '</div>';
+
+    if(!items.length){
+      html += '<div class="empty"><div class="empty-icon">&#128181;</div><div class="empty-title">Sin comisiones aun</div><div class="empty-sub">Se calculan al marcar un lead como Ganado</div></div>';
+    } else {
+      html += '<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Detalle</div>';
+      items.forEach(function(c){
+        var lead = allLeads.find(function(l){return l.id===c.lead_id;});
+        html += '<div class="card" style="padding:12px 14px;margin-bottom:8px">';
+        html += '<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+(lead?lead.nombre:'Lead #'+c.lead_id)+'</div>';
+        html += '<div style="font-size:11px;color:var(--txt3);margin-bottom:8px">'+c.fecha_venta+' &bull; '+(c.metros_cuadrados||'-')+' m² &bull; $'+(c.precio_usd||0).toLocaleString()+' USD</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+        // Captador
+        html += '<div style="background:var(--bg3);border-radius:var(--r);padding:10px">';
+        html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Captador: '+(c.captador||'-').split(' ')[0]+'</div>';
+        html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_captador_usd+'</div>';
+        html += '<div style="font-size:10px;color:'+(c.pagado_captador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_captador?'Pagado':'Pendiente')+'</div>';
+        if(!c.pagado_captador){ html += '<button onclick="pagarComision('+c.id+',\'captador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
+        // Cerrador
+        html += '<div style="background:var(--bg3);border-radius:var(--r);padding:10px">';
+        html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Cerrador: '+(c.cerrador||'-').split(' ')[0]+'</div>';
+        html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_cerrador_usd+'</div>';
+        html += '<div style="font-size:10px;color:'+(c.pagado_cerrador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_cerrador?'Pagado':'Pendiente')+'</div>';
+        if(!c.pagado_cerrador){ html += '<button onclick="pagarComision('+c.id+',\'cerrador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }'</div>';
+        html += '</div></div>';
+      });
+    }
+    el.innerHTML = html;
+  }catch(e){ el.innerHTML='<div class="empty"><div class="et">Error: '+e.message+'</div></div>'; }
+}
+
+async function pagarComision(id, tipo){
+  var campo = tipo==='captador'?'pagado_captador':'pagado_cerrador';
+  try{
+    await sb.from('comisiones_calculadas').update({[campo]:true}).eq('id',id);
+    toast('Comision marcada como pagada');
+    renderAdmin();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+
+
+// ══════════════════════════════════════
+// INDAGACION — 9 campos obligatorios
+// ══════════════════════════════════════
+var indagacionLeadId = null;
+
+function abrirIndagacion(leadId){
+  indagacionLeadId = leadId;
+  var lead = allLeads.find(function(l){return l.id===leadId;});
+  if(!lead) return;
+  // Pre-cargar datos existentes
+  var campos = {
+    'ind-ciudad': lead.ind_ciudad||lead.ciudad||'',
+    'ind-financiamiento': lead.ind_financiamiento||lead.financiamiento||'',
+    'ind-terreno': lead.ind_lugar_terreno||'',
+    'ind-monto-fin': lead.ind_monto_financiamiento||'',
+    'ind-presupuesto': lead.ind_presupuesto||'',
+    'ind-tope': lead.ind_presupuesto_tope?'si':'',
+    'ind-tipo': lead.ind_tipo||'',
+    'ind-primera': lead.ind_primera_vivienda?'primera':'',
+    'ind-cuando': lead.ind_cuando_construir||'',
+    'ind-plantas': lead.ind_plantas||'1'
+  };
+  Object.keys(campos).forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.value = campos[id];
+  });
+  document.getElementById('sheet-indagacion').classList.add('open');
+}
+
+async function guardarIndagacion(){
+  if(!indagacionLeadId) return;
+  var datos = {
+    ind_ciudad: document.getElementById('ind-ciudad').value||null,
+    ind_financiamiento: document.getElementById('ind-financiamiento').value||null,
+    ind_lugar_terreno: document.getElementById('ind-terreno').value||null,
+    ind_monto_financiamiento: document.getElementById('ind-monto-fin').value||null,
+    ind_presupuesto: document.getElementById('ind-presupuesto').value||null,
+    ind_presupuesto_tope: document.getElementById('ind-tope').value==='si',
+    ind_tipo: document.getElementById('ind-tipo').value||null,
+    ind_primera_vivienda: document.getElementById('ind-primera').value==='primera',
+    ind_cuando_construir: document.getElementById('ind-cuando').value||null,
+    ind_plantas: parseInt(document.getElementById('ind-plantas').value)||1
+  };
+  // Verificar si esta completa
+  var completa = datos.ind_ciudad && datos.ind_financiamiento && datos.ind_lugar_terreno &&
+    datos.ind_tipo && datos.ind_cuando_construir;
+  datos.indagacion_completa = !!completa;
+  try{
+    await sb.from('leads').update(datos).eq('id',indagacionLeadId);
+    // Actualizar en memoria
+    var idx = allLeads.findIndex(function(l){return l.id===indagacionLeadId;});
+    if(idx>-1) Object.assign(allLeads[idx], datos);
+    closeSheet('indagacion');
+    toast(completa?'Indagacion completa':'Indagacion guardada (incompleta)');
+    // Reabrir detalle
+    abrirSheetLead(indagacionLeadId);
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function badgeIndagacion(lead){
+  if(lead.indagacion_completa) return '<span style="font-size:10px;color:var(--green);font-weight:600">Indagacion completa</span>';
+  var campos = [lead.ind_ciudad, lead.ind_financiamiento, lead.ind_lugar_terreno, lead.ind_tipo, lead.ind_cuando_construir];
+  var llenos = campos.filter(function(c){return c;}).length;
+  if(llenos===0) return '<span style="font-size:10px;color:var(--red)">Sin indagar</span>';
+  return '<span style="font-size:10px;color:var(--acc)">Indagacion '+llenos+'/9</span>';
+}
+
+
+
+async function reactivarLeadDirecto(leadId){
+  if(!confirm('Reactivar este lead? Volvera a En seguimiento.')) return;
+  try{
+    await sb.from('leads').update({estado:'en_seguimiento',motivo_perdida:null}).eq('id',leadId);
+    var i=allLeads.findIndex(function(l){return l.id===leadId;});
+    if(i>-1){allLeads[i].estado='en_seguimiento';allLeads[i].motivo_perdida=null;}
+    sb.from('leads_perdidos').update({reactivado:true,fecha_reactivacion:new Date().toISOString()}).eq('lead_id',leadId).then(function(){}).catch(function(){});
+    toast('Lead reactivado');
+    renderLeads();renderTodos();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+
+// Notificaciones internas
+async function cargarNotifInternas(){
+  try{
+    var {data}=await sb.from('notificaciones_internas').select('*').eq('para',cu.nombre).eq('leida',false).order('created_at',{ascending:false}).limit(5);
+    var items=data||[];
+    var badge=document.getElementById('notif-badge');
+    if(badge) badge.classList.toggle('show',items.length>0);
+    if(items.length>0){
+      items.slice(0,2).forEach(function(n){ toast(n.titulo+': '+n.mensaje); });
+      sb.from('notificaciones_internas').update({leida:true}).eq('para',cu.nombre).eq('leida',false).then(function(){}).catch(function(){});
+    }
+  }catch(e){}
+}
+
+// Indagacion badge
+function badgeIndagacion(lead){
+  if(!lead) return '';
+  if(lead.indagacion_completa) return '<span style="font-size:10px;color:var(--green);font-weight:600">Indagacion completa</span>';
+  var n=[lead.ind_ciudad,lead.ind_financiamiento,lead.ind_lugar_terreno,lead.ind_tipo,lead.ind_cuando_construir].filter(function(c){return c;}).length;
+  if(n===0) return '<span style="font-size:10px;color:var(--red)">Sin indagar</span>';
+  return '<span style="font-size:10px;color:var(--acc)">Indagacion '+n+'/9</span>';
 }
 
 
@@ -4716,6 +5421,88 @@ initLogin();
     <div class="sheet-footer">
       <button class="btn btn-primary" style="flex:1" onclick="guardarReserva()">Registrar reserva</button>
       <button class="btn btn-ghost" onclick="closeSheet('reserva')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SHEET: INDAGACION -->
+<div class="sheet-overlay" id="sheet-indagacion" onclick="if(event.target===this)closeSheet('indagacion')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('indagacion')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title">Indagacion del cliente</div>
+      <button class="sheet-close" onclick="closeSheet('indagacion')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r);padding:10px;margin-bottom:14px;font-size:11px;color:var(--txt2)">
+        Completa estos 9 campos para calificar correctamente al cliente. Son la base para definir si avanza o no.
+      </div>
+
+      <div class="fg" style="margin-bottom:10px">
+        <label>1. Ciudad donde vive</label>
+        <input class="fi" id="ind-ciudad" placeholder="Santa Cruz, Warnes, Urubo...">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>2. Financiamiento o contado</label>
+        <select class="fsel" id="ind-financiamiento">
+          <option value="">Seleccionar...</option>
+          <option value="bancario">Financiamiento bancario</option>
+          <option value="recursos_propios">Al contado / recursos propios</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>3. Lugar del terreno</label>
+        <input class="fi" id="ind-terreno" placeholder="Barrio, zona, municipio...">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>4. Monto que puede financiar el banco (USD)</label>
+        <input class="fi" id="ind-monto-fin" type="number" placeholder="50000">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>5. Presupuesto de construccion (USD)</label>
+        <input class="fi" id="ind-presupuesto" type="number" placeholder="45000">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>6. Es presupuesto tope?</label>
+        <select class="fsel" id="ind-tope">
+          <option value="">Seleccionar...</option>
+          <option value="si">Si, es el maximo</option>
+          <option value="no">No, puede ajustarse</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>7. Para vivienda o inversion</label>
+        <select class="fsel" id="ind-tipo">
+          <option value="">Seleccionar...</option>
+          <option value="vivienda">Vivienda propia</option>
+          <option value="inversion">Inversion / alquiler</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>8. Primera vivienda o segunda</label>
+        <select class="fsel" id="ind-primera">
+          <option value="">Seleccionar...</option>
+          <option value="primera">Primera vivienda</option>
+          <option value="segunda">Segunda vivienda</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>9. Cuando quiere construir</label>
+        <input class="fi" id="ind-cuando" placeholder="Inmediato, 6 meses, fin de ano...">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Plantas (1 o 2)</label>
+        <select class="fsel" id="ind-plantas">
+          <option value="1">1 planta</option>
+          <option value="2">2 plantas</option>
+        </select>
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" style="flex:1" onclick="guardarIndagacion()">Guardar indagacion</button>
+      <button class="btn btn-g" onclick="closeSheet('indagacion')">Cancelar</button>
     </div>
   </div>
 </div>
