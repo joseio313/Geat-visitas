@@ -3562,83 +3562,6 @@ function renderCierre(){
   else if(cierreTabActual==='pagos') renderPagos(el);
 }
 
-function renderFinanciamiento(el){
-  // Selector de lead
-  const misL = allLeads.filter(l=>cu.rol==='closer'?l.cerrador===cu.nombre:true);
-  el.innerHTML=`
-    <div class="fgroup" style="margin-bottom:14px">
-      <label>Seleccionar cliente</label>
-      <select class="fselect" id="fin-lead-sel" onchange="cargarFinanciamiento(this.value)">
-        <option value="">Seleccionar...</option>
-        ${misL.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('')}
-      </select>
-    </div>
-    <div id="fin-content">
-      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px">Pasos del trámite bancario</div>
-        ${[
-          {num:1, titulo:'Firmar contrato con GEAT', desc:'El cliente firma el contrato de construcción con GEAT en notaría', icono:'[1]'},
-          {num:2, titulo:'GEAT envía presupuesto bancario', desc:'El equipo prepara y envía el presupuesto al banco del cliente', icono:'[2]'},
-          {num:3, titulo:'Banco aprueba el crédito', desc:'El banco evalúa y aprueba el financiamiento del cliente', icono:'[OK]'},
-          {num:4, titulo:'Firma contrato banco + propietario', desc:'Se firma el contrato entre el banco, el propietario y GEAT', icono:'[B]'},
-          {num:5, titulo:'Desembolso y pago a GEAT', desc:'El banco desembolsa el monto y GEAT recibe el pago. Inicio de obra.', icono:'[R]'},
-        ].map(p=>`
-          <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--brd)">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--bg3);border:2px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${p.icono}</div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:600;margin-bottom:2px">Paso ${p.num}: ${p.titulo}</div>
-              <div style="font-size:11px;color:var(--txt3)">${p.desc}</div>
-            </div>
-            <div>
-              <select style="padding:4px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:20px;font-size:10px;color:var(--txt3)" onchange="actualizarPasoFin(${p.num},this.value)">
-                <option value="pendiente">⏳ Pendiente</option>
-                <option value="en_proceso">🔄 En proceso</option>
-                <option value="completado">[OK] Completado</option>
-              </select>
-            </div>
-          </div>`).join('')}
-        <div style="margin-top:14px">
-          <div style="font-size:11px;font-weight:600;color:var(--txt3);margin-bottom:8px">Notas del trámite</div>
-          <textarea class="finput" rows="2" style="resize:vertical;min-height:56px" placeholder="Banco, contacto, observaciones..."></textarea>
-        </div>
-        <button class="btn btn-primary" style="width:100%;margin-top:10px">Guardar estado del trámite</button>
-      </div>
-    </div>`;
-}
-
-async function actualizarPasoFin(paso, estado){
-  var leadId = window._finLeadId || (document.getElementById('fin-lead-sel')&&document.getElementById('fin-lead-sel').value);
-  if(!leadId){ toast('Selecciona un cliente primero','error'); return; }
-  var campoEst = 'paso_'+paso+'_estado';
-  var campoFec = 'paso_'+paso+'_fecha';
-  var updates = {lead_id:parseInt(leadId), cerrador:cu.nombre, updated_at:new Date().toISOString()};
-  updates[campoEst] = estado;
-  updates[campoFec] = estado==='completado' ? new Date().toISOString() : null;
-  try{
-    // Intentar update primero, si no existe hacer insert
-    var {data:existing} = await sb.from('financiamiento_tramite').select('id').eq('lead_id',leadId).maybeSingle();
-    if(existing && existing.id){
-      await sb.from('financiamiento_tramite').update(updates).eq('id',existing.id);
-    } else {
-      // Crear registro con todos los pasos en pendiente
-      var nuevo = {lead_id:parseInt(leadId),cerrador:cu.nombre,
-        paso_1_estado:'pendiente',paso_2_estado:'pendiente',paso_3_estado:'pendiente',
-        paso_4_estado:'pendiente',paso_5_estado:'pendiente'};
-      nuevo[campoEst]=estado; nuevo[campoFec]=estado==='completado'?new Date().toISOString():null;
-      await sb.from('financiamiento_tramite').insert([nuevo]);
-    }
-    // Actualizar boton visualmente
-    var btn = document.querySelector('[data-paso="'+paso+'"]');
-    if(btn){
-      btn.style.background = estado==='completado'?'var(--green)':estado==='en_proceso'?'var(--blue)':'var(--bg3)';
-      btn.style.color = estado==='completado'||estado==='en_proceso'?'#fff':'var(--txt3)';
-    }
-    var labels = ['Firma GEAT','Presupuesto bancario','Aprobacion credito','Firma contrato','Desembolso'];
-    toast('Paso '+(labels[paso-1]||paso)+': '+estado);
-    renderFinanciamiento(document.getElementById('fin-content'));
-  }catch(e){ toast('Error: '+e.message,'error'); }
-}
-
 async function renderFinanciamiento(el){
   if(!el) return;
   var misLeads = allLeads.filter(function(l){
@@ -4210,14 +4133,6 @@ async function guardarIndagacion(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
-function badgeIndagacion(lead){
-  if(lead.indagacion_completa) return '<span style="font-size:10px;color:var(--green);font-weight:600">Indagacion completa</span>';
-  var campos = [lead.ind_ciudad, lead.ind_financiamiento, lead.ind_lugar_terreno, lead.ind_tipo, lead.ind_cuando_construir];
-  var llenos = campos.filter(function(c){return c;}).length;
-  if(llenos===0) return '<span style="font-size:10px;color:var(--red)">Sin indagar</span>';
-  return '<span style="font-size:10px;color:var(--acc)">Indagacion '+llenos+'/9</span>';
-}
-
 
 
 async function reactivarLeadDirecto(leadId){
@@ -4681,6 +4596,184 @@ async function guardarPagos(){
       toast('Completa al menos un monto o fecha','error');
     }
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+
+
+// ══════════════════════════════════════
+// GUARDAR REUNION — resultado OPCIONAL al crear
+// ══════════════════════════════════════
+function guardarReunion(){
+  var leadId = document.getElementById('reu-lead-sel')&&document.getElementById('reu-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var fecha = document.getElementById('reu-fecha')&&document.getElementById('reu-fecha').value;
+  if(!fecha){ toast('Selecciona fecha y hora','error'); return; }
+  closeSheet('reunion');
+  toast('Guardando reunion...');
+  var data = {
+    lead_id: parseInt(leadId),
+    cerrador: cu.nombre,
+    numero_reunion: parseInt(document.getElementById('reu-numero')&&document.getElementById('reu-numero').value)||1,
+    tipo: document.getElementById('reu-tipo')&&document.getElementById('reu-tipo').value||'primera_reunion',
+    fecha: new Date(fecha).toISOString(),
+    resultado: null,
+    notas: document.getElementById('reu-notas')&&document.getElementById('reu-notas').value||null,
+    con_propuesta: document.getElementById('reu-con-propuesta')&&document.getElementById('reu-con-propuesta').value==='si'
+  };
+  sb.from('reuniones_cerrador').insert([data]).then(function(){
+    toast('Reunion guardada');
+    if(data.fecha){
+      var lReu = allLeads.find(function(l){return l.id===data.lead_id;});
+      sb.from('agenda_grupal').insert([{
+        titulo:'Reunion '+(lReu?'con '+lReu.nombre:'')+' - '+data.tipo,
+        colaborador:cu.nombre, rol_colaborador:cu.rol,
+        fecha_actividad:data.fecha, lead_id:data.lead_id||null
+      }]).then(function(){}).catch(function(){});
+    }
+    renderCierre();
+  }).catch(function(e){ toast('Error: '+e.message,'error'); });
+}
+
+// ══════════════════════════════════════
+// ELIMINAR NOTA
+// ══════════════════════════════════════
+async function eliminarNota(id){
+  if(!confirm('Eliminar esta nota?')) return;
+  try{
+    await sb.from('notas_personales').delete().eq('id',id).eq('colaborador',cu.nombre);
+    toast('Nota eliminada');
+    renderNotas();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════
+// RENDER CONTACTOS HOY — panel inicio
+// ══════════════════════════════════════
+function renderContactosHoy(){
+  var el = document.getElementById('inicio-hoy-contactos');
+  if(!el) return;
+  var hoy = new Date().toISOString().slice(0,10);
+  var man = new Date(); man.setDate(man.getDate()+1);
+  var manStr = man.toISOString().slice(0,10);
+  var base = cu.rol==='admin'||cu.rol==='commercial_lead' ? allLeads :
+    cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
+    cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
+  var atrasados = base.filter(function(l){
+    return l.proximo_contacto&&l.proximo_contacto<hoy&&
+           l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
+  });
+  var paraHoy = base.filter(function(l){
+    return l.proximo_contacto===hoy&&
+           l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
+  });
+  var html = '';
+  if(atrasados.length){
+    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px">ATRASADOS ('+atrasados.length+')</div>';
+    atrasados.slice(0,5).forEach(function(l){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
+      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+l.proximo_contacto+'</div></div>';
+      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none">W</a>';
+      html += '</div>';
+    });
+    if(atrasados.length>5) html += '<div style="font-size:10px;color:var(--red);margin-top:4px">+'+(atrasados.length-5)+' mas</div>';
+    html += '</div>';
+  }
+  if(paraHoy.length){
+    html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;margin-bottom:8px">CONTACTAR HOY ('+paraHoy.length+')</div>';
+    paraHoy.forEach(function(l){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(245,158,11,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
+      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+(estilo(l.estado).label||l.estado)+'</div></div>';
+      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none">W</a>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ══════════════════════════════════════
+// GENERAR IMAGEN REQUERIMIENTO ARQUITECTURA
+// ══════════════════════════════════════
+function generarImagenReq(){
+  var leadId = document.getElementById('prop-lead-sel')&&document.getElementById('prop-lead-sel').value;
+  var lead = leadId&&allLeads.find(function(l){return l.id==leadId;});
+  var m2 = document.getElementById('prop-m2')&&document.getElementById('prop-m2').value||'-';
+  var desc = document.getElementById('prop-desc')&&document.getElementById('prop-desc').value||'';
+  var cliente = lead?lead.nombre:'Cliente';
+  var celular = lead?lead.celular:'-';
+  var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
+  var financ = lead?(lead.financiamiento==='bancario'?'Financiamiento bancario':'Al contado'):'';
+  var fecha = new Date().toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  var canvas = document.getElementById('prop-canvas');
+  if(!canvas) return;
+  canvas.width=800; canvas.height=560;
+  var ctx = canvas.getContext('2d');
+
+  // Fondo
+  ctx.fillStyle='#0F172A'; ctx.fillRect(0,0,800,560);
+  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,0,800,6);
+
+  // Logo
+  ctx.fillStyle='#F59E0B';
+  ctx.beginPath(); ctx.roundRect(28,22,56,56,8); ctx.fill();
+  ctx.fillStyle='#000'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
+  ctx.fillText('G',56,60);
+  ctx.fillStyle='#F59E0B'; ctx.font='bold 20px Arial'; ctx.textAlign='left';
+  ctx.fillText('GEAT',100,44);
+  ctx.fillStyle='#64748B'; ctx.font='10px Arial';
+  ctx.fillText('CONSTRUCCION Y CONSULTORIA',100,60);
+
+  // Titulo
+  ctx.fillStyle='#F1F5F9'; ctx.font='bold 22px Arial'; ctx.textAlign='center';
+  ctx.fillText('SOLICITUD DE PROPUESTA',400,110);
+  ctx.strokeStyle='#F59E0B'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(50,124); ctx.lineTo(750,124); ctx.stroke();
+
+  // Datos
+  var col1=[['Cliente:',cliente],['Celular:',celular],['Ciudad:',ciudad],['Financiamiento:',financ]];
+  ctx.textAlign='left';
+  col1.forEach(function(d,i){
+    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,155+i*28);
+    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],180,155+i*28);
+  });
+  ctx.strokeStyle='#334155'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(50,268); ctx.lineTo(750,268); ctx.stroke();
+
+  // Proyecto
+  ctx.fillStyle='#F59E0B'; ctx.font='bold 13px Arial'; ctx.textAlign='left';
+  ctx.fillText('ESPECIFICACIONES',60,295);
+  var col2=[['Metros cuadrados:',m2+' m²'],['Cerrador:',cu.nombre]];
+  col2.forEach(function(d,i){
+    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,320+i*26);
+    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],220,320+i*26);
+  });
+  if(desc){
+    ctx.fillStyle='#64748B'; ctx.font='11px Arial'; ctx.fillText('Detalles:',60,380);
+    ctx.fillStyle='#CBD5E1'; ctx.font='11px Arial';
+    var words=desc.split(' '),line='',y=396;
+    words.forEach(function(w){
+      var t=line+w+' ';
+      if(ctx.measureText(t).width>680){ctx.fillText(line,60,y);y+=16;line=w+' ';}
+      else line=t;
+    });
+    if(line) ctx.fillText(line,60,y);
+  }
+  ctx.fillStyle='#475569'; ctx.font='11px Arial'; ctx.textAlign='left';
+  ctx.fillText('Fecha: '+fecha,60,535);
+  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,554,800,6);
+
+  var wrap = document.getElementById('prop-canvas-wrap');
+  if(wrap) wrap.style.display='block';
+  var btn = document.getElementById('btn-enviar-grupo');
+  if(btn) btn.style.display='block';
+
+  window._propImgLead=lead; window._propImgM2=m2; window._propImgDesc=desc;
+  toast('Imagen generada — ahora enviala al grupo');
 }
 
 
