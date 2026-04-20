@@ -479,47 +479,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="leads-list"></div>
     </div>
 
-    <!-- AGENDA PERSONAL -->
-    <div class="panel" id="pn-agenda">
-      <div class="ph">
-        <div><div class="ph-title">Mi Calendario</div><div class="ph-sub" id="agenda-mes-label">—</div></div>
-        <div class="ph-actions">
-          <button class="btn btn-sm btn-ghost" id="btn-reunion-extra" onclick="crearReunionExtra()" style="display:none">+ Reunión</button>
-          <button class="btn btn-sm btn-primary" onclick="abrirNuevaActividad()">+ Actividad</button>
-        </div>
-      </div>
-      <!-- Calendario mes -->
-      <div class="cal-personal">
-        <div class="cal-personal-header">
-          <div class="cal-nav">
-            <button onclick="navMes(-1)">‹</button>
-            <div class="cal-mes-titulo" id="cal-mes-nombre">—</div>
-            <button onclick="navMes(1)">›</button>
-          </div>
-          <div style="display:flex;gap:4px">
-            <button class="tab active" id="cal-view-dia-p" onclick="setCalView('dia',this)" style="padding:4px 8px;font-size:10px">Día</button>
-            <button class="tab" id="cal-view-mes" onclick="setCalView('mes',this)" style="padding:4px 8px;font-size:10px">Mes</button>
-            <button class="tab" id="cal-view-semana" onclick="setCalView('semana',this)" style="padding:4px 8px;font-size:10px">Semana</button>
-            <button class="tab" id="cal-view-anio" onclick="setCalView('anio',this)" style="padding:4px 8px;font-size:10px">Año</button>
-          </div>
-        </div>
-        <div class="cal-dias-header">
-          <div class="cal-dia-h">Lun</div>
-          <div class="cal-dia-h">Mar</div>
-          <div class="cal-dia-h">Mié</div>
-          <div class="cal-dia-h">Jue</div>
-          <div class="cal-dia-h">Vie</div>
-          <div class="cal-dia-h">Sáb</div>
-          <div class="cal-dia-h">Dom</div>
-        </div>
-        <div class="cal-grid-mes" id="cal-grid"></div>
-      </div>
-      <!-- Detalle del día seleccionado -->
-      <div class="cal-dia-detalle" id="cal-dia-detalle" style="display:none">
-        <div class="cal-dia-detalle-titulo" id="cal-dia-detalle-titulo">—</div>
-        <div id="cal-dia-eventos"></div>
-      </div>
-    </div>
 
 
     <!-- AGENDA GRUPAL / CALENDARIO -->
@@ -1344,14 +1303,12 @@ const NAVS={
   field_capturer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
-    {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   closer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
-    {id:'agenda',icon:'&#128197;',label:'Agenda'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   commercial_lead:[
@@ -1816,7 +1773,7 @@ function renderLeadCards(leads,containerId,rol){
           <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">✏️ Actualizar</button>
         `:l.estado==='seguimiento_cierre'?`
           <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🔄 Seg. cierre</button>
-          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')">📅 Programar</button>
+
         `:''}
         <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo el historial del cliente">📋 Ver historial</button>
         <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})">✕ Perder</button>
@@ -2384,6 +2341,10 @@ function abrirSheetLead(id){
   document.getElementById('sheet-lead').classList.add('open');
 }
 function elegirModoNuevoLead(){
+  if(cu.rol==='closer'){
+    toast('Los cerradores no pueden crear leads. Contacta a un captador.','error');
+    return;
+  }
   document.getElementById('sheet-modo-lead').classList.add('open');
 }
 
@@ -2886,6 +2847,9 @@ function impersonarPorId(colId){
   _adminSession = Object.assign({}, cu);
   cu = col;
   document.getElementById('tb-user').textContent = cu.nombre.split(' ')[0];
+  // Cerradores no pueden crear leads
+  var btnLead = document.querySelector('.topbar-btn.pri');
+  if(btnLead) btnLead.style.display = cu.rol==='closer' ? 'none' : '';
   var banner = document.createElement('div');
   banner.id = 'impersonar-banner';
   banner.style.cssText = 'position:fixed;top:52px;left:0;right:0;background:var(--acc);color:#000;text-align:center;padding:6px;font-size:12px;font-weight:600;z-index:300;display:flex;align-items:center;justify-content:center;gap:12px';
@@ -3496,7 +3460,11 @@ Si no escuchas un campo pon null. No inventes.`},
     },1000);
   }).catch(err=>{
     document.getElementById('audio-err-msg').textContent=
-      err.name==='NotAllowedError'?'Micrófono bloqueado.\n\nToca el 🔒 junto a la URL → Permisos → Micrófono → Permitir\nLuego recarga.':'Error: '+err.message;
+      err.name==='NotAllowedError'?(
+        /Edg\//.test(navigator.userAgent)?'Microfono bloqueado en Edge.\n\n1. Toca el candado en la barra URL\n2. Permisos del sitio → Microfono → Permitir\n3. Recarga la pagina':
+        /iPad|iPhone|iPod/.test(navigator.userAgent)?'Microfono bloqueado en iOS.\n\nAjustes → Safari → Microfono → Permitir\nLuego recarga.':
+        'Microfono bloqueado.\n\nToca 🔒 en la barra URL → Permisos → Microfono → Permitir\nLuego recarga.'
+      ):'Error de microfono: '+err.message;
     setAudioSt('err');
   });
 }
@@ -5531,6 +5499,22 @@ async function enviarReqAlGrupo(){
   toast('Imagen descargada • Grupo WA abierto • Registrado en CRM');
 }
 
+
+
+function colorPorEstado(estado){
+  var colores = {
+    nuevo: '#EC4899',
+    en_seguimiento: '#EAB308',
+    visita_agendada: '#22C55E',
+    visita_realizada: '#15803D',
+    seguimiento_cierre: '#A855F7',
+    reservado: '#F59E0B',
+    en_tramite: '#3B82F6',
+    cerrado_ganado: '#16A34A',
+    cerrado_perdido: '#EF4444'
+  };
+  return colores[estado]||'#64748B';
+}
 
 initLogin();
 </script>
