@@ -335,7 +335,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <button class="topbar-notif" id="btn-notif" onclick="sw('notif')" title="Notificaciones">
       🔔<span class="notif-badge" id="notif-badge"></span>
     </button>
-    <button class="topbar-mic" id="btn-mic" onclick="iniciarGrabacion()" title="Voz">🎙</button>
   </div>
 
   <!-- CONTENT -->
@@ -350,8 +349,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div style="font-size:11px;color:var(--txt3)" id="inicio-fecha">—</div>
         </div>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-sm btn-ghost" onclick="iniciarGrabacion()">🎙 Voz</button>
-          <button class="btn btn-sm btn-primary" onclick="abrirNuevoLead()">+ Lead</button>
+          <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Lead</button>
         </div>
       </div>
 
@@ -413,8 +411,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div class="ph-sub" id="leads-count">—</div>
         </div>
         <div class="ph-actions">
-          <button class="btn btn-sm btn-ghost" onclick="iniciarGrabacion()">🎙</button>
-          <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
+          <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Lead</button>
         </div>
       </div>
 
@@ -751,10 +748,23 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <div class="panel" id="pn-notas">
       <div class="ph">
         <div>
-          <div class="ph-title">Mis Notas</div>
-          <div class="ph-sub">Privadas &#183; Solo t&#250; las ves</div>
+          <div class="ph-title">Notas</div>
+          <div class="ph-sub">Privadas &middot; Solo t&uacute; las ves</div>
         </div>
-        <button class="btn btn-sm btn-primary" onclick="nuevaNota()">+ Nueva</button>
+        <button class="btn btn-sm btn-primary" onclick="abrirNuevaNota()">+ Nueva</button>
+      </div>
+      <!-- Busqueda en notas -->
+      <div style="position:relative;margin-bottom:10px">
+        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px">&#128269;</span>
+        <input id="notas-q" class="search-inp" style="padding-left:34px" placeholder="Buscar notas..." oninput="filtrarNotas()">
+      </div>
+      <!-- Chips categoria -->
+      <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
+        <button class="tab on" id="nc-todos" onclick="setNotaCat('',this)" style="font-size:11px;padding:4px 10px">Todas</button>
+        <button class="tab" id="nc-general" onclick="setNotaCat('general',this)" style="font-size:11px;padding:4px 10px">General</button>
+        <button class="tab" id="nc-recordatorio" onclick="setNotaCat('recordatorio',this)" style="font-size:11px;padding:4px 10px">Recordatorio</button>
+        <button class="tab" id="nc-lead" onclick="setNotaCat('lead',this)" style="font-size:11px;padding:4px 10px">Lead</button>
+        <button class="tab" id="nc-idea" onclick="setNotaCat('idea',this)" style="font-size:11px;padding:4px 10px">Idea</button>
       </div>
       <div id="notas-list">
         <div class="loading"><span class="spin"></span>Cargando...</div>
@@ -1285,13 +1295,7 @@ async function initLogin(){
   colaboradores.forEach(c=>{
     const o=document.createElement('option');
     o.value=c.id;
-    var cargoDisplay = {
-      'admin':'CEO',
-      'commercial_lead':'Jefe Comercial',
-      'field_capturer':'Captadora',
-      'closer':'Asesor de Cierre'
-    }[c.rol]||c.rol;
-    o.textContent=c.nombre+' — '+cargoDisplay;
+    o.textContent=c.nombre+' — '+c.rol;
     sel.appendChild(o);
   });
   // Cargar API key de Anthropic y link de WhatsApp
@@ -1551,7 +1555,7 @@ function renderInicioCal(){
     const esHoy = dStr === hoyStr;
     grid.innerHTML = `<div style="padding:14px">
       ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades este día<br>
-        <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar actividad</button></div>` :
+        <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button></div>` :
       evsDia.map(ev=>{
         const hora = ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
         return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--brd);cursor:pointer;align-items:flex-start" onclick="${ev.lead_id?'abrirSheetLead('+ev.lead_id+')':''}">
@@ -1919,7 +1923,7 @@ function renderCalDia(){
   document.getElementById('cal-mes-nombre').textContent=diaNom;
   grid.innerHTML=`<div style="padding:14px">
     ${!evsDia.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades<br>
-      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar</button></div>`:
+      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button></div>`:
     evsDia.map(ev=>{
       const hora=ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
       return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd);align-items:flex-start">
@@ -2102,7 +2106,7 @@ function seleccionarDia(dStr){
   
   if(!evsDia.length){
     eventosEl.innerHTML=`<div style="font-size:12px;color:var(--txt3);padding:12px 0;text-align:center">Sin actividades este día
-      <br><button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevaActividad('${dStr}')">+ Agregar actividad</button>
+      <br><button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button>
     </div>`;
   } else {
     eventosEl.innerHTML=evsDia.map(ev=>{
@@ -3805,12 +3809,17 @@ function renderPropuestas(el){
         allLeads.filter(function(l){return cu.rol==='closer'?l.cerrador===cu.nombre:true;})
           .map(function(l){return '<option value="'+l.id+'">'+l.nombre+'</option>';}).join('') +
         '</select></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
-        '<div class="fgroup"><label>m2</label><input class="finput" id="prop-m2" type="number" placeholder="120" style="font-size:12px"></div>' +
-        '<div class="fgroup"><label>Precio USD</label><input class="finput" id="prop-precio" type="number" placeholder="45000" style="font-size:12px"></div>' +
+        '<div style="margin-bottom:8px">' +
+        '<div class="fgroup"><label>Metros cuadrados</label><input class="finput" id="prop-m2" type="number" placeholder="120" style="font-size:12px" oninput="guardarEstadoPropuesta()"></div>' +
         '</div>' +
         '<div class="fgroup" style="margin-bottom:8px"><label>Descripcion / Detalles</label>' +
-        '<textarea class="finput" id="prop-desc" rows="2" style="resize:vertical;min-height:56px;font-size:12px" placeholder="Modelo, plantas, caracteristicas..."></textarea>' +
+        '<textarea class="finput" id="prop-desc" rows="2" style="resize:vertical;min-height:56px;font-size:12px" oninput="guardarEstadoPropuesta()" placeholder="Modelo, plantas, caracteristicas..."></textarea>' +
+        '</div>' +
+        '<div class="fgroup" style="margin-bottom:8px"><label>Plano / Documento del terreno (opcional)</label>' +
+        '<div id="prop-doc-zone" style="border:1px dashed var(--brd2);border-radius:var(--r);padding:10px 12px;cursor:pointer;font-size:12px;color:var(--txt3);display:flex;align-items:center;gap:8px" onclick="document.getElementById(\'prop-doc-input\').click()">' +
+        '<span style="font-size:16px">&#128206;</span><span id="prop-doc-label">Toca para adjuntar plano de uso de suelo...</span>' +
+        '</div>' +
+        '<input type="file" id="prop-doc-input" accept=".pdf,.jpg,.jpeg,.png,.dwg" style="display:none" onchange="seleccionarDocTerrenoProp(this)">' +
         '</div>' +
 
         // Preview canvas
@@ -5235,6 +5244,294 @@ function badgeIndagacion(lead){
 }
 
 
+
+// ══════════════════════════════════════
+// NOTAS MEJORADAS
+// ══════════════════════════════════════
+var notaColorActual = '#334155';
+var notaCatActual = '';
+var notaEditId = null;
+
+function setNotaColor(color, btn){
+  notaColorActual = color;
+  document.querySelectorAll('[id^="nc-"]').forEach(function(b){
+    if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
+  });
+  if(btn) btn.style.borderColor='var(--acc)';
+}
+
+function setNotaCat(cat, btn){
+  notaCatActual = cat;
+  document.querySelectorAll('#pn-notas .tab').forEach(function(b){b.classList.remove('on');});
+  if(btn) btn.classList.add('on');
+  renderNotas();
+}
+
+function filtrarNotas(){
+  renderNotas();
+}
+
+function abrirNuevaNota(){
+  notaEditId = null;
+  notaColorActual = '#334155';
+  document.getElementById('nota-titulo').value='';
+  document.getElementById('nota-cat').value='general';
+  document.getElementById('nota-texto').value='';
+  document.getElementById('nota-recordar').value='';
+  document.getElementById('nota-sheet-title').textContent='Nueva nota';
+  document.querySelectorAll('[id^="nc-"]').forEach(function(b){
+    if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
+  });
+  var gris = document.getElementById('nc-gris');
+  if(gris) gris.style.borderColor='var(--acc)';
+  document.getElementById('sheet-nota').classList.add('open');
+}
+
+async function guardarNotaMejorada(){
+  var titulo = document.getElementById('nota-titulo').value.trim();
+  var texto = document.getElementById('nota-texto').value.trim();
+  if(!titulo&&!texto){ toast('Escribe algo en la nota','error'); return; }
+  var datos = {
+    colaborador: cu.nombre,
+    titulo: titulo||'Sin titulo',
+    texto: texto,
+    categoria: document.getElementById('nota-cat').value||'general',
+    color: notaColorActual,
+    recordar_en: document.getElementById('nota-recordar').value ? new Date(document.getElementById('nota-recordar').value).toISOString() : null,
+    privada: true
+  };
+  try{
+    if(notaEditId){
+      await sb.from('notas_personales').update(datos).eq('id',notaEditId);
+    } else {
+      await sb.from('notas_personales').insert([datos]);
+    }
+    closeSheet('nota');
+    toast('Nota guardada');
+    renderNotas();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function renderNotas(){
+  var el = document.getElementById('notas-list');
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var query = sb.from('notas_personales').select('*').eq('colaborador',cu.nombre).order('created_at',{ascending:false});
+    if(notaCatActual) query = query.eq('categoria',notaCatActual);
+    var {data} = await query;
+    var items = data||[];
+    var q = (document.getElementById('notas-q')?.value||'').toLowerCase();
+    if(q) items = items.filter(function(n){ return (n.titulo||'').toLowerCase().includes(q)||(n.texto||'').toLowerCase().includes(q); });
+    if(!items.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Toca "+ Nueva" para crear tu primera nota privada</div></div>';
+      return;
+    }
+    var catIcons = {general:'&#128203;',recordatorio:'&#9201;',lead:'&#128101;',idea:'&#128161;'};
+    el.innerHTML = items.map(function(n){
+      var col = n.color||'#334155';
+      var icono = catIcons[n.categoria]||'&#128221;';
+      var fecha = n.created_at ? new Date(n.created_at).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '';
+      var recordar = n.recordar_en ? '<div style="font-size:10px;color:var(--acc);margin-top:4px">&#9201; Recordar: '+new Date(n.recordar_en).toLocaleDateString('es-BO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>' : '';
+      return '<div style="background:'+col+'30;border:1px solid '+col+'50;border-left:4px solid '+col+';border-radius:var(--r2);padding:13px 14px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+        '<span style="font-size:14px">'+icono+'</span>' +
+        '<span style="font-size:13px;font-weight:600">'+n.titulo+'</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+        '<span style="font-size:10px;color:var(--txt3)">'+fecha+'</span>' +
+        '<button onclick="editarNota('+n.id+')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:12px;padding:0 2px">&#9998;</button>' +
+        '<button onclick="eliminarNota('+n.id+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 2px">&#10005;</button>' +
+        '</div></div>' +
+        (n.texto ? '<div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">'+n.texto+'</div>' : '') +
+        recordar +
+        '</div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<div class="empty"><div class="et">Error: '+e.message+'</div></div>'; }
+}
+
+async function editarNota(id){
+  try{
+    var {data} = await sb.from('notas_personales').select('*').eq('id',id).single();
+    if(!data) return;
+    notaEditId = id;
+    notaColorActual = data.color||'#334155';
+    document.getElementById('nota-titulo').value = data.titulo||'';
+    document.getElementById('nota-cat').value = data.categoria||'general';
+    document.getElementById('nota-texto').value = data.texto||'';
+    document.getElementById('nota-recordar').value = data.recordar_en ? new Date(data.recordar_en).toISOString().slice(0,16) : '';
+    document.getElementById('nota-sheet-title').textContent = 'Editar nota';
+    document.getElementById('sheet-nota').classList.add('open');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════
+// EVENTO CALENDARIO DIRECTO
+// ══════════════════════════════════════
+var eventoCalFechaDefault = null;
+
+function abrirNuevoEventoCal(fechaStr){
+  eventoCalFechaDefault = fechaStr;
+  // Pre-llenar fecha
+  var inicio = fechaStr ? fechaStr+'T09:00' : new Date().toISOString().slice(0,16);
+  document.getElementById('ev-titulo').value='';
+  document.getElementById('ev-inicio').value=inicio;
+  document.getElementById('ev-fin').value='';
+  document.getElementById('ev-tipo').value='personal';
+  document.getElementById('ev-visible').value='0';
+  document.getElementById('ev-desc').value='';
+  // Llenar leads
+  var sel = document.getElementById('ev-lead');
+  var misL = allLeads.filter(function(l){
+    return cu.rol==='admin'||cu.rol==='commercial_lead' ? true :
+    cu.rol==='field_capturer' ? l.captador===cu.nombre : l.cerrador===cu.nombre;
+  });
+  sel.innerHTML = '<option value="">Sin lead relacionado</option>' +
+    misL.map(function(l){ return '<option value="'+l.id+'">'+l.nombre+'</option>'; }).join('');
+  document.getElementById('sheet-evento-cal').classList.add('open');
+}
+
+async function guardarEventoCal(){
+  var titulo = document.getElementById('ev-titulo').value.trim();
+  var inicio = document.getElementById('ev-inicio').value;
+  if(!titulo){ toast('Escribe un titulo','error'); return; }
+  if(!inicio){ toast('Selecciona fecha de inicio','error'); return; }
+  var visible = document.getElementById('ev-visible').value==='1';
+  var datos = {
+    colaborador: cu.nombre,
+    titulo: titulo,
+    descripcion: document.getElementById('ev-desc').value||null,
+    fecha_inicio: new Date(inicio).toISOString(),
+    fecha_fin: document.getElementById('ev-fin').value ? new Date(document.getElementById('ev-fin').value).toISOString() : null,
+    tipo: document.getElementById('ev-tipo').value,
+    lead_id: document.getElementById('ev-lead').value ? parseInt(document.getElementById('ev-lead').value) : null,
+    visible_equipo: visible,
+    color: visible ? '#3B82F6' : '#F59E0B'
+  };
+  try{
+    await sb.from('eventos_calendario').insert([datos]);
+    // Si es visible para el equipo, agregar a agenda_grupal tambien
+    if(visible){
+      await sb.from('agenda_grupal').insert([{
+        titulo: titulo,
+        colaborador: cu.nombre,
+        rol_colaborador: cu.rol,
+        fecha_actividad: datos.fecha_inicio,
+        lead_id: datos.lead_id||null
+      }]).catch(function(){});
+    }
+    closeSheet('evento-cal');
+    toast('Evento creado');
+    // Recargar agenda
+    cargarAgendaPersonal();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════
+// PERSISTENCIA DE PROPUESTA (no pierde datos al salir)
+// ══════════════════════════════════════
+var _propDatosGuardados = {};
+
+function guardarEstadoPropuesta(){
+  try{
+    var estado = {
+      leadId: document.getElementById('prop-lead-sel')?.value||'',
+      m2: document.getElementById('prop-m2')?.value||'',
+      desc: document.getElementById('prop-desc')?.value||''
+    };
+    _propDatosGuardados = estado;
+  }catch(e){}
+}
+
+function restaurarEstadoPropuesta(){
+  try{
+    if(_propDatosGuardados.leadId){
+      var sel = document.getElementById('prop-lead-sel');
+      if(sel) sel.value = _propDatosGuardados.leadId;
+      var m2 = document.getElementById('prop-m2');
+      if(m2) m2.value = _propDatosGuardados.m2||'';
+      var desc = document.getElementById('prop-desc');
+      if(desc) desc.value = _propDatosGuardados.desc||'';
+      // Mostrar canvas si habia imagen
+      if(window._propImgData){
+        var wrap = document.getElementById('prop-canvas-wrap');
+        if(wrap) wrap.style.display='block';
+        var btn = document.getElementById('btn-enviar-grupo');
+        if(btn) btn.style.display='block';
+      }
+    }
+  }catch(e){}
+}
+
+// ══════════════════════════════════════
+// DOCUMENTO TERRENO EN PROPUESTA
+// ══════════════════════════════════════
+var _propDocFile = null;
+
+function seleccionarDocTerrenoProp(input){
+  var file = input.files&&input.files[0];
+  if(!file) return;
+  _propDocFile = file;
+  var label = document.getElementById('prop-doc-label');
+  if(label) label.textContent = file.name+' ('+Math.round(file.size/1024)+' KB)';
+  var zone = document.getElementById('prop-doc-zone');
+  if(zone) zone.style.borderColor='var(--green)';
+  guardarEstadoPropuesta();
+  toast('Documento adjuntado: '+file.name);
+}
+
+// ══════════════════════════════════════
+// PROPUESTA AL GRUPO WA — auto-registrar
+// ══════════════════════════════════════
+async function enviarReqAlGrupo(){
+  var canvas = document.getElementById('prop-canvas');
+  if(!canvas){ toast('Genera la imagen primero','error'); return; }
+
+  // Descargar imagen
+  var link = document.createElement('a');
+  var dataUrl = canvas.toDataURL('image/png');
+  var nombre = window._propImgLead ? window._propImgLead.nombre.replace(/\s/g,'_') : 'cliente';
+  link.href = dataUrl;
+  link.download = 'GEAT_req_'+nombre+'.png';
+  link.click();
+
+  // Subir imagen a Supabase Storage para registro
+  var lead = window._propImgLead;
+  var imgBlob = await (await fetch(dataUrl)).blob();
+  var path = 'req_'+(lead?lead.id:'x')+'_'+Date.now()+'.png';
+  var imgUrl = '';
+  try{
+    var {data:upData} = await sb.storage.from('propuestas').upload(path, imgBlob, {contentType:'image/png',upsert:true});
+    var {data:urlData} = sb.storage.from('propuestas').getPublicUrl(path);
+    imgUrl = urlData?.publicUrl||'';
+  }catch(e){ console.log('Upload img:', e.message); }
+
+  // Registrar solicitud en BD automaticamente
+  if(lead){
+    await guardarSolicitudArquitectura(lead.id,{
+      nombre_cliente: lead.nombre,
+      ciudad: lead.ciudad||'',
+      metros_cuadrados: window._propImgM2||null,
+      precio_estimado: null,
+      descripcion: window._propImgDesc||''
+    });
+    // Si hay documento de terreno, subirlo tambien
+    if(_propDocFile){
+      var docPath = 'doc_terreno_'+lead.id+'_'+Date.now()+'.'+_propDocFile.name.split('.').pop();
+      sb.storage.from('propuestas').upload(docPath, _propDocFile, {upsert:true})
+        .then(function(){ toast('Documento de terreno subido'); })
+        .catch(function(e){ console.log('Doc upload:', e.message); });
+    }
+  }
+
+  // Abrir grupo WhatsApp
+  var grupo = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
+  setTimeout(function(){ window.open(grupo,'_blank'); }, 600);
+  toast('Imagen descargada • Grupo WA abierto • Registrado en CRM');
+}
+
+
 initLogin();
 </script>
 
@@ -5503,6 +5800,117 @@ initLogin();
     <div class="sh-ftr">
       <button class="btn btn-p" style="flex:1" onclick="guardarIndagacion()">Guardar indagacion</button>
       <button class="btn btn-g" onclick="closeSheet('indagacion')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SHEET: NUEVA NOTA -->
+<div class="sheet-overlay" id="sheet-nota" onclick="if(event.target===this)closeSheet('nota')">
+  <div class="sheet" style="max-height:70vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('nota')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title" id="nota-sheet-title">Nueva nota</div>
+      <button class="sheet-close" onclick="closeSheet('nota')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="fg" style="margin-bottom:10px">
+        <label>Titulo</label>
+        <input class="fi" id="nota-titulo" placeholder="Titulo de la nota...">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Categoria</label>
+        <select class="fsel" id="nota-cat">
+          <option value="general">General</option>
+          <option value="recordatorio">Recordatorio</option>
+          <option value="lead">Lead</option>
+          <option value="idea">Idea</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Color</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="setNotaColor('#334155',this)" id="nc-gris" style="width:28px;height:28px;border-radius:50%;background:#334155;border:2px solid var(--acc);cursor:pointer" title="Gris"></button>
+          <button onclick="setNotaColor('#1e3a5f',this)" id="nc-azul" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid transparent;cursor:pointer" title="Azul"></button>
+          <button onclick="setNotaColor('#14532d',this)" id="nc-verde" style="width:28px;height:28px;border-radius:50%;background:#14532d;border:2px solid transparent;cursor:pointer" title="Verde"></button>
+          <button onclick="setNotaColor('#78350f',this)" id="nc-naranjo" style="width:28px;height:28px;border-radius:50%;background:#78350f;border:2px solid transparent;cursor:pointer" title="Naranja"></button>
+          <button onclick="setNotaColor('#4c1d95',this)" id="nc-morado" style="width:28px;height:28px;border-radius:50%;background:#4c1d95;border:2px solid transparent;cursor:pointer" title="Morado"></button>
+          <button onclick="setNotaColor('#7f1d1d',this)" id="nc-rojo" style="width:28px;height:28px;border-radius:50%;background:#7f1d1d;border:2px solid transparent;cursor:pointer" title="Rojo"></button>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Contenido</label>
+        <textarea class="fi" id="nota-texto" rows="6" style="resize:vertical;min-height:120px" placeholder="Escribe tu nota aqui..."></textarea>
+      </div>
+      <div class="fg">
+        <label>Recordar el (opcional)</label>
+        <input class="fi" id="nota-recordar" type="datetime-local">
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" style="flex:1" onclick="guardarNotaMejorada()">Guardar</button>
+      <button class="btn btn-g" onclick="closeSheet('nota')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SHEET: NUEVO EVENTO CALENDARIO -->
+<div class="sheet-overlay" id="sheet-evento-cal" onclick="if(event.target===this)closeSheet('evento-cal')">
+  <div class="sheet" style="max-height:80vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('evento-cal')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title">Nuevo evento</div>
+      <button class="sheet-close" onclick="closeSheet('evento-cal')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="fg" style="margin-bottom:10px">
+        <label>Titulo *</label>
+        <input class="fi" id="ev-titulo" placeholder="Reunion, llamada, visita...">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="fg">
+          <label>Inicio *</label>
+          <input class="fi" id="ev-inicio" type="datetime-local">
+        </div>
+        <div class="fg">
+          <label>Fin</label>
+          <input class="fi" id="ev-fin" type="datetime-local">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Tipo</label>
+        <select class="fsel" id="ev-tipo">
+          <option value="personal">Personal</option>
+          <option value="reunion">Reunion con cliente</option>
+          <option value="llamada">Llamada programada</option>
+          <option value="visita">Visita al terreno</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Lead relacionado (opcional)</label>
+        <select class="fsel" id="ev-lead">
+          <option value="">Sin lead relacionado</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Visible para el equipo</label>
+        <select class="fsel" id="ev-visible">
+          <option value="0">No (solo yo)</option>
+          <option value="1">Si (agenda grupal)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Descripcion</label>
+        <textarea class="fi" id="ev-desc" rows="2" style="resize:vertical;min-height:56px" placeholder="Detalles del evento..."></textarea>
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" style="flex:1" onclick="guardarEventoCal()">Guardar evento</button>
+      <button class="btn btn-g" onclick="closeSheet('evento-cal')">Cancelar</button>
     </div>
   </div>
 </div>
