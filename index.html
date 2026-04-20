@@ -3607,1125 +3607,170 @@ function renderFinanciamiento(el){
 }
 
 async function actualizarPasoFin(paso, estado){
-  const leadId = document.getElementById('fin-lead-sel')?.value;
+  var leadId = window._finLeadId || (document.getElementById('fin-lead-sel')&&document.getElementById('fin-lead-sel').value);
   if(!leadId){ toast('Selecciona un cliente primero','error'); return; }
-  try {
-    const campo = `paso_${paso}_estado`;
-    const campoFecha = `paso_${paso}_fecha`;
-    const updates = {
-      [campo]: estado,
-      [campoFecha]: estado==='completado' ? new Date().toISOString() : null,
-      lead_id: parseInt(leadId),
-      cerrador: cu.nombre,
-      updated_at: new Date().toISOString()
-    };
-    // Upsert segun lead_id
-    const {data:existing} = await sb.from('financiamiento_tramite').select('id').eq('lead_id',leadId).limit(1).single().catch(()=>({data:null}));
-    if(existing?.id){
+  var campoEst = 'paso_'+paso+'_estado';
+  var campoFec = 'paso_'+paso+'_fecha';
+  var updates = {lead_id:parseInt(leadId), cerrador:cu.nombre, updated_at:new Date().toISOString()};
+  updates[campoEst] = estado;
+  updates[campoFec] = estado==='completado' ? new Date().toISOString() : null;
+  try{
+    // Intentar update primero, si no existe hacer insert
+    var {data:existing} = await sb.from('financiamiento_tramite').select('id').eq('lead_id',leadId).maybeSingle();
+    if(existing && existing.id){
       await sb.from('financiamiento_tramite').update(updates).eq('id',existing.id);
     } else {
-      await sb.from('financiamiento_tramite').insert([updates]);
+      // Crear registro con todos los pasos en pendiente
+      var nuevo = {lead_id:parseInt(leadId),cerrador:cu.nombre,
+        paso_1_estado:'pendiente',paso_2_estado:'pendiente',paso_3_estado:'pendiente',
+        paso_4_estado:'pendiente',paso_5_estado:'pendiente'};
+      nuevo[campoEst]=estado; nuevo[campoFec]=estado==='completado'?new Date().toISOString():null;
+      await sb.from('financiamiento_tramite').insert([nuevo]);
     }
-    toast('Paso '+paso+': '+estado);
-  } catch(e){ toast('Error: '+e.message,'error'); }
-}
-
-function cargarFinanciamiento(leadId){
-  if(!leadId) return;
-  const lead = allLeads.find(l=>l.id==leadId);
-  if(lead) toast('Cargando trámite de: '+lead.nombre);
-}
-
-function renderPagos(el){
-  const misL = allLeads.filter(l=>cu.rol==='closer'?l.cerrador===cu.nombre:true);
-  el.innerHTML=`
-    <div class="fgroup" style="margin-bottom:14px">
-      <label>Seleccionar cliente</label>
-      <select class="fselect" id="pag-lead-sel" onchange="cargarPagos(this.value)">
-        <option value="">Seleccionar...</option>
-        ${misL.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('')}
-      </select>
-    </div>
-    <div id="pag-content">
-      <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Pagos al contado</div>
-        <div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Distribución estándar: 40% - 40% - 20%</div>
-        ${[
-          {lbl:'1er pago', pct:'40%', desc:'Al firmar contrato'},
-          {lbl:'2do pago', pct:'40%', desc:'Avance de obra'},
-          {lbl:'3er pago', pct:'20%', desc:'Antes de entrega de casa'},
-        ].map((p,i)=>`
-          <div class="pago-card" style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <div>
-                <div style="font-size:12px;font-weight:600">${p.lbl} - <span style="color:var(--acc)">${p.pct}</span></div>
-                <div style="font-size:10px;color:var(--txt3)">${p.desc}</div>
-              </div>
-              <select style="padding:4px 8px;background:var(--bg2);border:1px solid var(--brd);border-radius:20px;font-size:10px;color:var(--txt3)">
-                <option value="pendiente">⏳ Pendiente</option>
-                <option value="parcial">🔄 Parcial</option>
-                <option value="pagado">[OK] Pagado</option>
-              </select>
-            </div>
-            <div style="display:flex;gap:8px">
-              <input type="number" class="finput" placeholder="Monto USD" style="flex:1">
-              <input type="date" class="finput" style="flex:1">
-            </div>
-          </div>`).join('')}
-        <div style="margin-top:8px;padding:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:var(--r)">
-          <div style="font-size:10px;color:var(--txt3);font-weight:600;margin-bottom:2px">Para financiamiento bancario</div>
-          <div style="font-size:11px;color:var(--txt2)">Los pagos varían según políticas de cada banco. Registrar según acuerdo específico con el banco del cliente.</div>
-        </div>
-        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="guardarPagos()">Guardar pagos</button>
-      </div>
-    </div>`;
-}
-
-function cargarPagos(leadId){
-  if(!leadId) return;
-  const lead = allLeads.find(l=>l.id==leadId);
-  if(lead) toast('Cargando pagos de: '+lead.nombre);
-}
-
-function llenarLeadSelects(){
-  const misL = allLeads.filter(l=>{
-    if(cu.rol==='closer') return l.cerrador===cu.nombre;
-    if(cu.rol==='commercial_lead') return true;
-    if(cu.rol==='admin') return true;
-    return false;
-  });
-  ['reu-lead-sel','cotiz-lead-sel','res-lead-sel'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el) return;
-    el.innerHTML='<option value="">Seleccionar lead...</option>'+misL.map(l=>`<option value="${l.id}">${l.nombre} - ${l.celular||'-'}</option>`).join('');
-  });
-}
-
-function renderReuniones(el){
-  el.innerHTML=`
-    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetReunion()">+ Nueva Reunión</button>
-    <div id="reuniones-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
-  sb.from('reuniones_cerrador').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(50)
-    .then(({data})=>{
-      const rows=data||[];
-      const rl=document.getElementById('reuniones-list');
-      if(!rl) return;
-      if(!rows.length){rl.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones registradas</div></div>';return;}
-      rl.innerHTML=rows.map(r=>{
-        const lead=allLeads.find(l=>l.id===r.lead_id);
-        const colores={avance:'var(--blue)',revision_propuesta:'var(--purple)',cierre:'var(--green)'};
-        const col=colores[r.tipo]||'var(--acc)';
-        return `<div class="card has-left" style="border-left-color:${col};padding:12px 14px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+r.lead_id}</span>
-            <span class="badge" style="background:${col}20;color:${col};font-size:9px">Reunión ${r.numero_reunion}</span>
-          </div>
-          <div style="font-size:11px;color:var(--txt3);margin-bottom:4px">${r.tipo?.replace(/_/g,' ')} · ${r.fecha?new Date(r.fecha).toLocaleDateString('es-BO'):'Sin fecha'}</div>
-          ${r.resultado?`<div style="font-size:11px;color:var(--green);font-weight:500">✓ ${r.resultado}</div>`:'<div style="font-size:11px;color:var(--acc)">⏳ Pendiente</div>'}
-          ${r.notas?`<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"${r.notas.slice(0,80)}"</div>`:''}
-        </div>`;
-      }).join('');
-    }).catch(()=>{
-      const rl=document.getElementById('reuniones-list');
-      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones aún</div></div>';
-    });
-}
-
-function renderCotizaciones(el){
-  el.innerHTML=`
-    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetCotiz()">+ Nueva Cotización</button>
-    <div id="cotiz-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
-  sb.from('cotizaciones').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(50)
-    .then(({data})=>{
-      const rows=data||[];
-      const cl=document.getElementById('cotiz-list');
-      if(!cl) return;
-      if(!rows.length){cl.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin cotizaciones</div></div>';return;}
-      cl.innerHTML=rows.map(c=>{
-        const lead=allLeads.find(l=>l.id===c.lead_id);
-        const estadoCol={borrador:'var(--txt3)',enviada:'var(--blue)',aprobada:'var(--green)',rechazada:'var(--red)'}[c.estado]||'var(--txt3)';
-        return `<div class="card" style="padding:12px 14px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+c.lead_id}</span>
-            <span style="font-size:11px;font-weight:600;color:${estadoCol}">${c.estado}</span>
-          </div>
-          <div style="font-size:12px;font-weight:500;margin-bottom:4px">${c.titulo||'Sin título'}</div>
-          <div style="display:flex;gap:10px;font-size:11px;color:var(--txt3)">
-            ${c.metros_cuadrados?`<span>${c.metros_cuadrados} m²</span>`:''}
-            ${c.precio_estimado?`<span style="color:var(--acc);font-weight:600">$${Number(c.precio_estimado).toLocaleString()} USD</span>`:''}
-          </div>
-        </div>`;
-      }).join('');
-    }).catch(()=>{
-      const cl=document.getElementById('cotiz-list');
-      if(cl) cl.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin cotizaciones</div></div>';
-    });
-}
-
-function renderPropuestas(el){
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
-  sb.from('solicitudes_propuesta').select('*').order('created_at',{ascending:false}).limit(50)
-    .then(function(r){
-      var rows=r.data||[];
-
-      // Panel generador de imagen SIEMPRE visible arriba
-      var genPanel = '<div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r2);padding:14px;margin-bottom:14px">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Generar requerimiento para Arquitectura</div>' +
-        '<div class="fgroup" style="margin-bottom:8px"><label>Lead / Cliente</label>' +
-        '<select class="fselect" id="prop-lead-sel" style="font-size:12px" onchange="actualizarDatosPropLead(this.value)">' +
-        '<option value="">Seleccionar lead...</option>' +
-        allLeads.filter(function(l){return cu.rol==='closer'?l.cerrador===cu.nombre:true;})
-          .map(function(l){return '<option value="'+l.id+'">'+l.nombre+'</option>';}).join('') +
-        '</select></div>' +
-        '<div style="margin-bottom:8px">' +
-        '<div class="fgroup"><label>Metros cuadrados</label><input class="finput" id="prop-m2" type="number" placeholder="120" style="font-size:12px" oninput="guardarEstadoPropuesta()"></div>' +
-        '</div>' +
-        '<div class="fgroup" style="margin-bottom:8px"><label>Descripcion / Detalles</label>' +
-        '<textarea class="finput" id="prop-desc" rows="2" style="resize:vertical;min-height:56px;font-size:12px" oninput="guardarEstadoPropuesta()" placeholder="Modelo, plantas, caracteristicas..."></textarea>' +
-        '</div>' +
-        '<div class="fgroup" style="margin-bottom:8px"><label>Plano / Documento del terreno (opcional)</label>' +
-        '<div id="prop-doc-zone" style="border:1px dashed var(--brd2);border-radius:var(--r);padding:10px 12px;cursor:pointer;font-size:12px;color:var(--txt3);display:flex;align-items:center;gap:8px" onclick="document.getElementById(\'prop-doc-input\').click()">' +
-        '<span style="font-size:16px">&#128206;</span><span id="prop-doc-label">Toca para adjuntar plano de uso de suelo...</span>' +
-        '</div>' +
-        '<input type="file" id="prop-doc-input" accept=".pdf,.jpg,.jpeg,.png,.dwg" style="display:none" onchange="seleccionarDocTerrenoProp(this)">' +
-        '</div>' +
-
-        // Preview canvas
-        '<div id="prop-canvas-wrap" style="display:none;margin-bottom:10px">' +
-        '<canvas id="prop-canvas" width="800" height="560" style="width:100%;border-radius:var(--r);border:1px solid var(--brd)"></canvas>' +
-        '</div>' +
-
-        '<div style="display:flex;gap:8px">' +
-        '<button class="btn btn-primary" style="flex:1" onclick="generarImagenReq()">Generar imagen</button>' +
-        '<button id="btn-enviar-grupo" class="btn" style="flex:1;background:rgba(37,211,102,0.1);border-color:rgba(37,211,102,0.4);color:var(--green);display:none" onclick="enviarReqAlGrupo()">' +
-        'Enviar al grupo WA</button>' +
-        '</div>' +
-        '</div>';
-
-      // Lista de solicitudes existentes
-      var lista = '';
-      if(!rows.length){
-        lista='<div class="empty"><div class="empty-icon">&#128196;</div><div class="empty-title">Sin solicitudes aun</div></div>';
-      } else {
-        lista='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Historial de solicitudes</div>';
-        rows.forEach(function(p){
-          var estCol={pendiente:'var(--acc)',en_proceso:'var(--blue)',entregado:'var(--green)'}[p.estado]||'var(--txt3)';
-          lista+='<div class="card has-left" style="border-left-color:'+estCol+';padding:11px 13px;margin-bottom:6px">';
-          lista+='<div style="display:flex;justify-content:space-between;margin-bottom:3px">';
-          lista+='<span style="font-size:13px;font-weight:600">'+(p.nombre_cliente||'Cliente')+'</span>';
-          lista+='<span style="font-size:10px;font-weight:600;color:'+estCol+'">'+p.estado+'</span></div>';
-          lista+='<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">'+(p.metros_cuadrados||'-')+' m² · '+(p.ciudad||'')+'</div>';
-          if(p.notas_tecnica) lista+='<div style="font-size:11px;color:var(--txt2);font-style:italic;margin-bottom:4px">"'+p.notas_tecnica+'"</div>';
-          if(p.archivo_url) lista+='<a href="'+p.archivo_url+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--r);font-size:11px;font-weight:600;color:var(--green);text-decoration:none">&#128228; Ver propuesta</a>';
-          lista+='</div>';
-        });
-      }
-
-      el.innerHTML = genPanel + lista;
-    }).catch(function(e){
-      el.innerHTML='<div class="empty"><div class="et">Error: '+e.message+'</div></div>';
-    });
-}
-
-function actualizarDatosPropLead(leadId){
-  var lead = allLeads.find(function(l){return l.id==leadId;});
-  if(!lead) return;
-  if(lead.metros_cuadrados) document.getElementById('prop-m2').value=lead.metros_cuadrados;
-}
-
-function generarImagenReq(){
-  var leadId = document.getElementById('prop-lead-sel').value;
-  var lead = allLeads.find(function(l){return l.id==leadId;});
-  var m2 = document.getElementById('prop-m2').value||'-';
-  var precio = document.getElementById('prop-precio').value||'-';
-  var desc = document.getElementById('prop-desc').value||'';
-  var cliente = lead?lead.nombre:'Cliente';
-  var celular = lead?lead.celular:'-';
-  var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
-  var financ = lead?(lead.financiamiento==='bancario'?'Financiamiento bancario':'Al contado'):'';
-  var fecha = new Date().toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
-
-  var canvas = document.getElementById('prop-canvas');
-  var ctx = canvas.getContext('2d');
-  canvas.width=800; canvas.height=560;
-
-  // Fondo
-  ctx.fillStyle='#0F172A'; ctx.fillRect(0,0,800,560);
-
-  // Barra dorada
-  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,0,800,6);
-
-  // Logo
-  ctx.fillStyle='#F59E0B';
-  ctx.beginPath(); ctx.roundRect(28,22,56,56,8); ctx.fill();
-  ctx.fillStyle='#000'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
-  ctx.fillText('G',56,60);
-
-  // Empresa
-  ctx.fillStyle='#F59E0B'; ctx.font='bold 20px Arial'; ctx.textAlign='left';
-  ctx.fillText('GEAT',100,44);
-  ctx.fillStyle='#64748B'; ctx.font='10px Arial';
-  ctx.fillText('CONSTRUCCION Y CONSULTORIA',100,60);
-
-  // Titulo
-  ctx.fillStyle='#F1F5F9'; ctx.font='bold 22px Arial'; ctx.textAlign='center';
-  ctx.fillText('SOLICITUD DE PROPUESTA',400,110);
-  ctx.strokeStyle='#F59E0B'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(50,124); ctx.lineTo(750,124); ctx.stroke();
-
-  // Datos cliente
-  var col1=[['Cliente:',cliente],['Celular:',celular],['Ciudad:',ciudad],['Financiamiento:',financ]];
-  ctx.textAlign='left';
-  col1.forEach(function(d,i){
-    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,155+i*28);
-    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],180,155+i*28);
-  });
-
-  // Separador
-  ctx.strokeStyle='#334155'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(50,268); ctx.lineTo(750,268); ctx.stroke();
-
-  // Proyecto
-  ctx.fillStyle='#F59E0B'; ctx.font='bold 13px Arial'; ctx.textAlign='left';
-  ctx.fillText('ESPECIFICACIONES',60,295);
-  var col2=[['Metros cuadrados:',m2+' m²'],['Presupuesto est.:','$'+precio+' USD'],['Cerrador:',cu.nombre]];
-  col2.forEach(function(d,i){
-    ctx.fillStyle='#64748B'; ctx.font='12px Arial'; ctx.fillText(d[0],60,320+i*26);
-    ctx.fillStyle='#F1F5F9'; ctx.font='bold 12px Arial'; ctx.fillText(d[1],220,320+i*26);
-  });
-
-  // Descripcion
-  if(desc){
-    ctx.fillStyle='#64748B'; ctx.font='11px Arial'; ctx.fillText('Detalles:',60,410);
-    ctx.fillStyle='#CBD5E1'; ctx.font='11px Arial';
-    var words=desc.split(' '), line='', y=428;
-    words.forEach(function(w){
-      var t=line+w+' ';
-      if(ctx.measureText(t).width>680){ctx.fillText(line,60,y);y+=16;line=w+' ';}
-      else line=t;
-    });
-    if(line) ctx.fillText(line,60,y);
-  }
-
-  // Footer
-  ctx.fillStyle='#475569'; ctx.font='11px Arial'; ctx.textAlign='left';
-  ctx.fillText('Fecha: '+fecha,60,535);
-  ctx.textAlign='right';
-  ctx.fillText('GEAT Construccion y Consultoria',740,535);
-  ctx.fillStyle='#F59E0B'; ctx.fillRect(0,554,800,6);
-
-  // Mostrar canvas y boton
-  document.getElementById('prop-canvas-wrap').style.display='block';
-  document.getElementById('btn-enviar-grupo').style.display='block';
-  // Guardar datos para envio
-  window._propImgLead = lead;
-  window._propImgM2 = m2;
-  window._propImgPrecio = precio;
-  window._propImgDesc = desc;
-
-  toast('Imagen generada — ahora enviala al grupo');
-}
-
-function enviarReqAlGrupo(){
-  var canvas = document.getElementById('prop-canvas');
-  if(!canvas){ toast('Genera la imagen primero','error'); return; }
-
-  // Descargar imagen automaticamente
-  var link = document.createElement('a');
-  link.href = canvas.toDataURL('image/png');
-  var nombre = window._propImgLead ? window._propImgLead.nombre.replace(/\s/g,'_') : 'cliente';
-  link.download = 'GEAT_req_'+nombre+'.png';
-  link.click();
-
-  // Abrir grupo WhatsApp inmediatamente
-  var grupo = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
-  setTimeout(function(){ window.open(grupo,'_blank'); }, 500);
-
-  // Guardar solicitud en BD
-  var lead = window._propImgLead;
-  if(lead){
-    guardarSolicitudArquitectura(lead.id,{
-      nombre_cliente:lead.nombre, ciudad:lead.ciudad||'',
-      metros_cuadrados:window._propImgM2||null,
-      precio_estimado:window._propImgPrecio||null,
-      descripcion:window._propImgDesc||''
-    });
-  }
-  toast('Imagen descargada • Grupo de WhatsApp abierto');
-}
-
-
-async function enviarSolicitudArquitectura(){
-  // Generar solicitud a arquitectura y guardar en BD
-  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
-  var lead = leadId&&allLeads.find(function(l){return l.id==leadId;});
-  if(!lead){ toast('Selecciona un lead en Cotizaciones primero','error'); return; }
-  await guardarSolicitudArquitectura(leadId, {
-    nombre_cliente: lead.nombre,
-    ciudad: lead.ciudad||'',
-    metros_cuadrados: document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value||null,
-    precio_estimado: document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value||null,
-    descripcion: document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||''
-  });
-  toast('Solicitud enviada a Arquitectura');
-  renderCierre();
-}
-
-
-function renderReservas(el){
-  el.innerHTML=`
-    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="abrirSheetReserva()">+ Registrar Reserva</button>
-    <div id="reservas-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>`;
-  sb.from('reservas').select('*').eq('cerrador',cu.nombre).order('created_at',{ascending:false}).limit(30)
-    .then(({data})=>{
-      const rows=data||[];
-      const rl=document.getElementById('reservas-list');
-      if(!rl) return;
-      const total=rows.reduce((s,r)=>s+(Number(r.monto_reserva)||0),0);
-      if(total>0){
-        rl.innerHTML=`<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:var(--r);padding:12px;text-align:center;margin-bottom:12px">
-          <div style="font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:0.07em">Total reservas</div>
-          <div style="font-size:26px;font-weight:700;color:var(--green)">$${total.toLocaleString()} USD</div>
-        </div>`;
-      }
-      if(!rows.length){rl.innerHTML+='<div class="empty"><div class="empty-icon">[R]</div><div class="empty-title">Sin reservas registradas</div></div>';return;}
-      rl.innerHTML+=(rows.map(r=>{
-        const lead=allLeads.find(l=>l.id===r.lead_id);
-        const estCol={pendiente:'var(--acc)',confirmada:'var(--green)',anulada:'var(--red)'}[r.estado]||'var(--txt3)';
-        return `<div class="card has-left" style="border-left-color:var(--green);padding:12px 14px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:600">${lead?.nombre||'Lead #'+r.lead_id}</span>
-            <span style="font-size:14px;font-weight:700;color:var(--green)">$${Number(r.monto_reserva||0).toLocaleString()}</span>
-          </div>
-          <div style="font-size:11px;color:var(--txt3);margin-bottom:3px">${r.fecha_reserva||'-'} · ${r.metodo_pago||'-'}</div>
-          <div style="font-size:11px;font-weight:600;color:${estCol}">${r.estado||'pendiente'}</div>
-          ${r.comprobante_url?`<div style="font-size:10px;color:var(--blue);margin-top:3px">📎 ${r.comprobante_url.slice(0,50)}</div>`:''}
-        </div>`;
-      }).join(''));
-    }).catch(()=>{
-      const rl=document.getElementById('reservas-list');
-      if(rl) rl.innerHTML='<div class="empty"><div class="empty-icon">[R]</div><div class="empty-title">Sin reservas</div></div>';
-    });
-}
-
-function abrirSheetReunion(){
-  llenarLeadSelects();
-  document.getElementById('reu-notas').value='';
-  document.getElementById('reu-resultado').value='';
-  document.getElementById('reu-fecha').value='';
-  document.getElementById('sheet-reunion').classList.add('open');
-}
-
-function abrirSheetCotiz(){
-  llenarLeadSelects();
-  document.getElementById('cotiz-titulo').value='';
-  document.getElementById('cotiz-m2').value='';
-  document.getElementById('cotiz-precio').value='';
-  document.getElementById('cotiz-desc').value='';
-  document.getElementById('cotiz-estado').value='borrador';
-  document.getElementById('sheet-cotiz').classList.add('open');
-}
-
-function abrirSheetReserva(){
-  llenarLeadSelects();
-  document.getElementById('res-monto').value='';
-  document.getElementById('res-fecha').value=new Date().toISOString().slice(0,10);
-  document.getElementById('res-comprobante').value='';
-  document.getElementById('res-notas').value='';
-  document.getElementById('sheet-reserva').classList.add('open');
-}
-
-
-// ══════════════════════════════════════
-// SOLICITUD AL GRUPO DE ARQUITECTURA
-// ══════════════════════════════════════
-
-function toggleTerrenoInfo(val){
-  const el = document.getElementById('reu-terreno-info');
-  if(el) el.style.display = val==='visita_terreno' ? 'block' : 'none';
-}
-
-function enviarArquitectura(){
-  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
-  var lead = allLeads.find(function(l){return l.id==leadId;});
-  var titulo = (document.getElementById('cotiz-titulo')&&document.getElementById('cotiz-titulo').value)||'Sin titulo';
-  var m2 = (document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value)||'-';
-  var precio = (document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value)||'-';
-  var desc = (document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value)||'';
-  var cliente = lead?lead.nombre:'Cliente';
-  var celular = lead?lead.celular:'-';
-  var ciudad = lead?(lead.ciudad||'Santa Cruz'):'Santa Cruz';
-  var financ = lead?(lead.financiamiento==='bancario'?'Financiamiento bancario':'Al contado'):'';
-  var fecha = new Date().toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
-
-  // Generar imagen con Canvas
-  var canvas = document.createElement('canvas');
-  canvas.width = 800; canvas.height = 600;
-  var ctx = canvas.getContext('2d');
-
-  // Fondo negro GEAT
-  ctx.fillStyle = '#0F172A';
-  ctx.fillRect(0,0,800,600);
-
-  // Barra dorada superior
-  ctx.fillStyle = '#F59E0B';
-  ctx.fillRect(0,0,800,8);
-
-  // Logo G
-  ctx.fillStyle = '#F59E0B';
-  ctx.beginPath();
-  ctx.roundRect(30,30,60,60,10);
-  ctx.fill();
-  ctx.fillStyle = '#000';
-  ctx.font = 'bold 32px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('G',60,72);
-
-  // Nombre empresa
-  ctx.fillStyle = '#F59E0B';
-  ctx.font = 'bold 22px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText('GEAT', 105, 52);
-  ctx.fillStyle = '#94A3B8';
-  ctx.font = '12px Arial';
-  ctx.fillText('CONSTRUCCION Y CONSULTORIA', 105, 72);
-
-  // Titulo solicitud
-  ctx.fillStyle = '#F1F5F9';
-  ctx.font = 'bold 24px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('SOLICITUD DE PROPUESTA', 400, 135);
-
-  // Linea separadora
-  ctx.strokeStyle = '#F59E0B';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(50,150); ctx.lineTo(750,150);
-  ctx.stroke();
-
-  // Datos del cliente
-  var datos = [
-    ['Cliente:', cliente],
-    ['Celular:', celular],
-    ['Ciudad:', ciudad],
-    ['Financiamiento:', financ],
-  ];
-  ctx.textAlign = 'left';
-  datos.forEach(function(d,i){
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '13px Arial';
-    ctx.fillText(d[0], 60, 185+i*32);
-    ctx.fillStyle = '#F1F5F9';
-    ctx.font = 'bold 13px Arial';
-    ctx.fillText(d[1], 210, 185+i*32);
-  });
-
-  // Separador
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(50,320); ctx.lineTo(750,320);
-  ctx.stroke();
-
-  // Datos del proyecto
-  ctx.fillStyle = '#F59E0B';
-  ctx.font = 'bold 14px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText('ESPECIFICACIONES DEL PROYECTO', 60, 350);
-
-  var proyecto = [
-    ['Modelo/Titulo:', titulo],
-    ['Metros cuadrados:', m2+' m²'],
-    ['Presupuesto est.:', '$'+precio+' USD'],
-  ];
-  proyecto.forEach(function(d,i){
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '13px Arial';
-    ctx.fillText(d[0], 60, 380+i*30);
-    ctx.fillStyle = '#F1F5F9';
-    ctx.font = 'bold 13px Arial';
-    ctx.fillText(d[1], 230, 380+i*30);
-  });
-
-  if(desc){
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '12px Arial';
-    ctx.fillText('Detalles:', 60, 475);
-    ctx.fillStyle = '#CBD5E1';
-    // Texto con wrap basico
-    var words = desc.split(' ');
-    var line = '';
-    var y = 495;
-    words.forEach(function(w){
-      var test = line+w+' ';
-      if(ctx.measureText(test).width > 680){
-        ctx.fillText(line, 60, y); y+=18; line=w+' ';
-      } else { line=test; }
-    });
-    if(line) ctx.fillText(line, 60, y);
-  }
-
-  // Footer
-  ctx.fillStyle = '#475569';
-  ctx.font = '11px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText('Cerrador: '+cu.nombre, 60, 575);
-  ctx.textAlign = 'right';
-  ctx.fillText(fecha, 740, 575);
-
-  // Barra dorada inferior
-  ctx.fillStyle = '#F59E0B';
-  ctx.fillRect(0,592,800,8);
-
-  // Convertir canvas a imagen y compartir/descargar
-  var dataUrl = canvas.toDataURL('image/png');
-
-  // Mostrar modal con preview y opciones
-  var modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
-
-  var preview = document.createElement('img');
-  preview.src = dataUrl;
-  preview.style.cssText = 'max-width:100%;max-height:55vh;border-radius:8px;border:2px solid #F59E0B;margin-bottom:16px';
-
-  var btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px';
-
-  // Boton descargar imagen
-  var btnDl = document.createElement('a');
-  btnDl.href = dataUrl;
-  btnDl.download = 'GEAT_solicitud_'+cliente.replace(/\s/g,'_')+'.png';
-  btnDl.style.cssText = 'padding:13px;background:#F59E0B;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none';
-  btnDl.textContent = 'Descargar imagen';
-
-  // Boton abrir grupo WhatsApp
-  var grupoLink = WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
-  var btnGrupo = document.createElement('button');
-  btnGrupo.style.cssText = 'padding:13px;background:#22C55E;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:600;cursor:pointer';
-  btnGrupo.textContent = 'Abrir grupo Arquitectura';
-  btnGrupo.onclick = function(){ window.open(grupoLink,'_blank'); };
-
-  var instruccion = document.createElement('div');
-  instruccion.style.cssText = 'font-size:11px;color:#94A3B8;text-align:center;padding:8px;line-height:1.6';
-  instruccion.textContent = 'Descarga la imagen y luego enviala al grupo de WhatsApp de Arquitectura';
-
-  var btnCancel = document.createElement('button');
-  btnCancel.style.cssText = 'padding:10px;background:none;border:1px solid #334155;border-radius:10px;color:#94A3B8;font-size:13px;cursor:pointer';
-  btnCancel.textContent = 'Cerrar';
-  btnCancel.onclick = function(){ modal.remove(); };
-
-  btnRow.appendChild(btnDl);
-  btnRow.appendChild(btnGrupo);
-  btnRow.appendChild(instruccion);
-  btnRow.appendChild(btnCancel);
-  modal.appendChild(preview);
-  modal.appendChild(btnRow);
-  document.body.appendChild(modal);
-}
-
-function guardarReunionYReserva(){
-  guardarReunion();
-  setTimeout(()=>{
-    abrirSheetReserva();
-  }, 500);
-}
-
-function guardarReunion(){
-  const leadId=document.getElementById('reu-lead-sel').value;
-  if(!leadId){toast('Selecciona un lead','error');return;}
-  const data={
-    lead_id:parseInt(leadId),cerrador:cu.nombre,
-    numero_reunion:parseInt(document.getElementById('reu-numero').value),
-    tipo:document.getElementById('reu-tipo').value,
-    fecha:document.getElementById('reu-fecha').value?new Date(document.getElementById('reu-fecha').value).toISOString():null,
-    resultado:document.getElementById('reu-resultado').value||null,
-    notas:document.getElementById('reu-notas').value||null
-  };
-  closeSheet('reunion');toast('Guardando reunión...');
-  sb.from('reuniones_cerrador').insert([data]).then(function(){
-    toast('Reunion guardada');
-    // Agregar a agenda grupal si tiene fecha
-    if(data.fecha){
-      var lReu=allLeads.find(function(l){return l.id===data.lead_id;});
-      var tit='Reunion'+(lReu?' con '+lReu.nombre:'')+' - '+data.tipo;
-      sb.from('agenda_grupal').insert([{
-        titulo:tit,
-        colaborador:cu.nombre,
-        rol_colaborador:cu.rol,
-        fecha_actividad:data.fecha,
-        lead_id:data.lead_id||null
-      }]).then(function(){}).catch(function(){});
+    // Actualizar boton visualmente
+    var btn = document.querySelector('[data-paso="'+paso+'"]');
+    if(btn){
+      btn.style.background = estado==='completado'?'var(--green)':estado==='en_proceso'?'var(--blue)':'var(--bg3)';
+      btn.style.color = estado==='completado'||estado==='en_proceso'?'#fff':'var(--txt3)';
     }
-    renderCierre();
-  }).catch(function(e){toast('Error: '+e.message,'error');});
-}
-
-function guardarCotizacion(){
-  const leadId=document.getElementById('cotiz-lead-sel').value;
-  if(!leadId){toast('Selecciona un lead','error');return;}
-  const data={
-    lead_id:parseInt(leadId),cerrador:cu.nombre,
-    titulo:document.getElementById('cotiz-titulo').value||null,
-    metros_cuadrados:document.getElementById('cotiz-m2').value||null,
-    precio_estimado:document.getElementById('cotiz-precio').value||null,
-    descripcion:document.getElementById('cotiz-desc').value||null,
-    estado:document.getElementById('cotiz-estado').value
-  };
-  closeSheet('cotiz');toast('Guardando cotización...');
-  sb.from('cotizaciones').insert([data]).then(()=>{
-    toast('Cotización guardada ✓');renderCierre();
-  }).catch(e=>toast('Error: '+e.message,'error'));
-}
-
-function guardarReserva(){
-  const leadId=document.getElementById('res-lead-sel').value;
-  if(!leadId){toast('Selecciona un lead','error');return;}
-  const data={
-    lead_id:parseInt(leadId),cerrador:cu.nombre,
-    monto_reserva:document.getElementById('res-monto').value||null,
-    fecha_reserva:document.getElementById('res-fecha').value||null,
-    metodo_pago:document.getElementById('res-metodo').value,
-    comprobante_url:document.getElementById('res-comprobante').value||null,
-    notas:document.getElementById('res-notas').value||null,
-    estado:'pendiente'
-  };
-  closeSheet('reserva');toast('Guardando reserva...');
-  sb.from('reservas').insert([data]).then(()=>{
-    toast('Reserva registrada ✓');renderCierre();
-  }).catch(e=>toast('Error: '+e.message,'error'));
-}
-
-
-function regrabarFaltantes(){
-  // Volver al paso 1 de grabación para completar datos faltantes
-  document.getElementById('audio-st-result').style.display = 'none';
-  document.getElementById('audio-st-err').style.display = 'none';
-  if(window._vozFaltantes && window._vozFaltantes.length > 0){
-    document.getElementById('audio-hint').textContent = 'Dicta solo los datos que faltan: ' + window._vozFaltantes.join(', ');
-  }
-  document.getElementById('audio-st-rec').style.display = 'block';
-  // Reiniciar grabación
-  iniciarGrabacion();
-}
-
-
-// ══════════════════════════════════════
-// NOTAS PERSONALES PRIVADAS
-// ══════════════════════════════════════
-let notasData = [];
-
-async function renderNotas(){
-  const el = document.getElementById('notas-list');
-  if(!el) return;
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
-  try {
-    const {data} = await sb.from('notas_personales')
-      .select('*')
-      .eq('colaborador', cu.nombre)
-      .order('created_at',{ascending:false});
-    notasData = data || [];
-    if(!notasData.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Tus notas son privadas. Nadie mas las ve.</div></div>';
-      return;
-    }
-    el.innerHTML = notasData.map(n=>`
-      <div class="card" style="padding:13px 15px;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-          <div style="font-size:11px;font-weight:600;color:var(--acc)">${n.titulo||'Sin titulo'}</div>
-          <div style="display:flex;gap:6px">
-            <span style="font-size:10px;color:var(--txt3)">${n.created_at?new Date(n.created_at).toLocaleDateString('es-BO'):''}</span>
-            <button onclick="eliminarNota(${n.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0">&#10005;</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">${n.texto||''}</div>
-      </div>`).join('');
-  } catch(e){
-    el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas aun</div></div>';
-  }
-}
-
-async function nuevaNota(){
-  const titulo = prompt('Titulo de la nota:');
-  if(!titulo) return;
-  const texto = prompt('Contenido:');
-  if(texto===null) return;
-  try {
-    await sb.from('notas_personales').insert([{
-      colaborador: cu.nombre,
-      titulo: titulo,
-      texto: texto,
-      privada: true
-    }]);
-    toast('Nota guardada');
-    renderNotas();
-  } catch(e){ toast('Error al guardar: '+e.message,'error'); }
-}
-
-async function eliminarNota(id){
-  if(!confirm('Eliminar esta nota?')) return;
-  try {
-    await sb.from('notas_personales').delete().eq('id',id).eq('colaborador',cu.nombre);
-    toast('Nota eliminada');
-    renderNotas();
-  } catch(e){ toast('Error: '+e.message,'error'); }
-}
-
-// ══════════════════════════════════════
-// BUSQUEDA AVANZADA
-// ══════════════════════════════════════
-let busqEstados = new Set();
-let busqFinanciamiento = '';
-let busqFechaTipo = '';
-
-function iniciarBusqueda(){
-  ejecutarBusqueda();
-}
-
-function limpiarBusqueda(){
-  var ids = ['busq-q','busq-desde','busq-hasta','busq-medio','busq-ciudad','busq-m2min','busq-m2max'];
-  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-  busqEstados.clear();
-  busqFinanciamiento='';
-  busqFechaTipo='';
-  document.querySelectorAll('#pn-busqueda .tab').forEach(function(b){b.classList.remove('active');});
-  document.querySelectorAll('#busq-estados-chips button').forEach(function(b){b.style.opacity='0.55';b.style.transform='';});
-  var res = document.getElementById('busq-results');
-  if(res) res.innerHTML='<div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">Escribe para buscar o selecciona un filtro</div>';
-  var cnt = document.getElementById('busq-count');
-  if(cnt) cnt.textContent='—';
-}
-
-function setBusqFecha(tipo, btn){
-  busqFechaTipo = busqFechaTipo===tipo ? '' : tipo;
-  document.querySelectorAll('#bq-hoy,#bq-sem,#bq-mes,#bq-anio').forEach(function(b){b.classList.remove('active');});
-  if(busqFechaTipo) btn.classList.add('active');
-  const hoy = new Date();
-  const desdes = {
-    hoy: new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()),
-    semana: new Date(hoy.getTime()-7*86400000),
-    mes: new Date(hoy.getFullYear(),hoy.getMonth(),1),
-    anio: new Date(hoy.getFullYear(),0,1),
-  };
-  if(busqFechaTipo && desdes[busqFechaTipo]){
-    document.getElementById('busq-desde').value = desdes[busqFechaTipo].toISOString().slice(0,10);
-    document.getElementById('busq-hasta').value = hoy.toISOString().slice(0,10);
-  } else {
-    document.getElementById('busq-desde').value='';
-    document.getElementById('busq-hasta').value='';
-  }
-  ejecutarBusqueda();
-}
-
-function toggleBusqEst(est, btn){
-  if(busqEstados.has(est)){
-    busqEstados.delete(est);
-    btn.style.opacity='0.55';
-    btn.style.transform='';
-  } else {
-    busqEstados.add(est);
-    btn.style.opacity='1';
-    btn.style.transform='scale(1.05)';
-  }
-  ejecutarBusqueda();
-}
-
-function toggleFiltrosAvanzados(){
-  var div = document.getElementById('filtros-avanzados');
-  var arrow = document.getElementById('fa-arrow');
-  if(!div) return;
-  var open = div.style.display !== 'none';
-  div.style.display = open ? 'none' : 'block';
-  if(arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-function toggleBusqFin(tipo, btn){
-  busqFinanciamiento = busqFinanciamiento===tipo ? '' : tipo;
-  document.querySelectorAll('#bq-contado,#bq-banco').forEach(function(b){b.classList.remove('active');});
-  if(busqFinanciamiento) btn.classList.add('active');
-  ejecutarBusqueda();
-}
-
-function ejecutarBusqueda(){
-  const q = (document.getElementById('busq-q')?.value||'').toLowerCase();
-  const desde = document.getElementById('busq-desde')?.value||'';
-  const hasta = document.getElementById('busq-hasta')?.value||'';
-  const medio = document.getElementById('busq-medio')?.value||'';
-  const ciudad = (document.getElementById('busq-ciudad')?.value||'').toLowerCase();
-  const m2min = parseFloat(document.getElementById('busq-m2min')?.value)||0;
-  const m2max = parseFloat(document.getElementById('busq-m2max')?.value)||0;
-
-  // Filtrar segun rol
-  let base = cu.rol==='admin'||cu.rol==='commercial_lead' ? allLeads :
-    cu.rol==='field_capturer' ? allLeads.filter(l=>l.captador===cu.nombre) :
-    cu.rol==='closer' ? allLeads.filter(l=>l.cerrador===cu.nombre) : [];
-
-  let resultados = base.filter(l=>{
-    if(q && !['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>l[k]&&l[k].toLowerCase().includes(q))) return false;
-    if(desde && l.fecha_ingreso && l.fecha_ingreso < desde) return false;
-    if(hasta && l.fecha_ingreso && l.fecha_ingreso > hasta) return false;
-    if(busqEstados.size>0 && !busqEstados.has(l.estado)) return false;
-    if(busqFinanciamiento && l.financiamiento!==busqFinanciamiento) return false;
-    if(medio && l.medio_difusion!==medio) return false;
-    if(ciudad && !(l.ciudad||'').toLowerCase().includes(ciudad)) return false;
-    if(m2min && (parseFloat(l.metros_cuadrados)||0) < m2min) return false;
-    if(m2max && (parseFloat(l.metros_cuadrados)||0) > m2max) return false;
-    return true;
-  });
-
-  const countEl = document.getElementById('busq-count');
-  if(countEl) countEl.textContent = resultados.length + ' resultados';
-
-  const resEl = document.getElementById('busq-results');
-  if(resEl) resEl.innerHTML = renderLeadCards(resultados,'busq-results',cu.rol);
-}
-
-// ══════════════════════════════════════
-// CALENDARIO PERSONAL AUTOMATICO
-// Cada seguimiento con fecha proxima se registra automaticamente
-// ══════════════════════════════════════
-function registrarEnCalendario(tipo, descripcion, fechaISO, leadId, leadNombre){
-  if(!cu) return;
-  sb.from('calendario_personal').insert([{
-    colaborador: cu.nombre,
-    tipo: tipo,
-    descripcion: descripcion,
-    fecha_actividad: new Date().toISOString(),
-    fecha_programada: fechaISO||null,
-    lead_id: leadId||null,
-    lead_nombre: leadNombre||null
-  }]).then(()=>{}).catch(e=>console.log('Cal error:',e.message));
-}
-
-
-
-// ══════════════════════════════════════
-// GUIA DE SCRIPTS POR INTENTO — Protocolo GEAT
-// ══════════════════════════════════════
-var SCRIPTS_INTENTO = {
-  1: {
-    titulo: 'Guia - 1er Intento de Contacto',
-    texto: 'Muy buenas tardes Sr/a [NOMBRE], le saluda [TU NOMBRE], asesor/a comercial de Grupo GEAT Constructora y Consultoria. Me gustaria conversar con su persona ya que solicito informacion de las construcciones y beneficios que brindamos. Nos avisa su disponibilidad de tiempo para llamarlo, o desea recibir informacion por escrito? Quedo atento/a a su respuesta.'
-  },
-  2: {
-    titulo: 'Guia - 2do Intento de Contacto',
-    texto: 'Muy buenas tardes Sr/a [NOMBRE], le escribimos nuevamente de la constructora Grupo GEAT. Quisieramos conversar con su persona sobre la solicitud de informacion. Tal vez se ha encontrado ocupado/a por eso no hemos tenido respuesta. Nos podria avisar en que momento tiene disponibilidad de tiempo para poder brindarle informacion por favor, o en caso contrario si no gustaria, nos hace saber. Quedo atento/a a su respuesta.'
-  },
-  3: {
-    titulo: 'Guia - 3er Intento (Ultimo)',
-    texto: 'Muy buenas tardes [NOMBRE], la estuvimos llamando un par de veces. En esta ocasion lo vamos a dejar para una proxima oportunidad. En todo caso si aun le interesa saber los beneficios que estamos brindando este mes para las construcciones, puede responder a este mensaje. En caso contrario quedamos atentos a una proxima solicitud de su persona. Que tenga un excelente dia.'
-  }
-};
-
-function mostrarGuiaIntento(numIntento){
-  var guiaDiv = document.getElementById('intento-guia-script');
-  var guiaTit = document.getElementById('intento-guia-titulo');
-  var guiaTxt = document.getElementById('intento-guia-texto');
-  if(!guiaDiv || !numIntento || numIntento > 3) {
-    if(guiaDiv) guiaDiv.style.display='none';
-    return;
-  }
-  var script = SCRIPTS_INTENTO[numIntento];
-  if(script && guiaTit && guiaTxt){
-    guiaTit.textContent = script.titulo;
-    guiaTxt.textContent = script.texto;
-    guiaDiv.style.display='block';
-  }
-}
-
-
-
-// ══════════════════════════════════════
-// GUARDAR PAGOS EN SUPABASE
-// ══════════════════════════════════════
-async function guardarPagos(){
-  var leadId = document.getElementById('pag-lead-sel')&&document.getElementById('pag-lead-sel').value;
-  if(!leadId){ toast('Selecciona un cliente','error'); return; }
-  var pagos = [];
-  var configs = [
-    {num:1, pct:'40%', desc:'Al firmar contrato'},
-    {num:2, pct:'40%', desc:'Avance de obra'},
-    {num:3, pct:'20%', desc:'Antes de entrega'}
-  ];
-  // Leer los campos dinamicamente
-  var cards = document.querySelectorAll('#pag-content .pago-card');
-  cards.forEach(function(card, i){
-    var cfg = configs[i]||{};
-    var selectEl = card.querySelector('select');
-    var montoEl = card.querySelectorAll('input')[0];
-    var fechaEl = card.querySelectorAll('input')[1];
-    pagos.push({
-      lead_id: parseInt(leadId),
-      cerrador: cu.nombre,
-      numero_pago: i+1,
-      porcentaje: cfg.pct||'',
-      descripcion: cfg.desc||'',
-      monto_usd: montoEl&&montoEl.value?parseFloat(montoEl.value):null,
-      fecha_pago: fechaEl&&fechaEl.value?fechaEl.value:null,
-      estado: selectEl?selectEl.value:'pendiente'
-    });
-  });
-  try{
-    // Upsert por lead_id y numero_pago
-    for(var p of pagos){
-      if(p.monto_usd||p.fecha_pago){
-        await sb.from('pagos_cliente').upsert([p],{onConflict:'lead_id,numero_pago'});
-      }
-    }
-    toast('Pagos guardados');
+    var labels = ['Firma GEAT','Presupuesto bancario','Aprobacion credito','Firma contrato','Desembolso'];
+    toast('Paso '+(labels[paso-1]||paso)+': '+estado);
+    renderFinanciamiento(document.getElementById('fin-content'));
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
-
-
-// ══════════════════════════════════════
-// LEADS CON CONTACTO PARA HOY — Panel Inicio
-// ══════════════════════════════════════
-function renderContactosHoy(){
-  var el = document.getElementById('inicio-hoy-contactos');
+async function renderFinanciamiento(el){
   if(!el) return;
-  var hoy = new Date().toISOString().slice(0,10);
-  var man = new Date(); man.setDate(man.getDate()+1);
-  var manStr = man.toISOString().slice(0,10);
-  // Filtrar segun rol
-  var base = cu.rol==='admin'||cu.rol==='commercial_lead' ? allLeads :
-    cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
-    cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
-  var atrasados = base.filter(function(l){
-    return l.proximo_contacto && l.proximo_contacto < hoy &&
-           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
-  });
-  var paraHoy = base.filter(function(l){
-    return l.proximo_contacto === hoy &&
-           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
-  });
-  var paraManana = base.filter(function(l){
-    return l.proximo_contacto === manStr &&
-           l.estado !== 'cerrado_ganado' && l.estado !== 'cerrado_perdido';
-  });
-  var html = '';
-  if(atrasados.length > 0){
-    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">ATRASADOS ('+atrasados.length+')</div>';
-    atrasados.slice(0,5).forEach(function(l){
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1)" onclick="abrirSheetLead('+l.id+')" style="cursor:pointer">';
-      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
-      html += '<div style="font-size:10px;color:var(--txt3)">'+l.proximo_contacto+' &middot; '+(l.captador||l.cerrador||'').split(' ')[0]+'</div></div>';
-      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">[W]</a>';
-      html += '</div>';
-    });
-    if(atrasados.length > 5) html += '<div style="font-size:10px;color:var(--red);margin-top:4px">+' + (atrasados.length-5) + ' mas atrasados</div>';
-    html += '</div>';
+  var misLeads = allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    return l.cerrador===cu.nombre;
+  }).filter(function(l){return l.estado!=='cerrado_perdido';});
+
+  var leadId = window._finLeadId||'';
+
+    var selHtml = '';
+  (function(){
+    var opts = misLeads.map(function(l){return '<option value="'+l.id+'"'+(l.id==leadId?' selected':'')+'>'+l.nombre+'</option>';}).join('');
+    selHtml = '<div class="fgroup" style="margin-bottom:12px"><label>Cliente</label><select class="fselect" id="fin-lead-sel" onchange="_finSelChange(this.value)"><option value="">Seleccionar cliente...</option>'+opts+'</select></div>';
+  })();
+
+  if(!leadId){
+    el.innerHTML = selHtml + '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">Selecciona un cliente para ver su tramite bancario</div>';
+    return;
   }
-  if(paraHoy.length > 0){
-    html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">CONTACTAR HOY ('+paraHoy.length+')</div>';
-    paraHoy.forEach(function(l){
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(245,158,11,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
-      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
-      html += '<div style="font-size:10px;color:var(--txt3)">'+(estilo(l.estado).label)+'</div></div>';
-      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">[W]</a>';
-      html += '</div>';
-    });
-    html += '</div>';
-  }
-  if(paraManana.length > 0){
-    html += '<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px;margin-bottom:8px">';
-    html += '<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">Manana ('+paraManana.length+')</div>';
-    paraManana.slice(0,3).forEach(function(l){
-      html += '<div style="font-size:12px;color:var(--txt2);padding:4px 0">'+l.nombre+' &middot; <span style="color:var(--txt3)">'+(estilo(l.estado).label)+'</span></div>';
+
+  el.innerHTML = selHtml + '<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var {data} = await sb.from('financiamiento_tramite').select('*').eq('lead_id',leadId).maybeSingle();
+    var pasos = [
+      {num:1,label:'Firma propietario GEAT',desc:'Contrato firmado por la empresa'},
+      {num:2,label:'Presupuesto bancario',desc:'Cliente presenta documentos al banco'},
+      {num:3,label:'Aprobacion de credito',desc:'Banco aprueba el monto'},
+      {num:4,label:'Firma de contrato',desc:'Firma del contrato de compraventa'},
+      {num:5,label:'Desembolso',desc:'Banco deposita el monto a GEAT'}
+    ];
+    var html = selHtml + '<div style="display:flex;flex-direction:column;gap:8px">';
+    pasos.forEach(function(p){
+      var est = data?(data['paso_'+p.num+'_estado']||'pendiente'):'pendiente';
+      var fecha = data?data['paso_'+p.num+'_fecha']:null;
+      var col = {pendiente:'var(--brd)',en_proceso:'var(--blue)',completado:'var(--green)'}[est]||'var(--brd)';
+      html += '<div style="background:var(--bg3);border:1px solid var(--brd);border-left:4px solid '+col+';border-radius:var(--r);padding:12px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      html += '<div><div style="font-size:13px;font-weight:600">'+p.num+'. '+p.label+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+p.desc+'</div>';
+      if(fecha) html += '<div style="font-size:10px;color:'+col+';margin-top:2px">'+new Date(fecha).toLocaleDateString('es-BO')+'</div>';
+      html += '</div><span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+est+'</span></div>';
+      html += '<div style="display:flex;gap:6px">';
+      var pNum=p.num, lId=leadId;
+      html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="en_proceso" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="flex:1;padding:6px;font-size:11px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:var(--r);color:var(--blue);cursor:pointer'+(est==="en_proceso"?' display:none':'')+'">'+(est!=="en_proceso"?'En proceso':'')+'</button>';
+      html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="completado" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="flex:1;padding:6px;font-size:11px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--r);color:var(--green);cursor:pointer'+(est==="completado"?' display:none':'')+'">'+(est!=="completado"?'Completado':'')+'</button>';
+      if(est!=="pendiente") html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="pendiente" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="padding:6px 10px;font-size:11px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer">Revertir</button>';
+      html += '</div></div>';
     });
     html += '</div>';
+    el.innerHTML = html;
+  }catch(e){ el.innerHTML = selHtml+'<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+}
+
+
+async function renderPagos(el){
+  if(!el) return;
+  // Construir selector de lead si no existe
+  var misLeads = allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    return l.cerrador===cu.nombre;
+  }).filter(function(l){ return l.estado!=='cerrado_perdido'; });
+
+  var leadId = window._pagLeadId||'';
+
+  var selHtml = '';
+  (function(){
+    var opts = misLeads.map(function(l){return '<option value="'+l.id+'"'+(l.id==leadId?' selected':'')+'>'+l.nombre+' — '+(l.estado||'')+'</option>';}).join('');
+    selHtml = '<div class="fgroup" style="margin-bottom:12px"><label>Cliente</label><select class="fselect" id="pag-lead-sel" onchange="_pagSelChange(this.value)"><option value="">Seleccionar cliente...</option>'+opts+'</select></div>';
+  })();
+
+  if(!leadId){
+    el.innerHTML = selHtml + '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">Selecciona un cliente para ver sus pagos</div>';
+    return;
   }
-  el.innerHTML = html;
-}
 
+  el.innerHTML = selHtml + '<div class="loading"><span class="spin"></span>Cargando pagos...</div>';
 
-// ══════════════════════════════════════
-// FILTROS INTEGRADOS EN PANEL LEADS
-// ══════════════════════════════════════
-var leadFiltroEstados = new Set();
-var leadFiltroFin = '';
-var leadFiltroFecha = '';
+  try{
+    var lead = allLeads.find(function(l){return l.id==leadId;});
+    var {data:existentes} = await sb.from('pagos_cliente').select('*').eq('lead_id',leadId).order('numero_pago');
+    var pags = existentes||[];
+    var fin = lead&&lead.financiamiento==='bancario';
+    var configs = fin ?
+      [{num:1,pct:'40%',desc:'Firma de contrato'},{num:2,pct:'40%',desc:'Avance de obra 50%'},{num:3,pct:'20%',desc:'Antes de entrega final'}] :
+      [{num:1,pct:'30%',desc:'Al iniciar la obra'},{num:2,pct:'40%',desc:'Avance al 50%'},{num:3,pct:'30%',desc:'Entrega final'}];
 
-function toggleFiltrosLeads(){
-  var panel = document.getElementById('filtros-leads-panel');
-  if(!panel) return;
-  var open = panel.style.display !== 'none';
-  panel.style.display = open ? 'none' : 'block';
-  var btn = document.getElementById('btn-filtros-leads');
-  if(btn) btn.style.borderColor = open ? 'var(--brd)' : 'var(--acc)';
-  if(btn) btn.style.color = open ? 'var(--txt3)' : 'var(--acc)';
-}
+    var totalPagado = pags.filter(function(p){return p.estado==='pagado';}).reduce(function(s,p){return s+(p.monto_usd||0);},0);
+    var totalPendiente = pags.filter(function(p){return p.estado!=='pagado';}).reduce(function(s,p){return s+(p.monto_usd||0);},0);
 
-function abrirFiltrosLeads(){
-  var panel = document.getElementById('filtros-leads-panel');
-  if(panel) panel.style.display = 'block';
-}
+    var html = selHtml;
+    html += '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+(fin?'Esquema bancario: 40% – 40% – 20%':'Esquema contado: 30% – 40% – 30%')+'</div>';
 
-function setLeadFecha(tipo, btn){
-  leadFiltroFecha = leadFiltroFecha===tipo ? '' : tipo;
-  document.querySelectorAll('#lf-hoy,#lf-sem,#lf-mes,#lf-anio').forEach(function(b){b.classList.remove('active');});
-  if(leadFiltroFecha) btn.classList.add('active');
-  actualizarContFiltros();
-  renderLeads();
-}
+    if(pags.length>0){
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">'+
+        '<div style="background:rgba(34,197,94,0.1);border-radius:var(--r);padding:10px;text-align:center">'+
+        '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+totalPagado.toLocaleString()+'</div>'+
+        '<div style="font-size:10px;color:var(--txt3)">Cobrado</div></div>'+
+        '<div style="background:rgba(245,158,11,0.1);border-radius:var(--r);padding:10px;text-align:center">'+
+        '<div style="font-size:16px;font-weight:700;color:var(--acc)">$'+totalPendiente.toLocaleString()+'</div>'+
+        '<div style="font-size:10px;color:var(--txt3)">Pendiente</div></div></div>';
+    }
 
-function toggleLeadEst(est, btn){
-  if(leadFiltroEstados.has(est)){
-    leadFiltroEstados.delete(est);
-    btn.style.opacity='0.55'; btn.style.transform='';
-  } else {
-    leadFiltroEstados.add(est);
-    btn.style.opacity='1'; btn.style.transform='scale(1.04)';
-  }
-  actualizarContFiltros();
-  renderLeads();
-}
-
-function toggleLeadFin(tipo, btn){
-  leadFiltroFin = leadFiltroFin===tipo ? '' : tipo;
-  document.querySelectorAll('#lf-contado,#lf-banco').forEach(function(b){b.classList.remove('active');});
-  if(leadFiltroFin) btn.classList.add('active');
-  actualizarContFiltros();
-  renderLeads();
-}
-
-function actualizarContFiltros(){
-  var cont = 0;
-  if(leadFiltroFecha) cont++;
-  cont += leadFiltroEstados.size;
-  if(leadFiltroFin) cont++;
-  var ciudad = document.getElementById('lf-ciudad');
-  if(ciudad && ciudad.value) cont++;
-  var m2min = document.getElementById('lf-m2min');
-  var m2max = document.getElementById('lf-m2max');
-  if(m2min && m2min.value) cont++;
-  if(m2max && m2max.value) cont++;
-  var cntEl = document.getElementById('filtros-leads-count');
-  if(cntEl){
-    cntEl.style.display = cont>0 ? 'inline' : 'none';
-    cntEl.textContent = cont;
+    configs.forEach(function(cfg){
+      var pago = pags.find(function(p){return p.numero_pago===cfg.num;});
+      var est = pago&&pago.estado||'pendiente';
+      var colEst = {pendiente:'var(--txt3)',pagado:'var(--green)',en_proceso:'var(--blue)'}[est]||'var(--txt3)';
+      html += '<div class="pago-card" style="background:var(--bg3);border-left:3px solid '+colEst+';border-radius:var(--r);padding:12px;margin-bottom:8px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<div><div style="font-size:13px;font-weight:600">Pago '+cfg.num+' — '+cfg.pct+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+cfg.desc+'</div></div>';
+      html += '<span style="font-size:10px;font-weight:600;color:'+colEst+'">'+est+'</span></div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+      html += '<div><div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Monto (USD)</div>';
+      html += '<input type="number" id="pag-monto-'+cfg.num+'" class="finput" style="font-size:12px;padding:7px 10px" placeholder="0" value="'+(pago&&pago.monto_usd||'')+'"></div>';
+      html += '<div><div style="font-size:10px;color:var(--txt3);margin-bottom:3px">Fecha de pago</div>';
+      html += '<input type="date" id="pag-fecha-'+cfg.num+'" class="finput" style="font-size:12px;padding:7px 10px" value="'+(pago&&pago.fecha_pago||'')+'"></div></div>';
+      html += '<select id="pag-estado-'+cfg.num+'" class="fselect" style="font-size:12px">';
+      ['pendiente','en_proceso','pagado'].forEach(function(e2){
+        html += '<option value="'+e2+'"'+(est===e2?' selected':'')+'>'+e2+'</option>';
+      });
+      html += '</select></div>';
+    });
+    html += '<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="guardarPagos()">Guardar pagos</button>';
+    el.innerHTML = html;
+  }catch(e){
+    el.innerHTML = selHtml + '<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>';
   }
 }
 
-function limpiarFiltrosLeads(){
-  leadFiltroEstados.clear();
-  leadFiltroFin = '';
-  leadFiltroFecha = '';
-  var ids = ['leads-q','lf-ciudad','lf-m2min','lf-m2max'];
-  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-  document.querySelectorAll('#filtros-leads-panel .tab').forEach(function(b){b.classList.remove('active');});
-  document.querySelectorAll('[id^="lf-"][class*="badge"]').forEach(function(b){b.style.opacity='0.55';b.style.transform='';});
-  var cntEl = document.getElementById('filtros-leads-count');
-  if(cntEl) cntEl.style.display='none';
-  renderLeads();
-}
 
-
-
-// ══════════════════════════════════════
-// PANEL CEO — Datos exclusivos del CEO
-// ══════════════════════════════════════
 async function renderPanelCEO(el){
   el.innerHTML = '<div class="loading"><span class="spin"></span>Cargando panel CEO...</div>';
   var hoy = new Date().toISOString().slice(0,10);
@@ -5516,6 +4561,129 @@ function colorPorEstado(estado){
   return colores[estado]||'#64748B';
 }
 
+
+function _reFin(){ var e=document.getElementById('cierre-content'); if(e) renderFinanciamiento(e); }
+function _rePag(){ var e=document.getElementById('cierre-content'); if(e) renderPagos(e); }
+function _finSelChange(v){ window._finLeadId=v; _reFin(); }
+function _pagSelChange(v){ window._pagLeadId=v; _rePag(); }
+
+
+// ══════════════════════════════════════
+// RESERVA — subida real de archivo a Storage
+// ══════════════════════════════════════
+function handleResDrop(e){
+  e.preventDefault();
+  var file = e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(file) previewResFile({files:[file]});
+  var zone = document.getElementById('res-drop-zone');
+  if(zone) zone.style.borderColor='var(--brd)';
+}
+
+function previewResFile(input){
+  var file = input.files&&input.files[0];
+  if(!file) return;
+  window._resFile = file;
+  var isImg = file.type.startsWith('image/');
+  var sizeStr = (file.size/1024/1024).toFixed(2)+' MB';
+  var zone = document.getElementById('res-drop-zone');
+  if(zone) zone.style.borderColor='var(--green)';
+  var prev = document.getElementById('res-file-preview');
+  if(!prev) return;
+  prev.style.display='flex';
+  prev.innerHTML = '<span style="font-size:22px">'+(isImg?'&#128444;':'&#128196;')+'</span>'+
+    '<div style="flex:1"><div style="font-weight:600;font-size:12px">'+file.name+'</div>'+
+    '<div style="font-size:10px;color:var(--txt3)">'+sizeStr+'</div></div>'+
+    (isImg?'<img src="'+URL.createObjectURL(file)+'" style="height:44px;border-radius:4px;margin-left:auto">':'');
+}
+
+async function guardarReserva(){
+  var leadId = document.getElementById('res-lead-sel')&&document.getElementById('res-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var btn = document.querySelector('[onclick="guardarReserva()"]');
+  if(btn){ btn.textContent='Guardando...'; btn.disabled=true; }
+  try{
+    var comprobanteUrl='', comprobanteNombre='';
+    if(window._resFile){
+      var ext = window._resFile.name.split('.').pop();
+      var path = 'reserva_'+leadId+'_'+Date.now()+'.'+ext;
+      var {error:upErr} = await sb.storage.from('propuestas').upload(path, window._resFile, {upsert:true});
+      if(!upErr){
+        var {data:urlData} = sb.storage.from('propuestas').getPublicUrl(path);
+        comprobanteUrl = urlData&&urlData.publicUrl||'';
+        comprobanteNombre = window._resFile.name;
+      }
+    }
+    var data = {
+      lead_id: parseInt(leadId),
+      cerrador: cu.nombre,
+      monto_reserva: parseFloat(document.getElementById('res-monto')&&document.getElementById('res-monto').value)||null,
+      fecha_reserva: document.getElementById('res-fecha')&&document.getElementById('res-fecha').value||null,
+      metodo_pago: document.getElementById('res-metodo')&&document.getElementById('res-metodo').value||null,
+      comprobante_url: comprobanteUrl||null,
+      comprobante_nombre: comprobanteNombre||null,
+      notas: document.getElementById('res-notas')&&document.getElementById('res-notas').value||null,
+      estado: 'activa'
+    };
+    await sb.from('reservas').insert([data]);
+    await sb.from('leads').update({estado:'reservado'}).eq('id',leadId);
+    var idx = allLeads.findIndex(function(l){return l.id==leadId;});
+    if(idx>-1) allLeads[idx].estado='reservado';
+    window._resFile=null;
+    var zone=document.getElementById('res-drop-zone'); if(zone) zone.style.borderColor='var(--brd)';
+    var prev=document.getElementById('res-file-preview'); if(prev){prev.style.display='none';prev.innerHTML='';}
+    var mono=document.getElementById('res-monto'); if(mono) mono.value='';
+    var fres=document.getElementById('res-fecha'); if(fres) fres.value='';
+    var notas=document.getElementById('res-notas'); if(notas) notas.value='';
+    toast('Reserva guardada'+(comprobanteUrl?' con comprobante':''));
+    renderCierre();
+  }catch(e){
+    toast('Error: '+e.message,'error');
+  }finally{
+    if(btn){ btn.textContent='Registrar reserva'; btn.disabled=false; }
+  }
+}
+
+// ══════════════════════════════════════
+// PAGOS — guardar en tabla pagos_cliente
+// ══════════════════════════════════════
+async function guardarPagos(){
+  var leadId = window._pagLeadId||
+    (document.getElementById('pag-lead-sel')&&document.getElementById('pag-lead-sel').value);
+  if(!leadId){ toast('Selecciona un cliente primero','error'); return; }
+  var configs = [{num:1},{num:2},{num:3}];
+  var guardados = 0;
+  try{
+    for(var i=0;i<configs.length;i++){
+      var n = configs[i].num;
+      var montoEl = document.getElementById('pag-monto-'+n);
+      var fechaEl = document.getElementById('pag-fecha-'+n);
+      var estadoEl = document.getElementById('pag-estado-'+n);
+      if(!montoEl&&!fechaEl) continue;
+      var monto = montoEl&&montoEl.value?parseFloat(montoEl.value):null;
+      var fecha = fechaEl&&fechaEl.value?fechaEl.value:null;
+      if(!monto&&!fecha) continue;
+      var pago = {
+        lead_id: parseInt(leadId),
+        cerrador: cu.nombre,
+        numero_pago: n,
+        monto_usd: monto,
+        fecha_pago: fecha,
+        estado: estadoEl?estadoEl.value:'pendiente'
+      };
+      await sb.from('pagos_cliente').upsert([pago],{onConflict:'lead_id,numero_pago'});
+      guardados++;
+    }
+    if(guardados>0){
+      toast('Pagos guardados ('+guardados+' registros)');
+      var el=document.getElementById('cierre-content');
+      if(el) renderPagos(el);
+    } else {
+      toast('Completa al menos un monto o fecha','error');
+    }
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+
 initLogin();
 </script>
 
@@ -5562,28 +4730,22 @@ initLogin();
           <div style="font-size:11px;color:var(--txt3)">Esta visita es el paso más importante antes del cierre. El cerrador lleva la propuesta y evalúa el terreno con el cliente.</div>
         </div>
         <div class="fgroup">
-          <label>Fecha y hora</label>
+          <label>Fecha y hora *</label>
           <input type="datetime-local" class="finput" id="reu-fecha">
         </div>
-        <div class="fgroup">
-          <label>Resultado</label>
-          <select class="fselect" id="reu-resultado">
-            <option value="">Pendiente</option>
-            <option value="positivo">Positivo — avanza</option>
-            <option value="requiere_propuesta">Requiere propuesta</option>
-            <option value="cerrado">Cerrado con éxito</option>
-            <option value="no_avanzo">No avanzó</option>
-          </select>
+        <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:11px;color:var(--txt3)">
+          &#9432; El resultado se registra <strong style="color:var(--acc)">despues de la reunion</strong> — al abrirla desde el historial
         </div>
         <div class="fgroup">
-          <label>Notas</label>
-          <textarea class="finput" id="reu-notas" rows="3" style="resize:vertical;min-height:70px" placeholder="Qué se habló, acuerdos..."></textarea>
+          <label>Notas previas</label>
+          <textarea class="finput" id="reu-notas" rows="3" style="resize:vertical;min-height:70px" placeholder="Objetivo de la reunion, que se va a presentar..."></textarea>
         </div>
+        <input type="hidden" id="reu-resultado" value="">
         <div class="fgroup">
-          <label>¿Se llevó propuesta a esta reunión?</label>
+          <label>¿Se llevará propuesta a esta reunión?</label>
           <select class="fselect" id="reu-con-propuesta">
             <option value="">No</option>
-            <option value="si">Sí — se presentó propuesta</option>
+            <option value="si">Sí — se presentará propuesta</option>
           </select>
         </div>
       </div>
@@ -5690,8 +4852,14 @@ initLogin();
           </select>
         </div>
         <div class="fgroup">
-          <label>URL / foto del comprobante</label>
-          <input type="text" class="finput" id="res-comprobante" placeholder="https://... o descripción del comprobante">
+          <label>Comprobante / Documento de reserva</label>
+          <div id="res-drop-zone" onclick="document.getElementById('res-file-input').click()" style="border:2px dashed var(--brd);border-radius:var(--r2);padding:16px;text-align:center;cursor:pointer;transition:all 0.2s" ondragover="event.preventDefault();this.style.borderColor='var(--acc)'" ondragleave="this.style.borderColor='var(--brd)'" ondrop="handleResDrop(event)">
+            <div style="font-size:24px;margin-bottom:4px">&#128228;</div>
+            <div style="font-size:12px;font-weight:500;margin-bottom:2px">Toca para adjuntar archivo</div>
+            <div style="font-size:10px;color:var(--txt3)">PDF, JPG, PNG — foto del comprobante o contrato</div>
+            <input type="file" id="res-file-input" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="previewResFile(this)">
+          </div>
+          <div id="res-file-preview" style="display:none;margin-top:8px;background:var(--bg3);border-radius:var(--r);padding:10px;font-size:12px;display:flex;align-items:center;gap:8px"></div>
         </div>
         <div class="fgroup">
           <label>Notas adicionales</label>
