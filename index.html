@@ -1222,6 +1222,9 @@ let segLeadId=null;
 let perderLeadId=null;
 let selPillVal={intento:null,seg:null};
 let audioData=null; // datos del último proceso de audio
+let leadFiltroFecha=null;
+let leadFiltroEstados=new Set();
+let leadFiltroFin=null;
 
 // -- ETAPAS --
 const E={
@@ -1698,6 +1701,51 @@ function renderLeads(){
   if(q)leads=leads.filter(l=>['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>l[k]&&l[k].toLowerCase().includes(q)));
   document.getElementById('leads-count').textContent=leads.length+' lead'+(leads.length!==1?'s':'');
   renderLeadCards(leads,'leads-list',cu.rol);
+}
+
+function toggleFiltrosLeads(){
+  var p=document.getElementById('filtros-leads-panel');
+  if(p) p.style.display=p.style.display==='none'?'block':'none';
+}
+function abrirFiltrosLeads(){
+  var p=document.getElementById('filtros-leads-panel');
+  if(p) p.style.display='block';
+}
+function setLeadFecha(periodo,btn){
+  leadFiltroFecha=(leadFiltroFecha===periodo)?null:periodo;
+  document.querySelectorAll('#filtros-leads-panel .tab[id^="lf-h"],#filtros-leads-panel .tab[id^="lf-s"],#filtros-leads-panel .tab[id^="lf-m"],#filtros-leads-panel .tab[id^="lf-a"]').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFecha&&btn) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+function toggleLeadEst(estado,btn){
+  if(leadFiltroEstados.has(estado)){leadFiltroEstados.delete(estado);if(btn)btn.style.opacity='0.55';}
+  else{leadFiltroEstados.add(estado);if(btn)btn.style.opacity='1';}
+  actualizarContFiltros();
+  renderLeads();
+}
+function toggleLeadFin(tipo,btn){
+  leadFiltroFin=(leadFiltroFin===tipo)?null:tipo;
+  document.querySelectorAll('#lf-contado,#lf-banco').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFin&&btn) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+function actualizarContFiltros(){
+  var n=leadFiltroEstados.size+(leadFiltroFecha?1:0)+(leadFiltroFin?1:0)+
+        (document.getElementById('lf-ciudad')?.value?1:0)+
+        (document.getElementById('lf-m2min')?.value?1:0)+
+        (document.getElementById('lf-m2max')?.value?1:0);
+  var badge=document.getElementById('filtros-leads-count');
+  if(badge){badge.textContent=n;badge.style.display=n>0?'':'none';}
+}
+function limpiarFiltrosLeads(){
+  leadFiltroFecha=null; leadFiltroEstados=new Set(); leadFiltroFin=null;
+  ['lf-ciudad','lf-m2min','lf-m2max'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.querySelectorAll('#filtros-leads-panel .tab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('#filtros-leads-panel .badge').forEach(function(b){b.style.opacity='0.55';});
+  actualizarContFiltros();
+  renderLeads();
 }
 
 // -- RENDER TODOS --
@@ -4641,6 +4689,66 @@ function guardarReunion(){
   }).catch(function(e){ toast('Error: '+e.message,'error'); });
 }
 
+function guardarReunionYReserva(){
+  // Guardar la reunión primero, luego abrir sheet de reserva
+  var leadId = document.getElementById('reu-lead-sel')&&document.getElementById('reu-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var fecha = document.getElementById('reu-fecha')&&document.getElementById('reu-fecha').value;
+  if(!fecha){ toast('Selecciona fecha y hora','error'); return; }
+  guardarReunion();
+  // Abrir sheet de reserva con el mismo lead pre-seleccionado
+  setTimeout(function(){
+    var selRes = document.getElementById('res-lead-sel');
+    if(selRes) selRes.value = leadId;
+    document.getElementById('sheet-reserva').classList.add('open');
+  }, 400);
+}
+
+async function guardarCotizacion(){
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var titulo = document.getElementById('cotiz-titulo')&&document.getElementById('cotiz-titulo').value.trim();
+  if(!titulo){ toast('Escribe el título de la cotización','error'); return; }
+  var data = {
+    lead_id: parseInt(leadId),
+    cerrador: cu.nombre,
+    titulo: titulo,
+    metros_cuadrados: parseFloat(document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value)||null,
+    precio_usd: parseFloat(document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value)||null,
+    descripcion: document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||null,
+    estado: document.getElementById('cotiz-estado')&&document.getElementById('cotiz-estado').value||'borrador',
+    fecha: new Date().toISOString()
+  };
+  try{
+    await sb.from('cotizaciones_cerrador').insert([data]);
+    closeSheet('cotiz');
+    toast('Cotización guardada ✓');
+    renderCierre();
+  }catch(e){ toast('Error al guardar: '+e.message,'error'); }
+}
+
+function enviarArquitectura(){
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  var lead = leadId ? allLeads.find(function(l){return l.id==leadId;}) : null;
+  var m2 = document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value||'-';
+  var desc = document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||'';
+  if(!lead){ toast('Selecciona un cliente primero','error'); return; }
+  // Construir mensaje para WhatsApp
+  var msg = '*SOLICITUD DE PROPUESTA — GEAT*\n\n'+
+    '*Cliente:* '+lead.nombre+'\n'+
+    '*Celular:* '+lead.celular+'\n'+
+    '*Ciudad:* '+(lead.ciudad||'Santa Cruz')+'\n'+
+    '*Financ.:* '+(lead.financiamiento==='bancario'?'Bancario':'Al contado')+'\n'+
+    '*m²:* '+m2+' m²\n'+
+    (desc?'*Detalles:* '+desc+'\n':'')+
+    '*Cerrador:* '+cu.nombre+'\n'+
+    '*Fecha:* '+new Date().toLocaleDateString('es-BO');
+  var grupo = window.WA_ARQUITECTURA||'https://wa.me/';
+  var url = grupo.includes('chat.whatsapp.com') ? grupo : 'https://wa.me/?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+  toast('Abriendo WhatsApp con los datos del requerimiento');
+}
+
 // ══════════════════════════════════════
 // ELIMINAR NOTA
 // ══════════════════════════════════════
@@ -4796,8 +4904,6 @@ initLogin();
       <div class="sheet-title">Nueva Reunión</div>
       <button class="sheet-close" onclick="closeSheet('reunion')">&#x2715;</button>
     </div>
-      <button class="sheet-close" onclick="closeSheet('reunion')">✕</button>
-    </div>
     <div class="sheet-body">
       <div class="form-grid">
         <div class="fgroup">
@@ -4867,8 +4973,6 @@ initLogin();
       <div class="sheet-title">Nueva Cotización</div>
       <button class="sheet-close" onclick="closeSheet('cotiz')">&#x2715;</button>
     </div>
-      <button class="sheet-close" onclick="closeSheet('cotiz')">✕</button>
-    </div>
     <div class="sheet-body">
       <div class="form-grid">
         <div class="fgroup">
@@ -4925,8 +5029,6 @@ initLogin();
       <button onclick="closeSheet('reserva')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Registrar Reserva / Pago</div>
       <button class="sheet-close" onclick="closeSheet('reserva')">&#x2715;</button>
-    </div>
-      <button class="sheet-close" onclick="closeSheet('reserva')">✕</button>
     </div>
     <div class="sheet-body">
       <div class="form-grid">
