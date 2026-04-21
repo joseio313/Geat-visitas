@@ -2944,6 +2944,8 @@ async function renderAdmin(){
   // Mostrar/ocultar tabs segun rol
   const tabAuditoria = document.getElementById('tab-auditoria');
   if(tabAuditoria) tabAuditoria.style.display = cu.rol==='admin' ? '' : 'none';
+  const tabCeo = document.getElementById('tab-ceo');
+  if(tabCeo) tabCeo.style.display = cu.rol==='admin' ? '' : 'none';
 
   // Gustavo (commercial_lead) NO puede ver perfil del CEO
   // Se maneja en el grid de acceso rapido
@@ -3110,25 +3112,27 @@ async function renderAdmin(){
       <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
       ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
     </div>
-    ${metricas&&metricas.length?`
-    <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;font-size:11px;border-collapse:collapse">
-          <thead>
-            <tr style="border-bottom:1px solid var(--brd)">
-              <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`:''}`;
+    ${metricas&&metricas.length?renderTablaMetricas(metricas):''}`;
+  }else if(adminTabActual==='auditoria'){
+    const logs = window._auditLog || [];
+    if(!logs.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin actividad registrada</div><div class="empty-sub">Las acciones del sistema se irán registrando aquí</div></div>';
+    }else{
+      el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Registro de actividad (últimas '+logs.length+')</div>'+
+        logs.map(function(r){
+          const fecha=new Date(r.timestamp).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+          const col={impersonacion:'var(--acc)',guardar_lead:'var(--blue)',intento:'var(--green)',seguimiento:'var(--purple)',perder_lead:'var(--red)'}[r.accion]||'var(--brd2)';
+          return '<div style="background:var(--bg3);border:1px solid var(--brd);border-left:3px solid '+col+';border-radius:var(--r);padding:10px 12px;margin-bottom:6px">'+
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px">'+
+            '<div style="font-size:12px;font-weight:600;color:var(--txt)">'+r.accion.replace(/_/g,' ')+'</div>'+
+            '<div style="font-size:10px;color:var(--txt3)">'+fecha+'</div>'+
+            '</div>'+
+            '<div style="font-size:11px;color:var(--txt3)">'+r.colaborador+' · '+r.rol+(r.tabla_afectada?' — tabla: '+r.tabla_afectada:'')+'</div>'+
+            '</div>';
+        }).join('');
+    }
+  }else if(adminTabActual==='ceo'){
+    renderPanelCEO(el);
   }
 }
 
@@ -3138,7 +3142,6 @@ async function renderAdmin(){
 
 function registrarAuditoria(accion, tabla, regId, datosAnt, datosNuev){
   if(!cu) return;
-  // Guardar en Supabase (solo diseño por ahora - conectar en v50)
   const registro = {
     colaborador: cu.nombre,
     rol: cu.rol,
@@ -3149,10 +3152,14 @@ function registrarAuditoria(accion, tabla, regId, datosAnt, datosNuev){
     datos_nuevos: datosNuev ? JSON.stringify(datosNuev) : null,
     timestamp: new Date().toISOString()
   };
-  // Log local mientras no hay BD conectada
+  // Log local siempre
   if(!window._auditLog) window._auditLog = [];
   window._auditLog.unshift(registro);
   if(window._auditLog.length > 100) window._auditLog.pop();
+  // Persistir en Supabase de forma asíncrona (no bloquea)
+  try{
+    sb.from('auditoria_sistema').insert([registro]).then(function(){}).catch(function(){});
+  }catch(e){}
 }
 
 async function cambiarTurnoManual(){
