@@ -3665,6 +3665,124 @@ function renderCierre(){
   else if(cierreTabActual==='pagos') renderPagos(el);
 }
 
+async function renderReuniones(el){
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var q=sb.from('reuniones_cerrador').select('*').order('fecha',{ascending:false});
+    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    var {data}=await q.limit(50);
+    var rows=data||[];
+    var tipos={primera_reunion:'1ra Reunión',segunda_reunion:'2da Reunión',tercera_reunion:'3ra Reunión',cierre:'Cierre'};
+    var estados={pendiente:'var(--txt3)',realizada:'var(--green)',cancelada:'var(--red)'};
+    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reunion\').classList.add(\'open\')">+ Nueva reunión</button>';
+    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones</div></div>'; return; }
+    html+=rows.map(function(r){
+      var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
+      var fecha=r.fecha?new Date(r.fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-';
+      var col=estados[r.estado]||'var(--brd)';
+      return '<div class="card" style="padding:12px 14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+        '<div><div style="font-size:13px;font-weight:600">'+lead.nombre+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+(tipos[r.tipo]||r.tipo)+' · '+fecha+'</div>'+
+        (r.notas?'<div style="font-size:11px;color:var(--txt3);margin-top:2px;font-style:italic">"'+r.notas.slice(0,60)+(r.notas.length>60?'...':'')+'"</div>':'')+
+        '</div><span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+(r.estado||'pendiente')+'</span></div></div>';
+    }).join('');
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+}
+
+async function renderCotizaciones(el){
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var q=sb.from('cotizaciones_cerrador').select('*').order('fecha',{ascending:false});
+    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    var {data}=await q.limit(50);
+    var rows=data||[];
+    var colEst={borrador:'var(--txt3)',enviada:'var(--blue)',aprobada:'var(--green)',rechazada:'var(--red)'};
+    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-cotiz\').classList.add(\'open\')">+ Nueva cotización</button>';
+    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin cotizaciones</div></div>'; return; }
+    html+=rows.map(function(r){
+      var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
+      var fecha=r.fecha?new Date(r.fecha).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'-';
+      var col=colEst[r.estado]||'var(--brd)';
+      return '<div class="card" style="padding:12px 14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
+        '<div style="font-size:13px;font-weight:600">'+lead.nombre+'</div>'+
+        '<span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+(r.estado||'borrador')+'</span></div>'+
+        '<div style="font-size:12px;color:var(--txt2);margin-bottom:2px">'+r.titulo+'</div>'+
+        '<div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">'+
+        (r.metros_cuadrados?'<span>'+r.metros_cuadrados+' m²</span>':'')+
+        (r.precio_usd?'<span style="color:var(--green);font-weight:600">$'+Number(r.precio_usd).toLocaleString()+'</span>':'')+
+        '<span>'+fecha+'</span></div>'+
+        (r.descripcion?'<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"'+r.descripcion.slice(0,80)+(r.descripcion.length>80?'...':'')+'"</div>':'')+
+        '</div>';
+    }).join('');
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+}
+
+async function renderPropuestas(el){
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var q=sb.from('solicitudes_propuesta').select('*').order('created_at',{ascending:false});
+    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    var {data}=await q.limit(50);
+    var rows=data||[];
+    var colEst={pendiente:'var(--txt3)',en_proceso:'var(--blue)',entregado:'var(--green)',rechazada:'var(--red)'};
+    if(!rows.length){ el.innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div class="empty-title">Sin propuestas solicitadas</div><div class="empty-sub">Las propuestas de arquitectura aparecerán aquí</div></div>'; return; }
+    var html=rows.map(function(r){
+      var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:r.nombre_cliente||'Cliente #'+r.lead_id};
+      var fecha=r.created_at?new Date(r.created_at).toLocaleDateString('es-BO',{day:'numeric',month:'short'}):'-';
+      var col=colEst[r.estado]||'var(--brd)';
+      return '<div class="card" style="padding:12px 14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
+        '<div style="font-size:13px;font-weight:600">'+(lead.nombre||r.nombre_cliente)+'</div>'+
+        '<span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+(r.estado||'pendiente')+'</span></div>'+
+        '<div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">'+
+        (r.ciudad?'<span>'+r.ciudad+'</span>':'')+
+        (r.metros_cuadrados?'<span>'+r.metros_cuadrados+' m²</span>':'')+
+        '<span>'+fecha+'</span></div>'+
+        (r.archivo_url?'<div style="margin-top:6px"><a href="'+r.archivo_url+'" target="_blank" style="font-size:11px;color:var(--acc);text-decoration:none">📎 Ver propuesta</a></div>':'')+
+        '</div>';
+    }).join('');
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+}
+
+async function renderReservas(el){
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var q=sb.from('reservas').select('*').order('fecha_reserva',{ascending:false});
+    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    var {data}=await q.limit(50);
+    var rows=data||[];
+    var colEst={activa:'var(--green)',cancelada:'var(--red)',aplicada:'var(--blue)'};
+    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reserva\').classList.add(\'open\')">+ Nueva reserva</button>';
+    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">🔑</div><div class="empty-title">Sin reservas</div></div>'; return; }
+    html+=rows.map(function(r){
+      var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
+      var fecha=r.fecha_reserva?new Date(r.fecha_reserva).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'-';
+      var col=colEst[r.estado]||'var(--green)';
+      return '<div class="card" style="padding:12px 14px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
+        '<div style="font-size:13px;font-weight:600">'+lead.nombre+'</div>'+
+        '<span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+(r.estado||'activa')+'</span></div>'+
+        '<div style="display:flex;gap:12px;font-size:11px;color:var(--txt3)">'+
+        (r.monto_reserva?'<span style="color:var(--green);font-weight:600">$'+Number(r.monto_reserva).toLocaleString()+'</span>':'')+
+        (r.metodo_pago?'<span>'+r.metodo_pago+'</span>':'')+
+        '<span>'+fecha+'</span></div>'+
+        (r.comprobante_url?'<div style="margin-top:6px"><a href="'+r.comprobante_url+'" target="_blank" style="font-size:11px;color:var(--acc);text-decoration:none">📎 Ver comprobante</a></div>':'')+
+        (r.notas?'<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"'+r.notas.slice(0,60)+'"</div>':'')+
+        '</div>';
+    }).join('');
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+}
+
 async function renderFinanciamiento(el){
   if(!el) return;
   var misLeads = allLeads.filter(function(l){
