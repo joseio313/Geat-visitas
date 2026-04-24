@@ -3667,46 +3667,63 @@ function renderCierre(){
 
 async function renderReuniones(el){
   if(!el) return;
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  var misLeads=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    return l.cerrador===cu.nombre;
+  }).filter(function(l){return l.estado!=='cerrado_perdido';});
+  var leadId=window._reuLeadId||'';
+  var opts=misLeads.map(function(l){return '<option value="'+l.id+'"'+(l.id==leadId?' selected':'')+'>'+l.nombre+'</option>';}).join('');
+  var selHtml='<div class="fgroup" style="margin-bottom:12px"><label>Cliente</label><select class="fselect" id="reu-lead-f" onchange="_reuSelChange(this.value)"><option value="">Todos los clientes</option>'+opts+'</select></div>';
+  var btnHtml='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reunion\').classList.add(\'open\')">+ Nueva reunión</button>';
+  el.innerHTML=selHtml+btnHtml+'<div class="loading"><span class="spin"></span>Cargando...</div>';
   try{
     var q=sb.from('reuniones_cerrador').select('*').order('fecha',{ascending:false});
-    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    if(leadId) q=q.eq('lead_id',leadId);
+    else if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
     var {data}=await q.limit(50);
     var rows=data||[];
     var tipos={primera_reunion:'1ra Reunión',segunda_reunion:'2da Reunión',tercera_reunion:'3ra Reunión',cierre:'Cierre'};
-    var estados={pendiente:'var(--txt3)',realizada:'var(--green)',cancelada:'var(--red)'};
-    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reunion\').classList.add(\'open\')">+ Nueva reunión</button>';
-    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones</div></div>'; return; }
-    html+=rows.map(function(r){
+    var colEst={pendiente:'var(--txt3)',realizada:'var(--green)',cancelada:'var(--red)'};
+    if(!rows.length){ el.innerHTML=selHtml+btnHtml+'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones</div></div>'; return; }
+    var html=selHtml+btnHtml+rows.map(function(r){
       var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
       var fecha=r.fecha?new Date(r.fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-';
-      var col=estados[r.estado]||'var(--brd)';
-      return '<div class="card" style="padding:12px 14px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+      var col=colEst[r.estado]||'var(--txt3)';
+      return '<div class="card" style="padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:flex-start">'+
         '<div><div style="font-size:13px;font-weight:600">'+lead.nombre+'</div>'+
-        '<div style="font-size:11px;color:var(--txt3)">'+(tipos[r.tipo]||r.tipo)+' · '+fecha+'</div>'+
-        (r.notas?'<div style="font-size:11px;color:var(--txt3);margin-top:2px;font-style:italic">"'+r.notas.slice(0,60)+(r.notas.length>60?'...':'')+'"</div>':'')+
+        '<div style="font-size:11px;color:var(--txt3)">'+(tipos[r.tipo]||r.tipo||'Reunión')+' · '+fecha+'</div>'+
+        (r.notas?'<div style="font-size:11px;color:var(--txt3);margin-top:2px;font-style:italic">"'+r.notas.slice(0,60)+'"</div>':'')+
         '</div><span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+(r.estado||'pendiente')+'</span></div></div>';
     }).join('');
     el.innerHTML=html;
-  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+  }catch(e){ el.innerHTML=selHtml+btnHtml+'<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
 }
 
 async function renderCotizaciones(el){
   if(!el) return;
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  var misLeads=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    return l.cerrador===cu.nombre;
+  }).filter(function(l){return l.estado!=='cerrado_perdido';});
+  var leadId=window._cotizLeadId||'';
+  var opts=misLeads.map(function(l){return '<option value="'+l.id+'"'+(l.id==leadId?' selected':'')+'>'+l.nombre+'</option>';}).join('');
+  var selHtml='<div class="fgroup" style="margin-bottom:12px"><label>Cliente</label><select class="fselect" id="cotiz-lead-f" onchange="_cotizSelChange(this.value)"><option value="">Todos los clientes</option>'+opts+'</select></div>';
+  var btnHtml='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-cotiz\').classList.add(\'open\')">+ Nueva cotización</button>';
+  el.innerHTML=selHtml+btnHtml+'<div class="loading"><span class="spin"></span>Cargando...</div>';
   try{
     var q=sb.from('cotizaciones_cerrador').select('*').order('fecha',{ascending:false});
-    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    if(leadId) q=q.eq('lead_id',leadId);
+    else if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
     var {data}=await q.limit(50);
     var rows=data||[];
     var colEst={borrador:'var(--txt3)',enviada:'var(--blue)',aprobada:'var(--green)',rechazada:'var(--red)'};
-    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-cotiz\').classList.add(\'open\')">+ Nueva cotización</button>';
-    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin cotizaciones</div></div>'; return; }
-    html+=rows.map(function(r){
+    if(!rows.length){ el.innerHTML=selHtml+btnHtml+'<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin cotizaciones</div></div>'; return; }
+    var html=selHtml+btnHtml+rows.map(function(r){
       var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
       var fecha=r.fecha?new Date(r.fecha).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'-';
-      var col=colEst[r.estado]||'var(--brd)';
+      var col=colEst[r.estado]||'var(--txt3)';
       return '<div class="card" style="padding:12px 14px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
         '<div style="font-size:13px;font-weight:600">'+lead.nombre+'</div>'+
@@ -3716,11 +3733,11 @@ async function renderCotizaciones(el){
         (r.metros_cuadrados?'<span>'+r.metros_cuadrados+' m²</span>':'')+
         (r.precio_usd?'<span style="color:var(--green);font-weight:600">$'+Number(r.precio_usd).toLocaleString()+'</span>':'')+
         '<span>'+fecha+'</span></div>'+
-        (r.descripcion?'<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"'+r.descripcion.slice(0,80)+(r.descripcion.length>80?'...':'')+'"</div>':'')+
+        (r.descripcion?'<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">"'+r.descripcion.slice(0,80)+'"</div>':'')+
         '</div>';
     }).join('');
     el.innerHTML=html;
-  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+  }catch(e){ el.innerHTML=selHtml+btnHtml+'<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
 }
 
 async function renderPropuestas(el){
@@ -3736,7 +3753,7 @@ async function renderPropuestas(el){
     var html=rows.map(function(r){
       var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:r.nombre_cliente||'Cliente #'+r.lead_id};
       var fecha=r.created_at?new Date(r.created_at).toLocaleDateString('es-BO',{day:'numeric',month:'short'}):'-';
-      var col=colEst[r.estado]||'var(--brd)';
+      var col=colEst[r.estado]||'var(--txt3)';
       return '<div class="card" style="padding:12px 14px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
         '<div style="font-size:13px;font-weight:600">'+(lead.nombre||r.nombre_cliente)+'</div>'+
@@ -3754,16 +3771,25 @@ async function renderPropuestas(el){
 
 async function renderReservas(el){
   if(!el) return;
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  var misLeads=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    if(cu.rol==='commercial_lead') return true;
+    return l.cerrador===cu.nombre;
+  }).filter(function(l){return l.estado!=='cerrado_perdido';});
+  var leadId=window._resLeadId||'';
+  var opts=misLeads.map(function(l){return '<option value="'+l.id+'"'+(l.id==leadId?' selected':'')+'>'+l.nombre+'</option>';}).join('');
+  var selHtml='<div class="fgroup" style="margin-bottom:12px"><label>Cliente</label><select class="fselect" id="res-lead-f" onchange="_resSelChange(this.value)"><option value="">Todos los clientes</option>'+opts+'</select></div>';
+  var btnHtml='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reserva\').classList.add(\'open\')">+ Nueva reserva</button>';
+  el.innerHTML=selHtml+btnHtml+'<div class="loading"><span class="spin"></span>Cargando...</div>';
   try{
     var q=sb.from('reservas').select('*').order('fecha_reserva',{ascending:false});
-    if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
+    if(leadId) q=q.eq('lead_id',leadId);
+    else if(cu.rol==='closer') q=q.eq('cerrador',cu.nombre);
     var {data}=await q.limit(50);
     var rows=data||[];
     var colEst={activa:'var(--green)',cancelada:'var(--red)',aplicada:'var(--blue)'};
-    var html='<button class="btn btn-sm" style="margin-bottom:12px" onclick="document.getElementById(\'sheet-reserva\').classList.add(\'open\')">+ Nueva reserva</button>';
-    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="empty-icon">🔑</div><div class="empty-title">Sin reservas</div></div>'; return; }
-    html+=rows.map(function(r){
+    if(!rows.length){ el.innerHTML=selHtml+btnHtml+'<div class="empty"><div class="empty-icon">🔑</div><div class="empty-title">Sin reservas</div></div>'; return; }
+    var html=selHtml+btnHtml+rows.map(function(r){
       var lead=allLeads.find(function(l){return l.id===r.lead_id;})||{nombre:'Cliente #'+r.lead_id};
       var fecha=r.fecha_reserva?new Date(r.fecha_reserva).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'-';
       var col=colEst[r.estado]||'var(--green)';
@@ -3780,7 +3806,7 @@ async function renderReservas(el){
         '</div>';
     }).join('');
     el.innerHTML=html;
-  }catch(e){ el.innerHTML='<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
+  }catch(e){ el.innerHTML=selHtml+btnHtml+'<div style="padding:16px;color:var(--red);font-size:12px">Error: '+e.message+'</div>'; }
 }
 
 async function renderFinanciamiento(el){
@@ -3827,9 +3853,9 @@ async function renderFinanciamiento(el){
       html += '</div><span style="font-size:10px;font-weight:600;color:'+col+';background:'+col+'20;padding:3px 8px;border-radius:10px">'+est+'</span></div>';
       html += '<div style="display:flex;gap:6px">';
       var pNum=p.num, lId=leadId;
-      html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="en_proceso" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="flex:1;padding:6px;font-size:11px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:var(--r);color:var(--blue);cursor:pointer'+(est==="en_proceso"?' display:none':'')+'">'+(est!=="en_proceso"?'En proceso':'')+'</button>';
-      html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="completado" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="flex:1;padding:6px;font-size:11px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--r);color:var(--green);cursor:pointer'+(est==="completado"?' display:none':'')+'">'+(est!=="completado"?'Completado':'')+'</button>';
-      if(est!=="pendiente") html += '<button data-paso="'+pNum+'" data-lid="'+lId+'" data-est="pendiente" onclick="window._finLeadId=this.dataset.lid;actualizarPasoFin(+this.dataset.paso,this.dataset.est)" style="padding:6px 10px;font-size:11px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer">Revertir</button>';
+      if(est!=="en_proceso") html += '<button onclick="window._finLeadId=\''+lId+'\';actualizarPasoFin('+pNum+',\'en_proceso\')" style="flex:1;padding:6px;font-size:11px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:var(--r);color:var(--blue);cursor:pointer">En proceso</button>';
+      if(est!=="completado") html += '<button onclick="window._finLeadId=\''+lId+'\';actualizarPasoFin('+pNum+',\'completado\')" style="flex:1;padding:6px;font-size:11px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:var(--r);color:var(--green);cursor:pointer">Completado</button>';
+      if(est!=="pendiente") html += '<button onclick="window._finLeadId=\''+lId+'\';actualizarPasoFin('+pNum+',\'pendiente\')" style="padding:6px 10px;font-size:11px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer">Revertir</button>';
       html += '</div></div>';
     });
     html += '</div>';
@@ -4700,6 +4726,22 @@ function colorPorEstado(estado){
 
 function _reFin(){ var e=document.getElementById('cierre-content'); if(e) renderFinanciamiento(e); }
 function _rePag(){ var e=document.getElementById('cierre-content'); if(e) renderPagos(e); }
+function _reuSelChange(v){ window._reuLeadId=v; var e=document.getElementById('cierre-content'); if(e) renderReuniones(e); }
+function _cotizSelChange(v){ window._cotizLeadId=v; var e=document.getElementById('cierre-content'); if(e) renderCotizaciones(e); }
+function _resSelChange(v){ window._resLeadId=v; var e=document.getElementById('cierre-content'); if(e) renderReservas(e); }
+async function actualizarPasoFin(paso, estado){
+  var leadId=window._finLeadId;
+  if(!leadId){ toast('Selecciona un cliente primero','error'); return; }
+  try{
+    var {data:ex}=await sb.from('financiamiento_tramite').select('id').eq('lead_id',leadId).maybeSingle();
+    var upd={};
+    upd['paso_'+paso+'_estado']=estado;
+    upd['paso_'+paso+'_fecha']=estado==='completado'?new Date().toISOString().slice(0,10):null;
+    if(ex){ await sb.from('financiamiento_tramite').update(upd).eq('id',ex.id); }
+    else{ upd.lead_id=parseInt(leadId); await sb.from('financiamiento_tramite').insert([upd]); }
+    _reFin();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
 function _finSelChange(v){ window._finLeadId=v; _reFin(); }
 function _pagSelChange(v){ window._pagLeadId=v; _rePag(); }
 
