@@ -1833,6 +1833,7 @@ function renderLeadCards(leads,containerId,rol){
 
 // -- CALENDARIO PERSONAL --
 let calFecha = new Date(); // mes/semana mostrado
+let _calSemTodos = []; // cache de eventos de la semana actual
 let calView = 'mes'; // 'mes' | 'semana'
 let calDiaSeleccionado = null;
 let calEventos = []; // todas las actividades del colaborador
@@ -2273,6 +2274,7 @@ async function renderCalendario(){
     ...(visitas||[]).map(v=>({...v,_tipo:'visita',_fecha:v.visita_fecha})),
     ...(reuniones||[]).map(r=>({...r,_tipo:'reunion',_fecha:r.fecha_inicio}))
   ].sort((a,b)=>a._fecha>b._fecha?1:-1);
+  _calSemTodos = todos;
 
   if(calTabActual==='lista'){
     if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div></div>';return;}
@@ -2335,6 +2337,37 @@ async function renderCalendario(){
     }
     el.innerHTML=html;
   }
+}
+
+function filtrarCalDia(dStr){
+  var el=document.getElementById('calendario-content');
+  if(!el) return;
+  // Toggle: click mismo día = quitar filtro
+  if(el.dataset.filtrodia===dStr){ delete el.dataset.filtrodia; renderCalendario(); return; }
+  el.dataset.filtrodia=dStr;
+  var filtered=_calSemTodos.filter(function(ev){return ev._fecha&&ev._fecha.slice(0,10)===dStr;});
+  var fechaTxt=new Date(dStr+'T12:00:00').toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+    '<div style="font-size:13px;font-weight:600;color:var(--txt)">'+fechaTxt+'</div>'+
+    '<button class="btn btn-sm btn-ghost" onclick="delete document.getElementById(\'calendario-content\').dataset.filtrodia;renderCalendario()">← Semana</button>'+
+  '</div>';
+  if(!filtered.length){
+    html+='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos este día</div></div>';
+  }else{
+    html+=filtered.map(function(ev){
+      var est=estilo(ev.estado);
+      var hora=new Date(ev._fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      return '<div class="card" style="padding:10px 14px" onclick="'+(ev._tipo==='visita'?'abrirSheetLead('+ev.id+')':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:11px;color:var(--txt3);min-width:38px;text-align:center">'+hora+'</div>'+
+        '<div style="width:6px;height:6px;border-radius:50%;background:'+(ev._tipo==='reunion'?'var(--purple)':est.dot)+';flex-shrink:0"></div>'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+(ev.nombre||ev.titulo)+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+(ev.cerrador||ev.sala||'')+'</div></div>'+
+        (ev._tipo==='visita'?'<span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span>':'<span class="badge e-scierre" style="font-size:9px">Reunión</span>')+
+        '</div></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
 }
 
 // -- SHEET LEAD (ver + editar) --
@@ -2548,6 +2581,21 @@ async function guardarLead(){
       }
     }, 300);
   }
+}
+
+function mostrarGuiaIntento(num){
+  var guias={
+    1:{titulo:'1er Intento — Presentación',texto:'Hola [nombre], te llamo de GEAT Construcción y Consultoría. Vi que te interesaste en nuestros proyectos. ¿Tienes 2 minutos? Quería contarte brevemente las opciones que tenemos disponibles en tu zona y resolver cualquier duda inicial.'},
+    2:{titulo:'2do Intento — Seguimiento',texto:'Hola [nombre], soy [tu nombre] de GEAT. Te contacté anteriormente — quería asegurarme de que recibieras la información. Entiendo que estás evaluando opciones; si me cuentas qué es lo más importante para ti en un proyecto, puedo orientarte mejor.'},
+    3:{titulo:'3er Intento — Última llamada',texto:'Hola [nombre], es mi último intento de contacto por ahora. Si en algún momento deseas retomar el tema, con gusto te atiendo. ¿Hay un mejor horario para llamarte o prefieres que te escriba por WhatsApp?'}
+  };
+  var g=guias[num];
+  var wrap=document.getElementById('intento-guia-script');
+  if(!wrap)return;
+  if(!g){wrap.style.display='none';return;}
+  document.getElementById('intento-guia-titulo').textContent='Guía — '+g.titulo;
+  document.getElementById('intento-guia-texto').textContent=g.texto;
+  wrap.style.display='';
 }
 
 // -- SHEET INTENTO --
