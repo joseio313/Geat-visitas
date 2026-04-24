@@ -1222,6 +1222,9 @@ let segLeadId=null;
 let perderLeadId=null;
 let selPillVal={intento:null,seg:null};
 let audioData=null; // datos del último proceso de audio
+let leadFiltroFecha=null;
+let leadFiltroEstados=new Set();
+let leadFiltroFin=null;
 
 // -- ETAPAS --
 const E={
@@ -1700,6 +1703,51 @@ function renderLeads(){
   renderLeadCards(leads,'leads-list',cu.rol);
 }
 
+function toggleFiltrosLeads(){
+  var p=document.getElementById('filtros-leads-panel');
+  if(p) p.style.display=p.style.display==='none'?'block':'none';
+}
+function abrirFiltrosLeads(){
+  var p=document.getElementById('filtros-leads-panel');
+  if(p) p.style.display='block';
+}
+function setLeadFecha(periodo,btn){
+  leadFiltroFecha=(leadFiltroFecha===periodo)?null:periodo;
+  document.querySelectorAll('#filtros-leads-panel .tab[id^="lf-h"],#filtros-leads-panel .tab[id^="lf-s"],#filtros-leads-panel .tab[id^="lf-m"],#filtros-leads-panel .tab[id^="lf-a"]').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFecha&&btn) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+function toggleLeadEst(estado,btn){
+  if(leadFiltroEstados.has(estado)){leadFiltroEstados.delete(estado);if(btn)btn.style.opacity='0.55';}
+  else{leadFiltroEstados.add(estado);if(btn)btn.style.opacity='1';}
+  actualizarContFiltros();
+  renderLeads();
+}
+function toggleLeadFin(tipo,btn){
+  leadFiltroFin=(leadFiltroFin===tipo)?null:tipo;
+  document.querySelectorAll('#lf-contado,#lf-banco').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFin&&btn) btn.classList.add('active');
+  actualizarContFiltros();
+  renderLeads();
+}
+function actualizarContFiltros(){
+  var n=leadFiltroEstados.size+(leadFiltroFecha?1:0)+(leadFiltroFin?1:0)+
+        (document.getElementById('lf-ciudad')?.value?1:0)+
+        (document.getElementById('lf-m2min')?.value?1:0)+
+        (document.getElementById('lf-m2max')?.value?1:0);
+  var badge=document.getElementById('filtros-leads-count');
+  if(badge){badge.textContent=n;badge.style.display=n>0?'':'none';}
+}
+function limpiarFiltrosLeads(){
+  leadFiltroFecha=null; leadFiltroEstados=new Set(); leadFiltroFin=null;
+  ['lf-ciudad','lf-m2min','lf-m2max'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.querySelectorAll('#filtros-leads-panel .tab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('#filtros-leads-panel .badge').forEach(function(b){b.style.opacity='0.55';});
+  actualizarContFiltros();
+  renderLeads();
+}
+
 // -- RENDER TODOS --
 function setTodosTab(tab,btn){
   todosTabActual=tab;
@@ -1785,6 +1833,7 @@ function renderLeadCards(leads,containerId,rol){
 
 // -- CALENDARIO PERSONAL --
 let calFecha = new Date(); // mes/semana mostrado
+let _calSemTodos = []; // cache de eventos de la semana actual
 let calView = 'mes'; // 'mes' | 'semana'
 let calDiaSeleccionado = null;
 let calEventos = []; // todas las actividades del colaborador
@@ -2225,6 +2274,7 @@ async function renderCalendario(){
     ...(visitas||[]).map(v=>({...v,_tipo:'visita',_fecha:v.visita_fecha})),
     ...(reuniones||[]).map(r=>({...r,_tipo:'reunion',_fecha:r.fecha_inicio}))
   ].sort((a,b)=>a._fecha>b._fecha?1:-1);
+  _calSemTodos = todos;
 
   if(calTabActual==='lista'){
     if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div></div>';return;}
@@ -2287,6 +2337,37 @@ async function renderCalendario(){
     }
     el.innerHTML=html;
   }
+}
+
+function filtrarCalDia(dStr){
+  var el=document.getElementById('calendario-content');
+  if(!el) return;
+  // Toggle: click mismo día = quitar filtro
+  if(el.dataset.filtrodia===dStr){ delete el.dataset.filtrodia; renderCalendario(); return; }
+  el.dataset.filtrodia=dStr;
+  var filtered=_calSemTodos.filter(function(ev){return ev._fecha&&ev._fecha.slice(0,10)===dStr;});
+  var fechaTxt=new Date(dStr+'T12:00:00').toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+    '<div style="font-size:13px;font-weight:600;color:var(--txt)">'+fechaTxt+'</div>'+
+    '<button class="btn btn-sm btn-ghost" onclick="delete document.getElementById(\'calendario-content\').dataset.filtrodia;renderCalendario()">← Semana</button>'+
+  '</div>';
+  if(!filtered.length){
+    html+='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos este día</div></div>';
+  }else{
+    html+=filtered.map(function(ev){
+      var est=estilo(ev.estado);
+      var hora=new Date(ev._fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      return '<div class="card" style="padding:10px 14px" onclick="'+(ev._tipo==='visita'?'abrirSheetLead('+ev.id+')':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:11px;color:var(--txt3);min-width:38px;text-align:center">'+hora+'</div>'+
+        '<div style="width:6px;height:6px;border-radius:50%;background:'+(ev._tipo==='reunion'?'var(--purple)':est.dot)+';flex-shrink:0"></div>'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+(ev.nombre||ev.titulo)+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+(ev.cerrador||ev.sala||'')+'</div></div>'+
+        (ev._tipo==='visita'?'<span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span>':'<span class="badge e-scierre" style="font-size:9px">Reunión</span>')+
+        '</div></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
 }
 
 // -- SHEET LEAD (ver + editar) --
@@ -2500,6 +2581,21 @@ async function guardarLead(){
       }
     }, 300);
   }
+}
+
+function mostrarGuiaIntento(num){
+  var guias={
+    1:{titulo:'1er Intento — Presentación',texto:'Hola [nombre], te llamo de GEAT Construcción y Consultoría. Vi que te interesaste en nuestros proyectos. ¿Tienes 2 minutos? Quería contarte brevemente las opciones que tenemos disponibles en tu zona y resolver cualquier duda inicial.'},
+    2:{titulo:'2do Intento — Seguimiento',texto:'Hola [nombre], soy [tu nombre] de GEAT. Te contacté anteriormente — quería asegurarme de que recibieras la información. Entiendo que estás evaluando opciones; si me cuentas qué es lo más importante para ti en un proyecto, puedo orientarte mejor.'},
+    3:{titulo:'3er Intento — Última llamada',texto:'Hola [nombre], es mi último intento de contacto por ahora. Si en algún momento deseas retomar el tema, con gusto te atiendo. ¿Hay un mejor horario para llamarte o prefieres que te escriba por WhatsApp?'}
+  };
+  var g=guias[num];
+  var wrap=document.getElementById('intento-guia-script');
+  if(!wrap)return;
+  if(!g){wrap.style.display='none';return;}
+  document.getElementById('intento-guia-titulo').textContent='Guía — '+g.titulo;
+  document.getElementById('intento-guia-texto').textContent=g.texto;
+  wrap.style.display='';
 }
 
 // -- SHEET INTENTO --
@@ -2944,6 +3040,8 @@ async function renderAdmin(){
   // Mostrar/ocultar tabs segun rol
   const tabAuditoria = document.getElementById('tab-auditoria');
   if(tabAuditoria) tabAuditoria.style.display = cu.rol==='admin' ? '' : 'none';
+  const tabCeo = document.getElementById('tab-ceo');
+  if(tabCeo) tabCeo.style.display = cu.rol==='admin' ? '' : 'none';
 
   // Gustavo (commercial_lead) NO puede ver perfil del CEO
   // Se maneja en el grid de acceso rapido
@@ -3110,25 +3208,27 @@ async function renderAdmin(){
       <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
       ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
     </div>
-    ${metricas&&metricas.length?`
-    <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;font-size:11px;border-collapse:collapse">
-          <thead>
-            <tr style="border-bottom:1px solid var(--brd)">
-              <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`:''}`;
+    ${metricas&&metricas.length?renderTablaMetricas(metricas):''}`;
+  }else if(adminTabActual==='auditoria'){
+    const logs = window._auditLog || [];
+    if(!logs.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin actividad registrada</div><div class="empty-sub">Las acciones del sistema se irán registrando aquí</div></div>';
+    }else{
+      el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Registro de actividad (últimas '+logs.length+')</div>'+
+        logs.map(function(r){
+          const fecha=new Date(r.timestamp).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+          const col={impersonacion:'var(--acc)',guardar_lead:'var(--blue)',intento:'var(--green)',seguimiento:'var(--purple)',perder_lead:'var(--red)'}[r.accion]||'var(--brd2)';
+          return '<div style="background:var(--bg3);border:1px solid var(--brd);border-left:3px solid '+col+';border-radius:var(--r);padding:10px 12px;margin-bottom:6px">'+
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px">'+
+            '<div style="font-size:12px;font-weight:600;color:var(--txt)">'+r.accion.replace(/_/g,' ')+'</div>'+
+            '<div style="font-size:10px;color:var(--txt3)">'+fecha+'</div>'+
+            '</div>'+
+            '<div style="font-size:11px;color:var(--txt3)">'+r.colaborador+' · '+r.rol+(r.tabla_afectada?' — tabla: '+r.tabla_afectada:'')+'</div>'+
+            '</div>';
+        }).join('');
+    }
+  }else if(adminTabActual==='ceo'){
+    renderPanelCEO(el);
   }
 }
 
@@ -3138,7 +3238,6 @@ async function renderAdmin(){
 
 function registrarAuditoria(accion, tabla, regId, datosAnt, datosNuev){
   if(!cu) return;
-  // Guardar en Supabase (solo diseño por ahora - conectar en v50)
   const registro = {
     colaborador: cu.nombre,
     rol: cu.rol,
@@ -3149,10 +3248,14 @@ function registrarAuditoria(accion, tabla, regId, datosAnt, datosNuev){
     datos_nuevos: datosNuev ? JSON.stringify(datosNuev) : null,
     timestamp: new Date().toISOString()
   };
-  // Log local mientras no hay BD conectada
+  // Log local siempre
   if(!window._auditLog) window._auditLog = [];
   window._auditLog.unshift(registro);
   if(window._auditLog.length > 100) window._auditLog.pop();
+  // Persistir en Supabase de forma asíncrona (no bloquea)
+  try{
+    sb.from('auditoria_sistema').insert([registro]).then(function(){}).catch(function(){});
+  }catch(e){}
 }
 
 async function cambiarTurnoManual(){
@@ -4634,6 +4737,66 @@ function guardarReunion(){
   }).catch(function(e){ toast('Error: '+e.message,'error'); });
 }
 
+function guardarReunionYReserva(){
+  // Guardar la reunión primero, luego abrir sheet de reserva
+  var leadId = document.getElementById('reu-lead-sel')&&document.getElementById('reu-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var fecha = document.getElementById('reu-fecha')&&document.getElementById('reu-fecha').value;
+  if(!fecha){ toast('Selecciona fecha y hora','error'); return; }
+  guardarReunion();
+  // Abrir sheet de reserva con el mismo lead pre-seleccionado
+  setTimeout(function(){
+    var selRes = document.getElementById('res-lead-sel');
+    if(selRes) selRes.value = leadId;
+    document.getElementById('sheet-reserva').classList.add('open');
+  }, 400);
+}
+
+async function guardarCotizacion(){
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  if(!leadId){ toast('Selecciona un lead','error'); return; }
+  var titulo = document.getElementById('cotiz-titulo')&&document.getElementById('cotiz-titulo').value.trim();
+  if(!titulo){ toast('Escribe el título de la cotización','error'); return; }
+  var data = {
+    lead_id: parseInt(leadId),
+    cerrador: cu.nombre,
+    titulo: titulo,
+    metros_cuadrados: parseFloat(document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value)||null,
+    precio_usd: parseFloat(document.getElementById('cotiz-precio')&&document.getElementById('cotiz-precio').value)||null,
+    descripcion: document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||null,
+    estado: document.getElementById('cotiz-estado')&&document.getElementById('cotiz-estado').value||'borrador',
+    fecha: new Date().toISOString()
+  };
+  try{
+    await sb.from('cotizaciones_cerrador').insert([data]);
+    closeSheet('cotiz');
+    toast('Cotización guardada ✓');
+    renderCierre();
+  }catch(e){ toast('Error al guardar: '+e.message,'error'); }
+}
+
+function enviarArquitectura(){
+  var leadId = document.getElementById('cotiz-lead-sel')&&document.getElementById('cotiz-lead-sel').value;
+  var lead = leadId ? allLeads.find(function(l){return l.id==leadId;}) : null;
+  var m2 = document.getElementById('cotiz-m2')&&document.getElementById('cotiz-m2').value||'-';
+  var desc = document.getElementById('cotiz-desc')&&document.getElementById('cotiz-desc').value||'';
+  if(!lead){ toast('Selecciona un cliente primero','error'); return; }
+  // Construir mensaje para WhatsApp
+  var msg = '*SOLICITUD DE PROPUESTA — GEAT*\n\n'+
+    '*Cliente:* '+lead.nombre+'\n'+
+    '*Celular:* '+lead.celular+'\n'+
+    '*Ciudad:* '+(lead.ciudad||'Santa Cruz')+'\n'+
+    '*Financ.:* '+(lead.financiamiento==='bancario'?'Bancario':'Al contado')+'\n'+
+    '*m²:* '+m2+' m²\n'+
+    (desc?'*Detalles:* '+desc+'\n':'')+
+    '*Cerrador:* '+cu.nombre+'\n'+
+    '*Fecha:* '+new Date().toLocaleDateString('es-BO');
+  var grupo = window.WA_ARQUITECTURA||'https://wa.me/';
+  var url = grupo.includes('chat.whatsapp.com') ? grupo : 'https://wa.me/?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+  toast('Abriendo WhatsApp con los datos del requerimiento');
+}
+
 // ══════════════════════════════════════
 // ELIMINAR NOTA
 // ══════════════════════════════════════
@@ -4789,8 +4952,6 @@ initLogin();
       <div class="sheet-title">Nueva Reunión</div>
       <button class="sheet-close" onclick="closeSheet('reunion')">&#x2715;</button>
     </div>
-      <button class="sheet-close" onclick="closeSheet('reunion')">✕</button>
-    </div>
     <div class="sheet-body">
       <div class="form-grid">
         <div class="fgroup">
@@ -4860,8 +5021,6 @@ initLogin();
       <div class="sheet-title">Nueva Cotización</div>
       <button class="sheet-close" onclick="closeSheet('cotiz')">&#x2715;</button>
     </div>
-      <button class="sheet-close" onclick="closeSheet('cotiz')">✕</button>
-    </div>
     <div class="sheet-body">
       <div class="form-grid">
         <div class="fgroup">
@@ -4918,8 +5077,6 @@ initLogin();
       <button onclick="closeSheet('reserva')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0;line-height:1" title="Volver">&#8592;</button>
       <div class="sheet-title">Registrar Reserva / Pago</div>
       <button class="sheet-close" onclick="closeSheet('reserva')">&#x2715;</button>
-    </div>
-      <button class="sheet-close" onclick="closeSheet('reserva')">✕</button>
     </div>
     <div class="sheet-body">
       <div class="form-grid">
