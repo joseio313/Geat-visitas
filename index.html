@@ -428,6 +428,13 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       </div>
 
       <div id="inicio-hoy-contactos" style="margin-bottom:12px"></div>
+      <!-- Acceso rápido agenda grupal (admin/jefe) -->
+      <div id="inicio-grupal-btn" style="display:none;margin-bottom:12px">
+        <button onclick="sw('calendario')" style="width:100%;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left">
+          <div style="font-size:18px">📅</div>
+          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Agenda grupal</div><div style="font-size:11px;color:var(--txt3)">Visitas y reuniones del equipo</div></div>
+        </button>
+      </div>
       <div id="inicio-agenda"></div>
     </div>
 
@@ -685,6 +692,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="ph">
         <div><div class="ph-title">Todos los Leads</div><div class="ph-sub" id="todos-count">—</div></div>
         <div class="ph-actions">
+          <button class="btn btn-sm btn-ghost" onclick="generarReporteSemanal()">📊 Reporte</button>
           <button class="btn btn-sm btn-ghost" onclick="exportarCSV()">↗ CSV</button>
           <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
@@ -1348,6 +1356,7 @@ const NAVS={
   field_capturer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
+    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   closer:[
@@ -1491,13 +1500,17 @@ function iniciarRealtime(){
 function iniciarNotificaciones(){
   if(!('Notification' in window))return;
   Notification.requestPermission().then(p=>{
-    if(p==='granted')setInterval(checkNotifsPendientes,5*60000);
+    if(p==='granted'){
+      checkNotifsPendientes();
+      setInterval(checkNotifsPendientes,3*60000); // cada 3 min
+    }
   });
 }
 async function checkNotifsPendientes(){
   if(Notification.permission!=='granted')return;
   const ahora=new Date();
   const en15=new Date(ahora.getTime()+15*60000);
+  // Actividades próximas (en los próximos 15 min)
   const{data}=await sb.from('agenda_personal')
     .select('*,leads(nombre)')
     .eq('colaborador',cu.nombre).eq('completada',false)
@@ -1505,11 +1518,23 @@ async function checkNotifsPendientes(){
     .lte('fecha_programada',en15.toISOString());
   (data||[]).forEach(a=>{
     const hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    new Notification('GEAT CRM - Actividad próxima',{
-      body:`${hora}: ${a.leads?.nombre||a.titulo}`,
-      tag:'geat-'+a.id
+    new Notification('GEAT — Actividad en '+hora,{
+      body:(a.leads?.nombre||a.titulo)+' — '+a.tipo.replace(/_/g,' '),
+      tag:'geat-prox-'+a.id,icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%23F2C500"/><text x="16" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="%23000">G</text></svg>'
     });
   });
+  // Actividades atrasadas (solo una notificación resumen)
+  const hoy=ahora.toISOString().slice(0,10);
+  const{data:atrasadas}=await sb.from('agenda_personal')
+    .select('id')
+    .eq('colaborador',cu.nombre).eq('completada',false)
+    .lt('fecha_programada',hoy+'T00:00:00');
+  if(atrasadas&&atrasadas.length>0){
+    new Notification('GEAT — '+atrasadas.length+' actividades atrasadas',{
+      body:'Tenés '+atrasadas.length+' pendientes sin completar. Entrá al CRM.',
+      tag:'geat-atrasadas'
+    });
+  }
 }
 
 // -- RENDER INICIO --
@@ -1657,6 +1682,9 @@ function renderInicio(){
       filtroWrap.style.display='none';
     }
   }
+  // Mostrar botón agenda grupal para admin/jefe
+  var grupalBtn=document.getElementById('inicio-grupal-btn');
+  if(grupalBtn) grupalBtn.style.display=(cu.rol==='admin'||cu.rol==='commercial_lead')?'':'none';
 
   // Stats
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
@@ -1686,13 +1714,49 @@ async function renderNotifsInicio(){
     .order('created_at',{ascending:false}).limit(3);
   const items=data||[];
   const el=document.getElementById('inicio-notifs');
-  if(!items.length){el.innerHTML='';return;}
-  el.innerHTML=`<div style="margin-bottom:12px">
-    ${items.map(n=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="sw('notif')">
-      <div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>
-      <div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">${n.titulo}</strong>${n.mensaje?' - '+n.mensaje:''}</div>
-    </div>`).join('')}
-  </div>`;
+  var html='';
+  // Notificaciones normales
+  if(items.length){
+    html+=items.map(n=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="sw(\'notif\')">'+
+      '<div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>'+
+      '<div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">'+n.titulo+'</strong>'+(n.mensaje?' - '+n.mensaje:'')+'</div></div>').join('');
+  }
+  // ALERTAS INTELIGENTES para admin/jefe
+  if(cu.rol==='admin'||cu.rol==='commercial_lead'){
+    var hoy=new Date().toISOString().slice(0,10);
+    var hace48h=new Date(Date.now()-2*864e5).toISOString().slice(0,10);
+    var hace3d=new Date(Date.now()-3*864e5).toISOString().slice(0,10);
+    // Leads sin contactar >48h
+    var sinContactar=allLeads.filter(function(l){
+      return l.estado==='nuevo'&&l.fecha_ingreso&&l.fecha_ingreso<=hace48h;
+    });
+    if(sinContactar.length>0){
+      html+='<div style="padding:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:var(--r);margin-bottom:6px">'+
+        '<div style="font-size:12px;color:var(--red);font-weight:600">🚨 '+sinContactar.length+' leads sin contactar hace +48h</div>'+
+        '<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+sinContactar.slice(0,3).map(function(l){return l.nombre+' ('+l.captador+')';}).join(', ')+(sinContactar.length>3?' y '+(sinContactar.length-3)+' más':'')+'</div></div>';
+    }
+    // Atrasados por persona
+    var atrasadosPorPersona={};
+    allLeads.filter(function(l){return l.proximo_contacto&&l.proximo_contacto<hoy&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';}).forEach(function(l){
+      var cap=l.captador||l.cerrador||'Sin asignar';
+      atrasadosPorPersona[cap]=(atrasadosPorPersona[cap]||0)+1;
+    });
+    var personasConAtrasos=Object.entries(atrasadosPorPersona).filter(function(e){return e[1]>=3;});
+    if(personasConAtrasos.length>0){
+      html+='<div style="padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px">'+
+        '<div style="font-size:12px;color:var(--acc);font-weight:600">⚠ Colaboradores con +3 atrasados</div>'+
+        '<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+personasConAtrasos.map(function(p){return p[0].split(' ')[0]+': '+p[1]+' atrasados';}).join(' · ')+'</div></div>';
+    }
+    // Leads sin actividad >3 días
+    var sinActividad=allLeads.filter(function(l){
+      return l.estado==='en_seguimiento'&&l.proximo_contacto&&l.proximo_contacto<=hace3d;
+    });
+    if(sinActividad.length>0){
+      html+='<div style="padding:10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.15);border-radius:var(--r);margin-bottom:6px">'+
+        '<div style="font-size:12px;color:#8B5CF6;font-weight:600">💤 '+sinActividad.length+' leads en seguimiento sin actividad hace +3 días</div></div>';
+    }
+  }
+  el.innerHTML=html?'<div style="margin-bottom:12px">'+html+'</div>':'';
 }
 
 async function renderAgendaInicio(){
@@ -1793,6 +1857,84 @@ function renderTodos(){
   if(q)leads=leads.filter(l=>['nombre','celular','ciudad','captador','cerrador','notas'].some(k=>l[k]&&l[k].toLowerCase().includes(q)));
   document.getElementById('todos-count').textContent=leads.length+' leads';
   renderLeadCards(leads,'todos-list',cu.rol);
+}
+
+// -- BÚSQUEDA AVANZADA --
+let busqEstados=[];
+let busqFechaPreset='';
+let busqFinanciamiento='';
+function ejecutarBusqueda(){
+  var q=(document.getElementById('busq-q')?.value||'').toLowerCase();
+  var desde=document.getElementById('busq-desde')?.value||'';
+  var hasta=document.getElementById('busq-hasta')?.value||'';
+  var medio=document.getElementById('busq-medio')?.value||'';
+  var ciudad=(document.getElementById('busq-ciudad')?.value||'').toLowerCase();
+  var m2min=parseFloat(document.getElementById('busq-m2min')?.value)||0;
+  var m2max=parseFloat(document.getElementById('busq-m2max')?.value)||Infinity;
+  var leads=allLeads.filter(function(l){
+    if(q&&!['nombre','celular','ciudad','captador','cerrador','notas'].some(function(k){return l[k]&&l[k].toLowerCase().includes(q);}))return false;
+    if(busqEstados.length&&busqEstados.indexOf(l.estado)===-1)return false;
+    if(busqFinanciamiento&&l.financiamiento!==busqFinanciamiento)return false;
+    if(desde&&l.fecha_ingreso&&l.fecha_ingreso<desde)return false;
+    if(hasta&&l.fecha_ingreso&&l.fecha_ingreso>hasta)return false;
+    if(medio&&l.medio_difusion!==medio)return false;
+    if(ciudad&&(!l.ciudad||l.ciudad.toLowerCase().indexOf(ciudad)===-1))return false;
+    if(m2min>0&&(!l.metros_cuadrados||l.metros_cuadrados<m2min))return false;
+    if(m2max<Infinity&&(!l.metros_cuadrados||l.metros_cuadrados>m2max))return false;
+    return true;
+  });
+  document.getElementById('busq-count').textContent=leads.length+' resultados';
+  renderLeadCards(leads,'busq-results',cu.rol);
+}
+function setBusqFecha(preset,btn){
+  document.querySelectorAll('#pn-busqueda .tab').forEach(function(b){b.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  if(busqFechaPreset===preset){busqFechaPreset='';document.getElementById('busq-desde').value='';if(btn)btn.classList.remove('active');}
+  else{
+    busqFechaPreset=preset;
+    var hoy=new Date();var desde='';
+    if(preset==='hoy')desde=hoy.toISOString().slice(0,10);
+    else if(preset==='semana')desde=new Date(hoy.getTime()-7*864e5).toISOString().slice(0,10);
+    else if(preset==='mes')desde=new Date(hoy.getFullYear(),hoy.getMonth(),1).toISOString().slice(0,10);
+    else if(preset==='anio')desde=hoy.getFullYear()+'-01-01';
+    document.getElementById('busq-desde').value=desde;
+    document.getElementById('busq-hasta').value='';
+  }
+  ejecutarBusqueda();
+}
+function toggleBusqEst(estado,btn){
+  var idx=busqEstados.indexOf(estado);
+  if(idx>-1){busqEstados.splice(idx,1);btn.style.opacity='0.55';}
+  else{busqEstados.push(estado);btn.style.opacity='1';}
+  ejecutarBusqueda();
+}
+function toggleBusqFin(fin,btn){
+  if(busqFinanciamiento===fin){busqFinanciamiento='';btn.classList.remove('active');}
+  else{
+    busqFinanciamiento=fin;
+    document.querySelectorAll('#bq-contado,#bq-banco').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+  }
+  ejecutarBusqueda();
+}
+function toggleFiltrosAvanzados(){
+  var el=document.getElementById('filtros-avanzados');
+  var arrow=document.getElementById('fa-arrow');
+  if(el.style.display==='none'){el.style.display='';arrow.style.transform='rotate(180deg)';}
+  else{el.style.display='none';arrow.style.transform='';}
+}
+function limpiarBusqueda(){
+  document.getElementById('busq-q').value='';
+  document.getElementById('busq-desde').value='';
+  document.getElementById('busq-hasta').value='';
+  document.getElementById('busq-medio').value='';
+  document.getElementById('busq-ciudad').value='';
+  document.getElementById('busq-m2min').value='';
+  document.getElementById('busq-m2max').value='';
+  busqEstados=[];busqFechaPreset='';busqFinanciamiento='';
+  document.querySelectorAll('#pn-busqueda .tab, #pn-busqueda .badge').forEach(function(b){b.classList.remove('active');b.style.opacity='0.55';});
+  document.getElementById('busq-count').textContent='—';
+  document.getElementById('busq-results').innerHTML='<div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">Escribí para buscar o seleccioná un filtro</div>';
 }
 
 // -- RENDER LEAD CARDS --
@@ -2471,14 +2613,19 @@ function toggleEstadoCampos(){
 
 // Validacion de etapa - evitar saltos criticos
 function validarCambioEtapa(estadoActual, estadoNuevo, numIntentos){
-  // Solo emite alerta — nunca bloquea el proceso
-  // La venta no puede caerse por el CRM
   if(estadoActual==='nuevo' && estadoNuevo==='cerrado_ganado'){
     toast('AVISO: Lead pasado a Ganado sin visita previa registrada', 'error');
   } else if(estadoActual==='nuevo' && (estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada') && (!numIntentos||numIntentos===0)){
     toast('Aviso: Sin intentos de contacto previos registrados', 'error');
   }
-  return true; // siempre permite continuar
+  // Bloquear avance a visita sin indagación completa
+  if((estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada')&&editingLeadId){
+    var lead=allLeads.find(function(l){return l.id===editingLeadId;});
+    if(lead&&!lead.indagacion_completa){
+      toast('Completá la indagación antes de agendar visita (mínimo 6/9 campos)','error');
+    }
+  }
+  return true;
 }
 
 async function guardarLead(){
@@ -3353,6 +3500,36 @@ function exportarCSV(){
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='leads_geat_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
+}
+
+function generarReporteSemanal(){
+  var hoy=new Date();var hace7=new Date(hoy.getTime()-7*864e5);
+  var desde=hace7.toISOString().slice(0,10);
+  var leads7=allLeads.filter(function(l){return l.fecha_ingreso&&l.fecha_ingreso>=desde;});
+  var activos=allLeads.filter(function(l){return l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
+  var ganados7=leads7.filter(function(l){return l.estado==='cerrado_ganado';});
+  var perdidos7=leads7.filter(function(l){return l.estado==='cerrado_perdido';});
+  var visitas7=leads7.filter(function(l){return l.visita_fecha;});
+  var atrasados=allLeads.filter(function(l){return l.proximo_contacto&&l.proximo_contacto<hoy.toISOString().slice(0,10)&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
+  // Por captador
+  var porCap={};
+  leads7.forEach(function(l){var c=l.captador||'Sin asignar';if(!porCap[c])porCap[c]={n:0,g:0,v:0};porCap[c].n++;if(l.estado==='cerrado_ganado')porCap[c].g++;if(l.visita_fecha)porCap[c].v++;});
+  var texto='GEAT REPORTE SEMANAL\n'+
+    hace7.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' - '+hoy.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'})+'\n\n'+
+    'Leads nuevos: '+leads7.length+'\n'+
+    'Visitas agendadas: '+visitas7.length+'\n'+
+    'Ganados: '+ganados7.length+'\n'+
+    'Perdidos: '+perdidos7.length+'\n'+
+    'Activos totales: '+activos.length+'\n'+
+    'Atrasados: '+atrasados.length+'\n\n'+
+    'POR CAPTADOR:\n'+
+    Object.entries(porCap).map(function(e){return e[0].split(' ')[0]+': '+e[1].n+' leads, '+e[1].v+' visitas, '+e[1].g+' ganados';}).join('\n');
+  // Copiar al portapapeles
+  navigator.clipboard.writeText(texto).then(function(){
+    toast('Reporte copiado — pegalo en WhatsApp');
+  }).catch(function(){
+    prompt('Copia este reporte:',texto);
+  });
 }
 
 // -- PROGRAMAR INTENTO/SEGUIMIENTO --
@@ -4283,18 +4460,24 @@ async function guardarIndagacion(){
     ind_cuando_construir: document.getElementById('ind-cuando').value||null,
     ind_plantas: parseInt(document.getElementById('ind-plantas').value)||1
   };
-  // Verificar si esta completa
-  var completa = datos.ind_ciudad && datos.ind_financiamiento && datos.ind_lugar_terreno &&
-    datos.ind_tipo && datos.ind_cuando_construir;
+  // Contar campos llenos
+  var camposLlenos=[datos.ind_ciudad,datos.ind_financiamiento,datos.ind_lugar_terreno,
+    datos.ind_monto_financiamiento,datos.ind_presupuesto,datos.ind_tipo,
+    datos.ind_cuando_construir].filter(function(c){return c;}).length;
+  // + booleanos que siempre tienen valor
+  camposLlenos += 2; // plantas y tope siempre tienen valor
+  var completa = camposLlenos >= 6;
   datos.indagacion_completa = !!completa;
   try{
     await sb.from('leads').update(datos).eq('id',indagacionLeadId);
-    // Actualizar en memoria
     var idx = allLeads.findIndex(function(l){return l.id===indagacionLeadId;});
     if(idx>-1) Object.assign(allLeads[idx], datos);
     closeSheet('indagacion');
-    toast(completa?'Indagacion completa':'Indagacion guardada (incompleta)');
-    // Reabrir detalle
+    if(completa){
+      toast('Indagación completa ('+camposLlenos+'/9) — listo para envío de info');
+    } else {
+      toast('Guardado ('+camposLlenos+'/9). Faltan datos para avanzar a envío de info.','error');
+    }
     abrirSheetLead(indagacionLeadId);
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
