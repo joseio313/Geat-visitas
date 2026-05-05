@@ -297,11 +297,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="login-sub">Construcción y Consultoría · CRM</div>
     </div>
     <div class="login-card">
-      <span class="login-label">Colaborador</span>
-      <select class="login-select" id="login-user" onchange="resetPin()">
-        <option value="">Seleccionar...</option>
-      </select>
-      <div class="pin-label">PIN de acceso</div>
+      <div class="pin-label">Ingresá tu PIN de 4 dígitos</div>
       <div class="pin-dots">
         <div class="pin-dot" id="d0"></div>
         <div class="pin-dot" id="d1"></div>
@@ -880,12 +876,11 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="guia-captador" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:14px;margin-bottom:16px">
         <div style="font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📋 Guía de registro</div>
         <div style="font-size:12px;color:var(--txt2);line-height:1.8">
-          <div>① <strong>Nombre y celular</strong> — siempre obligatorios</div>
-          <div>② <strong>Ciudad</strong> — donde vive el cliente</div>
+          <div>① <strong>Nombre y celular</strong> — Ej: Señor X, 70000000</div>
+          <div>② <strong>Ciudad</strong> — ¿dónde vive? Santa Cruz, Warnes, Urubo...</div>
           <div>③ <strong>¿Banco o contado?</strong> — preguntá antes de registrar</div>
-          <div>④ <strong>Medio de difusión</strong> — ¿de dónde llegó? (Facebook, TikTok, referido...)</div>
-          <div>⑤ <strong>Próximo contacto</strong> — agendá cuándo volver a llamarle</div>
-          <div>⑥ <strong>Notas</strong> — terreno, presupuesto, interés, lo que dijo</div>
+          <div>④ <strong>Medio</strong> — ¿por dónde llegó? Facebook, TikTok, referido...</div>
+          <div>⑤ <strong>Programá tu primer intento</strong> — ¿cuándo vas a llamar?</div>
         </div>
         <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Tip: también podés usar el botón 🎙 para dictar los datos por voz</div>
       </div>
@@ -894,8 +889,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div style="font-size:11px;color:var(--acc);font-weight:600">📌 Modo edición</div>
           <div style="font-size:10px;color:var(--txt3);margin-top:2px">Solo puedes agregar información nueva. Los datos originales no se modifican.</div>
         </div>
-        <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Nombre completo"></div>
-        <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 76543210"></div>
+        <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Ej: Señor X, Señora X"></div>
+        <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 70000000"></div>
         <div class="fgroup"><label>Ciudad</label><input class="finput" id="f-ciudad" placeholder="Santa Cruz" value="Santa Cruz"></div>
         <div class="fgroup"><label>Financiamiento</label>
           <select class="fselect" id="f-financiamiento">
@@ -1127,10 +1122,12 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="sheet-title">Seguimiento</div>
       <button class="sheet-close" onclick="closeSheet('seg')">&#x2715;</button>
     </div>
-      <button class="sheet-close" onclick="closeSheet('seg')">✕</button>
-    </div>
     <div class="sheet-body">
       <div style="font-size:12px;color:var(--txt3);margin-bottom:14px" id="seg-lead-info"></div>
+      <div style="font-size:10px;color:var(--txt3);margin-bottom:8px">Registrando a las <strong id="hora-seg-auto"></strong> — hora del sistema</div>
+      <div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3);line-height:1.5">
+        Anotá qué pasó con el Señor/a X: ¿contestó? ¿qué dijo? Luego programá cuándo volver a contactarlo.
+      </div>
       <div class="fgroup" style="margin-bottom:14px">
         <label>¿Cómo estuvo el contacto?</label>
         <div class="pill-group">
@@ -1303,13 +1300,7 @@ let pinVal='';
 async function initLogin(){
   const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
   colaboradores=data||[];
-  const sel=document.getElementById('login-user');
-  colaboradores.forEach(c=>{
-    const o=document.createElement('option');
-    o.value=c.id;
-    o.textContent=c.nombre+' — '+c.rol;
-    sel.appendChild(o);
-  });
+  // Login es solo por PIN - sin selector de nombres
   // Cargar API key de Anthropic y link de WhatsApp
   try{
     const {data:cfg} = await sb.from('app_config').select('anthropic_key,whatsapp_arquitectura').eq('key','html_0').limit(1).single();
@@ -1336,19 +1327,16 @@ function delPin(){
   pinVal=pinVal.slice(0,-1);
 }
 function checkPin(){
-  const id=document.getElementById('login-user').value;
-  if(!id){document.getElementById('login-err').textContent='Selecciona un colaborador';resetPin();return;}
-  const col=colaboradores.find(c=>c.id==id);
-  if(!col){resetPin();return;}
-  if(col.pin===pinVal){
-    cu=col;
+  const col=colaboradores.find(c=>c.pin===pinVal);
+  if(!col){
+    document.getElementById('login-err').textContent='PIN incorrecto';
+    resetPin();
+    return;
+  }
+  cu=col;
     document.getElementById('login').style.display='none';
     document.getElementById('app').style.display='flex';
     initApp();
-  }else{
-    document.getElementById('login-err').textContent='PIN incorrecto';
-    setTimeout(resetPin,600);
-  }
 }
 
 // -- NAV --
@@ -1356,7 +1344,6 @@ const NAVS={
   field_capturer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
-    {id:'busqueda',icon:'&#128269;',label:'Buscar'},
     {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   closer:[
@@ -1981,21 +1968,21 @@ function renderLeadCards(leads,containerId,rol){
       </div>
       <div class="btn-row" onclick="event.stopPropagation()">
         ${l.estado==='nuevo'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Registrar resultado del intento">📞 Registrar intento</button>
-          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Programar cuándo llamar">📅 Programar</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>
         `:l.estado==='en_seguimiento'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">[W] Registrar seg.</button>
-          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')" title="Programar próximo contacto">📅 Programar</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')" title="Programá cuándo llamar o escribir de nuevo">📅 Programar</button>
         `:l.estado==='visita_realizada'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">[O] Resultado visita</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="¿Cómo fue la visita? Registrá el resultado">[O] Resultado visita</button>
         `:l.estado==='visita_agendada'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">✏️ Actualizar</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Actualizá el estado de la visita">✏️ Actualizar</button>
         `:l.estado==='seguimiento_cierre'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})">🔄 Seg. cierre</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Seguimiento post-visita — ¿va a reservar?">🔄 Seg. cierre</button>
 
         `:''}
-        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo el historial del cliente">📋 Ver historial</button>
-        <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})">✕ Perder</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo lo que se hizo con este cliente desde el día 1">📋 Historial</button>
+        <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})" title="Marcar como perdido con motivo">✕ Perder</button>
         ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
       </div>
     </div>`;
@@ -2345,7 +2332,7 @@ function abrirNuevaActividad(fechaDefault){
         <button onclick="document.getElementById('mini-modal-flujo').remove()" style="background:none;border:none;color:var(--txt3);font-size:20px;cursor:pointer">✕</button>
       </div>
       <div style="display:grid;gap:12px">
-        <div class="fgroup"><label>Título</label><input class="finput" id="nact-titulo" placeholder="Ej: Llamar a Carlos Mendoza"></div>
+        <div class="fgroup"><label>Título</label><input class="finput" id="nact-titulo" placeholder="Ej: Llamar al Señor X"></div>
         <div class="fgroup"><label>Tipo</label>
           <select class="fselect" id="nact-tipo">
             <option value="intento_1">Primer intento de contacto</option>
@@ -2618,11 +2605,11 @@ function validarCambioEtapa(estadoActual, estadoNuevo, numIntentos){
   } else if(estadoActual==='nuevo' && (estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada') && (!numIntentos||numIntentos===0)){
     toast('Aviso: Sin intentos de contacto previos registrados', 'error');
   }
-  // Bloquear avance a visita sin indagación completa
+  // Avisar si falta indagación pero NO bloquear
   if((estadoNuevo==='visita_agendada'||estadoNuevo==='visita_realizada')&&editingLeadId){
     var lead=allLeads.find(function(l){return l.id===editingLeadId;});
     if(lead&&!lead.indagacion_completa){
-      toast('Completá la indagación antes de agendar visita (mínimo 6/9 campos)','error');
+      toast('Tip: Completá la indagación cuando puedas — ayuda al cerrador','error');
     }
   }
   return true;
@@ -2883,6 +2870,18 @@ function abrirSeguimiento(id){
   document.getElementById('seg-visita-fecha').value='';
   document.getElementById('seg-visita-wrap').style.display='none';
   document.getElementById('seg-lead-info').textContent=l.nombre+' · '+l.celular;
+  // Guía contextual según estado
+  var guiaEl=document.getElementById('seg-guia');
+  if(guiaEl){
+    var guias={
+      en_seguimiento:'Anotá qué conversaron. Si mostró interés, seleccioná "Muy interesado" y agendá visita a oficina.',
+      visita_agendada:'Confirmá si la visita sigue en pie. Recordale 24h antes con un WhatsApp cortés.',
+      visita_realizada:'¿Cómo fue la visita? Si quiere avanzar → seguimiento de cierre. Si pide tiempo → programar seguimiento.',
+      seguimiento_cierre:'¿Ya tiene la calificación bancaria? ¿Firmó reserva? Registrá cada avance.'
+    };
+    guiaEl.textContent=guias[l.estado]||'Registrá qué pasó y programá el próximo contacto.';
+    guiaEl.style.display='';
+  }
   var horaEl = document.getElementById('hora-seg-auto');
   if(horaEl) horaEl.textContent = new Date().toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sheet-seg').classList.add('open');
@@ -3772,7 +3771,7 @@ function usarFallbackTexto(){
   if(!existingTA){
     var wrap=document.createElement('div');
     wrap.style.cssText='margin-top:12px';
-    wrap.innerHTML='<textarea id="audio-fallback-ta" class="ftextarea" style="min-height:100px;font-size:14px" placeholder="Ej: Roxana Mendez, celular 76543210, Santa Cruz, quiere construir con banco, terreno en Urubo, presupuesto 45000 dolares"></textarea>'+
+    wrap.innerHTML='<textarea id="audio-fallback-ta" class="ftextarea" style="min-height:100px;font-size:14px" placeholder="Ej: Señor X, celular 70000000, Santa Cruz, quiere construir con banco, terreno en 8vo anillo, presupuesto 45000"></textarea>'+
       '<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="procesarFallbackTexto()">Procesar con IA</button>';
     recDiv.appendChild(wrap);
   }
@@ -3877,6 +3876,78 @@ function renderCierre(){
   else if(cierreTabActual==='reservas') renderReservas(el);
   else if(cierreTabActual==='financiamiento') renderFinanciamiento(el);
   else if(cierreTabActual==='pagos') renderPagos(el);
+}
+
+// -- REUNIONES (módulo cierre) --
+async function renderReuniones(el){
+  try{
+    var{data}=await sb.from('agenda_grupal').select('*').in('tipo',['visita_captador','reunion','visita_seguimiento']).order('fecha_inicio',{ascending:false}).limit(30);
+    var items=data||[];
+    if(!items.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones</div><div class="empty-sub">Se crean al agendar visitas desde los leads</div></div>';return;}
+    el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Reuniones y visitas recientes</div>'+
+    items.map(function(r){
+      var fecha=r.fecha_inicio?new Date(r.fecha_inicio).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Sin fecha';
+      var lead=allLeads.find(function(l){return l.id===r.lead_id;});
+      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="'+(lead?'abrirSheetLead('+lead.id+')':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="width:8px;height:8px;border-radius:50%;background:'+(r.tipo==='reunion'?'var(--purple)':'var(--blue)')+';flex-shrink:0"></div>'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+(lead?lead.nombre:r.titulo||'Reunion')+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+fecha+(r.cerrador?' · '+r.cerrador:'')+(r.sala?' · '+r.sala.replace('_',' '):'')+'</div></div>'+
+        '<span class="badge" style="font-size:9px;background:rgba(139,92,246,0.1);color:#8B5CF6">'+(r.tipo==='reunion'?'Reunion':'Visita')+'</span></div></div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div class="empty">Error: '+e.message+'</div>';}
+}
+
+// -- COTIZACIONES (módulo cierre) --
+async function renderCotizaciones(el){
+  var misLeads=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
+    return l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
+  });
+  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin leads para cotizar</div><div class="empty-sub">Llegan acá después de la visita</div></div>';return;}
+  el.innerHTML='<div style="padding:8px 10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para ver sus datos y preparar cotización.</div>'+
+  misLeads.map(function(l){
+    var est=estilo(l.estado);
+    return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+l.nombre+'</div>'+
+      '<div style="font-size:11px;color:var(--txt3)">'+l.celular+(l.ind_presupuesto?' · $'+l.ind_presupuesto:'')+(l.ind_plantas?' · '+l.ind_plantas+'pl':'')+'</div></div>'+
+      '<span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span></div></div>';
+  }).join('');
+}
+
+// -- PROPUESTAS (módulo cierre) --
+async function renderPropuestas(el){
+  var misLeads=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre;
+    return l.estado==='seguimiento_cierre'||l.estado==='reservado'||l.estado==='en_tramite'||l.estado==='cerrado_ganado';
+  });
+  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin propuestas</div><div class="empty-sub">Necesitás leads en seguimiento de cierre</div></div>';return;}
+  el.innerHTML='<div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para subir propuesta técnica o editar datos de cierre.</div>'+
+  misLeads.map(function(l){
+    var est=estilo(l.estado);
+    return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+l.nombre+'</div>'+
+      '<div style="font-size:11px;color:var(--txt3)">'+(l.cerrador||'-')+' · '+(l.metros_cuadrados?l.metros_cuadrados+' m²':'')+'</div></div>'+
+      '<span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span></div></div>';
+  }).join('');
+}
+
+// -- RESERVAS (módulo cierre) --
+async function renderReservas(el){
+  var reservados=allLeads.filter(function(l){
+    if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado==='reservado';
+    return l.estado==='reservado';
+  });
+  if(!reservados.length){el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div><div class="empty-sub">Un lead pasa a Reservado al pagar anticipo</div></div>';return;}
+  el.innerHTML=reservados.map(function(l){
+    return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+l.nombre+'</div>'+
+      '<div style="font-size:11px;color:var(--txt3)">'+(l.cerrador||'-')+' · '+l.celular+'</div></div>'+
+      '<span class="badge e-reservado" style="font-size:9px">Reservado</span></div></div>';
+  }).join('');
 }
 
 async function renderFinanciamiento(el){
