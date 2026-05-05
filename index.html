@@ -356,6 +356,24 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <!-- Notifs -->
       <div id="inicio-notifs"></div>
 
+      <!-- GUÍA RÁPIDA COLAPSABLE -->
+      <div id="guia-rapida-wrap" style="margin-bottom:12px">
+        <button onclick="var el=document.getElementById('guia-rapida-body');el.style.display=el.style.display==='none'?'':'none';this.querySelector('span').textContent=el.style.display==='none'?'▸':'▾'" style="width:100%;padding:8px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);cursor:pointer;display:flex;align-items:center;gap:8px;text-align:left">
+          <span style="font-size:12px;color:var(--acc)">▸</span>
+          <span style="font-size:12px;font-weight:600;color:var(--acc)">💡 ¿Cómo uso esto?</span>
+          <span style="font-size:10px;color:var(--txt3);margin-left:auto">Guía rápida</span>
+        </button>
+        <div id="guia-rapida-body" style="display:none;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-top:none;border-radius:0 0 var(--r) var(--r);font-size:12px;color:var(--txt2);line-height:1.8">
+          <div style="margin-bottom:8px;font-weight:600;color:var(--txt)">Tu día a día:</div>
+          <div>① Entrá y revisá tus <strong>actividades pendientes</strong> abajo</div>
+          <div>② Tocá cada actividad → registrá qué pasó → programá la siguiente</div>
+          <div>③ Para un cliente nuevo: <strong>+ Lead</strong> arriba → llenás datos → se programa solo</div>
+          <div style="margin-top:8px;font-weight:600;color:var(--txt)">Flujo del cliente:</div>
+          <div>Nuevo → 3 intentos de contacto → Seguimiento → Visita a oficina → Cierre</div>
+          <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Cada actividad queda registrada. Tu jefe ve todo el historial.</div>
+        </div>
+      </div>
+
       <!-- MINI STATS -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-hoy" style="font-size:18px">—</div><div class="stat-l">Hoy</div></div>
@@ -2624,6 +2642,21 @@ async function abrirIntento(id){
     }).join('');
   }
 }
+function mostrarGuiaIntento(num){
+  var guia=document.getElementById('intento-guia-script');
+  var titulo=document.getElementById('intento-guia-titulo');
+  var texto=document.getElementById('intento-guia-texto');
+  if(!guia||!titulo||!texto)return;
+  guia.style.display='';
+  var scripts={
+    1:{t:'1er Intento — Presentación',m:'Saludá cordialmente. Presentá a GEAT: "Somos empresa constructora con +X obras entregadas." Preguntá si tiene terreno propio y si piensa construir pronto. Enviá video de obra entregada por WhatsApp.'},
+    2:{t:'2do Intento — Indagación',m:'Retomá la conversación: "Le escribo para darle seguimiento..." Preguntá: ¿financiamiento o contado? ¿Dónde queda su terreno? ¿Cuánto presupuesto maneja? ¿Cuándo piensa construir? Tomá nota de todo.'},
+    3:{t:'3er Intento — Cierre o descarte',m:'Último intento. Sé directo: "Quería confirmar si todavía le interesa construir con nosotros." Si dice sí → agendar visita a oficina. Si no contesta → marcar como Perdido con motivo.'}
+  };
+  var s=scripts[num]||scripts[1];
+  titulo.textContent='Guía — '+s.t;
+  texto.textContent=s.m;
+}
 function selPillVisita(btn){
   window._visitoOficina = btn.dataset.val==='si';
   btn.closest('.pill-group').querySelectorAll('.pill').forEach(p=>p.className='pill');
@@ -3452,12 +3485,14 @@ function closeSheet(name,event){
 let srec=null,mRec=null,audioChunks=[];
 let audioTimerInt=null,audioStartT=null;
 let audioDatos=null;
+let audioTextoAcumulado='';
 
 const SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 function iniciarGrabacion(){
   if(SpeechRec){usarSpeechAPI();return;}
-  usarMediaRecorder();
+  // Sin SpeechRecognition (iOS Safari, Firefox) → fallback texto manual
+  usarFallbackTexto();
 }
 function setAudioSt(st){
   ['rec','proc','result','err'].forEach(s=>{
@@ -3470,119 +3505,108 @@ function cancelarAudio(){
   if(srec){try{srec.stop();}catch(e){}}
   if(mRec&&mRec.state!=='inactive'){mRec.stop();}
   clearInterval(audioTimerInt);
-  srec=null;mRec=null;audioChunks=[];audioDatos=null;
+  srec=null;mRec=null;audioChunks=[];audioDatos=null;audioTextoAcumulado='';
   document.getElementById('btn-mic').classList.remove('recording');
 }
 function usarSpeechAPI(){
   srec=new SpeechRec();
-  srec.lang='es-BO';srec.interimResults=false;srec.maxAlternatives=1;
+  srec.lang='es-BO';srec.continuous=true;srec.interimResults=true;srec.maxAlternatives=1;
   setAudioSt('rec');
   document.getElementById('btn-mic').classList.add('recording');
-  document.getElementById('audio-hint').textContent='Di el nombre, celular, ciudad y detalles del cliente...';
+  document.getElementById('audio-hint').textContent='Hablá claro: nombre, celular, ciudad y datos del cliente. Tocá Detener cuando termines.';
+  audioTextoAcumulado='';
   audioStartT=Date.now();
   audioTimerInt=setInterval(()=>{
     const s=Math.floor((Date.now()-audioStartT)/1000);
     document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-    // Sin límite de tiempo automático - el usuario controla cuándo detener
   },1000);
-  srec.onresult=async(e)=>{
-    clearInterval(audioTimerInt);
-    const texto=e.results[0][0].transcript;
-    document.getElementById('btn-mic').classList.remove('recording');
-    setAudioSt('proc');
-    document.getElementById('audio-proc-msg').textContent='Analizando: "'+texto.slice(0,50)+'"...';
-    await procesarAudioTexto(texto);
+  // Mostrar texto parcial mientras habla
+  srec.onresult=(e)=>{
+    let parcial='';let finalTxt='';
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal) finalTxt+=e.results[i][0].transcript+' ';
+      else parcial+=e.results[i][0].transcript;
+    }
+    audioTextoAcumulado=finalTxt.trim();
+    var hint=document.getElementById('audio-hint');
+    if(hint) hint.textContent=(audioTextoAcumulado+' '+parcial).trim().slice(-100)||'Escuchando...';
   };
   srec.onerror=(e)=>{
     clearInterval(audioTimerInt);
     document.getElementById('btn-mic').classList.remove('recording');
-    if(e.error==='no-speech'){cancelarAudio();toast('No se detectó voz','error');return;}
-    document.getElementById('audio-err-msg').textContent=
-      e.error==='not-allowed'?'Micrófono bloqueado.\n\nToca el 🔒 junto a la URL → Permisos → Micrófono → Permitir\nLuego recarga.':'Error: '+e.error;
-    setAudioSt('err');
+    if(e.error==='no-speech'){
+      cancelarAudio();toast('No se detectó voz. Intentá de nuevo.','error');return;
+    }
+    if(e.error==='not-allowed'){
+      document.getElementById('audio-err-msg').textContent='Micrófono bloqueado.\n\n1. Tocá el 🔒 junto a la URL\n2. Permisos → Micrófono → Permitir\n3. Recargá la página';
+      setAudioSt('err');return;
+    }
+    // Otros errores: si ya tenemos texto, procesarlo igual
+    if(audioTextoAcumulado){
+      procesarAudioTexto(audioTextoAcumulado);
+    } else {
+      document.getElementById('audio-err-msg').textContent='Error de voz: '+e.error+'. Probá con el modo texto.';
+      setAudioSt('err');
+    }
   };
-  srec.onend=()=>clearInterval(audioTimerInt);
-  srec.start();
+  srec.onend=()=>{
+    clearInterval(audioTimerInt);
+    document.getElementById('btn-mic').classList.remove('recording');
+    // Si se detuvo automáticamente y hay texto, procesarlo
+    if(audioTextoAcumulado&&document.getElementById('audio-overlay').classList.contains('open')){
+      setAudioSt('proc');
+      document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,50)+'..."';
+      procesarAudioTexto(audioTextoAcumulado);
+    }
+  };
+  try{srec.start();}catch(e){
+    document.getElementById('audio-err-msg').textContent='No se pudo iniciar. Probá con el modo texto.';
+    setAudioSt('err');
+  }
 }
 function detenerGrabacion(){
-  if(srec){srec.stop();}
+  if(srec){
+    clearInterval(audioTimerInt);
+    document.getElementById('btn-mic').classList.remove('recording');
+    if(audioTextoAcumulado){
+      srec.stop();
+      setAudioSt('proc');
+      document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,50)+'..."';
+      procesarAudioTexto(audioTextoAcumulado);
+    } else {
+      srec.stop();
+      cancelarAudio();toast('No se capturó texto. Hablá más fuerte o usá modo texto.','error');
+    }
+    return;
+  }
   if(mRec&&mRec.state!=='inactive'){
     clearInterval(audioTimerInt);
     setAudioSt('proc');
     mRec.stop();
   }
 }
-function usarMediaRecorder(){
-  navigator.mediaDevices?.getUserMedia({audio:true}).then(stream=>{
-    const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
-    const mime=isIOS?'audio/mp4':MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
-    mRec=new MediaRecorder(stream,{mimeType:mime});
-    audioChunks=[];
-    mRec.ondataavailable=e=>{if(e.data.size>0)audioChunks.push(e.data);};
-    mRec.onstop=async()=>{
-      stream.getTracks().forEach(t=>t.stop());
-      const blob=new Blob(audioChunks,{type:mime});
-      const b64=await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=()=>res(r.result.split(',')[1]);
-        r.onerror=rej;r.readAsDataURL(blob);
-      });
-      document.getElementById('audio-proc-msg').textContent='Analizando con IA...';
-      try{
-        if(!ANTHROPIC_KEY) throw new Error('API key no configurada');
-        const resp = await fetch('https://api.anthropic.com/v1/messages',{
-          method:'POST',
-          headers:{
-            'Content-Type':'application/json',
-            'x-api-key': ANTHROPIC_KEY,
-            'anthropic-version':'2023-06-01'
-          },
-          body: JSON.stringify({
-            model:'claude-sonnet-4-20250514',
-            max_tokens:1000,
-            messages:[{
-              role:'user',
-              content:[
-                {type:'text',text:`Eres un asistente que extrae datos de clientes de grabaciones de vendedores bolivianos de construccion.
-Extrae los datos y responde SOLO con este JSON valido:
-{"accion":"nuevo_lead","datos":{"nombre":null,"celular":null,"ciudad":null,"financiamiento":null,"lugar_terreno":null,"presupuesto":null,"cuando_construir":null,"medio_difusion":null,"notas":null},"transcripcion":"texto del audio","campos_faltantes":[]}
-Para financiamiento usa solo: "recursos_propios" o "bancario".
-Para medio_difusion usa solo: fan_page_geat, fan_page_steffi, fan_page_genoveva, tiktok_steffi, tiktok_empresa, instagram, referido_cliente, contacto_propio, barrido_ruteo, otro.
-campos_faltantes = lista de campos criticos que faltan (nombre, celular).
-Si no escuchas un campo pon null. No inventes.`},
-                {type:'document',source:{type:'base64',media_type:mime,data:b64}}
-              ]
-            }]
-          })
-        });
-        if(!resp.ok) throw new Error('Error API '+ resp.status);
-        const apiData = await resp.json();
-        const texto = apiData.content?.[0]?.text||'{}';
-        const datos = JSON.parse(texto.replace(/```json|```/g,'').trim());
-        audioDatos=datos; mostrarResultadoAudio(datos);
-      }catch(err){
-        document.getElementById('audio-err-msg').textContent='Error: '+err.message;
-        setAudioSt('err');
-      }
-    };
-    setAudioSt('rec');
-    document.getElementById('btn-mic').classList.add('recording');
-    mRec.start(250);
-    audioStartT=Date.now();
-    audioTimerInt=setInterval(()=>{
-      const s=Math.floor((Date.now()-audioStartT)/1000);
-      document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-      // Sin límite automático - tiempo indefinido
-    },1000);
-  }).catch(err=>{
-    document.getElementById('audio-err-msg').textContent=
-      err.name==='NotAllowedError'?(
-        /Edg\//.test(navigator.userAgent)?'Microfono bloqueado en Edge.\n\n1. Toca el candado en la barra URL\n2. Permisos del sitio → Microfono → Permitir\n3. Recarga la pagina':
-        /iPad|iPhone|iPod/.test(navigator.userAgent)?'Microfono bloqueado en iOS.\n\nAjustes → Safari → Microfono → Permitir\nLuego recarga.':
-        'Microfono bloqueado.\n\nToca 🔒 en la barra URL → Permisos → Microfono → Permitir\nLuego recarga.'
-      ):'Error de microfono: '+err.message;
-    setAudioSt('err');
-  });
+function usarFallbackTexto(){
+  // Para navegadores sin SpeechRecognition (iOS Safari, Firefox)
+  setAudioSt('rec');
+  document.getElementById('audio-hint').textContent='Tu navegador no soporta dictado por voz. Escribí los datos abajo:';
+  var recDiv=document.getElementById('audio-st-rec');
+  // Reemplazar contenido del rec con textarea
+  var existingTA=document.getElementById('audio-fallback-ta');
+  if(!existingTA){
+    var wrap=document.createElement('div');
+    wrap.style.cssText='margin-top:12px';
+    wrap.innerHTML='<textarea id="audio-fallback-ta" class="ftextarea" style="min-height:100px;font-size:14px" placeholder="Ej: Roxana Mendez, celular 76543210, Santa Cruz, quiere construir con banco, terreno en Urubo, presupuesto 45000 dolares"></textarea>'+
+      '<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="procesarFallbackTexto()">Procesar con IA</button>';
+    recDiv.appendChild(wrap);
+  }
+  document.getElementById('btn-mic').classList.remove('recording');
+}
+async function procesarFallbackTexto(){
+  var texto=document.getElementById('audio-fallback-ta')?.value?.trim();
+  if(!texto){toast('Escribí los datos del cliente','error');return;}
+  setAudioSt('proc');
+  document.getElementById('audio-proc-msg').textContent='Analizando datos...';
+  await procesarAudioTexto(texto);
 }
 async function procesarAudioTexto(texto){
   try{
