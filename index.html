@@ -1344,13 +1344,11 @@ const NAVS={
   field_capturer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
-    {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   closer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
-    {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   commercial_lead:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -3666,9 +3664,13 @@ let audioTextoAcumulado='';
 const SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 function iniciarGrabacion(){
-  if(SpeechRec){usarSpeechAPI();return;}
-  // Sin SpeechRecognition (iOS Safari, Firefox) → fallback texto manual
-  usarFallbackTexto();
+  // Reset estado
+  audioTextoAcumulado='';
+  if(SpeechRec){
+    usarSpeechAPI();
+  } else {
+    usarFallbackTexto();
+  }
 }
 function setAudioSt(st){
   ['rec','proc','result','err'].forEach(s=>{
@@ -3678,66 +3680,82 @@ function setAudioSt(st){
 }
 function cancelarAudio(){
   document.getElementById('audio-overlay').classList.remove('open');
-  if(srec){try{srec.stop();}catch(e){}}
-  if(mRec&&mRec.state!=='inactive'){mRec.stop();}
+  if(srec){try{srec.abort();}catch(e){}}
+  if(mRec&&mRec.state!=='inactive'){try{mRec.stop();}catch(e){}}
   clearInterval(audioTimerInt);
   srec=null;mRec=null;audioChunks=[];audioDatos=null;audioTextoAcumulado='';
   document.getElementById('btn-mic').classList.remove('recording');
+  // Limpiar fallback textarea si existe
+  var ta=document.getElementById('audio-fallback-ta');
+  if(ta)ta.value='';
 }
 function usarSpeechAPI(){
-  srec=new SpeechRec();
+  try{
+    srec=new SpeechRec();
+  }catch(e){
+    usarFallbackTexto();return;
+  }
   srec.lang='es-BO';srec.continuous=true;srec.interimResults=true;srec.maxAlternatives=1;
   setAudioSt('rec');
   document.getElementById('btn-mic').classList.add('recording');
-  document.getElementById('audio-hint').textContent='Hablá claro: nombre, celular, ciudad y datos del cliente. Tocá Detener cuando termines.';
+  document.getElementById('audio-hint').innerHTML='<strong>Hablá claro:</strong> nombre, celular, ciudad y datos del cliente.<br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:none;border:1px solid var(--brd);border-radius:var(--r);padding:6px 14px;color:var(--txt2);cursor:pointer;font-size:12px">✏️ Prefiero escribir</button>';
   audioTextoAcumulado='';
   audioStartT=Date.now();
   audioTimerInt=setInterval(()=>{
     const s=Math.floor((Date.now()-audioStartT)/1000);
     document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
+    // Auto-timeout a los 30 seg si no hay texto
+    if(s>30&&!audioTextoAcumulado){
+      clearInterval(audioTimerInt);
+      try{srec.abort();}catch(e){}
+      document.getElementById('btn-mic').classList.remove('recording');
+      document.getElementById('audio-hint').textContent='No se captó audio. Probá escribiendo:';
+      usarFallbackTexto();
+    }
   },1000);
-  // Mostrar texto parcial mientras habla
   srec.onresult=(e)=>{
     let parcial='';let finalTxt='';
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal) finalTxt+=e.results[i][0].transcript+' ';
       else parcial+=e.results[i][0].transcript;
     }
-    audioTextoAcumulado=finalTxt.trim();
+    if(finalTxt.trim()) audioTextoAcumulado=finalTxt.trim();
     var hint=document.getElementById('audio-hint');
-    if(hint) hint.textContent=(audioTextoAcumulado+' '+parcial).trim().slice(-100)||'Escuchando...';
+    var textoVivo=(audioTextoAcumulado+' '+parcial).trim();
+    if(hint&&textoVivo) hint.textContent=textoVivo.slice(-120);
   };
   srec.onerror=(e)=>{
     clearInterval(audioTimerInt);
     document.getElementById('btn-mic').classList.remove('recording');
     if(e.error==='no-speech'){
-      cancelarAudio();toast('No se detectó voz. Intentá de nuevo.','error');return;
+      // Auto-fallback a texto
+      document.getElementById('audio-hint').textContent='No se detectó voz. Escribí los datos:';
+      usarFallbackTexto();return;
     }
     if(e.error==='not-allowed'){
-      document.getElementById('audio-err-msg').textContent='Micrófono bloqueado.\n\n1. Tocá el 🔒 junto a la URL\n2. Permisos → Micrófono → Permitir\n3. Recargá la página';
+      document.getElementById('audio-err-msg').innerHTML='Micrófono bloqueado.<br><br>1. Tocá el 🔒 junto a la URL<br>2. Permisos → Micrófono → Permitir<br>3. Recargá la página<br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:var(--acc);border:none;border-radius:var(--r);padding:8px 16px;color:#000;cursor:pointer;font-size:13px;font-weight:600">✏️ Escribir datos manualmente</button>';
       setAudioSt('err');return;
     }
-    // Otros errores: si ya tenemos texto, procesarlo igual
+    // Cualquier otro error: fallback a texto
     if(audioTextoAcumulado){
       procesarAudioTexto(audioTextoAcumulado);
     } else {
-      document.getElementById('audio-err-msg').textContent='Error de voz: '+e.error+'. Probá con el modo texto.';
-      setAudioSt('err');
+      usarFallbackTexto();
     }
   };
   srec.onend=()=>{
     clearInterval(audioTimerInt);
     document.getElementById('btn-mic').classList.remove('recording');
-    // Si se detuvo automáticamente y hay texto, procesarlo
     if(audioTextoAcumulado&&document.getElementById('audio-overlay').classList.contains('open')){
       setAudioSt('proc');
       document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,50)+'..."';
       procesarAudioTexto(audioTextoAcumulado);
     }
+    // Si no hay texto y el overlay sigue abierto, no hacer nada (el usuario puede reintentar)
   };
   try{srec.start();}catch(e){
-    document.getElementById('audio-err-msg').textContent='No se pudo iniciar. Probá con el modo texto.';
-    setAudioSt('err');
+    // Si Speech API falla al iniciar, fallback directo
+    usarFallbackTexto();
   }
 }
 function detenerGrabacion(){
