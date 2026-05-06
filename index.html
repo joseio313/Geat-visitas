@@ -2403,7 +2403,26 @@ async function completarActividad(id){
   await cargarAgendaPersonal();
 }
 
-// -- CALENDARIO --// -- CALENDARIO --
+// -- CALENDARIO --
+let calWeekOffset=0;
+const TEAM_COLORS={
+  'Gustavo':'#3B82F6','Gustavo Vaca':'#3B82F6',
+  'David':'#A855F7','David Gambarte':'#A855F7',
+  'Genoveva':'#22C55E','Genoveva Alata':'#22C55E',
+  'Steffi':'#EC4899','Steffi Villarpando':'#EC4899',
+  'Josemiguel':'#F59E0B','Fátima':'#06B6D4','Raí':'#F97316'
+};
+function colorPersona(n){
+  if(!n)return '#64748B';
+  if(TEAM_COLORS[n])return TEAM_COLORS[n];
+  for(const k in TEAM_COLORS){if(n.indexOf(k)>=0||k.indexOf(n)>=0)return TEAM_COLORS[k];}
+  let h=0;for(let i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))&0xffffff;
+  return `hsl(${h%360},55%,55%)`;
+}
+function navCalWeek(d){
+  if(d===0)calWeekOffset=0;else calWeekOffset+=d;
+  renderCalendario();
+}
 function setCalTab(tab,btn){
   calTabActual=tab;
   document.querySelectorAll('#pn-calendario .tab').forEach(b=>b.classList.remove('active'));
@@ -2414,21 +2433,30 @@ async function renderCalendario(){
   const el=document.getElementById('calendario-content');
   el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
   const ahora=new Date();
-  const inicio=new Date(ahora);inicio.setDate(ahora.getDate()-ahora.getDay()+1);
-  const fin=new Date(inicio);fin.setDate(inicio.getDate()+6);
+  // Lunes de la semana objetivo
+  const diaSem=(ahora.getDay()+6)%7; // 0=lun..6=dom
+  const inicio=new Date(ahora);
+  inicio.setDate(ahora.getDate()-diaSem+calWeekOffset*7);
+  inicio.setHours(0,0,0,0);
+  const fin=new Date(inicio);fin.setDate(inicio.getDate()+7);
+
   const{data:visitas}=await sb.from('leads')
     .select('id,nombre,cerrador,captador,visita_fecha,visita_sala,estado')
     .gte('visita_fecha',inicio.toISOString())
-    .lte('visita_fecha',fin.toISOString()+'Z')
+    .lt('visita_fecha',fin.toISOString())
     .not('visita_fecha','is',null);
   const{data:reuniones}=await sb.from('agenda_grupal')
     .select('*')
     .gte('fecha_inicio',inicio.toISOString())
+    .lt('fecha_inicio',fin.toISOString())
     .order('fecha_inicio');
+
   const todos=[
-    ...(visitas||[]).map(v=>({...v,_tipo:'visita',_fecha:v.visita_fecha})),
-    ...(reuniones||[]).map(r=>({...r,_tipo:'reunion',_fecha:r.fecha_inicio}))
-  ].sort((a,b)=>a._fecha>b._fecha?1:-1);
+    ...(visitas||[]).map(v=>({id:v.id,_tipo:'visita',_fecha:v.visita_fecha,_fin:null,nombre:v.nombre,cerrador:v.cerrador,captador:v.captador,sala:v.visita_sala,estado:v.estado})),
+    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo}))
+  ].filter(e=>e._fecha).sort((a,b)=>a._fecha>b._fecha?1:-1);
+
+  const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
   if(calTabActual==='lista'){
     if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div></div>';return;}
@@ -2439,58 +2467,116 @@ async function renderCalendario(){
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:8px;height:8px;border-radius:50%;background:${ev._tipo==='reunion'?'var(--purple)':est.dot};flex-shrink:0"></div>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">${ev.nombre||ev.titulo}</div>
-            <div style="font-size:11px;color:var(--txt3)">${fecha} ${ev.visita_sala?'· '+ev.visita_sala.replace('_',' '):''}</div>
+            <div style="font-size:13px;font-weight:500">${ev.nombre||'(sin título)'}</div>
+            <div style="font-size:11px;color:var(--txt3)">${fecha} ${ev.sala?'· '+String(ev.sala).replace('_',' '):''}</div>
             ${ev.cerrador?`<div style="font-size:11px;color:var(--txt3)">${ev.captador?' Captador: '+ev.captador+' ·':''} Cerrador: ${ev.cerrador}</div>`:''}
           </div>
           ${ev._tipo==='visita'?`<span class="badge ${est.cls}" style="font-size:9px">${est.label}</span>`:'<span class="badge e-scierre" style="font-size:9px">Reunión</span>'}
         </div>
       </div>`;
     }).join('');
-  }else{
-    // Vista semana simplificada para móvil
-    const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-    const todayStr=ahora.toISOString().slice(0,10);
-    let html=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px">`;
-    for(let i=0;i<7;i++){
-      const d=new Date(inicio);d.setDate(inicio.getDate()+i);
-      const dStr=d.toISOString().slice(0,10);
-      const esHoy=dStr===todayStr;
-      const dayEvents=todos.filter(ev=>ev._fecha&&ev._fecha.slice(0,10)===dStr);
-      html+=`<div style="text-align:center;cursor:pointer" onclick="filtrarCalDia('${dStr}')">
-        <div style="font-size:9px;color:var(--txt3);text-transform:uppercase;font-weight:600;margin-bottom:4px">${dias[i]}</div>
-        <div style="width:28px;height:28px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;
-          ${esHoy?'background:var(--acc);color:#000':'color:var(--txt)'}">
-          ${d.getDate()}
-        </div>
-        ${dayEvents.length?`<div style="font-size:9px;color:var(--acc);margin-top:2px">${dayEvents.length}</div>`:''}
+    return;
+  }
+
+  // ---- VISTA SEMANA: GRID HORARIO ----
+  const HORA_INI=7, HORA_FIN=20, ROW_H=44;
+  const totalH=(HORA_FIN-HORA_INI)*ROW_H;
+  const todayStr=new Date().toISOString().slice(0,10);
+
+  const f1=inicio.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
+  const ff=new Date(fin);ff.setDate(fin.getDate()-1);
+  const f2=ff.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
+  const rangoTxt=`${f1} — ${f2}`;
+
+  let html=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+    <button class="btn btn-sm btn-ghost" onclick="navCalWeek(-1)" style="padding:6px 11px">‹</button>
+    <button class="btn btn-sm ${calWeekOffset===0?'btn-acc':'btn-ghost'}" onclick="navCalWeek(0)" style="padding:6px 12px">Hoy</button>
+    <button class="btn btn-sm btn-ghost" onclick="navCalWeek(1)" style="padding:6px 11px">›</button>
+    <div style="flex:1;text-align:right;font-size:12px;color:var(--txt2);font-weight:500">${rangoTxt}</div>
+  </div>`;
+
+  html+=`<div style="overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--brd);border-radius:var(--r);background:var(--bg2);max-height:70vh">`;
+  html+=`<div style="display:grid;grid-template-columns:44px repeat(7,minmax(98px,1fr));min-width:730px;position:relative">`;
+
+  // --- Cabecera días (fila 1) ---
+  html+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
+  for(let i=0;i<7;i++){
+    const d=new Date(inicio);d.setDate(inicio.getDate()+i);
+    const ds=d.toISOString().slice(0,10);
+    const esHoy=ds===todayStr;
+    html+=`<div style="text-align:center;padding:8px 4px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3">
+      <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em">${dias[i]}</div>
+      <div style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:13px;font-weight:600;margin-top:2px;${esHoy?'background:var(--acc);color:#000':'color:var(--txt)'}">${d.getDate()}</div>
+    </div>`;
+  }
+
+  // --- Columna de horas ---
+  html+=`<div style="position:relative;height:${totalH}px;background:var(--bg2);border-right:1px solid var(--brd)">`;
+  for(let h=HORA_INI;h<HORA_FIN;h++){
+    html+=`<div style="height:${ROW_H}px;font-size:9px;color:var(--txt3);padding:2px 4px;text-align:right;border-bottom:1px solid var(--brd);box-sizing:border-box">${h}:00</div>`;
+  }
+  html+=`</div>`;
+
+  // --- 7 columnas de día ---
+  for(let i=0;i<7;i++){
+    const d=new Date(inicio);d.setDate(inicio.getDate()+i);
+    const ds=d.toISOString().slice(0,10);
+    const esHoy=ds===todayStr;
+    let col=`<div style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''}">`;
+    // Líneas de hora
+    for(let h=0;h<(HORA_FIN-HORA_INI);h++){
+      col+=`<div style="position:absolute;top:${h*ROW_H}px;left:0;right:0;height:1px;background:var(--brd);opacity:0.5"></div>`;
+    }
+    // Línea hora actual
+    if(esHoy){
+      const now=new Date();
+      const mins=(now.getHours()-HORA_INI)*60+now.getMinutes();
+      if(mins>0&&mins<(HORA_FIN-HORA_INI)*60){
+        const top=mins/60*ROW_H;
+        col+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;box-shadow:0 0 4px rgba(239,68,68,0.5)"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
+      }
+    }
+    // Eventos del día
+    const evDia=todos.filter(ev=>ev._fecha&&ev._fecha.slice(0,10)===ds);
+    for(const ev of evDia){
+      const ini=new Date(ev._fecha);
+      const finEv=ev._fin?new Date(ev._fin):new Date(ini.getTime()+60*60*1000);
+      const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
+      const endMin=(finEv.getHours()-HORA_INI)*60+finEv.getMinutes();
+      if(endMin<=0||startMin>=(HORA_FIN-HORA_INI)*60)continue;
+      const sM=Math.max(0,startMin), eM=Math.min(endMin,(HORA_FIN-HORA_INI)*60);
+      const top=sM/60*ROW_H;
+      const altura=Math.max(22,(eM-sM)/60*ROW_H-2);
+      const responsable=ev.cerrador||ev.captador||'';
+      const c=colorPersona(responsable);
+      const titulo=String(ev.nombre||'(sin título)').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      const onclick=ev._tipo==='visita'?`abrirSheetLead(${ev.id})`:'';
+      const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+      const tipoIcon=ev._tipo==='reunion'?'👥 ':'📍 ';
+      col+=`<div onclick="${onclick}" title="${titulo} · ${responsable} · ${horaTxt}" style="position:absolute;top:${top}px;left:3px;right:3px;height:${altura}px;background:${c};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:4px;padding:3px 6px;font-size:10px;overflow:hidden;cursor:${onclick?'pointer':'default'};z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.35);box-sizing:border-box">
+        <div style="font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tipoIcon}${titulo}</div>
+        ${altura>30?`<div style="font-size:9px;opacity:0.92;line-height:1.15;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${horaTxt}${responsable?' · '+responsable:''}</div>`:''}
       </div>`;
     }
-    html+=`</div>`;
-    // Eventos de la semana en lista
-    if(todos.length){
-      html+=todos.map(ev=>{
-        const est=estilo(ev.estado);
-        const f=new Date(ev._fecha);
-        const dia=dias[(f.getDay()+6)%7];
-        const hora=f.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-        return `<div class="card" style="padding:10px 14px" onclick="${ev._tipo==='visita'?'abrirSheetLead('+ev.id+')':''}">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="font-size:11px;color:var(--txt3);min-width:30px;text-align:center"><div style="font-weight:600">${dia}</div><div>${hora}</div></div>
-            <div style="width:6px;height:6px;border-radius:50%;background:${ev._tipo==='reunion'?'var(--purple)':est.dot};flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.nombre||ev.titulo}</div>
-              <div style="font-size:11px;color:var(--txt3)">${ev.cerrador||ev.sala||''}</div>
-            </div>
-            ${ev._tipo==='visita'?`<span class="badge ${est.cls}" style="font-size:9px">${est.label}</span>`:'<span class="badge e-scierre" style="font-size:9px">Reunión</span>'}
-          </div>
-        </div>`;
-      }).join('');
-    }else{
-      html+='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div></div>';
-    }
-    el.innerHTML=html;
+    col+=`</div>`;
+    html+=col;
   }
+  html+=`</div></div>`;
+
+  // Leyenda de personas
+  const personas=[...new Set(todos.map(ev=>ev.cerrador||ev.captador).filter(Boolean))];
+  if(personas.length){
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:10px;color:var(--txt2)">`;
+    for(const p of personas){
+      html+=`<div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:${colorPersona(p)};flex-shrink:0"></span><span>${p}</span></div>`;
+    }
+    html+=`</div>`;
+  }
+  if(!todos.length){
+    html+=`<div style="text-align:center;padding:14px 8px;font-size:11px;color:var(--txt3);margin-top:6px">Sin eventos esta semana</div>`;
+  }
+
+  el.innerHTML=html;
 }
 
 // -- SHEET LEAD (ver + editar) --
