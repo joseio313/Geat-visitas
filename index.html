@@ -515,13 +515,33 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <!-- AGENDA GRUPAL / CALENDARIO -->
     <div class="panel" id="pn-calendario">
       <div class="ph">
-        <div><div class="ph-title">Agenda Grupal</div><div class="ph-sub">Visitas y reuniones del equipo</div></div>
+        <div>
+          <div class="ph-title" id="cal-ph-title">Agenda Grupal</div>
+          <div class="ph-sub" id="cal-ph-sub">Visitas y reuniones del equipo</div>
+        </div>
+        <button class="btn btn-sm btn-primary" id="cal-btn-nueva-nota" onclick="abrirNuevaNota()" style="display:none">+ Nueva</button>
       </div>
       <div class="tabs">
-        <button class="tab active" onclick="setCalTab('semana',this)">Semana</button>
-        <button class="tab" onclick="setCalTab('lista',this)">Lista</button>
+        <button class="tab active" id="cal-tab-semana" onclick="setCalTab('semana',this)">Semana</button>
+        <button class="tab" id="cal-tab-lista" onclick="setCalTab('lista',this)">Lista</button>
+        <button class="tab" id="cal-tab-notas" onclick="setCalTab('notas',this)">📝 Notas</button>
       </div>
       <div id="calendario-content"></div>
+      <!-- NOTAS: pestaña dentro de calendario -->
+      <div id="calendario-notas" style="display:none">
+        <div style="position:relative;margin-bottom:10px">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px">&#128269;</span>
+          <input id="notas-q" class="search-inp" style="padding-left:34px" placeholder="Buscar notas..." oninput="filtrarNotas()">
+        </div>
+        <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
+          <button class="tab on" id="nc-todos" onclick="setNotaCat('',this)" style="font-size:11px;padding:4px 10px">Todas</button>
+          <button class="tab" id="nc-general" onclick="setNotaCat('general',this)" style="font-size:11px;padding:4px 10px">General</button>
+          <button class="tab" id="nc-recordatorio" onclick="setNotaCat('recordatorio',this)" style="font-size:11px;padding:4px 10px">Recordatorio</button>
+          <button class="tab" id="nc-lead" onclick="setNotaCat('lead',this)" style="font-size:11px;padding:4px 10px">Lead</button>
+          <button class="tab" id="nc-idea" onclick="setNotaCat('idea',this)" style="font-size:11px;padding:4px 10px">Idea</button>
+        </div>
+        <div id="notas-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>
+      </div>
     </div>
 
     <!-- GESTIÓN DE CIERRE (closers) -->
@@ -737,32 +757,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
 
     <!-- NOTAS PERSONALES (privadas) -->
-    <div class="panel" id="pn-notas">
-      <div class="ph">
-        <div>
-          <div class="ph-title">Notas</div>
-          <div class="ph-sub">Privadas &middot; Solo t&uacute; las ves</div>
-        </div>
-        <button class="btn btn-sm btn-primary" onclick="abrirNuevaNota()">+ Nueva</button>
-      </div>
-      <!-- Busqueda en notas -->
-      <div style="position:relative;margin-bottom:10px">
-        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px">&#128269;</span>
-        <input id="notas-q" class="search-inp" style="padding-left:34px" placeholder="Buscar notas..." oninput="filtrarNotas()">
-      </div>
-      <!-- Chips categoria -->
-      <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
-        <button class="tab on" id="nc-todos" onclick="setNotaCat('',this)" style="font-size:11px;padding:4px 10px">Todas</button>
-        <button class="tab" id="nc-general" onclick="setNotaCat('general',this)" style="font-size:11px;padding:4px 10px">General</button>
-        <button class="tab" id="nc-recordatorio" onclick="setNotaCat('recordatorio',this)" style="font-size:11px;padding:4px 10px">Recordatorio</button>
-        <button class="tab" id="nc-lead" onclick="setNotaCat('lead',this)" style="font-size:11px;padding:4px 10px">Lead</button>
-        <button class="tab" id="nc-idea" onclick="setNotaCat('idea',this)" style="font-size:11px;padding:4px 10px">Idea</button>
-      </div>
-      <div id="notas-list">
-        <div class="loading"><span class="spin"></span>Cargando...</div>
-      </div>
-    </div>
-
   </div><!-- /content -->
 
   <!-- BOTTOM NAV -->
@@ -1361,7 +1355,6 @@ const NAVS={
     {id:'todos',icon:'&#128101;',label:'Todos'},
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
     {id:'admin',icon:'&#9881;',label:'Admin'},
-    {id:'notas',icon:'&#128221;',label:'Notas'},
   ],
   tecnico:[
     {id:'inicio',icon:'&#128196;',label:'Solicitudes'},
@@ -2469,9 +2462,31 @@ function navCalWeek(d){
 }
 function setCalTab(tab,btn){
   calTabActual=tab;
-  document.querySelectorAll('#pn-calendario .tab').forEach(b=>b.classList.remove('active'));
+  // Solo afectar las tabs principales del panel (no los chips de notas)
+  ['cal-tab-semana','cal-tab-lista','cal-tab-notas'].forEach(id=>{
+    const b=document.getElementById(id);if(b)b.classList.remove('active');
+  });
   if(btn)btn.classList.add('active');
-  renderCalendario();
+  const cont=document.getElementById('calendario-content');
+  const notas=document.getElementById('calendario-notas');
+  const phT=document.getElementById('cal-ph-title');
+  const phS=document.getElementById('cal-ph-sub');
+  const btnNueva=document.getElementById('cal-btn-nueva-nota');
+  if(tab==='notas'){
+    if(cont)cont.style.display='none';
+    if(notas)notas.style.display='';
+    if(phT)phT.textContent='Notas';
+    if(phS)phS.textContent='Privadas · Solo tú las ves';
+    if(btnNueva)btnNueva.style.display='';
+    renderNotas();
+  }else{
+    if(cont)cont.style.display='';
+    if(notas)notas.style.display='none';
+    if(phT)phT.textContent='Agenda Grupal';
+    if(phS)phS.textContent='Visitas y reuniones del equipo';
+    if(btnNueva)btnNueva.style.display='none';
+    renderCalendario();
+  }
 }
 async function renderCalendario(){
   const el=document.getElementById('calendario-content');
@@ -4758,7 +4773,7 @@ function setNotaColor(color, btn){
 
 function setNotaCat(cat, btn){
   notaCatActual = cat;
-  document.querySelectorAll('#pn-notas .tab').forEach(function(b){b.classList.remove('on');});
+  document.querySelectorAll('#calendario-notas .tab').forEach(function(b){b.classList.remove('on');});
   if(btn) btn.classList.add('on');
   renderNotas();
 }
