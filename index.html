@@ -3827,96 +3827,110 @@ function setAudioSt(st){
   document.getElementById('audio-overlay').classList.add('open');
 }
 function cancelarAudio(){
+  srecActivo=false;
   document.getElementById('audio-overlay').classList.remove('open');
   if(srec){try{srec.abort();}catch(e){}}
   if(mRec&&mRec.state!=='inactive'){try{mRec.stop();}catch(e){}}
-  clearInterval(audioTimerInt);
-  srec=null;mRec=null;audioChunks=[];audioDatos=null;audioTextoAcumulado='';
+  clearInterval(audioTimerInt);audioTimerInt=null;
+  srec=null;mRec=null;audioChunks=[];audioDatos=null;audioTextoAcumulado='';audioStartT=null;
   document.getElementById('btn-mic').classList.remove('recording');
   // Limpiar fallback textarea si existe
   var ta=document.getElementById('audio-fallback-ta');
   if(ta)ta.value='';
 }
+let srecActivo=false; // true mientras debe seguir escuchando
 function usarSpeechAPI(){
+  srecActivo=true;
+  _iniciarSrec();
+}
+function _iniciarSrec(){
   try{
     srec=new SpeechRec();
   }catch(e){
-    usarFallbackTexto();return;
+    srecActivo=false;usarFallbackTexto();return;
   }
-  srec.lang='es-BO';srec.continuous=true;srec.interimResults=true;srec.maxAlternatives=1;
+  // es-ES tiene mejor soporte en Chrome que es-BO
+  srec.lang='es-ES';srec.continuous=false;srec.interimResults=true;srec.maxAlternatives=1;
   setAudioSt('rec');
   document.getElementById('btn-mic').classList.add('recording');
-  document.getElementById('audio-hint').innerHTML='<strong>Hablá claro:</strong> nombre, celular, ciudad y datos del cliente.<br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:none;border:1px solid var(--brd);border-radius:var(--r);padding:6px 14px;color:var(--txt2);cursor:pointer;font-size:12px">✏️ Prefiero escribir</button>';
-  audioTextoAcumulado='';
-  audioStartT=Date.now();
-  audioTimerInt=setInterval(()=>{
-    const s=Math.floor((Date.now()-audioStartT)/1000);
-    document.getElementById('audio-timer').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
-    // Auto-timeout a los 30 seg si no hay texto
-    if(s>30&&!audioTextoAcumulado){
-      clearInterval(audioTimerInt);
-      try{srec.abort();}catch(e){}
-      document.getElementById('btn-mic').classList.remove('recording');
-      document.getElementById('audio-hint').textContent='No se captó audio. Probá escribiendo:';
-      usarFallbackTexto();
+  var hintEl=document.getElementById('audio-hint');
+  if(hintEl)hintEl.innerHTML='🎙 <strong>Hablá claro:</strong> nombre, celular, ciudad y datos del cliente.<br><span style="font-size:10px;color:var(--txt3)">Detectando voz...</span><br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:none;border:1px solid var(--brd);border-radius:var(--r);padding:6px 14px;color:var(--txt2);cursor:pointer;font-size:12px;margin-top:4px">✏️ Prefiero escribir</button>';
+  if(!audioStartT){audioStartT=Date.now();}
+  if(!audioTimerInt){
+    audioTimerInt=setInterval(()=>{
+      const s=Math.floor((Date.now()-audioStartT)/1000);
+      var timerEl=document.getElementById('audio-timer');
+      if(timerEl)timerEl.textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
+      if(s>30&&!audioTextoAcumulado){
+        clearInterval(audioTimerInt);audioTimerInt=null;
+        srecActivo=false;
+        try{if(srec)srec.abort();}catch(e){}
+        document.getElementById('btn-mic').classList.remove('recording');
+        usarFallbackTexto();
+      }
+    },1000);
+  }
+  srec.onstart=()=>{
+    var hintEl=document.getElementById('audio-hint');
+    if(hintEl&&!audioTextoAcumulado){
+      hintEl.innerHTML='🎙 <strong>Escuchando...</strong> Hablá nombre, celular y ciudad.<br><span style="font-size:10px;color:var(--acc)">✓ Micrófono activo</span><br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:none;border:1px solid var(--brd);border-radius:var(--r);padding:6px 14px;color:var(--txt2);cursor:pointer;font-size:12px;margin-top:4px">✏️ Prefiero escribir</button>';
     }
-  },1000);
+  };
   srec.onresult=(e)=>{
     let parcial='';let finalTxt='';
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal) finalTxt+=e.results[i][0].transcript+' ';
       else parcial+=e.results[i][0].transcript;
     }
-    if(finalTxt.trim()) audioTextoAcumulado=finalTxt.trim();
-    var hint=document.getElementById('audio-hint');
+    if(finalTxt.trim()) audioTextoAcumulado=(audioTextoAcumulado+' '+finalTxt).trim();
+    var hintEl=document.getElementById('audio-hint');
     var textoVivo=(audioTextoAcumulado+' '+parcial).trim();
-    if(hint&&textoVivo) hint.textContent=textoVivo.slice(-120);
+    if(hintEl&&textoVivo) hintEl.textContent=textoVivo.slice(-150);
   };
   srec.onerror=(e)=>{
-    clearInterval(audioTimerInt);
     document.getElementById('btn-mic').classList.remove('recording');
-    if(e.error==='no-speech'){
-      // Auto-fallback a texto
-      document.getElementById('audio-hint').textContent='No se detectó voz. Escribí los datos:';
-      usarFallbackTexto();return;
-    }
-    if(e.error==='not-allowed'){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      srecActivo=false;clearInterval(audioTimerInt);audioTimerInt=null;
       document.getElementById('audio-err-msg').innerHTML='Micrófono bloqueado.<br><br>1. Tocá el 🔒 junto a la URL<br>2. Permisos → Micrófono → Permitir<br>3. Recargá la página<br><br><button onclick="cancelarAudio();usarFallbackTexto()" style="background:var(--acc);border:none;border-radius:var(--r);padding:8px 16px;color:#000;cursor:pointer;font-size:13px;font-weight:600">✏️ Escribir datos manualmente</button>';
       setAudioSt('err');return;
     }
-    // Cualquier otro error: fallback a texto
-    if(audioTextoAcumulado){
-      procesarAudioTexto(audioTextoAcumulado);
-    } else {
-      usarFallbackTexto();
+    // no-speech u otro: si hay texto procesamos, si no reiniciamos
+    if(e.error==='no-speech'&&!audioTextoAcumulado&&srecActivo){
+      // Chrome lanzó no-speech — reiniciar
+      setTimeout(()=>{if(srecActivo)_iniciarSrec();},300);
     }
   };
   srec.onend=()=>{
-    clearInterval(audioTimerInt);
     document.getElementById('btn-mic').classList.remove('recording');
-    if(audioTextoAcumulado&&document.getElementById('audio-overlay').classList.contains('open')){
+    if(!document.getElementById('audio-overlay').classList.contains('open')){srecActivo=false;return;}
+    if(audioTextoAcumulado){
+      // Hay texto: procesar
+      srecActivo=false;clearInterval(audioTimerInt);audioTimerInt=null;
       setAudioSt('proc');
-      document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,50)+'..."';
+      document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,60)+'..."';
       procesarAudioTexto(audioTextoAcumulado);
+    } else if(srecActivo){
+      // Sin texto aún: reiniciar automáticamente (Chrome detiene tras silencio)
+      document.getElementById('btn-mic').classList.add('recording');
+      setTimeout(()=>{if(srecActivo)_iniciarSrec();},400);
     }
-    // Si no hay texto y el overlay sigue abierto, no hacer nada (el usuario puede reintentar)
   };
   try{srec.start();}catch(e){
-    // Si Speech API falla al iniciar, fallback directo
-    usarFallbackTexto();
+    srecActivo=false;usarFallbackTexto();
   }
 }
 function detenerGrabacion(){
+  srecActivo=false;
   if(srec){
-    clearInterval(audioTimerInt);
+    clearInterval(audioTimerInt);audioTimerInt=null;
     document.getElementById('btn-mic').classList.remove('recording');
     if(audioTextoAcumulado){
-      srec.stop();
+      try{srec.stop();}catch(e){}
       setAudioSt('proc');
       document.getElementById('audio-proc-msg').textContent='Analizando: "'+audioTextoAcumulado.slice(0,50)+'..."';
       procesarAudioTexto(audioTextoAcumulado);
     } else {
-      srec.stop();
+      try{srec.stop();}catch(e){}
       cancelarAudio();toast('No se capturó texto. Hablá más fuerte o usá modo texto.','error');
     }
     return;
