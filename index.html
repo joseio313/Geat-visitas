@@ -3966,27 +3966,41 @@ async function procesarFallbackTexto(){
 }
 async function procesarAudioTexto(texto){
   try{
-    if(!ANTHROPIC_KEY) throw new Error('API key no configurada');
+    if(!ANTHROPIC_KEY) throw new Error('API key no configurada — pedile a Josemiguel que verifique app_config en Supabase');
     const resp = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':ANTHROPIC_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
       body: JSON.stringify({
-        model:'claude-haiku-4-5',
+        model:'claude-sonnet-4-6',
         max_tokens:800,
-        messages:[{role:'user',content:`Extrae datos de clientes de esta transcripcion de un vendedor boliviano de construccion.
-Transcripcion: "${texto}"
-Responde SOLO con JSON:
-{"accion":"nuevo_lead","datos":{"nombre":null,"celular":null,"ciudad":null,"financiamiento":null,"lugar_terreno":null,"presupuesto":null,"cuando_construir":null,"medio_difusion":null,"notas":null},"transcripcion":"${texto}","campos_faltantes":[]}
-financiamiento: "recursos_propios" o "bancario". No inventes datos.`}]
+        messages:[{role:'user',content:'Extrae datos de clientes de esta transcripcion de un vendedor boliviano de construccion.\nTranscripcion: "'+texto+'"\nResponde SOLO con JSON valido sin markdown:\n{"accion":"nuevo_lead","datos":{"nombre":null,"celular":null,"ciudad":null,"financiamiento":null,"lugar_terreno":null,"presupuesto":null,"cuando_construir":null,"medio_difusion":null,"notas":null},"transcripcion":"'+texto.replace(/"/g,"'")+'","campos_faltantes":[]}\nfinancamiento: "recursos_propios" o "bancario". No inventes datos.'}]
       })
     });
-    if(!resp.ok) throw new Error('Error API '+resp.status);
+    if(!resp.ok){
+      let detalle='';
+      try{const errJson=await resp.json();detalle=errJson.error?.message||JSON.stringify(errJson);}catch(e){}
+      throw new Error('API '+resp.status+(detalle?' — '+detalle:''));
+    }
     const apiData = await resp.json();
-    const textoResp = apiData.content?.[0]?.text||'{}';
-    const datos = JSON.parse(textoResp.replace(/```json|```/g,'').trim());
+    const textoResp = (apiData.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    let datos;
+    try{datos=JSON.parse(textoResp);}
+    catch(e){
+      // Si viene con texto antes del JSON, intentar extraer
+      const match=textoResp.match(/\{[\s\S]*\}/);
+      if(match) datos=JSON.parse(match[0]);
+      else throw new Error('Respuesta inesperada de IA: '+textoResp.slice(0,80));
+    }
+    if(!datos.datos) datos={accion:'nuevo_lead',datos:{notas:texto},transcripcion:texto,campos_faltantes:['nombre','celular','ciudad']};
     audioDatos=datos; mostrarResultadoAudio(datos);
   }catch(err){
-    document.getElementById('audio-err-msg').textContent='Error: '+err.message;
+    console.error('[Audio] procesarAudioTexto error:',err);
+    document.getElementById('audio-err-msg').innerHTML='<strong>Error:</strong> '+err.message+'<br><small style="color:var(--txt3)">Revisá la consola del navegador (F12) para más detalles</small>';
     setAudioSt('err');
   }
 }
