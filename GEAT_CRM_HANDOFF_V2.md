@@ -3,7 +3,7 @@
 ## Fecha: 5 Mayo 2026
 
 ## ARCHIVO PRINCIPAL
-- `indice.html` (CON acento) — NO confundir con `index.html`
+- `index.html` (sin acento) — único HTML en la raíz del repo
 - Repo: `joseio313/Geat-visitas`
 - Deploy: `joseio313.github.io/Geat-visitas/`
 - Backend: Supabase `jsacnpgpnvoslrpurfxc`
