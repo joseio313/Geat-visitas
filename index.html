@@ -352,24 +352,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <!-- Notifs -->
       <div id="inicio-notifs"></div>
 
-      <!-- GUÍA RÁPIDA COLAPSABLE -->
-      <div id="guia-rapida-wrap" style="margin-bottom:12px">
-        <button onclick="var el=document.getElementById('guia-rapida-body');el.style.display=el.style.display==='none'?'':'none';this.querySelector('span').textContent=el.style.display==='none'?'▸':'▾'" style="width:100%;padding:8px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);cursor:pointer;display:flex;align-items:center;gap:8px;text-align:left">
-          <span style="font-size:12px;color:var(--acc)">▸</span>
-          <span style="font-size:12px;font-weight:600;color:var(--acc)">💡 ¿Cómo uso esto?</span>
-          <span style="font-size:10px;color:var(--txt3);margin-left:auto">Guía rápida</span>
-        </button>
-        <div id="guia-rapida-body" style="display:none;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-top:none;border-radius:0 0 var(--r) var(--r);font-size:12px;color:var(--txt2);line-height:1.8">
-          <div style="margin-bottom:8px;font-weight:600;color:var(--txt)">Tu día a día:</div>
-          <div>① Entrá y revisá tus <strong>actividades pendientes</strong> abajo</div>
-          <div>② Tocá cada actividad → registrá qué pasó → programá la siguiente</div>
-          <div>③ Para un cliente nuevo: <strong>+ Lead</strong> arriba → llenás datos → se programa solo</div>
-          <div style="margin-top:8px;font-weight:600;color:var(--txt)">Flujo del cliente:</div>
-          <div>Nuevo → 3 intentos de contacto → Seguimiento → Visita a oficina → Cierre</div>
-          <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Cada actividad queda registrada. Tu jefe ve todo el historial.</div>
-        </div>
-      </div>
-
       <!-- MINI STATS -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-hoy" style="font-size:18px">—</div><div class="stat-l">Hoy</div></div>
@@ -2121,7 +2103,7 @@ function renderCalDia(){
   const dStr=calFecha.toISOString().slice(0,10);
   const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
   const diaNom=calFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
-  document.getElementById('cal-mes-nombre').textContent=diaNom;
+  { const _e=document.getElementById('cal-mes-nombre'); if(_e) _e.textContent=diaNom; }
   grid.innerHTML=`<div style="padding:14px">
     ${!evsDia.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades<br>
       <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button></div>`:
@@ -2154,7 +2136,7 @@ function renderCalAnio(){
   const grid=document.getElementById('cal-grid');
   if(!grid)return;
   const anio=calFecha.getFullYear();
-  document.getElementById('cal-mes-nombre').textContent='Año '+anio;
+  { const _e=document.getElementById('cal-mes-nombre'); if(_e) _e.textContent='Año '+anio; }
   const agHdr=document.querySelector('#pn-agenda .cal-dias-header');
   if(agHdr)agHdr.style.display='none';
   
@@ -2203,9 +2185,8 @@ function renderCalendarioPersonal(){
   const tit=calView==='mes'
     ?meses[calFecha.getMonth()]+' '+calFecha.getFullYear()
     :'Semana del '+calFecha.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
-  document.getElementById('cal-mes-nombre').textContent=tit;
-  document.getElementById('agenda-mes-label').textContent=
-    meses[hoy.getMonth()]+' '+hoy.getFullYear()+' - '+cu.nombre.split(' ')[0];
+  { const _e=document.getElementById('cal-mes-nombre'); if(_e) _e.textContent=tit; }
+  { const _e=document.getElementById('agenda-mes-label'); if(_e) _e.textContent=meses[hoy.getMonth()]+' '+hoy.getFullYear()+' - '+cu.nombre.split(' ')[0]; }
 }
 
 function renderCalMes(hoy,hoyStr){
