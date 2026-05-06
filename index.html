@@ -547,7 +547,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <!-- GESTIÓN DE CIERRE (closers) -->
     <div class="panel" id="pn-cierre">
       <div class="ph">
-        <div><div class="ph-title">Gestión de Cierre</div><div class="ph-sub">Reuniones · Cotizaciones · Reservas</div></div>
+        <div><div class="ph-title">Gestión de Cierre</div><div class="ph-sub">Seleccioná un cliente para ver su proceso de cierre</div></div>
+      </div>
+      <div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:var(--r);margin-bottom:10px;font-size:11px;color:var(--txt2);line-height:1.4">
+        💡 Este es tu panel de cierre. Tocá un cliente (Señor X / Señora X) en cualquier pestaña para abrir su ficha y avanzar el proceso.
       </div>
       <div class="tabs" id="cierre-tabs" style="overflow-x:auto;scrollbar-width:none">
         <button class="tab active" onclick="setCierreTab('reuniones',this)">Reuniones</button>
@@ -1557,8 +1560,8 @@ function renderInicioCal(){
     const evsDia = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
     const esHoy = dStr === hoyStr;
     grid.innerHTML = `<div style="padding:14px">
-      ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades este día<br>
-        <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button></div>` :
+      ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Aquí verás tus actividades del día.<br>Registrá un lead o agendá una actividad para empezar.<br>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar actividad</button></div>` :
       evsDia.map(ev=>{
         const hora = ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
         return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--brd);cursor:pointer;align-items:flex-start" onclick="${ev.lead_id?'abrirSheetLead('+ev.lead_id+')':''}">
@@ -1963,7 +1966,7 @@ function limpiarBusqueda(){
 function renderLeadCards(leads,containerId,rol){
   const el=document.getElementById(containerId);
   if(!leads.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Sin leads</div><div class="empty-sub">No hay leads en esta etapa</div></div>';
+    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Aquí aparecen tus clientes</div><div class="empty-sub">Tocá <b>+ Lead</b> arriba a la derecha para registrar uno nuevo (ej: Señor X, Señora X).</div></div>';
     return;
   }
   const hoy=new Date().toISOString().slice(0,10);
@@ -2518,7 +2521,7 @@ async function renderCalendario(){
   const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
   if(calTabActual==='lista'){
-    if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div></div>';return;}
+    if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Tocá un cliente (Señor X / Señora X) en Leads para programar.</div></div>';return;}
     el.innerHTML=todos.map(ev=>{
       const est=estilo(ev.estado);
       const fecha=new Date(ev._fecha).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -2632,7 +2635,7 @@ async function renderCalendario(){
     html+=`</div>`;
   }
   if(!todos.length){
-    html+=`<div style="text-align:center;padding:14px 8px;font-size:11px;color:var(--txt3);margin-top:6px">Sin eventos esta semana</div>`;
+    html+=`<div style="text-align:center;padding:14px 8px;font-size:11px;color:var(--txt3);margin-top:6px">Sin eventos esta semana. Las visitas y reuniones del equipo aparecen acá al agendarse.</div>`;
   }
 
   el.innerHTML=html;
@@ -4046,7 +4049,7 @@ async function renderReuniones(el){
   try{
     var{data}=await sb.from('agenda_grupal').select('*').in('tipo',['visita_captador','reunion','visita_seguimiento']).order('fecha_inicio',{ascending:false}).limit(30);
     var items=data||[];
-    if(!items.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones</div><div class="empty-sub">Se crean al agendar visitas desde los leads</div></div>';return;}
+    if(!items.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones agendadas</div><div class="empty-sub">Cuando agendás una visita desde la ficha de un cliente (ej: Señor X), aparece acá automáticamente.</div></div>';return;}
     el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Reuniones y visitas recientes</div>'+
     items.map(function(r){
       var fecha=r.fecha_inicio?new Date(r.fecha_inicio).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Sin fecha';
@@ -4835,7 +4838,7 @@ async function renderNotas(){
     var q = (document.getElementById('notas-q')?.value||'').toLowerCase();
     if(q) items = items.filter(function(n){ return (n.titulo||'').toLowerCase().includes(q)||(n.texto||'').toLowerCase().includes(q); });
     if(!items.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Sin notas</div><div class="empty-sub">Toca "+ Nueva" para crear tu primera nota privada</div></div>';
+      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Aquí van tus notas privadas</div><div class="empty-sub">Solo vos las ves. Tocá <b>+ Nueva</b> para crear una (recordatorio de Señor X, idea de propuesta, etc.).</div></div>';
       return;
     }
     var catIcons = {general:'&#128203;',recordatorio:'&#9201;',lead:'&#128101;',idea:'&#128161;'};
