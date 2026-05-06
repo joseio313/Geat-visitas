@@ -406,13 +406,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       </div>
 
       <div id="inicio-hoy-contactos" style="margin-bottom:12px"></div>
-      <!-- Acceso rápido agenda grupal (admin/jefe) -->
-      <div id="inicio-grupal-btn" style="display:none;margin-bottom:12px">
-        <button onclick="sw('calendario')" style="width:100%;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left">
-          <div style="font-size:18px">📅</div>
-          <div><div style="font-size:13px;font-weight:600;color:var(--txt)">Agenda grupal</div><div style="font-size:11px;color:var(--txt3)">Visitas y reuniones del equipo</div></div>
-        </button>
-      </div>
       <div id="inicio-agenda"></div>
     </div>
 
@@ -1332,12 +1325,14 @@ const NAVS={
   commercial_lead:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'todos',icon:'&#128101;',label:'Todos'},
+    {id:'calendario',icon:'&#128197;',label:'Grupal'},
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
     {id:'admin',icon:'&#9881;',label:'Admin'},
   ],
   admin:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'todos',icon:'&#128101;',label:'Todos'},
+    {id:'calendario',icon:'&#128197;',label:'Grupal'},
     {id:'cierre',icon:'&#127919;',label:'Cierre'},
     {id:'admin',icon:'&#9881;',label:'Admin'},
   ],
@@ -1689,10 +1684,6 @@ function renderInicio(){
       filtroWrap.style.display='none';
     }
   }
-  // Mostrar botón agenda grupal para admin/jefe
-  var grupalBtn=document.getElementById('inicio-grupal-btn');
-  if(grupalBtn) grupalBtn.style.display=(cu.rol==='admin'||cu.rol==='commercial_lead')?'':'none';
-
   // Stats
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
   const hoy=new Date().toISOString().slice(0,10);
