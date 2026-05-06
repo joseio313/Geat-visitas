@@ -1586,27 +1586,71 @@ function renderInicioCal(){
     inicioDiaSeleccionado = dStr;
 
   } else if(inicioView === 'semana'){
-    if(header) header.style.display = 'grid';
+    if(header) header.style.display = 'none'; // grid trae su propio header
     const dayOfWeek = (inicioFecha.getDay()+6)%7;
     const lunes = new Date(inicioFecha); lunes.setDate(inicioFecha.getDate()-dayOfWeek);
+    lunes.setHours(0,0,0,0);
     const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+6);
     if(label) label.textContent = lunes.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' - '+domingo.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'});
-    
-    let cells = '';
+
+    const HORA_INI=7, HORA_FIN=20, ROW_H=40;
+    const totalH=(HORA_FIN-HORA_INI)*ROW_H;
+    const diasCortos=['L','M','X','J','V','S','D'];
+
+    let cols='';
+    cols+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
     for(let i=0;i<7;i++){
-      const d = new Date(lunes); d.setDate(lunes.getDate()+i);
-      const dStr = d.toISOString().slice(0,10);
-      const esHoy = dStr===hoyStr;
-      const esSel = inicioDiaSeleccionado===dStr;
-      const evs = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
-      cells += `<div style="min-height:100px;padding:4px;background:${esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer" onclick="selDiaInicio('${dStr}')">
-        <div style="font-size:11px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;margin-bottom:3px;
-          ${esHoy?'background:var(--acc);color:#000;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 3px':''}">${d.getDate()}</div>
-        ${evs.slice(0,3).map(ev=>`<div style="border-radius:3px;padding:2px 4px;font-size:9px;font-weight:500;margin-bottom:2px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.titulo.split(' ')[0]}</div>`).join('')}
-        ${evs.length>3?`<div style="font-size:8px;color:var(--txt3);padding:1px 4px">+${evs.length-3}</div>`:''}
+      const d=new Date(lunes); d.setDate(lunes.getDate()+i);
+      const ds=d.toISOString().slice(0,10);
+      const esHoy=ds===hoyStr;
+      cols+=`<div onclick="selDiaInicio('${ds}')" style="text-align:center;padding:6px 2px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3;cursor:pointer">
+        <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">${diasCortos[i]}</div>
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:600;margin-top:2px;${esHoy?'background:var(--acc);color:#000':'color:var(--txt)'}">${d.getDate()}</div>
       </div>`;
     }
-    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--brd)">${cells}</div>`;
+    cols+=`<div style="position:relative;height:${totalH}px;background:var(--bg2);border-right:1px solid var(--brd)">`;
+    for(let h=HORA_INI;h<HORA_FIN;h++){
+      cols+=`<div style="height:${ROW_H}px;font-size:9px;color:var(--txt3);padding:2px 3px;text-align:right;border-bottom:1px solid var(--brd);box-sizing:border-box">${h}:00</div>`;
+    }
+    cols+=`</div>`;
+    for(let i=0;i<7;i++){
+      const d=new Date(lunes); d.setDate(lunes.getDate()+i);
+      const ds=d.toISOString().slice(0,10);
+      const esHoy=ds===hoyStr;
+      let col=`<div onclick="selDiaInicio('${ds}')" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
+      for(let h=0;h<(HORA_FIN-HORA_INI);h++){
+        col+=`<div style="position:absolute;top:${h*ROW_H}px;left:0;right:0;height:1px;background:var(--brd);opacity:0.5;pointer-events:none"></div>`;
+      }
+      if(esHoy){
+        const now=new Date();
+        const mins=(now.getHours()-HORA_INI)*60+now.getMinutes();
+        if(mins>0&&mins<(HORA_FIN-HORA_INI)*60){
+          const top=mins/60*ROW_H;
+          col+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;pointer-events:none"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
+        }
+      }
+      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===ds);
+      for(const ev of evs){
+        const ini=ev.fecha;
+        const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
+        const endMin=startMin+60;
+        if(endMin<=0||startMin>=(HORA_FIN-HORA_INI)*60)continue;
+        const sM=Math.max(0,startMin), eM=Math.min(endMin,(HORA_FIN-HORA_INI)*60);
+        const top=sM/60*ROW_H;
+        const altura=Math.max(20,(eM-sM)/60*ROW_H-2);
+        const tit=String(ev.titulo||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+        const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+        const onclick=ev.lead_id?`abrirSheetLead(${ev.lead_id})`:`verEventoCal('${ev.id}')`;
+        const opacity=ev.completada&&ev.tipo==='realizado'?'0.65':'1';
+        col+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}" style="position:absolute;top:${top}px;left:2px;right:2px;height:${altura}px;background:${ev.color};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
+          <div style="font-weight:600;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tit}</div>
+          ${altura>28?`<div style="font-size:9px;opacity:0.92;line-height:1.1;margin-top:1px">${horaTxt}</div>`:''}
+        </div>`;
+      }
+      col+=`</div>`;
+      cols+=col;
+    }
+    grid.innerHTML=`<div style="overflow:auto;-webkit-overflow-scrolling:touch;max-height:60vh;border:1px solid var(--brd);border-radius:var(--r)"><div style="display:grid;grid-template-columns:38px repeat(7,minmax(80px,1fr));min-width:620px;position:relative">${cols}</div></div>`;
 
   } else { // mes
     if(header) header.style.display = 'grid';
