@@ -1263,6 +1263,9 @@ let segLeadId=null;
 let perderLeadId=null;
 let selPillVal={intento:null,seg:null};
 let audioData=null; // datos del último proceso de audio
+let leadFiltroEstados=new Set();
+let leadFiltroFecha='';
+let leadFiltroFin='';
 
 // -- ETAPAS --
 const E={
@@ -1873,6 +1876,44 @@ function renderLeads(){
   if(q)leads=leads.filter(l=>['nombre','celular','ciudad','notas','captador','cerrador'].some(k=>l[k]&&l[k].toLowerCase().includes(q)));
   document.getElementById('leads-count').textContent=leads.length+' lead'+(leads.length!==1?'s':'');
   renderLeadCards(leads,'leads-list',cu.rol);
+}
+
+function toggleFiltrosLeads(){
+  var el=document.getElementById('filtros-leads-panel');
+  if(!el)return;
+  el.style.display=el.style.display==='none'?'':'none';
+}
+function abrirFiltrosLeads(){
+  var el=document.getElementById('filtros-leads-panel');
+  if(el)el.style.display='';
+}
+function toggleLeadEst(estado,btn){
+  if(leadFiltroEstados.has(estado)){leadFiltroEstados.delete(estado);btn.style.opacity='0.55';}
+  else{leadFiltroEstados.add(estado);btn.style.opacity='1';}
+  actualizarContFiltros();renderLeads();
+}
+function setLeadFecha(preset,btn){
+  document.querySelectorAll('#filtros-leads-panel .tab').forEach(function(b){b.classList.remove('active');});
+  if(leadFiltroFecha===preset){leadFiltroFecha='';}
+  else{leadFiltroFecha=preset;if(btn)btn.classList.add('active');}
+  actualizarContFiltros();renderLeads();
+}
+function toggleLeadFin(fin,btn){
+  if(leadFiltroFin===fin){leadFiltroFin='';btn.classList.remove('active');}
+  else{leadFiltroFin=fin;['lf-contado','lf-banco'].forEach(function(id){var b=document.getElementById(id);if(b)b.classList.remove('active');});btn.classList.add('active');}
+  actualizarContFiltros();renderLeads();
+}
+function limpiarFiltrosLeads(){
+  leadFiltroEstados.clear();leadFiltroFecha='';leadFiltroFin='';
+  ['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','cerrado_ganado','cerrado_perdido'].forEach(function(e){var b=document.getElementById('lf-'+e);if(b)b.style.opacity='0.55';});
+  ['lf-hoy','lf-sem','lf-mes','lf-anio','lf-contado','lf-banco'].forEach(function(id){var b=document.getElementById(id);if(b)b.classList.remove('active');});
+  ['leads-q','lf-ciudad','lf-m2min','lf-m2max'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  actualizarContFiltros();renderLeads();
+}
+function actualizarContFiltros(){
+  var n=leadFiltroEstados.size+(leadFiltroFecha?1:0)+(leadFiltroFin?1:0);
+  var badge=document.getElementById('filtros-leads-count');
+  if(badge){badge.textContent=n;badge.style.display=n>0?'':'none';}
 }
 
 // -- RENDER TODOS --
@@ -3587,6 +3628,14 @@ async function renderAdmin(){
         </table>
       </div>
     </div>`:''}`;
+  }else if(adminTabActual==='auditoria'){
+    await renderAuditoria(el);
+  }else if(adminTabActual==='llamadas'){
+    await renderReporteLlamadas(el);
+  }else if(adminTabActual==='ceo'){
+    el.innerHTML='<div class="empty"><div class="empty-icon">&#128200;</div><div class="empty-title">Panel CEO</div><div class="empty-sub">Próximamente disponible</div></div>';
+  }else{
+    el.innerHTML='';
   }
 }
 
@@ -5285,6 +5334,7 @@ async function eliminarNota(id){
 function renderContactosHoy(){
   var el = document.getElementById('inicio-hoy-contactos');
   if(!el) return;
+  if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
   var hoy = new Date().toISOString().slice(0,10);
   var man = new Date(); man.setDate(man.getDate()+1);
   var manStr = man.toISOString().slice(0,10);
