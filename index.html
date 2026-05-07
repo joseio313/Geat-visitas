@@ -1775,18 +1775,9 @@ function renderInicio(){
       filtroWrap.style.display='none';
     }
   }
-  // Stats
+  // KPIs (Hoy / Atrasadas / Mes) — fuente única: calEventos. Lo escribe renderStatsAgenda().
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
-  const hoy=new Date().toISOString().slice(0,10);
-  const hoyLeads=misLeads.filter(l=>l.fecha_ingreso===hoy);
-  const semLeads=misLeads.filter(l=>{
-    const d=new Date(l.fecha_ingreso);const ahora=new Date();
-    return(ahora-d)/(864e5)<=7;
-  });
-  document.getElementById('s-hoy').textContent=hoyLeads.length;
-  document.getElementById('s-sem').textContent=semLeads.length;
   const activos=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido');
-  document.getElementById('s-mes').textContent=activos.length;
   // Accesos rápidos count
   const qaLeads=document.getElementById('qa-leads-count');
   if(qaLeads)qaLeads.textContent=activos.length+' activos';
@@ -2109,22 +2100,41 @@ async function cargarAgendaPersonal(){
   // Agregar a agendaData despues de cargar
 
   // Cargar actividades de la agenda personal
-  const{data:activ}=await sb.from('agenda_personal')
-    .select('*,leads(nombre,celular,estado)')
-    .eq('colaborador',cu.nombre)
-    .order('fecha_programada',{ascending:true})
-    .limit(500);
-  
+  let activ=[];
+  try{
+    const r=await sb.from('agenda_personal')
+      .select('*,leads(nombre,celular,estado)')
+      .eq('colaborador',cu.nombre)
+      .order('fecha_programada',{ascending:true})
+      .limit(500);
+    activ=r.data||[];
+  }catch(e){ console.warn('agenda_personal:', e.message); }
+
+  // Cargar eventos_calendario (formulario "+ Agendar actividad", llamadas, etc.)
+  let evCal=[];
+  try{
+    const r=await sb.from('eventos_calendario')
+      .select('*,leads(nombre,celular,estado)')
+      .eq('colaborador',cu.nombre)
+      .order('fecha_inicio',{ascending:true})
+      .limit(500);
+    evCal=r.data||[];
+  }catch(e){ console.warn('eventos_calendario:', e.message); }
+
   // Cargar historial propio (lo que YA hizo) para mostrar en el calendario
-  const{data:hist}=await sb.from('historial_lead')
-    .select('*,leads!historial_lead_lead_id_fkey(nombre)')
-    .eq('colaborador',cu.nombre)
-    .gte('fecha_actividad', new Date(calFecha.getFullYear(),calFecha.getMonth()-1,1).toISOString())
-    .order('fecha_actividad',{ascending:true})
-    .limit(300);
+  let hist=[];
+  try{
+    const r=await sb.from('historial_lead')
+      .select('*,leads!historial_lead_lead_id_fkey(nombre)')
+      .eq('colaborador',cu.nombre)
+      .gte('fecha_actividad', new Date(calFecha.getFullYear(),calFecha.getMonth()-1,1).toISOString())
+      .order('fecha_actividad',{ascending:true})
+      .limit(300);
+    hist=r.data||[];
+  }catch(e){ console.warn('historial_lead:', e.message); }
 
   calEventos = [
-    ...(activ||[]).map(a=>({
+    ...activ.map(a=>({
       id:'ap_'+a.id,
       raw_id:a.id,
       tipo:'programado',
@@ -2138,7 +2148,22 @@ async function cargarAgendaPersonal(){
       celular:a.leads?.celular,
       color:a.completada?'#475569':getEtapaColor(a.leads?.estado||'nuevo'),
     })),
-    ...(hist||[]).map(h=>({
+    ...evCal.map(e=>({
+      id:'ec_'+e.id,
+      raw_id:e.id,
+      tipo:'programado',
+      fecha:new Date(e.fecha_inicio),
+      titulo:e.leads?.nombre||e.titulo||'Evento',
+      sub:e.tipo?String(e.tipo).replace(/_/g,' '):(e.descripcion||''),
+      nota:e.descripcion,
+      completada:false,
+      estado:e.leads?.estado||'nuevo',
+      lead_id:e.lead_id,
+      celular:e.leads?.celular,
+      color:e.color||getEtapaColor(e.leads?.estado||'nuevo'),
+      _origen:'eventos_calendario',
+    })),
+    ...hist.map(h=>({
       id:'hl_'+h.id,
       raw_id:h.id,
       tipo:'realizado',
@@ -2404,17 +2429,22 @@ function verEventoCal(id){
 }
 
 function renderStatsAgenda(){
-  const hoyStr=new Date().toISOString().slice(0,10);
-  const mesStr=new Date().toISOString().slice(0,7);
-  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)===hoyStr).length;
-  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)<hoyStr).length;
-  const realizados=calEventos.filter(e=>e.tipo==='realizado'&&e.fecha.toISOString().slice(0,7)===mesStr).length;
-  const el=document.getElementById('inicio-stats');
-  if(el){
-    document.getElementById('s-hoy').textContent=pHoy;
-    document.getElementById('s-sem').textContent=pAtr>0?`${pAtr}⚠`:'0';
-    document.getElementById('s-mes').textContent=realizados;
-  }
+  const ahora=new Date();
+  const hoyStr=(typeof ymdLocal==='function')?ymdLocal(ahora):ahora.toISOString().slice(0,10);
+  const mesStr=hoyStr.slice(0,7);
+  const ymd=(typeof ymdLocal==='function')?ymdLocal:(d=>d.toISOString().slice(0,10));
+  const ahoraTs=ahora.getTime();
+  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&ymd(e.fecha)===hoyStr).length;
+  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.getTime()<ahoraTs&&ymd(e.fecha)<hoyStr).length;
+  const realizados=calEventos.filter(e=>e.tipo==='realizado'&&ymd(e.fecha).slice(0,7)===mesStr).length;
+  const sH=document.getElementById('s-hoy'); if(sH) sH.textContent=pHoy;
+  const sS=document.getElementById('s-sem'); if(sS) sS.textContent=pAtr>0?`${pAtr}⚠`:'0';
+  const sM=document.getElementById('s-mes'); if(sM) sM.textContent=realizados;
+  // Badge "🔴 X atrasadas" — fuente unificada con KPIs
+  const pill=document.getElementById('inicio-cal-atrasadas');
+  const pillN=document.getElementById('inicio-cal-atrasadas-n');
+  if(pill) pill.style.display=pAtr?'':'none';
+  if(pillN) pillN.textContent=pAtr;
 }
 
 // Sheet nueva actividad manual
@@ -3908,27 +3938,27 @@ function closeSheet(name,event){
 }
 
 function abrirAtrasadasSheet(){
-  var hoy=new Date().toISOString().slice(0,10);
-  var base = (cu.rol==='admin'||cu.rol==='commercial_lead') ? allLeads :
-    cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
-    cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
-  var atrasados = base.filter(function(l){
-    return l.proximo_contacto && l.proximo_contacto<hoy &&
-           l.estado!=='cerrado_ganado' && l.estado!=='cerrado_perdido';
-  }).sort(function(a,b){ return (a.proximo_contacto||'').localeCompare(b.proximo_contacto||''); });
+  var ahoraTs=Date.now();
+  // Fuente: actividades pendientes vencidas (calEventos), misma que alimenta el badge.
+  var atrasadas=(calEventos||[]).filter(function(e){
+    return e.tipo==='programado' && !e.completada && e.fecha && e.fecha.getTime()<ahoraTs;
+  }).sort(function(a,b){ return a.fecha-b.fecha; });
   var body=document.getElementById('sheet-atrasadas-body');
   if(!body) return;
-  if(!atrasados.length){
-    body.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:24px">No hay atrasadas. ✅</div>';
+  if(!atrasadas.length){
+    body.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:24px">No hay actividades atrasadas. ✅</div>';
   }else{
-    body.innerHTML='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+atrasados.length+' lead'+(atrasados.length!==1?'s':'')+' con próximo contacto vencido. Tocá uno para abrirlo.</div>'+
-      atrasados.map(function(l){
-        var est=estilo(l.estado);
-        var wa=l.celular?'<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">W</a>':'';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid rgba(239,68,68,0.18);background:rgba(239,68,68,0.05);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="closeSheet(\'atrasadas\');abrirSheetLead('+l.id+')">'+
+    body.innerHTML='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+atrasadas.length+' actividad'+(atrasadas.length!==1?'es':'')+' pendiente'+(atrasadas.length!==1?'s':'')+' vencida'+(atrasadas.length!==1?'s':'')+'. Tocá una para abrir el lead o evento.</div>'+
+      atrasadas.map(function(e){
+        var fecha=e.fecha.toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+        var tit=String(e.titulo||'Actividad').replace(/</g,'&lt;');
+        var sub=e.sub?String(e.sub).replace(/</g,'&lt;'):'';
+        var wa=e.celular?'<a href="https://wa.me/591'+e.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">W</a>':'';
+        var clickAccion=e.lead_id?"abrirSheetLead("+e.lead_id+")":"verEventoCal('"+e.id+"')";
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid rgba(239,68,68,0.18);background:rgba(239,68,68,0.05);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="closeSheet(\'atrasadas\');'+clickAccion+'">'+
             '<div style="flex:1;min-width:0">'+
-              '<div style="font-size:13px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>'+l.nombre+'</span><span class="badge '+est.cls+'">'+est.label+'</span></div>'+
-              '<div style="font-size:11px;color:var(--red);margin-top:2px">⚠ Vencido el '+l.proximo_contacto+(l.celular?' · '+l.celular:'')+'</div>'+
+              '<div style="font-size:13px;font-weight:600">⚠ '+tit+'</div>'+
+              '<div style="font-size:11px;color:var(--red);margin-top:2px">Vencida: '+fecha+(sub?' · '+sub:'')+'</div>'+
             '</div>'+
             wa+
           '</div>';
@@ -5507,11 +5537,7 @@ function renderContactosHoy(){
     return l.proximo_contacto===hoy&&
            l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
   });
-  // Pill de atrasadas en el header del calendario (reemplaza el panel grande viejo)
-  var pill=document.getElementById('inicio-cal-atrasadas');
-  var pillN=document.getElementById('inicio-cal-atrasadas-n');
-  if(pill){ pill.style.display = atrasados.length ? '' : 'none'; }
-  if(pillN){ pillN.textContent = atrasados.length; }
+  // El pill "🔴 X atrasadas" ahora lo escribe renderStatsAgenda() desde calEventos (única fuente).
   var html = '';
   if(paraHoy.length){
     html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
