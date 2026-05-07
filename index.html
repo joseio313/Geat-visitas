@@ -501,16 +501,13 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       </div>
       <div id="cal-wrap" style="position:relative;overflow:hidden;min-height:400px">
         <div id="calendario-content"></div>
-        <!-- Drawer notas: entra desde la derecha, parte del calendario -->
-        <div id="calendario-notas" style="position:absolute;top:0;right:0;bottom:0;width:min(360px,92%);background:var(--bg2);border-left:1px solid var(--brd);transform:translateX(110%);transition:transform .25s ease;overflow-y:auto;padding:12px;box-shadow:-8px 0 24px rgba(0,0,0,0.25);z-index:5">
+        <!-- Drawer notas: sidebar derecho — el calendario queda visible a la izquierda -->
+        <div id="calendario-notas" style="position:absolute;top:0;right:0;bottom:0;width:min(380px,92%);background:var(--bg2);border-left:1px solid var(--brd);transform:translateX(110%);transition:transform .25s ease;overflow-y:auto;padding:12px;box-shadow:-8px 0 24px rgba(0,0,0,0.25);z-index:5;display:flex;flex-direction:column">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
             <div style="font-size:13px;font-weight:600">📝 Notas privadas</div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm btn-primary" title="Crear una nueva nota" onclick="abrirNuevaNota()">+ Nueva</button>
-              <button class="btn btn-sm btn-ghost" title="Cerrar panel de notas" onclick="toggleNotasDrawer()">✕</button>
-            </div>
+            <button class="btn btn-sm btn-ghost" title="Cerrar panel de notas" onclick="toggleNotasDrawer()">✕</button>
           </div>
-          <div style="position:relative;margin-bottom:10px">
+          <div style="position:relative;margin-bottom:8px">
             <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px">&#128269;</span>
             <input id="notas-q" class="search-inp" style="padding-left:34px" placeholder="Buscar notas..." oninput="filtrarNotas()">
           </div>
@@ -521,7 +518,28 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <button class="tab" id="nc-lead" onclick="setNotaCat('lead',this)" style="font-size:11px;padding:4px 10px">Lead</button>
             <button class="tab" id="nc-idea" onclick="setNotaCat('idea',this)" style="font-size:11px;padding:4px 10px">Idea</button>
           </div>
-          <div id="notas-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>
+          <!-- Lista de notas: arriba, scroll propio si crece -->
+          <div id="notas-list" style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:60px"><div class="loading"><span class="spin"></span>Cargando...</div></div>
+          <!-- Formulario inline simple: título, contenido, color, recordar -->
+          <div style="border-top:1px solid var(--brd);padding-top:10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div id="nota-sheet-title" style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.07em">Nueva nota</div>
+              <button id="nota-cancel-btn" class="btn btn-sm btn-ghost" style="display:none;padding:2px 8px;font-size:10px" onclick="cancelarEdicionNota()">Cancelar edición</button>
+            </div>
+            <input class="fi" id="nota-titulo" placeholder="Título..." style="margin-bottom:6px;font-size:12px;padding:7px 10px">
+            <textarea class="fi" id="nota-texto" rows="3" style="resize:vertical;min-height:62px;margin-bottom:6px;font-size:12px;padding:7px 10px" placeholder="Contenido..."></textarea>
+            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:10px;color:var(--txt3)">Color:</span>
+              <button onclick="setNotaColor('#334155',this)" id="nc-gris" style="width:22px;height:22px;border-radius:50%;background:#334155;border:2px solid var(--acc);cursor:pointer" title="Gris"></button>
+              <button onclick="setNotaColor('#1e3a5f',this)" id="nc-azul" style="width:22px;height:22px;border-radius:50%;background:#1e3a5f;border:2px solid transparent;cursor:pointer" title="Azul"></button>
+              <button onclick="setNotaColor('#14532d',this)" id="nc-verde" style="width:22px;height:22px;border-radius:50%;background:#14532d;border:2px solid transparent;cursor:pointer" title="Verde"></button>
+              <button onclick="setNotaColor('#78350f',this)" id="nc-naranjo" style="width:22px;height:22px;border-radius:50%;background:#78350f;border:2px solid transparent;cursor:pointer" title="Naranja"></button>
+              <button onclick="setNotaColor('#4c1d95',this)" id="nc-morado" style="width:22px;height:22px;border-radius:50%;background:#4c1d95;border:2px solid transparent;cursor:pointer" title="Morado"></button>
+              <button onclick="setNotaColor('#7f1d1d',this)" id="nc-rojo" style="width:22px;height:22px;border-radius:50%;background:#7f1d1d;border:2px solid transparent;cursor:pointer" title="Rojo"></button>
+            </div>
+            <input class="fi" id="nota-recordar" type="datetime-local" title="Recordar (opcional)" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
+            <button class="btn btn-p" style="width:100%" onclick="guardarNotaMejorada()">Guardar nota</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1603,9 +1621,18 @@ function renderInicioCal(){
       </div>`;
     }
 
-    const emptyHint = !evsDia.length
-      ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:11px;color:var(--txt3);pointer-events:none;line-height:1.5">Sin actividades para este día.<br>Tocá <b>+ Agendar actividad</b> arriba.</div>`
-      : '';
+    let emptyHint='';
+    if(!evsDia.length){
+      const ghostHora=function(hr,texto){
+        const top=(hr-HORA_INI)*ROW_H;
+        return `<div style="position:absolute;top:${top}px;left:6px;right:6px;height:42px;background:#475569;border-left:3px dashed rgba(255,255,255,0.4);color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;overflow:hidden;opacity:0.32;pointer-events:none;box-sizing:border-box">
+          <div style="font-weight:600;line-height:1.15">${texto}</div>
+          <div style="font-size:9px;opacity:0.85;line-height:1.15;margin-top:1px">${hr}:00 · ejemplo</div>
+        </div>`;
+      };
+      emptyHint = ghostHora(10,'Llamada Señor Ejemplo')+ghostHora(15,'Visita Señora Ejemplo')+
+        `<div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;background:var(--bg2);padding:2px 8px;border-radius:10px;pointer-events:none">Ejemplo · no son reales</div>`;
+    }
 
     grid.innerHTML = `
       <div style="display:flex;justify-content:flex-end;padding:8px 10px;border-bottom:1px solid var(--brd)">
@@ -1984,7 +2011,24 @@ function limpiarBusqueda(){
 function renderLeadCards(leads,containerId,rol){
   const el=document.getElementById(containerId);
   if(!leads.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Acá aparecen tus clientes</div><div class="empty-sub">Tocá <b>+ Lead</b> para registrar uno nuevo (ej: Señor X, Señora X).</div></div>';
+    var ghostCard=function(nombre,sub,badgeCls,badgeLbl){
+      return '<div class="card has-left" style="border-left-color:#475569;opacity:0.32;pointer-events:none;margin-bottom:6px">'+
+        '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">'+
+              '<span style="font-size:14px;font-weight:600">'+nombre+'</span>'+
+              '<span class="badge '+badgeCls+'">'+badgeLbl+'</span>'+
+            '</div>'+
+            '<div style="font-size:12px;color:var(--txt3)">'+sub+'</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    };
+    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📭</div><div class="empty-title">Acá aparecen tus clientes</div><div class="empty-sub">Tocá <b>+ Lead</b> para registrar uno nuevo. Así se ven los leads cuando hay datos:</div></div>'+
+      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+      ghostCard('Señor Ejemplo','77712345 · Santa Cruz','e-nuevo','Nuevo')+
+      ghostCard('Señora Ejemplo','77767890 · Cochabamba','e-seg','Seguimiento')+
+      ghostCard('Señor Ejemplo B','77755555 · La Paz','e-vagend','Visita agend.');
     return;
   }
   const hoy=new Date().toISOString().slice(0,10);
@@ -4141,7 +4185,20 @@ async function renderCotizaciones(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
     return l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
   });
-  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin leads para cotizar</div><div class="empty-sub">Llegan acá después de la visita</div></div>';return;}
+  if(!misLeads.length){
+    var ghostCot=function(nombre,monto,m2){
+      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.32;pointer-events:none">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nombre+'</div>'+
+          '<div style="font-size:11px;color:var(--txt3)">77712345 · $'+monto+' · '+m2+'m²</div></div>'+
+          '<span class="badge e-vrealiz" style="font-size:9px">Visita realiz.</span>'+
+        '</div></div>';
+    };
+    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📄</div><div class="empty-title">Sin leads para cotizar</div><div class="empty-sub">Llegan acá después de la visita. Así se ven cuando hay datos:</div></div>'+
+      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+      ghostCot('Señor Ejemplo','25.000','120');
+    return;
+  }
   el.innerHTML='<div style="padding:8px 10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para ver sus datos y preparar cotización.</div>'+
   misLeads.map(function(l){
     var est=estilo(l.estado);
@@ -4856,33 +4913,48 @@ function filtrarNotas(){
   renderNotas();
 }
 
-function abrirNuevaNota(){
+function limpiarFormNota(){
   notaEditId = null;
   notaColorActual = '#334155';
-  document.getElementById('nota-titulo').value='';
-  document.getElementById('nota-cat').value='general';
-  document.getElementById('nota-texto').value='';
-  document.getElementById('nota-recordar').value='';
-  document.getElementById('nota-sheet-title').textContent='Nueva nota';
-  document.querySelectorAll('[id^="nc-"]').forEach(function(b){
+  var t=document.getElementById('nota-titulo'); if(t) t.value='';
+  var x=document.getElementById('nota-texto'); if(x) x.value='';
+  var r=document.getElementById('nota-recordar'); if(r) r.value='';
+  var st=document.getElementById('nota-sheet-title'); if(st) st.textContent='Nueva nota';
+  var cb=document.getElementById('nota-cancel-btn'); if(cb) cb.style.display='none';
+  document.querySelectorAll('#calendario-notas [id^="nc-"]').forEach(function(b){
     if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
   });
-  var gris = document.getElementById('nc-gris');
+  var gris=document.getElementById('nc-gris');
   if(gris) gris.style.borderColor='var(--acc)';
-  document.getElementById('sheet-nota').classList.add('open');
+}
+
+function abrirNuevaNota(){
+  limpiarFormNota();
+  // Si el drawer está cerrado, abrirlo
+  var dr=document.getElementById('calendario-notas');
+  if(dr && !dr.classList.contains('open')) toggleNotasDrawer();
+  // Foco en título
+  setTimeout(function(){ var t=document.getElementById('nota-titulo'); if(t) t.focus(); }, 280);
+}
+
+function cancelarEdicionNota(){
+  limpiarFormNota();
 }
 
 async function guardarNotaMejorada(){
-  var titulo = document.getElementById('nota-titulo').value.trim();
-  var texto = document.getElementById('nota-texto').value.trim();
+  var tEl=document.getElementById('nota-titulo');
+  var xEl=document.getElementById('nota-texto');
+  var titulo = tEl ? tEl.value.trim() : '';
+  var texto = xEl ? xEl.value.trim() : '';
   if(!titulo&&!texto){ toast('Escribe algo en la nota','error'); return; }
+  var rEl=document.getElementById('nota-recordar');
   var datos = {
     colaborador: cu.nombre,
     titulo: titulo||'Sin titulo',
     texto: texto,
-    categoria: document.getElementById('nota-cat').value||'general',
+    categoria: 'general',
     color: notaColorActual,
-    recordar_en: document.getElementById('nota-recordar').value ? new Date(document.getElementById('nota-recordar').value).toISOString() : null,
+    recordar_en: rEl && rEl.value ? new Date(rEl.value).toISOString() : null,
     privada: true
   };
   try{
@@ -4891,7 +4963,7 @@ async function guardarNotaMejorada(){
     } else {
       await sb.from('notas_personales').insert([datos]);
     }
-    closeSheet('nota');
+    limpiarFormNota();
     toast('Nota guardada');
     renderNotas();
   }catch(e){ toast('Error: '+e.message,'error'); }
@@ -4909,7 +4981,19 @@ async function renderNotas(){
     var q = (document.getElementById('notas-q')?.value||'').toLowerCase();
     if(q) items = items.filter(function(n){ return (n.titulo||'').toLowerCase().includes(q)||(n.texto||'').toLowerCase().includes(q); });
     if(!items.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Aquí van tus notas privadas</div><div class="empty-sub">Solo vos las ves. Tocá <b>+ Nueva</b> para crear una (recordatorio de Señor X, idea de propuesta, etc.).</div></div>';
+      var ghostNota=function(col,icono,titulo,texto){
+        return '<div style="background:'+col+'30;border:1px solid '+col+'50;border-left:4px solid '+col+';border-radius:var(--r2);padding:13px 14px;margin-bottom:8px;opacity:0.32;pointer-events:none">'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'+
+            '<span style="font-size:14px">'+icono+'</span>'+
+            '<span style="font-size:13px;font-weight:600">'+titulo+'</span>'+
+          '</div>'+
+          '<div style="font-size:12px;color:var(--txt2);line-height:1.6">'+texto+'</div>'+
+        '</div>';
+      };
+      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">&#128221;</div><div class="empty-title">Aquí van tus notas privadas</div><div class="empty-sub">Solo vos las ves. Escribí abajo para crear la primera. Así se ven:</div></div>'+
+        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+        ghostNota('#1e3a5f','&#9201;','Llamar Señor Ejemplo','Pasarle modelo de 120m² al contado.')+
+        ghostNota('#14532d','&#128161;','Idea propuesta Señora Ejemplo','Mostrar fachada estilo industrial, le gustó.');
       return;
     }
     var catIcons = {general:'&#128203;',recordatorio:'&#9201;',lead:'&#128101;',idea:'&#128161;'};
@@ -4942,12 +5026,21 @@ async function editarNota(id){
     if(!data) return;
     notaEditId = id;
     notaColorActual = data.color||'#334155';
-    document.getElementById('nota-titulo').value = data.titulo||'';
-    document.getElementById('nota-cat').value = data.categoria||'general';
-    document.getElementById('nota-texto').value = data.texto||'';
-    document.getElementById('nota-recordar').value = data.recordar_en ? new Date(data.recordar_en).toISOString().slice(0,16) : '';
-    document.getElementById('nota-sheet-title').textContent = 'Editar nota';
-    document.getElementById('sheet-nota').classList.add('open');
+    var t=document.getElementById('nota-titulo'); if(t) t.value = data.titulo||'';
+    var x=document.getElementById('nota-texto'); if(x) x.value = data.texto||'';
+    var r=document.getElementById('nota-recordar'); if(r) r.value = data.recordar_en ? new Date(data.recordar_en).toISOString().slice(0,16) : '';
+    var st=document.getElementById('nota-sheet-title'); if(st) st.textContent = 'Editar nota';
+    var cb=document.getElementById('nota-cancel-btn'); if(cb) cb.style.display='';
+    // Marcar el color seleccionado
+    document.querySelectorAll('#calendario-notas [id^="nc-"]').forEach(function(b){
+      if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
+    });
+    var colorMap={'#334155':'nc-gris','#1e3a5f':'nc-azul','#14532d':'nc-verde','#78350f':'nc-naranjo','#4c1d95':'nc-morado','#7f1d1d':'nc-rojo'};
+    var btnColor=document.getElementById(colorMap[notaColorActual]||'nc-gris');
+    if(btnColor) btnColor.style.borderColor='var(--acc)';
+    var dr=document.getElementById('calendario-notas');
+    if(dr && !dr.classList.contains('open')) toggleNotasDrawer();
+    setTimeout(function(){ if(t) t.focus(); }, 280);
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -5968,54 +6061,7 @@ initLogin();
 
 
 <!-- SHEET: NUEVA NOTA -->
-<div class="sheet-overlay" id="sheet-nota" onclick="if(event.target===this)closeSheet('nota')">
-  <div class="sheet" style="max-height:70vh">
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <button onclick="closeSheet('nota')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
-      <div class="sheet-title" id="nota-sheet-title">Nueva nota</div>
-      <button class="sheet-close" onclick="closeSheet('nota')">&#x2715;</button>
-    </div>
-    <div class="sheet-body">
-      <div class="fg" style="margin-bottom:10px">
-        <label>Titulo</label>
-        <input class="fi" id="nota-titulo" placeholder="Titulo de la nota...">
-      </div>
-      <div class="fg" style="margin-bottom:10px">
-        <label>Categoria</label>
-        <select class="fsel" id="nota-cat">
-          <option value="general">General</option>
-          <option value="recordatorio">Recordatorio</option>
-          <option value="lead">Lead</option>
-          <option value="idea">Idea</option>
-        </select>
-      </div>
-      <div class="fg" style="margin-bottom:10px">
-        <label>Color</label>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button onclick="setNotaColor('#334155',this)" id="nc-gris" style="width:28px;height:28px;border-radius:50%;background:#334155;border:2px solid var(--acc);cursor:pointer" title="Gris"></button>
-          <button onclick="setNotaColor('#1e3a5f',this)" id="nc-azul" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid transparent;cursor:pointer" title="Azul"></button>
-          <button onclick="setNotaColor('#14532d',this)" id="nc-verde" style="width:28px;height:28px;border-radius:50%;background:#14532d;border:2px solid transparent;cursor:pointer" title="Verde"></button>
-          <button onclick="setNotaColor('#78350f',this)" id="nc-naranjo" style="width:28px;height:28px;border-radius:50%;background:#78350f;border:2px solid transparent;cursor:pointer" title="Naranja"></button>
-          <button onclick="setNotaColor('#4c1d95',this)" id="nc-morado" style="width:28px;height:28px;border-radius:50%;background:#4c1d95;border:2px solid transparent;cursor:pointer" title="Morado"></button>
-          <button onclick="setNotaColor('#7f1d1d',this)" id="nc-rojo" style="width:28px;height:28px;border-radius:50%;background:#7f1d1d;border:2px solid transparent;cursor:pointer" title="Rojo"></button>
-        </div>
-      </div>
-      <div class="fg" style="margin-bottom:10px">
-        <label>Contenido</label>
-        <textarea class="fi" id="nota-texto" rows="6" style="resize:vertical;min-height:120px" placeholder="Escribe tu nota aqui..."></textarea>
-      </div>
-      <div class="fg">
-        <label>Recordar el (opcional)</label>
-        <input class="fi" id="nota-recordar" type="datetime-local">
-      </div>
-    </div>
-    <div class="sh-ftr">
-      <button class="btn btn-p" style="flex:1" onclick="guardarNotaMejorada()">Guardar</button>
-      <button class="btn btn-g" onclick="closeSheet('nota')">Cancelar</button>
-    </div>
-  </div>
-</div>
+<!-- (sheet-nota eliminado: el formulario de notas ahora vive inline en el drawer del calendario grupal) -->
 
 
 <!-- SHEET: NUEVO EVENTO CALENDARIO -->
