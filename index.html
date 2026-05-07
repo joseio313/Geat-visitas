@@ -1387,6 +1387,7 @@ function sw(id,btn){
   if(id==='calendario')renderCalendario();
   if(id==='notif')renderNotifs();
   if(id==='admin')renderAdmin();
+  if(id==='cierre')renderCierre();
 }
 
 // -- INIT --
@@ -1811,6 +1812,8 @@ async function renderAgendaInicio(){
   const countEl=document.getElementById('filtro-persona-count');
   if(countEl) countEl.textContent=items.length+' actividades';
   const el=document.getElementById('inicio-agenda');
+  // Opción C: field_capturer y closer solo ven el badge de atrasadas en los stats (s-sem via renderStatsAgenda), no el panel grande
+  if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
   if(!items.length){el.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:16px">Sin actividades pendientes '+(filtroPersona?'para '+filtroPersona:'')+'</div>';return;}
   el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividades pendientes '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
   items.map(function(a){
@@ -3515,6 +3518,18 @@ async function renderAdmin(){
     const turnos=await verEstadoTurnos();
     // Métricas de vendedores este mes
     const{data:metricas}=await sb.from('metricas_vendedor').select('*');
+    let rows='';
+    (metricas||[]).forEach(m=>{
+      const nom=m.nombre?m.nombre.split(' ')[0]:'-';
+      rows+=`<tr style="border-bottom:1px solid var(--brd)">
+        <td style="padding:7px 8px;font-weight:500">${nom}<span style="font-size:9px;color:var(--txt3);margin-left:4px">${m.cargo||m.rol||''}</span></td>
+        <td style="text-align:center;padding:7px 4px;color:var(--acc)">${m.leads_mes||0}</td>
+        <td style="text-align:center;padding:7px 4px">${m.intentos_mes||0}</td>
+        <td style="text-align:center;padding:7px 4px">${m.seguimientos_mes||0}</td>
+        <td style="text-align:center;padding:7px 4px;color:var(--green)">${m.visitas_mes||0}</td>
+        <td style="text-align:center;padding:7px 4px;color:var(--acc);font-weight:600">${m.ventas_mes||0}</td>
+      </tr>`;
+    });
     const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
     const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
@@ -4091,7 +4106,7 @@ async function renderReuniones(el){
         '<div style="font-size:11px;color:var(--txt3)">'+fecha+(r.cerrador?' · '+r.cerrador:'')+(r.sala?' · '+r.sala.replace('_',' '):'')+'</div></div>'+
         '<span class="badge" style="font-size:9px;background:rgba(139,92,246,0.1);color:#8B5CF6">'+(r.tipo==='reunion'?'Reunion':'Visita')+'</span></div></div>';
     }).join('');
-  }catch(e){el.innerHTML='<div class="empty">Error: '+e.message+'</div>';}
+  }catch(e){console.error('[renderReuniones]',e);el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Error al cargar reuniones</div><div class="empty-sub">'+e.message+'</div></div>';}
 }
 
 // -- COTIZACIONES (módulo cierre) --
