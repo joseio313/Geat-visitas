@@ -402,10 +402,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           </div>
           <div id="inicio-dia-eventos"></div>
         </div>
-        <!-- Actividades pendientes (dentro del calendario) -->
-        <div style="border-top:1px solid var(--brd);padding:12px 14px">
-          <div id="inicio-agenda"></div>
-        </div>
       </div>
 
       <div id="inicio-hoy-contactos" style="margin-bottom:12px"></div>
@@ -1393,7 +1389,7 @@ async function initApp(){
   // Mostrar inicio inmediatamente con estado de carga
   document.getElementById('inicio-saludo').textContent=(new Date().getHours()<12?'Buenos días':new Date().getHours()<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
   document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
-  document.getElementById('inicio-agenda').innerHTML='<div class="loading"><span class="spin"></span>Cargando actividades...</div>';
+  // Panel separado de "Actividades pendientes" eliminado: las actividades viven dentro del calendario.
   // Cargar datos
   await loadLeads();
   renderContactosHoy(); // Mostrar atrasados y contactos de hoy
@@ -1531,9 +1527,13 @@ function navMesInicio(dir){
   renderInicioCal();
 }
 
+function ymdLocal(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function renderInicioCal(){
   const hoy = new Date();
-  const hoyStr = hoy.toISOString().slice(0,10);
+  const hoyStr = ymdLocal(hoy);
+  const ahoraTs = hoy.getTime();
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const grid = document.getElementById('inicio-cal-grid');
@@ -1543,10 +1543,10 @@ function renderInicioCal(){
 
   if(inicioView === 'dia'){
     if(header) header.style.display = 'none';
-    const dStr = inicioFecha.toISOString().slice(0,10);
+    const dStr = ymdLocal(inicioFecha);
     const diaNom = inicioFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
     if(label) label.textContent = diaNom;
-    const evsDia = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
+    const evsDia = calEventos.filter(e=>ymdLocal(e.fecha)===dStr).sort((a,b)=>a.fecha-b.fecha);
     const esHoy = dStr === hoyStr;
 
     const HORA_INI=8, HORA_FIN=18, ROW_H=44;
@@ -1581,9 +1581,11 @@ function renderInicioCal(){
       const sub=String(ev.sub||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
       const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
       const onclick=ev.lead_id?`abrirSheetLead(${ev.lead_id})`:`verEventoCal('${ev.id}')`;
+      const atrasada=ev.tipo==='programado'&&!ev.completada&&ini.getTime()<ahoraTs;
       const opacity=ev.completada&&ev.tipo==='realizado'?'0.65':'1';
-      bloques+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}" style="position:absolute;top:${top}px;left:6px;right:6px;height:${altura}px;background:${ev.color};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
-        <div style="font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tit}</div>
+      const borderL=atrasada?'4px solid var(--red)':'3px solid rgba(255,255,255,0.35)';
+      bloques+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}${atrasada?' · ATRASADA':''}" style="position:absolute;top:${top}px;left:6px;right:6px;height:${altura}px;background:${ev.color};border-left:${borderL};${atrasada?'outline:1px solid var(--red);':''}color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
+        <div style="font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${atrasada?'⚠ ':''}${tit}</div>
         <div style="font-size:9px;opacity:0.92;line-height:1.15;margin-top:1px">${horaTxt}${sub?' · '+sub:''}</div>
       </div>`;
     }
@@ -1620,7 +1622,7 @@ function renderInicioCal(){
     cols+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=d.toISOString().slice(0,10);
+      const ds=ymdLocal(d);
       const esHoy=ds===hoyStr;
       cols+=`<div onclick="selDiaInicio('${ds}')" style="text-align:center;padding:6px 2px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3;cursor:pointer">
         <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">${diasCortos[i]}</div>
@@ -1634,7 +1636,7 @@ function renderInicioCal(){
     cols+=`</div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=d.toISOString().slice(0,10);
+      const ds=ymdLocal(d);
       const esHoy=ds===hoyStr;
       let col=`<div onclick="selDiaInicio('${ds}')" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
       for(let h=0;h<(HORA_FIN-HORA_INI);h++){
@@ -1648,7 +1650,7 @@ function renderInicioCal(){
           col+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;pointer-events:none"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
         }
       }
-      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===ds);
+      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===ds);
       for(const ev of evs){
         const ini=ev.fecha;
         const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
@@ -1660,9 +1662,11 @@ function renderInicioCal(){
         const tit=String(ev.titulo||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
         const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
         const onclick=ev.lead_id?`abrirSheetLead(${ev.lead_id})`:`verEventoCal('${ev.id}')`;
+        const atrasada=ev.tipo==='programado'&&!ev.completada&&ini.getTime()<ahoraTs;
         const opacity=ev.completada&&ev.tipo==='realizado'?'0.65':'1';
-        col+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}" style="position:absolute;top:${top}px;left:2px;right:2px;height:${altura}px;background:${ev.color};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
-          <div style="font-weight:600;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tit}</div>
+        const borderL=atrasada?'4px solid var(--red)':'3px solid rgba(255,255,255,0.35)';
+        col+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}${atrasada?' · ATRASADA':''}" style="position:absolute;top:${top}px;left:2px;right:2px;height:${altura}px;background:${ev.color};border-left:${borderL};${atrasada?'outline:1px solid var(--red);':''}color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
+          <div style="font-weight:600;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${atrasada?'⚠ ':''}${tit}</div>
           ${altura>28?`<div style="font-size:9px;opacity:0.92;line-height:1.1;margin-top:1px">${horaTxt}</div>`:''}
         </div>`;
       }
@@ -1684,10 +1688,10 @@ function renderInicioCal(){
     while(celdas.length%7!==0) { const l=celdas[celdas.length-1].d; celdas.push({d:new Date(l.getTime()+864e5),otro:true}); }
     
     const cells=celdas.map(c=>{
-      const dStr=c.d.toISOString().slice(0,10);
+      const dStr=ymdLocal(c.d);
       const esHoy=dStr===hoyStr;
       const esSel=inicioDiaSeleccionado===dStr;
-      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===dStr);
       return `<div style="min-height:60px;padding:3px;background:${c.otro?'var(--bg)':esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer;opacity:${c.otro?0.4:1}" onclick="selDiaInicio('${dStr}')">
         <div style="font-size:10px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;width:18px;height:18px;border-radius:50%;margin:0 auto 2px;display:flex;align-items:center;justify-content:center;${esHoy?'background:var(--acc);color:#000':''}">${c.d.getDate()}</div>
         ${evs.slice(0,2).map(ev=>`<div style="border-radius:2px;padding:1px 3px;font-size:8px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">${ev.titulo.split(' ')[0]}</div>`).join('')}
@@ -1746,8 +1750,7 @@ function renderInicio(){
   const qaLeads=document.getElementById('qa-leads-count');
   if(qaLeads)qaLeads.textContent=activos.length+' activos';
 
-  // Actividades de hoy + visitas en oficina
-  renderAgendaInicio();
+  // Las actividades pendientes ahora viven dentro del calendario (renderInicioCal).
   // Notifs en inicio
   renderNotifsInicio();
 }
@@ -1823,26 +1826,9 @@ async function renderAgendaInicio(){
   // Actualizar conteo
   const countEl=document.getElementById('filtro-persona-count');
   if(countEl) countEl.textContent=items.length+' actividades';
-  const el=document.getElementById('inicio-agenda');
-  if(!items.length){el.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:16px">Sin actividades pendientes '+(filtroPersona?'para '+filtroPersona:'')+'</div>';return;}
-  el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividades pendientes '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
-  items.map(function(a){
-    var est=estilo(a.leads?.estado);
-    var hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    var esAtrasado=a.fecha_programada.slice(0,10)<hoy;
-    return '<div class="agenda-row" style="cursor:pointer'+(esAtrasado?';border-left:3px solid var(--red)':'')+'" onclick="abrirSheetLead('+a.lead_id+')">'+
-      '<div class="agenda-time"'+(esAtrasado?' style="color:var(--red);font-weight:700"':'')+'>'+hora+'</div>'+
-      '<div class="agenda-dot" style="background:'+est.dot+'"></div>'+
-      '<div class="agenda-info">'+
-        '<div class="agenda-name">'+(a.leads?.nombre||a.titulo)+'</div>'+
-        '<div class="agenda-sub">'+a.tipo.replace(/_/g,' ')+' · '+(a.leads?.celular||'-')+(filtroPersona||cu.rol==='admin'?' · '+a.colaborador:'')+'</div>'+
-      '</div>'+
-      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirIntento('+a.lead_id+')">📞</button>'+
-    '</div>';
-  }).join('');
+  // Panel separado eliminado: el grid del calendario ya muestra las actividades en su día/hora.
 }
 function aplicarFiltroPersona(){
-  renderAgendaInicio();
   renderInicioCal();
 }
 
