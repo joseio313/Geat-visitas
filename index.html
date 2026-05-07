@@ -1440,8 +1440,7 @@ async function loadLeads(){
   const{data}=await sb.from('leads')
     .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado')
     .eq('archivado',false)
-    .order('created_at',{ascending:false})
-    .limit(500);
+    .order('created_at',{ascending:false});
   allLeads=data||[];
   return allLeads;
 }
