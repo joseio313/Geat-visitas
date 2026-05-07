@@ -499,6 +499,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" id="cal-tab-lista" onclick="setCalTab('lista',this)">Lista</button>
         <button class="tab" id="cal-tab-notas" title="Abrir panel lateral de notas sin salir del calendario" onclick="toggleNotasDrawer(this)">📝 Notas</button>
       </div>
+      <div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:var(--r);margin:0 0 10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Acá ves visitas, reuniones y eventos de TODO el equipo.</div>
       <div id="cal-wrap" style="position:relative;overflow:hidden;min-height:400px">
         <div id="calendario-content"></div>
         <!-- Drawer notas: sidebar derecho — el calendario queda visible a la izquierda -->
@@ -1063,8 +1064,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="fgroup" style="margin-bottom:12px">
         <label>¿Qué tipo de actividad?</label>
         <div class="pill-group" id="intento-tipo-pills">
-          <button class="pill" data-val="llamada" onclick="selPillTipo(this)">📞 Llamada</button>
-          <button class="pill" data-val="whatsapp" onclick="selPillTipo(this)">💬 WhatsApp</button>
+          <button class="pill" data-val="llamada" title="Contacto por llamada telefónica" onclick="selPillTipo(this)">📞 Llamada</button>
+          <button class="pill" data-val="whatsapp" title="Contacto por WhatsApp" onclick="selPillTipo(this)">💬 WhatsApp</button>
           <button class="pill" data-val="visita_terreno" onclick="selPillTipo(this)">📍 Visita terreno</button>
           <button class="pill" data-val="envio_info" onclick="selPillTipo(this)">📄 Envío info</button>
         </div>
@@ -1140,10 +1141,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="fgroup" style="margin-bottom:14px">
         <label>¿Cómo estuvo el contacto?</label>
         <div class="pill-group">
-          <button class="pill" data-val="interesado" onclick="selPill(this,'seg')">🔥 Muy interesado</button>
-          <button class="pill" data-val="dudas" onclick="selPill(this,'seg')">🤔 Con dudas</button>
-          <button class="pill" data-val="tiempo" onclick="selPill(this,'seg')">⏰ Necesita tiempo</button>
-          <button class="pill" data-val="frio" onclick="selPill(this,'seg')">❄️ Frío</button>
+          <button class="pill" data-val="interesado" title="Cliente caliente: cierra pronto" onclick="selPill(this,'seg')">🔥 Muy interesado</button>
+          <button class="pill" data-val="dudas" title="Tiene preguntas, hay que aclararlas" onclick="selPill(this,'seg')">🤔 Con dudas</button>
+          <button class="pill" data-val="tiempo" title="Pide tiempo antes de decidir" onclick="selPill(this,'seg')">⏰ Necesita tiempo</button>
+          <button class="pill" data-val="frio" title="Bajo interés: poco probable" onclick="selPill(this,'seg')">❄️ Frío</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -2068,7 +2069,7 @@ function renderLeadCards(leads,containerId,rol){
       </div>
       <div class="btn-row" onclick="event.stopPropagation()">
         ${l.estado==='nuevo'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>
+          <button class="btn btn-sm btn-ghost" title="Anotá qué pasó: contestó / no contestó / ocupado" onclick="abrirIntento(${l.id})">📞 Registrar intento</button>
           <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>
         `:l.estado==='en_seguimiento'?`
           <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>
@@ -2083,7 +2084,7 @@ function renderLeadCards(leads,containerId,rol){
         `:''}
         <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo lo que se hizo con este cliente desde el día 1">📋 Historial</button>
         <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})" title="Marcar como perdido con motivo">✕ Perder</button>
-        ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
+        ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" title="Volver a poner el lead en seguimiento" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2578,7 +2579,24 @@ async function renderCalendario(){
   const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
   if(calTabActual==='lista'){
-    if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Tocá un cliente (Señor X / Señora X) en Leads para programar.</div></div>';return;}
+    if(!todos.length){
+      var ghostEv=function(nom,fec,sala,cls,lbl,col){
+        return '<div class="card" style="opacity:0.4;pointer-events:none">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0"></div>'+
+            '<div style="flex:1">'+
+              '<div style="font-size:13px;font-weight:500">'+nom+'</div>'+
+              '<div style="font-size:11px;color:var(--txt3)">'+fec+' · '+sala+'</div>'+
+            '</div>'+
+            '<span class="badge '+cls+'" style="font-size:9px">'+lbl+'</span>'+
+          '</div></div>';
+      };
+      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Así se verá cuando tengas datos:</div></div>'+
+        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+        ghostEv('Señor X','Lun 10:00','sala 1','e-vagend','Visita agend.','#3B82F6')+
+        ghostEv('Señora X','Mié 15:30','sala 2','e-scierre','Reunión','#8B5CF6');
+      return;
+    }
     el.innerHTML=todos.map(ev=>{
       const est=estilo(ev.estado);
       const fecha=new Date(ev._fecha).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -3542,7 +3560,7 @@ async function renderAdmin(){
           <span class="badge e-perdido" style="font-size:9px">${l.motivo_perdida}</span>
           <div style="font-size:10px;color:var(--txt3);margin-top:4px">${new Date(l.fecha_perdida).toLocaleDateString('es-BO')}</div>
         </div>
-        ${!l.reactivado&&l.lead_id?`<button class="btn btn-sm btn-ghost" onclick="reactivarLead(${l.lead_id},${l.id})">🔄 Reactivar</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
+        ${!l.reactivado&&l.lead_id?`<button class="btn btn-sm btn-ghost" title="Reabrir el lead y mandarlo a seguimiento" onclick="reactivarLead(${l.lead_id},${l.id})">🔄 Reactivar</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
       </div>
     </div>`).join('');
   }else if(adminTabActual==='stats'){
@@ -4164,7 +4182,22 @@ async function renderReuniones(el){
   try{
     var{data}=await sb.from('agenda_grupal').select('*').in('tipo',['visita_captador','reunion','visita_seguimiento']).order('fecha_inicio',{ascending:false}).limit(30);
     var items=data||[];
-    if(!items.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones agendadas</div><div class="empty-sub">Cuando agendás una visita desde la ficha de un cliente (ej: Señor X), aparece acá automáticamente.</div></div>';return;}
+    if(!items.length){
+      var ghostReu=function(nom,fecha,sala,cls){
+        return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>'+
+            '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
+            '<div style="font-size:11px;color:var(--txt3)">'+fecha+' · '+sala+'</div></div>'+
+            '<span class="badge" style="font-size:9px;background:rgba(139,92,246,0.1);color:#8B5CF6">'+cls+'</span>'+
+          '</div></div>';
+      };
+      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones agendadas</div><div class="empty-sub">Cuando agendás una visita desde la ficha de un cliente, aparece acá. Así se verá cuando tengas datos:</div></div>'+
+        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+        ghostReu('Señor X','Lun 12 may, 10:00','sala 1','Visita')+
+        ghostReu('Señora X','Mié 14 may, 15:00','sala 2','Reunión');
+      return;
+    }
     el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Reuniones y visitas recientes</div>'+
     items.map(function(r){
       var fecha=r.fecha_inicio?new Date(r.fecha_inicio).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Sin fecha';
@@ -4216,7 +4249,20 @@ async function renderPropuestas(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre;
     return l.estado==='seguimiento_cierre'||l.estado==='reservado'||l.estado==='en_tramite'||l.estado==='cerrado_ganado';
   });
-  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin propuestas</div><div class="empty-sub">Necesitás leads en seguimiento de cierre</div></div>';return;}
+  if(!misLeads.length){
+    var ghostProp=function(nom,cer,m2,cls,lbl){
+      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+cer+' · '+m2+' m²</div></div>'+
+        '<span class="badge '+cls+'" style="font-size:9px">'+lbl+'</span></div></div>';
+    };
+    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📋</div><div class="empty-title">Sin propuestas</div><div class="empty-sub">Necesitás leads en seguimiento de cierre. Así se verá cuando tengas datos:</div></div>'+
+      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+      ghostProp('Señor X','Gustavo','120','e-scierre','Seg. cierre')+
+      ghostProp('Señora X','David','85','e-reservado','Reservado');
+    return;
+  }
   el.innerHTML='<div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para subir propuesta técnica o editar datos de cierre.</div>'+
   misLeads.map(function(l){
     var est=estilo(l.estado);
@@ -4234,7 +4280,20 @@ async function renderReservas(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado==='reservado';
     return l.estado==='reservado';
   });
-  if(!reservados.length){el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div><div class="empty-sub">Un lead pasa a Reservado al pagar anticipo</div></div>';return;}
+  if(!reservados.length){
+    var ghostRes=function(nom,m2,cer){
+      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
+        '<div style="font-size:11px;color:var(--txt3)">'+m2+' m² · cerrador: '+cer+'</div></div>'+
+        '<span class="badge e-reservado" style="font-size:9px">Reservado</span></div></div>';
+    };
+    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div><div class="empty-sub">Un lead pasa a Reservado al pagar anticipo. Así se verá cuando tengas datos:</div></div>'+
+      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+      ghostRes('Señor X','120','Gustavo')+
+      ghostRes('Señora X','85','David');
+    return;
+  }
   el.innerHTML=reservados.map(function(l){
     return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+
       '<div style="display:flex;align-items:center;gap:10px">'+
@@ -4723,7 +4782,8 @@ async function renderComisiones(el){
       if(!c.pagado_cerrador) porPersona[cer].pendiente+=(c.comision_cerrador_usd||0);
     });
 
-    var html = '<div class="kpi-grid" style="margin-bottom:14px">'+
+    var html = '<div style="padding:8px 10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.18);border-radius:var(--r);margin-bottom:10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Las comisiones se calculan automáticamente al marcar un lead como Ganado.</div>'+
+      '<div class="kpi-grid" style="margin-bottom:14px">'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+items.length+'</div><div class="kpi-l">Ventas</div></div>'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--green)">'+totalM2.toLocaleString()+'</div><div class="kpi-l">m² totales</div></div>'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--red)">$'+(totalPendCap+totalPendCer)+'</div><div class="kpi-l">Comisiones pend.</div></div>'+
@@ -4755,14 +4815,14 @@ async function renderComisiones(el){
         html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Captador: '+(c.captador||'-').split(' ')[0]+'</div>';
         html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_captador_usd+'</div>';
         html += '<div style="font-size:10px;color:'+(c.pagado_captador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_captador?'Pagado':'Pendiente')+'</div>';
-        if(!c.pagado_captador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'captador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
+        if(!c.pagado_captador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'captador\')" title="Registrar comisión pagada (admin)" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
         html += '</div>';
         // Cerrador
         html += '<div style="background:var(--bg3);border-radius:var(--r);padding:10px">';
         html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Cerrador: '+(c.cerrador||'-').split(' ')[0]+'</div>';
         html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_cerrador_usd+'</div>';
         html += '<div style="font-size:10px;color:'+(c.pagado_cerrador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_cerrador?'Pagado':'Pendiente')+'</div>';
-        if(!c.pagado_cerrador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'cerrador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
+        if(!c.pagado_cerrador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'cerrador\')" title="Registrar comisión pagada (admin)" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
         html += '</div>';
         html += '</div></div>';
       });
@@ -5678,7 +5738,17 @@ async function renderReporteLlamadas(el){
     var listaDiv=document.createElement('div');
     listaDiv.id='llamadas-lista';
     if(!items.length){
-      listaDiv.innerHTML='<div class="empty"><div class="empty-icon">&#128222;</div><div class="empty-title">Sin llamadas registradas</div></div>';
+      var ghostLla=function(nom,res,resCol,fec){
+        return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+          '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
+          '<div style="font-size:11px;color:var(--txt3)">'+fec+' · captador</div></div>'+
+          '<span class="badge" style="font-size:9px;background:'+resCol+'22;color:'+resCol+'">'+res+'</span></div></div>';
+      };
+      listaDiv.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">&#128222;</div><div class="empty-title">Sin llamadas registradas</div><div class="empty-sub">Acá vas a ver el historial de cada intento. Así se verá cuando tengas datos:</div></div>'+
+        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+        ghostLla('Señor X','Contestó','#10B981','Hoy 09:30')+
+        ghostLla('Señora X','No contestó','#EF4444','Ayer 17:00');
     } else {
       listaDiv.innerHTML=_renderListaLlamadas(items);
     }
@@ -5989,7 +6059,7 @@ initLogin();
     </div>
     <div class="sheet-body">
       <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r);padding:10px;margin-bottom:14px;font-size:11px;color:var(--txt2)">
-        Completa estos 9 campos para calificar correctamente al cliente. Son la base para definir si avanza o no.
+        Estos 9 campos ayudan al cerrador. Llenalos cuando puedas, no son obligatorios.
       </div>
 
       <div class="fg" style="margin-bottom:10px">
