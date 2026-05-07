@@ -2110,8 +2110,9 @@ async function cargarAgendaPersonal(){
     activ=r.data||[];
   }catch(e){ console.warn('agenda_personal:', e.message); }
 
-  // Cargar eventos_calendario (formulario "+ Agendar actividad", llamadas, etc.)
-  // Nota: no usamos join con leads porque eventos_calendario NO tiene FK declarada — el lookup se hace en JS abajo.
+  // eventos_calendario fue unificada con agenda_personal el 7-may-2026.
+  // Toda escritura nueva va a agenda_personal. Mantenemos la lectura como red de seguridad
+  // hasta validar (1 semana) y luego se elimina.
   let evCal=[];
   try{
     const r=await sb.from('eventos_calendario')
@@ -2120,7 +2121,14 @@ async function cargarAgendaPersonal(){
       .order('fecha_inicio',{ascending:true})
       .limit(500);
     if(r.error) throw r.error;
-    evCal=r.data||[];
+    // Filtrar los eventos que YA fueron migrados a agenda_personal (mismo colaborador+fecha+titulo)
+    // para evitar bloques duplicados en el grid.
+    const dup = (e) => (activ||[]).some(a =>
+      a.colaborador===e.colaborador &&
+      a.fecha_programada===e.fecha_inicio &&
+      (a.titulo||'')===(e.titulo||'')
+    );
+    evCal=(r.data||[]).filter(e => !dup(e));
   }catch(e){ console.warn('eventos_calendario:', e.message||e); }
 
   // Cargar historial propio (lo que YA hizo) para mostrar en el calendario
@@ -5200,32 +5208,31 @@ async function guardarEventoCal(){
   if(!titulo){ toast('Escribe un titulo','error'); return; }
   if(!inicio){ toast('Selecciona fecha de inicio','error'); return; }
   var visible = document.getElementById('ev-visible').value==='1';
+  var fechaIso = new Date(inicio).toISOString();
+  // Persistir en agenda_personal (fuente unificada). eventos_calendario quedó deprecada el 7-may-2026.
   var datos = {
     colaborador: cu.nombre,
     titulo: titulo,
-    descripcion: document.getElementById('ev-desc').value||null,
-    fecha_inicio: new Date(inicio).toISOString(),
-    fecha_fin: document.getElementById('ev-fin').value ? new Date(document.getElementById('ev-fin').value).toISOString() : null,
-    tipo: document.getElementById('ev-tipo').value,
+    nota: document.getElementById('ev-desc').value||null,
+    fecha_programada: fechaIso,
+    tipo: document.getElementById('ev-tipo').value || 'personal',
     lead_id: document.getElementById('ev-lead').value ? parseInt(document.getElementById('ev-lead').value) : null,
-    visible_equipo: visible,
-    color: visible ? '#3B82F6' : '#F59E0B'
+    completada: false
   };
   try{
-    await sb.from('eventos_calendario').insert([datos]);
-    // Si es visible para el equipo, agregar a agenda_grupal tambien
+    await sb.from('agenda_personal').insert([datos]);
+    // Si es visible para el equipo, agregar a agenda_grupal también
     if(visible){
       await sb.from('agenda_grupal').insert([{
         titulo: titulo,
         colaborador: cu.nombre,
         rol_colaborador: cu.rol,
-        fecha_actividad: datos.fecha_inicio,
+        fecha_actividad: fechaIso,
         lead_id: datos.lead_id||null
       }]).catch(function(){});
     }
     closeSheet('evento-cal');
     toast('Evento creado');
-    // Recargar agenda
     cargarAgendaPersonal();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
