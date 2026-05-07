@@ -376,7 +376,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <button title="Mes anterior" onclick="navMesInicio(-1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">‹</button>
             <div style="font-size:13px;font-weight:600;min-width:110px;text-align:center" id="inicio-cal-label">—</div>
             <button title="Mes siguiente" onclick="navMesInicio(1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">›</button>
-            <button id="inicio-cal-atrasadas" title="Ver atrasadas" onclick="abrirAtrasadasSheet()" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:var(--red);font-size:10px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;white-space:nowrap">🔴 <span id="inicio-cal-atrasadas-n">0</span> atrasadas</button>
           </div>
           <div style="display:flex;gap:4px">
             <button class="tab active" id="inicio-view-dia" onclick="setInicioView('dia',this)" style="padding:4px 8px;font-size:10px">Día</button>
@@ -402,6 +401,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <button class="btn btn-sm btn-ghost" title="Programar una nueva actividad para el día seleccionado" onclick="abrirNuevaActividad(inicioDiaSeleccionado)">+ Actividad</button>
           </div>
           <div id="inicio-dia-eventos"></div>
+        </div>
+        <!-- Actividades pendientes (dentro del calendario) -->
+        <div style="border-top:1px solid var(--brd);padding:12px 14px">
+          <div id="inicio-agenda"></div>
         </div>
       </div>
 
@@ -499,16 +502,18 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" id="cal-tab-lista" onclick="setCalTab('lista',this)">Lista</button>
         <button class="tab" id="cal-tab-notas" title="Abrir panel lateral de notas sin salir del calendario" onclick="toggleNotasDrawer(this)">📝 Notas</button>
       </div>
-      <div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:var(--r);margin:0 0 10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Acá ves visitas, reuniones y eventos de TODO el equipo.</div>
       <div id="cal-wrap" style="position:relative;overflow:hidden;min-height:400px">
         <div id="calendario-content"></div>
-        <!-- Drawer notas: sidebar derecho — el calendario queda visible a la izquierda -->
-        <div id="calendario-notas" style="position:absolute;top:0;right:0;bottom:0;width:min(380px,92%);background:var(--bg2);border-left:1px solid var(--brd);transform:translateX(110%);transition:transform .25s ease;overflow-y:auto;padding:12px;box-shadow:-8px 0 24px rgba(0,0,0,0.25);z-index:5;display:flex;flex-direction:column">
+        <!-- Drawer notas: entra desde la derecha, parte del calendario -->
+        <div id="calendario-notas" style="position:absolute;top:0;right:0;bottom:0;width:min(360px,92%);background:var(--bg2);border-left:1px solid var(--brd);transform:translateX(110%);transition:transform .25s ease;overflow-y:auto;padding:12px;box-shadow:-8px 0 24px rgba(0,0,0,0.25);z-index:5">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
             <div style="font-size:13px;font-weight:600">📝 Notas privadas</div>
-            <button class="btn btn-sm btn-ghost" title="Cerrar panel de notas" onclick="toggleNotasDrawer()">✕</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm btn-primary" title="Crear una nueva nota" onclick="abrirNuevaNota()">+ Nueva</button>
+              <button class="btn btn-sm btn-ghost" title="Cerrar panel de notas" onclick="toggleNotasDrawer()">✕</button>
+            </div>
           </div>
-          <div style="position:relative;margin-bottom:8px">
+          <div style="position:relative;margin-bottom:10px">
             <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:13px">&#128269;</span>
             <input id="notas-q" class="search-inp" style="padding-left:34px" placeholder="Buscar notas..." oninput="filtrarNotas()">
           </div>
@@ -519,28 +524,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <button class="tab" id="nc-lead" onclick="setNotaCat('lead',this)" style="font-size:11px;padding:4px 10px">Lead</button>
             <button class="tab" id="nc-idea" onclick="setNotaCat('idea',this)" style="font-size:11px;padding:4px 10px">Idea</button>
           </div>
-          <!-- Lista de notas: arriba, scroll propio si crece -->
-          <div id="notas-list" style="flex:1;overflow-y:auto;margin-bottom:10px;min-height:60px"><div class="loading"><span class="spin"></span>Cargando...</div></div>
-          <!-- Formulario inline simple: título, contenido, color, recordar -->
-          <div style="border-top:1px solid var(--brd);padding-top:10px;flex-shrink:0">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <div id="nota-sheet-title" style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:0.07em">Nueva nota</div>
-              <button id="nota-cancel-btn" class="btn btn-sm btn-ghost" style="display:none;padding:2px 8px;font-size:10px" onclick="cancelarEdicionNota()">Cancelar edición</button>
-            </div>
-            <input class="fi" id="nota-titulo" placeholder="Título..." style="margin-bottom:6px;font-size:12px;padding:7px 10px">
-            <textarea class="fi" id="nota-texto" rows="3" style="resize:vertical;min-height:62px;margin-bottom:6px;font-size:12px;padding:7px 10px" placeholder="Contenido..."></textarea>
-            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:10px;color:var(--txt3)">Color:</span>
-              <button onclick="setNotaColor('#334155',this)" id="nc-gris" style="width:22px;height:22px;border-radius:50%;background:#334155;border:2px solid var(--acc);cursor:pointer" title="Gris"></button>
-              <button onclick="setNotaColor('#1e3a5f',this)" id="nc-azul" style="width:22px;height:22px;border-radius:50%;background:#1e3a5f;border:2px solid transparent;cursor:pointer" title="Azul"></button>
-              <button onclick="setNotaColor('#14532d',this)" id="nc-verde" style="width:22px;height:22px;border-radius:50%;background:#14532d;border:2px solid transparent;cursor:pointer" title="Verde"></button>
-              <button onclick="setNotaColor('#78350f',this)" id="nc-naranjo" style="width:22px;height:22px;border-radius:50%;background:#78350f;border:2px solid transparent;cursor:pointer" title="Naranja"></button>
-              <button onclick="setNotaColor('#4c1d95',this)" id="nc-morado" style="width:22px;height:22px;border-radius:50%;background:#4c1d95;border:2px solid transparent;cursor:pointer" title="Morado"></button>
-              <button onclick="setNotaColor('#7f1d1d',this)" id="nc-rojo" style="width:22px;height:22px;border-radius:50%;background:#7f1d1d;border:2px solid transparent;cursor:pointer" title="Rojo"></button>
-            </div>
-            <input class="fi" id="nota-recordar" type="datetime-local" title="Recordar (opcional)" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
-            <button class="btn btn-p" style="width:100%" onclick="guardarNotaMejorada()">Guardar nota</button>
-          </div>
+          <div id="notas-list"><div class="loading"><span class="spin"></span>Cargando...</div></div>
         </div>
       </div>
     </div>
@@ -667,16 +651,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
 
     <!-- PANEL TECNICO — Solicitudes de propuesta -->
-    <!-- ══ PANEL ARQUITECTURA: SOLICITUDES PENDIENTES ══ -->
-    <div class="panel" id="pn-arquitectura">
-      <div class="ph">
-        <div><div class="ph-title">Solicitudes pendientes</div><div class="ph-sub" id="arq-sub">Cotizaciones enviadas por los cerradores</div></div>
-        <button class="btn btn-sm btn-ghost" title="Recargar lista" onclick="renderArquitecturaPanel()">⟳</button>
-      </div>
-      <div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:var(--r);margin-bottom:10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Cuando un cerrador manda una cotización al grupo, aparece acá. Tocá <b>Marcar como entregada</b> al subir la propuesta.</div>
-      <div id="arq-lista"><div class="loading"><span class="spin"></span>Cargando solicitudes...</div></div>
-    </div>
-
     <div class="panel" id="pn-tecnico-upload">
       <div class="ph">
         <div><div class="ph-title">Subir Propuesta</div><div class="ph-sub">Selecciona la solicitud y sube el archivo</div></div>
@@ -820,18 +794,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px" onclick="iniciarGrabacion()">Reintentar</button>
       <button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button>
     </div>
-  </div>
-</div>
-
-<!-- ══ SHEET: ATRASADAS (lista de leads con proximo_contacto vencido) ══ -->
-<div class="sheet-overlay" id="sheet-atrasadas" onclick="if(event.target===this)closeSheet('atrasadas')">
-  <div class="sheet" style="max-height:85vh">
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <div class="sheet-title">🔴 Atrasadas</div>
-      <button class="sheet-close" title="Cerrar" onclick="closeSheet('atrasadas')">x</button>
-    </div>
-    <div class="sheet-body" id="sheet-atrasadas-body"></div>
   </div>
 </div>
 
@@ -1074,8 +1036,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="fgroup" style="margin-bottom:12px">
         <label>¿Qué tipo de actividad?</label>
         <div class="pill-group" id="intento-tipo-pills">
-          <button class="pill" data-val="llamada" title="Contacto por llamada telefónica" onclick="selPillTipo(this)">📞 Llamada</button>
-          <button class="pill" data-val="whatsapp" title="Contacto por WhatsApp" onclick="selPillTipo(this)">💬 WhatsApp</button>
+          <button class="pill" data-val="llamada" onclick="selPillTipo(this)">📞 Llamada</button>
+          <button class="pill" data-val="whatsapp" onclick="selPillTipo(this)">💬 WhatsApp</button>
           <button class="pill" data-val="visita_terreno" onclick="selPillTipo(this)">📍 Visita terreno</button>
           <button class="pill" data-val="envio_info" onclick="selPillTipo(this)">📄 Envío info</button>
         </div>
@@ -1151,10 +1113,10 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="fgroup" style="margin-bottom:14px">
         <label>¿Cómo estuvo el contacto?</label>
         <div class="pill-group">
-          <button class="pill" data-val="interesado" title="Cliente caliente: cierra pronto" onclick="selPill(this,'seg')">🔥 Muy interesado</button>
-          <button class="pill" data-val="dudas" title="Tiene preguntas, hay que aclararlas" onclick="selPill(this,'seg')">🤔 Con dudas</button>
-          <button class="pill" data-val="tiempo" title="Pide tiempo antes de decidir" onclick="selPill(this,'seg')">⏰ Necesita tiempo</button>
-          <button class="pill" data-val="frio" title="Bajo interés: poco probable" onclick="selPill(this,'seg')">❄️ Frío</button>
+          <button class="pill" data-val="interesado" onclick="selPill(this,'seg')">🔥 Muy interesado</button>
+          <button class="pill" data-val="dudas" onclick="selPill(this,'seg')">🤔 Con dudas</button>
+          <button class="pill" data-val="tiempo" onclick="selPill(this,'seg')">⏰ Necesita tiempo</button>
+          <button class="pill" data-val="frio" onclick="selPill(this,'seg')">❄️ Frío</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -1387,7 +1349,7 @@ const NAVS={
     {id:'admin',icon:'&#9881;',label:'Admin'},
   ],
   tecnico:[
-    {id:'arquitectura',icon:'&#128196;',label:'Solicitudes'},
+    {id:'inicio',icon:'&#128196;',label:'Solicitudes'},
     {id:'tecnico-upload',icon:'&#128228;',label:'Subir'},
   ],
 };
@@ -1409,7 +1371,6 @@ function sw(id,btn){
   else{const b=document.querySelector(`[data-nav="${id}"]`);if(b)b.classList.add('active');}
   // Cargar al cambiar de panel
   if(id==='leads')renderLeads();
-  if(id==='arquitectura')renderArquitecturaPanel();
   if(id==='tecnico-upload')cargarSelectSolicitudes();
   if(id==='todos')renderTodos();
   if(id==='notas')renderNotas();
@@ -1423,11 +1384,6 @@ function sw(id,btn){
 async function initApp(){
   document.getElementById('tb-user').textContent=cu.nombre;
   buildNav();
-  // Rol tecnico: arrancar en panel de Arquitectura, no en Inicio comercial.
-  if(cu.rol==='tecnico'){
-    sw('arquitectura', document.querySelector('[data-nav="arquitectura"]'));
-    return;
-  }
   // Botón reunión extra solo para admin y commercial_lead
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
     const btn=document.getElementById('btn-reunion-extra');
@@ -1437,7 +1393,7 @@ async function initApp(){
   // Mostrar inicio inmediatamente con estado de carga
   document.getElementById('inicio-saludo').textContent=(new Date().getHours()<12?'Buenos días':new Date().getHours()<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
   document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
-  // Panel separado de "Actividades pendientes" eliminado: las actividades viven dentro del calendario.
+  document.getElementById('inicio-agenda').innerHTML='<div class="loading"><span class="spin"></span>Cargando actividades...</div>';
   // Cargar datos
   await loadLeads();
   renderContactosHoy(); // Mostrar atrasados y contactos de hoy
@@ -1575,13 +1531,9 @@ function navMesInicio(dir){
   renderInicioCal();
 }
 
-function ymdLocal(d){
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
 function renderInicioCal(){
   const hoy = new Date();
-  const hoyStr = ymdLocal(hoy);
-  const ahoraTs = hoy.getTime();
+  const hoyStr = hoy.toISOString().slice(0,10);
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const grid = document.getElementById('inicio-cal-grid');
@@ -1591,76 +1543,31 @@ function renderInicioCal(){
 
   if(inicioView === 'dia'){
     if(header) header.style.display = 'none';
-    const dStr = ymdLocal(inicioFecha);
+    const dStr = inicioFecha.toISOString().slice(0,10);
     const diaNom = inicioFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
     if(label) label.textContent = diaNom;
-    const evsDia = calEventos.filter(e=>ymdLocal(e.fecha)===dStr).sort((a,b)=>a.fecha-b.fecha);
+    const evsDia = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
     const esHoy = dStr === hoyStr;
-
-    const HORA_INI=8, HORA_FIN=18, ROW_H=44;
-    const totalH=(HORA_FIN-HORA_INI)*ROW_H;
-
-    let horasCol='';
-    for(let h=HORA_INI;h<HORA_FIN;h++){
-      horasCol+=`<div style="height:${ROW_H}px;font-size:10px;color:var(--txt3);padding:2px 6px;text-align:right;border-bottom:1px solid var(--brd);box-sizing:border-box">${h}:00</div>`;
-    }
-
-    let bloques='';
-    for(let h=0;h<(HORA_FIN-HORA_INI);h++){
-      bloques+=`<div style="position:absolute;top:${h*ROW_H}px;left:0;right:0;height:1px;background:var(--brd);opacity:0.5;pointer-events:none"></div>`;
-    }
-    if(esHoy){
-      const now=new Date();
-      const mins=(now.getHours()-HORA_INI)*60+now.getMinutes();
-      if(mins>0&&mins<(HORA_FIN-HORA_INI)*60){
-        const top=mins/60*ROW_H;
-        bloques+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;pointer-events:none"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
-      }
-    }
-    for(const ev of evsDia){
-      const ini=ev.fecha;
-      const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
-      const endMin=startMin+60;
-      if(endMin<=0||startMin>=(HORA_FIN-HORA_INI)*60)continue;
-      const sM=Math.max(0,startMin), eM=Math.min(endMin,(HORA_FIN-HORA_INI)*60);
-      const top=sM/60*ROW_H;
-      const altura=Math.max(22,(eM-sM)/60*ROW_H-2);
-      const tit=String(ev.titulo||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-      const sub=String(ev.sub||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-      const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-      const onclick=ev.lead_id?`abrirSheetLead(${ev.lead_id})`:`verEventoCal('${ev.id}')`;
-      const atrasada=ev.tipo==='programado'&&!ev.completada&&ini.getTime()<ahoraTs;
-      const opacity=ev.completada&&ev.tipo==='realizado'?'0.65':'1';
-      const borderL=atrasada?'4px solid var(--red)':'3px solid rgba(255,255,255,0.35)';
-      bloques+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}${atrasada?' · ATRASADA':''}" style="position:absolute;top:${top}px;left:6px;right:6px;height:${altura}px;background:${ev.color};border-left:${borderL};${atrasada?'outline:1px solid var(--red);':''}color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
-        <div style="font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${atrasada?'⚠ ':''}${tit}</div>
-        <div style="font-size:9px;opacity:0.92;line-height:1.15;margin-top:1px">${horaTxt}${sub?' · '+sub:''}</div>
-      </div>`;
-    }
-
-    let emptyHint='';
-    if(!evsDia.length){
-      const ghostHora=function(hr,texto){
-        const top=(hr-HORA_INI)*ROW_H;
-        return `<div style="position:absolute;top:${top}px;left:6px;right:6px;height:42px;background:#475569;border-left:3px dashed rgba(255,255,255,0.4);color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;overflow:hidden;opacity:0.32;pointer-events:none;box-sizing:border-box">
-          <div style="font-weight:600;line-height:1.15">${texto}</div>
-          <div style="font-size:9px;opacity:0.85;line-height:1.15;margin-top:1px">${hr}:00 · ejemplo</div>
+    grid.innerHTML = `<div style="padding:14px">
+      ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Aquí verás tus actividades del día.<br>Registrá un lead o agendá una actividad para empezar.<br>
+        <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar actividad</button></div>` :
+      evsDia.map(ev=>{
+        const hora = ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+        return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--brd);cursor:pointer;align-items:flex-start" onclick="${ev.lead_id?'abrirSheetLead('+ev.lead_id+')':''}">
+          <div style="font-size:11px;color:var(--txt3);min-width:36px;font-weight:500;margin-top:2px">${hora}</div>
+          <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
+            <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' - '+ev.nota.slice(0,40):''}</div>
+            ${ev.celular?`<a href="https://wa.me/591${ev.celular.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:#25d366;text-decoration:none">[W] WhatsApp</a>`:''}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+            ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
+            ${ev.lead_id?`<button class="btn btn-sm btn-red" style="padding:4px 6px;font-size:10px" onclick="abrirPerder(${ev.lead_id})">✕</button>`:''}
+          </div>
         </div>`;
-      };
-      emptyHint = ghostHora(10,'Llamada Señor Ejemplo')+ghostHora(15,'Visita Señora Ejemplo')+
-        `<div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;background:var(--bg2);padding:2px 8px;border-radius:10px;pointer-events:none">Ejemplo · no son reales</div>`;
-    }
-
-    grid.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;padding:8px 10px;border-bottom:1px solid var(--brd)">
-        <button class="btn btn-sm btn-ghost" title="Agendar una nueva actividad para este día" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar actividad</button>
-      </div>
-      <div style="overflow:auto;-webkit-overflow-scrolling:touch;max-height:60vh">
-        <div style="display:grid;grid-template-columns:48px 1fr;min-height:${totalH}px">
-          <div style="background:var(--bg2);border-right:1px solid var(--brd)">${horasCol}</div>
-          <div style="position:relative;height:${totalH}px;${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer" onclick="abrirNuevoEventoCal('${dStr}')">${bloques}${emptyHint}</div>
-        </div>
-      </div>`;
+      }).join('')}
+    </div>`;
     inicioDiaSeleccionado = dStr;
 
   } else if(inicioView === 'semana'){
@@ -1679,7 +1586,7 @@ function renderInicioCal(){
     cols+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=ymdLocal(d);
+      const ds=d.toISOString().slice(0,10);
       const esHoy=ds===hoyStr;
       cols+=`<div onclick="selDiaInicio('${ds}')" style="text-align:center;padding:6px 2px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3;cursor:pointer">
         <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">${diasCortos[i]}</div>
@@ -1693,7 +1600,7 @@ function renderInicioCal(){
     cols+=`</div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=ymdLocal(d);
+      const ds=d.toISOString().slice(0,10);
       const esHoy=ds===hoyStr;
       let col=`<div onclick="selDiaInicio('${ds}')" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
       for(let h=0;h<(HORA_FIN-HORA_INI);h++){
@@ -1707,7 +1614,7 @@ function renderInicioCal(){
           col+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;pointer-events:none"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
         }
       }
-      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===ds);
+      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===ds);
       for(const ev of evs){
         const ini=ev.fecha;
         const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
@@ -1719,11 +1626,9 @@ function renderInicioCal(){
         const tit=String(ev.titulo||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
         const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
         const onclick=ev.lead_id?`abrirSheetLead(${ev.lead_id})`:`verEventoCal('${ev.id}')`;
-        const atrasada=ev.tipo==='programado'&&!ev.completada&&ini.getTime()<ahoraTs;
         const opacity=ev.completada&&ev.tipo==='realizado'?'0.65':'1';
-        const borderL=atrasada?'4px solid var(--red)':'3px solid rgba(255,255,255,0.35)';
-        col+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}${atrasada?' · ATRASADA':''}" style="position:absolute;top:${top}px;left:2px;right:2px;height:${altura}px;background:${ev.color};border-left:${borderL};${atrasada?'outline:1px solid var(--red);':''}color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
-          <div style="font-weight:600;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${atrasada?'⚠ ':''}${tit}</div>
+        col+=`<div onclick="event.stopPropagation();${onclick}" title="${tit} · ${horaTxt}" style="position:absolute;top:${top}px;left:2px;right:2px;height:${altura}px;background:${ev.color};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;overflow:hidden;cursor:pointer;z-index:3;box-shadow:0 1px 2px rgba(0,0,0,0.3);box-sizing:border-box;opacity:${opacity}">
+          <div style="font-weight:600;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tit}</div>
           ${altura>28?`<div style="font-size:9px;opacity:0.92;line-height:1.1;margin-top:1px">${horaTxt}</div>`:''}
         </div>`;
       }
@@ -1745,10 +1650,10 @@ function renderInicioCal(){
     while(celdas.length%7!==0) { const l=celdas[celdas.length-1].d; celdas.push({d:new Date(l.getTime()+864e5),otro:true}); }
     
     const cells=celdas.map(c=>{
-      const dStr=ymdLocal(c.d);
+      const dStr=c.d.toISOString().slice(0,10);
       const esHoy=dStr===hoyStr;
       const esSel=inicioDiaSeleccionado===dStr;
-      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===dStr);
+      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
       return `<div style="min-height:60px;padding:3px;background:${c.otro?'var(--bg)':esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer;opacity:${c.otro?0.4:1}" onclick="selDiaInicio('${dStr}')">
         <div style="font-size:10px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;width:18px;height:18px;border-radius:50%;margin:0 auto 2px;display:flex;align-items:center;justify-content:center;${esHoy?'background:var(--acc);color:#000':''}">${c.d.getDate()}</div>
         ${evs.slice(0,2).map(ev=>`<div style="border-radius:2px;padding:1px 3px;font-size:8px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">${ev.titulo.split(' ')[0]}</div>`).join('')}
@@ -1791,14 +1696,24 @@ function renderInicio(){
       filtroWrap.style.display='none';
     }
   }
-  // KPIs (Hoy / Atrasadas / Mes) — fuente única: calEventos. Lo escribe renderStatsAgenda().
+  // Stats
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
+  const hoy=new Date().toISOString().slice(0,10);
+  const hoyLeads=misLeads.filter(l=>l.fecha_ingreso===hoy);
+  const semLeads=misLeads.filter(l=>{
+    const d=new Date(l.fecha_ingreso);const ahora=new Date();
+    return(ahora-d)/(864e5)<=7;
+  });
+  document.getElementById('s-hoy').textContent=hoyLeads.length;
+  document.getElementById('s-sem').textContent=semLeads.length;
   const activos=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido');
+  document.getElementById('s-mes').textContent=activos.length;
   // Accesos rápidos count
   const qaLeads=document.getElementById('qa-leads-count');
   if(qaLeads)qaLeads.textContent=activos.length+' activos';
 
-  // Las actividades pendientes ahora viven dentro del calendario (renderInicioCal).
+  // Actividades de hoy + visitas en oficina
+  renderAgendaInicio();
   // Notifs en inicio
   renderNotifsInicio();
 }
@@ -1874,9 +1789,26 @@ async function renderAgendaInicio(){
   // Actualizar conteo
   const countEl=document.getElementById('filtro-persona-count');
   if(countEl) countEl.textContent=items.length+' actividades';
-  // Panel separado eliminado: el grid del calendario ya muestra las actividades en su día/hora.
+  const el=document.getElementById('inicio-agenda');
+  if(!items.length){el.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:16px">Sin actividades pendientes '+(filtroPersona?'para '+filtroPersona:'')+'</div>';return;}
+  el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividades pendientes '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
+  items.map(function(a){
+    var est=estilo(a.leads?.estado);
+    var hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    var esAtrasado=a.fecha_programada.slice(0,10)<hoy;
+    return '<div class="agenda-row" style="cursor:pointer'+(esAtrasado?';border-left:3px solid var(--red)':'')+'" onclick="abrirSheetLead('+a.lead_id+')">'+
+      '<div class="agenda-time"'+(esAtrasado?' style="color:var(--red);font-weight:700"':'')+'>'+hora+'</div>'+
+      '<div class="agenda-dot" style="background:'+est.dot+'"></div>'+
+      '<div class="agenda-info">'+
+        '<div class="agenda-name">'+(a.leads?.nombre||a.titulo)+'</div>'+
+        '<div class="agenda-sub">'+a.tipo.replace(/_/g,' ')+' · '+(a.leads?.celular||'-')+(filtroPersona||cu.rol==='admin'?' · '+a.colaborador:'')+'</div>'+
+      '</div>'+
+      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirIntento('+a.lead_id+')">📞</button>'+
+    '</div>';
+  }).join('');
 }
 function aplicarFiltroPersona(){
+  renderAgendaInicio();
   renderInicioCal();
 }
 
@@ -2019,24 +1951,7 @@ function limpiarBusqueda(){
 function renderLeadCards(leads,containerId,rol){
   const el=document.getElementById(containerId);
   if(!leads.length){
-    var ghostCard=function(nombre,sub,badgeCls,badgeLbl){
-      return '<div class="card has-left" style="border-left-color:#475569;opacity:0.32;pointer-events:none;margin-bottom:6px">'+
-        '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px">'+
-          '<div style="flex:1;min-width:0">'+
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">'+
-              '<span style="font-size:14px;font-weight:600">'+nombre+'</span>'+
-              '<span class="badge '+badgeCls+'">'+badgeLbl+'</span>'+
-            '</div>'+
-            '<div style="font-size:12px;color:var(--txt3)">'+sub+'</div>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
-    };
-    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📭</div><div class="empty-title">Acá aparecen tus clientes</div><div class="empty-sub">Tocá <b>+ Lead</b> para registrar uno nuevo. Así se ven los leads cuando hay datos:</div></div>'+
-      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-      ghostCard('Señor Ejemplo','77712345 · Santa Cruz','e-nuevo','Nuevo')+
-      ghostCard('Señora Ejemplo','77767890 · Cochabamba','e-seg','Seguimiento')+
-      ghostCard('Señor Ejemplo B','77755555 · La Paz','e-vagend','Visita agend.');
+    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Acá aparecen tus clientes</div><div class="empty-sub">Tocá <b>+ Lead</b> para registrar uno nuevo (ej: Señor X, Señora X).</div></div>';
     return;
   }
   const hoy=new Date().toISOString().slice(0,10);
@@ -2076,7 +1991,7 @@ function renderLeadCards(leads,containerId,rol){
       </div>
       <div class="btn-row" onclick="event.stopPropagation()">
         ${l.estado==='nuevo'?`
-          <button class="btn btn-sm btn-ghost" title="Anotá qué pasó: contestó / no contestó / ocupado" onclick="abrirIntento(${l.id})">📞 Registrar intento</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>
           <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>
         `:l.estado==='en_seguimiento'?`
           <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>
@@ -2091,7 +2006,7 @@ function renderLeadCards(leads,containerId,rol){
         `:''}
         <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo lo que se hizo con este cliente desde el día 1">📋 Historial</button>
         <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})" title="Marcar como perdido con motivo">✕ Perder</button>
-        ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" title="Volver a poner el lead en seguimiento" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
+        ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2116,51 +2031,22 @@ async function cargarAgendaPersonal(){
   // Agregar a agendaData despues de cargar
 
   // Cargar actividades de la agenda personal
-  let activ=[];
-  try{
-    const r=await sb.from('agenda_personal')
-      .select('*,leads(nombre,celular,estado)')
-      .eq('colaborador',cu.nombre)
-      .order('fecha_programada',{ascending:true})
-      .limit(500);
-    activ=r.data||[];
-  }catch(e){ console.warn('agenda_personal:', e.message); }
-
-  // eventos_calendario fue unificada con agenda_personal el 7-may-2026.
-  // Toda escritura nueva va a agenda_personal. Mantenemos la lectura como red de seguridad
-  // hasta validar (1 semana) y luego se elimina.
-  let evCal=[];
-  try{
-    const r=await sb.from('eventos_calendario')
-      .select('*')
-      .eq('colaborador',cu.nombre)
-      .order('fecha_inicio',{ascending:true})
-      .limit(500);
-    if(r.error) throw r.error;
-    // Filtrar los eventos que YA fueron migrados a agenda_personal (mismo colaborador+fecha+titulo)
-    // para evitar bloques duplicados en el grid.
-    const dup = (e) => (activ||[]).some(a =>
-      a.colaborador===e.colaborador &&
-      a.fecha_programada===e.fecha_inicio &&
-      (a.titulo||'')===(e.titulo||'')
-    );
-    evCal=(r.data||[]).filter(e => !dup(e));
-  }catch(e){ console.warn('eventos_calendario:', e.message||e); }
-
+  const{data:activ}=await sb.from('agenda_personal')
+    .select('*,leads(nombre,celular,estado)')
+    .eq('colaborador',cu.nombre)
+    .order('fecha_programada',{ascending:true})
+    .limit(500);
+  
   // Cargar historial propio (lo que YA hizo) para mostrar en el calendario
-  let hist=[];
-  try{
-    const r=await sb.from('historial_lead')
-      .select('*,leads!historial_lead_lead_id_fkey(nombre)')
-      .eq('colaborador',cu.nombre)
-      .gte('fecha_actividad', new Date(calFecha.getFullYear(),calFecha.getMonth()-1,1).toISOString())
-      .order('fecha_actividad',{ascending:true})
-      .limit(300);
-    hist=r.data||[];
-  }catch(e){ console.warn('historial_lead:', e.message); }
+  const{data:hist}=await sb.from('historial_lead')
+    .select('*,leads!historial_lead_lead_id_fkey(nombre)')
+    .eq('colaborador',cu.nombre)
+    .gte('fecha_actividad', new Date(calFecha.getFullYear(),calFecha.getMonth()-1,1).toISOString())
+    .order('fecha_actividad',{ascending:true})
+    .limit(300);
 
   calEventos = [
-    ...activ.map(a=>({
+    ...(activ||[]).map(a=>({
       id:'ap_'+a.id,
       raw_id:a.id,
       tipo:'programado',
@@ -2174,25 +2060,7 @@ async function cargarAgendaPersonal(){
       celular:a.leads?.celular,
       color:a.completada?'#475569':getEtapaColor(a.leads?.estado||'nuevo'),
     })),
-    ...evCal.map(e=>{
-      var ld = e.lead_id ? (allLeads||[]).find(l=>l.id===e.lead_id) : null;
-      return {
-        id:'ec_'+e.id,
-        raw_id:e.id,
-        tipo:'programado',
-        fecha:new Date(e.fecha_inicio),
-        titulo: ld?.nombre || e.titulo || 'Evento',
-        sub: e.tipo?String(e.tipo).replace(/_/g,' '):(e.descripcion||''),
-        nota: e.descripcion,
-        completada:false,
-        estado: ld?.estado || 'nuevo',
-        lead_id: e.lead_id,
-        celular: ld?.celular,
-        color: e.color || getEtapaColor(ld?.estado||'nuevo'),
-        _origen:'eventos_calendario',
-      };
-    }),
-    ...hist.map(h=>({
+    ...(hist||[]).map(h=>({
       id:'hl_'+h.id,
       raw_id:h.id,
       tipo:'realizado',
@@ -2458,22 +2326,17 @@ function verEventoCal(id){
 }
 
 function renderStatsAgenda(){
-  const ahora=new Date();
-  const hoyStr=(typeof ymdLocal==='function')?ymdLocal(ahora):ahora.toISOString().slice(0,10);
-  const mesStr=hoyStr.slice(0,7);
-  const ymd=(typeof ymdLocal==='function')?ymdLocal:(d=>d.toISOString().slice(0,10));
-  const ahoraTs=ahora.getTime();
-  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&ymd(e.fecha)===hoyStr).length;
-  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.getTime()<ahoraTs&&ymd(e.fecha)<hoyStr).length;
-  const realizados=calEventos.filter(e=>e.tipo==='realizado'&&ymd(e.fecha).slice(0,7)===mesStr).length;
-  const sH=document.getElementById('s-hoy'); if(sH) sH.textContent=pHoy;
-  const sS=document.getElementById('s-sem'); if(sS) sS.textContent=pAtr>0?`${pAtr}⚠`:'0';
-  const sM=document.getElementById('s-mes'); if(sM) sM.textContent=realizados;
-  // Badge "🔴 X atrasadas" — fuente unificada con KPIs
-  const pill=document.getElementById('inicio-cal-atrasadas');
-  const pillN=document.getElementById('inicio-cal-atrasadas-n');
-  if(pill) pill.style.display=pAtr?'':'none';
-  if(pillN) pillN.textContent=pAtr;
+  const hoyStr=new Date().toISOString().slice(0,10);
+  const mesStr=new Date().toISOString().slice(0,7);
+  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)===hoyStr).length;
+  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)<hoyStr).length;
+  const realizados=calEventos.filter(e=>e.tipo==='realizado'&&e.fecha.toISOString().slice(0,7)===mesStr).length;
+  const el=document.getElementById('inicio-stats');
+  if(el){
+    document.getElementById('s-hoy').textContent=pHoy;
+    document.getElementById('s-sem').textContent=pAtr>0?`${pAtr}⚠`:'0';
+    document.getElementById('s-mes').textContent=realizados;
+  }
 }
 
 // Sheet nueva actividad manual
@@ -2638,24 +2501,7 @@ async function renderCalendario(){
   const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
   if(calTabActual==='lista'){
-    if(!todos.length){
-      var ghostEv=function(nom,fec,sala,cls,lbl,col){
-        return '<div class="card" style="opacity:0.4;pointer-events:none">'+
-          '<div style="display:flex;align-items:center;gap:10px">'+
-            '<div style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0"></div>'+
-            '<div style="flex:1">'+
-              '<div style="font-size:13px;font-weight:500">'+nom+'</div>'+
-              '<div style="font-size:11px;color:var(--txt3)">'+fec+' · '+sala+'</div>'+
-            '</div>'+
-            '<span class="badge '+cls+'" style="font-size:9px">'+lbl+'</span>'+
-          '</div></div>';
-      };
-      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Así se verá cuando tengas datos:</div></div>'+
-        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-        ghostEv('Señor X','Lun 10:00','sala 1','e-vagend','Visita agend.','#3B82F6')+
-        ghostEv('Señora X','Mié 15:30','sala 2','e-scierre','Reunión','#8B5CF6');
-      return;
-    }
+    if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Tocá un cliente (Señor X / Señora X) en Leads para programar.</div></div>';return;}
     el.innerHTML=todos.map(ev=>{
       const est=estilo(ev.estado);
       const fecha=new Date(ev._fecha).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -3619,240 +3465,91 @@ async function renderAdmin(){
           <span class="badge e-perdido" style="font-size:9px">${l.motivo_perdida}</span>
           <div style="font-size:10px;color:var(--txt3);margin-top:4px">${new Date(l.fecha_perdida).toLocaleDateString('es-BO')}</div>
         </div>
-        ${!l.reactivado&&l.lead_id?`<button class="btn btn-sm btn-ghost" title="Reabrir el lead y mandarlo a seguimiento" onclick="reactivarLead(${l.lead_id},${l.id})">🔄 Reactivar</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
+        ${!l.reactivado&&l.lead_id?`<button class="btn btn-sm btn-ghost" onclick="reactivarLead(${l.lead_id},${l.id})">🔄 Reactivar</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
       </div>
     </div>`).join('');
   }else if(adminTabActual==='stats'){
-    try{
-      const personaFiltro = window.adminPersonaFiltro || '';
-      const periodoFiltro = window.adminPeriodoFiltro || 'mes';
-      const ahora = new Date();
-      const desde = {
-        dia: new Date(ahora.getFullYear(),ahora.getMonth(),ahora.getDate()).toISOString().slice(0,10),
-        semana: new Date(ahora.getTime()-7*86400000).toISOString().slice(0,10),
-        mes: new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString().slice(0,10),
-        anio: new Date(ahora.getFullYear(),0,1).toISOString().slice(0,10),
-      }[periodoFiltro];
-      const leadsFiltrados = (allLeads||[]).filter(l=>{
-        const enPeriodo = !l.fecha_ingreso || l.fecha_ingreso >= desde;
-        const esPersona = !personaFiltro || l.captador===personaFiltro || l.cerrador===personaFiltro;
-        return enPeriodo && esPersona;
-      });
-      const total=leadsFiltrados.length;
-      const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
-      const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
-      const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
-      const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
-
-      // Turnos de cerradores (tolerante a errores)
-      let turnos={proximo:'—',vDavid:0,vGustavo:0};
-      try{ turnos = await verEstadoTurnos() || turnos; }catch(e){ console.warn('Stats: verEstadoTurnos falló', e); }
-
-      // Tabla actividad del equipo: agrupar leadsFiltrados por colaborador (captador o cerrador)
-      const porColab = {};
-      leadsFiltrados.forEach(l=>{
-        [l.captador,l.cerrador].filter(Boolean).forEach(nombre=>{
-          if(!porColab[nombre]) porColab[nombre]={leads:new Set(),intentos:0,seguimientos:0,visitas:0,ventas:0};
-          porColab[nombre].leads.add(l.id);
-          ['intento1_estado','intento2_estado','intento3_estado'].forEach(k=>{
-            if(l[k]&&l[k]!=='pendiente') porColab[nombre].intentos++;
-          });
-          if(l.estado==='en_seguimiento'||l.estado==='seguimiento_cierre') porColab[nombre].seguimientos++;
-          if(l.estado==='visita_agendada'||l.estado==='visita_realizada') porColab[nombre].visitas++;
-          if(l.estado==='cerrado_ganado') porColab[nombre].ventas++;
-        });
-      });
-      const rows = Object.keys(porColab).sort().map(n=>{
-        const r=porColab[n];
-        return `<tr style="border-bottom:1px solid var(--brd)">
-          <td style="padding:6px 8px;font-weight:500">${n.split(' ')[0]}</td>
-          <td style="text-align:center;padding:6px 4px">${r.leads.size}</td>
-          <td style="text-align:center;padding:6px 4px">${r.intentos}</td>
-          <td style="text-align:center;padding:6px 4px">${r.seguimientos}</td>
-          <td style="text-align:center;padding:6px 4px;color:var(--blue)">${r.visitas}</td>
-          <td style="text-align:center;padding:6px 4px;color:var(--green);font-weight:600">${r.ventas}</td>
-        </tr>`;
-      }).join('');
-
-      const sinDatos = !leadsFiltrados.length;
-
-      // ═══════════ REPORTES CEO AVANZADOS ═══════════
-      // A) Velocidad del embudo (días promedio entre fases)
-      const diffDays=(a,b)=>{ if(!a||!b)return null; const ms=new Date(b)-new Date(a); return ms>0?ms/86400000:null; };
-      const sample=arr=>arr.filter(v=>v!=null&&!isNaN(v));
-      const avg=arr=>{const s=sample(arr); return s.length?(s.reduce((x,y)=>x+y,0)/s.length).toFixed(1):'—';};
-      const dCapPriContacto = avg(leadsFiltrados.map(l=>diffDays(l.fecha_ingreso,l.intento1_fecha)));
-      const dPriContVisita  = avg(leadsFiltrados.map(l=>diffDays(l.intento1_fecha,l.visita_fecha)));
-      // visita → cierre: aproximado con created_at del lead ganado vs visita_fecha
-      const dVisitaCierre   = avg(leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').map(l=>diffDays(l.visita_fecha,l.created_at)));
-
-      // B) Productividad por persona (top 3 captadoras + top 2 cerradores)
-      const colByRole = (colaboradores||[]).reduce((acc,c)=>{ acc[c.nombre]=c.rol; return acc; },{});
-      const captadores = Object.entries(porColab)
-        .filter(([n])=>colByRole[n]==='field_capturer')
-        .map(([n,r])=>({n, leads:r.leads.size, ventas:r.ventas, m2: leadsFiltrados.filter(l=>l.captador===n&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(parseFloat(l.metros_cuadrados)||0),0)}))
-        .sort((a,b)=>b.ventas-a.ventas||b.m2-a.m2).slice(0,3);
-      const cerradores = Object.entries(porColab)
-        .filter(([n])=>colByRole[n]==='closer'||colByRole[n]==='commercial_lead')
-        .map(([n,r])=>({n, leads:r.leads.size, ventas:r.ventas, m2: leadsFiltrados.filter(l=>l.cerrador===n&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(parseFloat(l.metros_cuadrados)||0),0)}))
-        .sort((a,b)=>b.ventas-a.ventas||b.m2-a.m2).slice(0,2);
-      // Actividades programadas vs completadas (semana actual)
-      const lunesSem=new Date(ahora); lunesSem.setDate(ahora.getDate()-((ahora.getDay()+6)%7)); lunesSem.setHours(0,0,0,0);
-      const finSem=new Date(lunesSem); finSem.setDate(lunesSem.getDate()+7);
-      const actSemana = (typeof calEventos!=='undefined'?calEventos:[]).filter(e=>e.fecha>=lunesSem&&e.fecha<finSem);
-      const progSem = actSemana.filter(e=>e.tipo==='programado').length;
-      const compSem = actSemana.filter(e=>e.tipo==='realizado'||e.completada).length;
-
-      // C) Tendencias: leads por semana últimas 8 semanas
-      const semanas=[];
-      for(let w=7;w>=0;w--){
-        const ini=new Date(lunesSem); ini.setDate(lunesSem.getDate()-7*w);
-        const fin=new Date(ini); fin.setDate(ini.getDate()+7);
-        const n=(allLeads||[]).filter(l=>{
-          if(!l.fecha_ingreso) return false;
-          const d=new Date(l.fecha_ingreso);
-          return d>=ini && d<fin && (!personaFiltro||l.captador===personaFiltro||l.cerrador===personaFiltro);
-        }).length;
-        semanas.push({ini, n});
-      }
-      const maxSem=Math.max(1,...semanas.map(s=>s.n));
-      const svgW=320, svgH=80, barW=Math.floor(svgW/8)-3;
-      const barsSvg = semanas.map((s,i)=>{
-        const h=Math.round(s.n/maxSem*(svgH-18));
-        const x=i*(barW+3);
-        const y=svgH-h-2;
-        return `<g><rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="#F59E0B" rx="2"/><text x="${x+barW/2}" y="${svgH-h-5}" text-anchor="middle" font-size="9" fill="#94A3B8">${s.n||''}</text></g>`;
-      }).join('');
-      // Tasa de pérdida por fase
-      const fases=['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado'];
-      const tasaPerdida = fases.map(f=>{
-        const enFase = leadsFiltrados.filter(l=>l.estado===f||l.resultado_estado===f).length;
-        const perdidosDeFase = leadsFiltrados.filter(l=>l.estado==='cerrado_perdido'&&l.resultado_estado===f).length;
-        const denom = enFase + perdidosDeFase;
-        return { fase:f.replace(/_/g,' '), pct: denom?Math.round(perdidosDeFase/denom*100):0, n:perdidosDeFase };
-      });
-
-      // D) Proyección
-      const probPorFase={nuevo:0.05,en_seguimiento:0.15,visita_agendada:0.30,visita_realizada:0.50,seguimiento_cierre:0.65,reservado:0.85,cerrado_ganado:1};
-      const pipelineM2 = leadsFiltrados
-        .filter(l=>l.estado!=='cerrado_perdido'&&l.estado!=='cerrado_ganado')
-        .reduce((s,l)=>s+((parseFloat(l.metros_cuadrados)||0)*(probPorFase[l.estado]||0.1)),0);
-      const ganadosMesActual = (allLeads||[]).filter(l=>{
-        if(l.estado!=='cerrado_ganado') return false;
-        const d=new Date(l.created_at);
-        return d.getFullYear()===ahora.getFullYear() && d.getMonth()===ahora.getMonth() && (!personaFiltro||l.captador===personaFiltro||l.cerrador===personaFiltro);
-      }).length;
-      const diaMes=ahora.getDate();
-      const diasMes=new Date(ahora.getFullYear(),ahora.getMonth()+1,0).getDate();
-      const proyeccionVentas = diaMes>0 ? Math.round(ganadosMesActual/diaMes*diasMes*10)/10 : 0;
-
-      const rowProd = function(p){ return `<tr style="border-bottom:1px solid var(--brd)"><td style="padding:6px 8px;font-weight:500">${p.n.split(' ')[0]}</td><td style="text-align:center;padding:6px 4px">${p.leads}</td><td style="text-align:center;padding:6px 4px;color:var(--green);font-weight:600">${p.ventas}</td><td style="text-align:right;padding:6px 8px;color:var(--acc)">${Math.round(p.m2).toLocaleString()} m²</td></tr>`; };
-
-      const reportesCEO = `
-      <!-- A) Velocidad del embudo -->
-      <div style="margin-top:18px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">⚡ Velocidad del embudo</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">${dCapPriContacto}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días captación → 1er contacto</div></div>
-          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--acc)">${dPriContVisita}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días contacto → visita</div></div>
-          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--green)">${dVisitaCierre}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días visita → cierre</div></div>
+    // Filtro por persona
+    const personaFiltro = window.adminPersonaFiltro || '';
+    const periodoFiltro = window.adminPeriodoFiltro || 'mes';
+    const ahora = new Date();
+    const desde = {
+      dia: new Date(ahora.getFullYear(),ahora.getMonth(),ahora.getDate()).toISOString().slice(0,10),
+      semana: new Date(ahora.getTime()-7*86400000).toISOString().slice(0,10),
+      mes: new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString().slice(0,10),
+      anio: new Date(ahora.getFullYear(),0,1).toISOString().slice(0,10),
+    }[periodoFiltro];
+    const leadsFiltrados = allLeads.filter(l=>{
+      const enPeriodo = !l.fecha_ingreso || l.fecha_ingreso >= desde;
+      const esPersona = !personaFiltro || l.captador===personaFiltro || l.cerrador===personaFiltro;
+      return enPeriodo && esPersona;
+    });
+    const total=leadsFiltrados.length;
+    const activos=allLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
+    const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
+    const perdidos=allLeads.filter(l=>l.estado==='cerrado_perdido').length;
+    const conVisita=allLeads.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    // Turnos de cerradores
+    const turnos=await verEstadoTurnos();
+    // Métricas de vendedores este mes
+    const{data:metricas}=await sb.from('metricas_vendedor').select('*');
+    const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
+    const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
+    const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
+    const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    el.innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':' Año'}</button>`).join('')}
+    </div>
+    <div style="margin-bottom:12px">
+      <select style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window.adminPersonaFiltro=this.value;setAdminTab('stats',null)">
+        <option value="">Todos los colaboradores</option>
+        ${colaboradores.map(c=>`<option value="${c.nombre}" ${personaFiltro===c.nombre?'selected':''}>${c.nombre} · ${c.rol}</option>`).join('')}
+      </select>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Leads</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos2}</div><div class="kpi-l">Activos</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados2}</div><div class="kpi-l">Ganados</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos2}</div><div class="kpi-l">Perdidos</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
+      <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:#8B5CF6">${leadsFiltrados.filter(function(l){return l.visito_oficina===true;}).length}</div><div class="kpi-l">Visitaron oficina</div></div>
+    </div>
+    <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
+          <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
+          <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
         </div>
       </div>
-
-      <!-- B) Productividad por persona -->
-      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🏆 Top productividad (m², sin USD)</div>
-        <div style="font-size:10px;color:var(--txt3);margin-bottom:6px">Actividades semana: ${progSem} programadas · ${compSem} completadas · ratio ${progSem?Math.round(compSem/progSem*100):0}%</div>
-        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin:10px 0 4px">Top 3 captadoras</div>
-        ${captadores.length?`<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--brd)"><th style="text-align:left;padding:4px 8px;color:var(--txt3);font-weight:500">Persona</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Leads</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Ventas</th><th style="text-align:right;padding:4px 8px;color:var(--txt3);font-weight:500">m² ganados</th></tr></thead><tbody>${captadores.map(rowProd).join('')}</tbody></table>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes.</div>'}
-        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin:14px 0 4px">Top 2 cerradores</div>
-        ${cerradores.length?`<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--brd)"><th style="text-align:left;padding:4px 8px;color:var(--txt3);font-weight:500">Persona</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Leads</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Ventas</th><th style="text-align:right;padding:4px 8px;color:var(--txt3);font-weight:500">m² ganados</th></tr></thead><tbody>${cerradores.map(rowProd).join('')}</tbody></table>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes.</div>'}
+      <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
+      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
+    </div>
+    ${metricas&&metricas.length?`
+    <div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid var(--brd)">
+              <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
+              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-
-      <!-- C) Tendencias -->
-      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📈 Tendencias · últimas 8 semanas</div>
-        ${maxSem>1?`<svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;max-width:100%">${barsSvg}</svg><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt3);margin-top:4px">${semanas.map(s=>'<span>'+(s.ini.getDate())+'/'+(s.ini.getMonth()+1)+'</span>').join('')}</div>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes para graficar tendencia.</div>'}
-        <div style="margin-top:14px;font-size:11px;font-weight:600;color:var(--txt2)">Tasa de pérdida por fase</div>
-        <div style="margin-top:6px">${tasaPerdida.filter(t=>t.n>0).length?tasaPerdida.filter(t=>t.n>0).map(t=>`<div style="display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:4px"><div style="flex:1;text-transform:capitalize">${t.fase}</div><div style="width:120px;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden"><div style="height:100%;background:var(--red);width:${Math.min(100,t.pct)}%"></div></div><div style="min-width:48px;text-align:right;color:var(--red);font-weight:600">${t.pct}% (${t.n})</div></div>`).join(''):'<div style="font-size:11px;color:var(--txt3);padding:6px">Sin pérdidas registradas en este período.</div>'}</div>
-      </div>
-
-      <!-- D) Proyección -->
-      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🔮 Proyección</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div style="background:var(--bg2);padding:12px;border-radius:var(--r);text-align:center">
-            <div style="font-size:22px;font-weight:700;color:var(--green)">${proyeccionVentas}</div>
-            <div style="font-size:10px;color:var(--txt3);margin-top:2px">Ventas estimadas mes (ritmo actual)</div>
-            <div style="font-size:9px;color:var(--txt3);margin-top:2px">${ganadosMesActual} ganados en ${diaMes} días</div>
-          </div>
-          <div style="background:var(--bg2);padding:12px;border-radius:var(--r);text-align:center">
-            <div style="font-size:22px;font-weight:700;color:var(--acc)">${Math.round(pipelineM2).toLocaleString()}</div>
-            <div style="font-size:10px;color:var(--txt3);margin-top:2px">Pipeline esperado (m²)</div>
-            <div style="font-size:9px;color:var(--txt3);margin-top:2px">m² activos × prob por fase</div>
-          </div>
-        </div>
-        <div style="font-size:9px;color:var(--txt3);margin-top:8px;line-height:1.4">Probabilidades: nuevo 5%, seguimiento 15%, visita agend. 30%, visita realiz. 50%, seg. cierre 65%, reservado 85%.</div>
-      </div>`;
-
-      el.innerHTML=`
-      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-        ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':'Año'}</button>`).join('')}
-      </div>
-      <div style="margin-bottom:12px">
-        <select style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window.adminPersonaFiltro=this.value;setAdminTab('stats',null)">
-          <option value="">Todos los colaboradores</option>
-          ${(colaboradores||[]).map(c=>`<option value="${c.nombre}" ${personaFiltro===c.nombre?'selected':''}>${c.nombre} · ${c.rol}</option>`).join('')}
-        </select>
-      </div>
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Leads</div></div>
-        <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos2}</div><div class="kpi-l">Activos</div></div>
-        <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados2}</div><div class="kpi-l">Ganados</div></div>
-        <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos2}</div><div class="kpi-l">Perdidos</div></div>
-        <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
-        <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
-        <div class="kpi"><div class="kpi-n" style="color:#8B5CF6">${leadsFiltrados.filter(l=>l.visito_oficina===true).length}</div><div class="kpi-l">Visitaron oficina</div></div>
-      </div>
-      <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
-          <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
-            <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
-            <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
-          </div>
-          <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
-            <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
-            <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
-        ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" title="Forzar el próximo cerrador en la rotación" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
-      </div>
-      <div style="margin-top:16px">
-        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo${personaFiltro?' · '+personaFiltro.split(' ')[0]:''}</div>
-        ${sinDatos ? `<div class="empty" style="padding:24px"><div class="empty-icon">📊</div><div class="empty-title">Sin datos en este período</div><div class="empty-sub">Probá con otro período o cambiá el filtro de colaborador.</div></div>` : `
-        <div style="overflow-x:auto">
-          <table style="width:100%;font-size:11px;border-collapse:collapse">
-            <thead>
-              <tr style="border-bottom:1px solid var(--brd)">
-                <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
-                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
-                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
-                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
-                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
-                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
-              </tr>
-            </thead>
-            <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--txt3);font-size:11px">Sin colaboradores con leads en este período.</td></tr>'}</tbody>
-          </table>
-        </div>`}
-      </div>
-      ${reportesCEO}`;
-    }catch(err){
-      console.error('Stats render error:', err);
-      el.innerHTML='<div class="empty" style="padding:30px"><div class="empty-icon">⚠</div><div class="empty-title">No se pudieron cargar las estadísticas</div><div class="empty-sub">'+(err&&err.message?err.message:'Error desconocido')+'</div><button class="btn btn-sm btn-ghost" style="margin-top:14px" onclick="setAdminTab(\'stats\',null)">Reintentar</button></div>';
-    }
+    </div>`:''}`;
   }
 }
 
@@ -4084,36 +3781,6 @@ async function verEstadoTurnos(){
 function closeSheet(name,event){
   if(event&&event.target.id!=='sheet-'+name)return;
   document.getElementById('sheet-'+name).classList.remove('open');
-}
-
-function abrirAtrasadasSheet(){
-  var ahoraTs=Date.now();
-  // Fuente: actividades pendientes vencidas (calEventos), misma que alimenta el badge.
-  var atrasadas=(calEventos||[]).filter(function(e){
-    return e.tipo==='programado' && !e.completada && e.fecha && e.fecha.getTime()<ahoraTs;
-  }).sort(function(a,b){ return a.fecha-b.fecha; });
-  var body=document.getElementById('sheet-atrasadas-body');
-  if(!body) return;
-  if(!atrasadas.length){
-    body.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:24px">No hay actividades atrasadas. ✅</div>';
-  }else{
-    body.innerHTML='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+atrasadas.length+' actividad'+(atrasadas.length!==1?'es':'')+' pendiente'+(atrasadas.length!==1?'s':'')+' vencida'+(atrasadas.length!==1?'s':'')+'. Tocá una para abrir el lead o evento.</div>'+
-      atrasadas.map(function(e){
-        var fecha=e.fecha.toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-        var tit=String(e.titulo||'Actividad').replace(/</g,'&lt;');
-        var sub=e.sub?String(e.sub).replace(/</g,'&lt;'):'';
-        var wa=e.celular?'<a href="https://wa.me/591'+e.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">W</a>':'';
-        var clickAccion=e.lead_id?"abrirSheetLead("+e.lead_id+")":"verEventoCal('"+e.id+"')";
-        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid rgba(239,68,68,0.18);background:rgba(239,68,68,0.05);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="closeSheet(\'atrasadas\');'+clickAccion+'">'+
-            '<div style="flex:1;min-width:0">'+
-              '<div style="font-size:13px;font-weight:600">⚠ '+tit+'</div>'+
-              '<div style="font-size:11px;color:var(--red);margin-top:2px">Vencida: '+fecha+(sub?' · '+sub:'')+'</div>'+
-            '</div>'+
-            wa+
-          '</div>';
-      }).join('');
-  }
-  document.getElementById('sheet-atrasadas').classList.add('open');
 }
 
 // -- AUDIO --
@@ -4390,22 +4057,7 @@ async function renderReuniones(el){
   try{
     var{data}=await sb.from('agenda_grupal').select('*').in('tipo',['visita_captador','reunion','visita_seguimiento']).order('fecha_inicio',{ascending:false}).limit(30);
     var items=data||[];
-    if(!items.length){
-      var ghostReu=function(nom,fecha,sala,cls){
-        return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
-          '<div style="display:flex;align-items:center;gap:10px">'+
-            '<div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>'+
-            '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
-            '<div style="font-size:11px;color:var(--txt3)">'+fecha+' · '+sala+'</div></div>'+
-            '<span class="badge" style="font-size:9px;background:rgba(139,92,246,0.1);color:#8B5CF6">'+cls+'</span>'+
-          '</div></div>';
-      };
-      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones agendadas</div><div class="empty-sub">Cuando agendás una visita desde la ficha de un cliente, aparece acá. Así se verá cuando tengas datos:</div></div>'+
-        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-        ghostReu('Señor X','Lun 12 may, 10:00','sala 1','Visita')+
-        ghostReu('Señora X','Mié 14 may, 15:00','sala 2','Reunión');
-      return;
-    }
+    if(!items.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin reuniones agendadas</div><div class="empty-sub">Cuando agendás una visita desde la ficha de un cliente (ej: Señor X), aparece acá automáticamente.</div></div>';return;}
     el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Reuniones y visitas recientes</div>'+
     items.map(function(r){
       var fecha=r.fecha_inicio?new Date(r.fecha_inicio).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Sin fecha';
@@ -4426,20 +4078,7 @@ async function renderCotizaciones(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
     return l.estado!=='cerrado_perdido'&&l.estado!=='nuevo';
   });
-  if(!misLeads.length){
-    var ghostCot=function(nombre,monto,m2){
-      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.32;pointer-events:none">'+
-        '<div style="display:flex;align-items:center;gap:10px">'+
-          '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nombre+'</div>'+
-          '<div style="font-size:11px;color:var(--txt3)">77712345 · $'+monto+' · '+m2+'m²</div></div>'+
-          '<span class="badge e-vrealiz" style="font-size:9px">Visita realiz.</span>'+
-        '</div></div>';
-    };
-    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📄</div><div class="empty-title">Sin leads para cotizar</div><div class="empty-sub">Llegan acá después de la visita. Así se ven cuando hay datos:</div></div>'+
-      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-      ghostCot('Señor Ejemplo','25.000','120');
-    return;
-  }
+  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">Sin leads para cotizar</div><div class="empty-sub">Llegan acá después de la visita</div></div>';return;}
   el.innerHTML='<div style="padding:8px 10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para ver sus datos y preparar cotización.</div>'+
   misLeads.map(function(l){
     var est=estilo(l.estado);
@@ -4457,20 +4096,7 @@ async function renderPropuestas(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre;
     return l.estado==='seguimiento_cierre'||l.estado==='reservado'||l.estado==='en_tramite'||l.estado==='cerrado_ganado';
   });
-  if(!misLeads.length){
-    var ghostProp=function(nom,cer,m2,cls,lbl){
-      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
-        '<div style="display:flex;align-items:center;gap:10px">'+
-        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
-        '<div style="font-size:11px;color:var(--txt3)">'+cer+' · '+m2+' m²</div></div>'+
-        '<span class="badge '+cls+'" style="font-size:9px">'+lbl+'</span></div></div>';
-    };
-    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📋</div><div class="empty-title">Sin propuestas</div><div class="empty-sub">Necesitás leads en seguimiento de cierre. Así se verá cuando tengas datos:</div></div>'+
-      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-      ghostProp('Señor X','Gustavo','120','e-scierre','Seg. cierre')+
-      ghostProp('Señora X','David','85','e-reservado','Reservado');
-    return;
-  }
+  if(!misLeads.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sin propuestas</div><div class="empty-sub">Necesitás leads en seguimiento de cierre</div></div>';return;}
   el.innerHTML='<div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:var(--r);margin-bottom:12px;font-size:11px;color:var(--txt3)">Tocá un lead para subir propuesta técnica o editar datos de cierre.</div>'+
   misLeads.map(function(l){
     var est=estilo(l.estado);
@@ -4488,20 +4114,7 @@ async function renderReservas(el){
     if(cu.rol==='closer') return l.cerrador===cu.nombre&&l.estado==='reservado';
     return l.estado==='reservado';
   });
-  if(!reservados.length){
-    var ghostRes=function(nom,m2,cer){
-      return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
-        '<div style="display:flex;align-items:center;gap:10px">'+
-        '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
-        '<div style="font-size:11px;color:var(--txt3)">'+m2+' m² · cerrador: '+cer+'</div></div>'+
-        '<span class="badge e-reservado" style="font-size:9px">Reservado</span></div></div>';
-    };
-    el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div><div class="empty-sub">Un lead pasa a Reservado al pagar anticipo. Así se verá cuando tengas datos:</div></div>'+
-      '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-      ghostRes('Señor X','120','Gustavo')+
-      ghostRes('Señora X','85','David');
-    return;
-  }
+  if(!reservados.length){el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-title">Sin reservas</div><div class="empty-sub">Un lead pasa a Reservado al pagar anticipo</div></div>';return;}
   el.innerHTML=reservados.map(function(l){
     return '<div class="card" style="padding:10px 14px;margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+
       '<div style="display:flex;align-items:center;gap:10px">'+
@@ -4866,101 +4479,9 @@ async function guardarSolicitudArquitectura(leadId, datos){
       metros_cuadrados: datos.metros_cuadrados||null,
       precio_estimado: datos.precio_estimado||null,
       descripcion: datos.descripcion||null,
-      estado: 'pendiente',
-      fecha_solicitud: new Date().toISOString()
+      estado: 'pendiente'
     }]);
-    // Si existe una cotización para ese lead, marcarla como pendiente_arquitectura
-    try{
-      await sb.from('cotizaciones').update({estado:'pendiente_arquitectura',updated_at:new Date().toISOString()}).eq('lead_id',leadId);
-    }catch(e2){ console.log('Update cotizacion estado:', e2.message); }
   }catch(e){ console.log('Solicitud arq error:', e.message); }
-}
-
-// ══════════════════════════════════════
-// PANEL ARQUITECTURA — Solicitudes pendientes
-// ══════════════════════════════════════
-async function renderArquitecturaPanel(){
-  var el=document.getElementById('arq-lista');
-  if(!el) return;
-  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando solicitudes...</div>';
-  try{
-    var {data,error}=await sb.from('solicitudes_propuesta')
-      .select('*')
-      .in('estado',['pendiente','en_proceso','pendiente_arquitectura'])
-      .order('fecha_solicitud',{ascending:false,nullsLast:true})
-      .order('created_at',{ascending:false})
-      .limit(200);
-    if(error) throw error;
-    var items=data||[];
-    var sub=document.getElementById('arq-sub');
-    if(sub) sub.textContent=items.length+' pendiente'+(items.length!==1?'s':'');
-    if(!items.length){
-      // Empty state con ghost
-      var ghost=function(nom,m2,cer,hace){
-        return '<div style="border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:8px;opacity:0.4;pointer-events:none">'+
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
-            '<div style="font-size:13px;font-weight:600">'+nom+'</div>'+
-            '<span class="badge" style="font-size:9px;background:rgba(245,158,11,0.12);color:var(--acc)">Pendiente</span>'+
-          '</div>'+
-          '<div style="font-size:11px;color:var(--txt3)">'+m2+' m² · cerrador: '+cer+' · hace '+hace+'</div>'+
-        '</div>';
-      };
-      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📐</div><div class="empty-title">Sin solicitudes pendientes</div><div class="empty-sub">Cuando un cerrador envíe una cotización al grupo, aparecerá acá. Así se verá:</div></div>'+
-        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-        ghost('Señor X','120','Gustavo','2 h')+
-        ghost('Señora X','85','David','1 día');
-      return;
-    }
-    el.innerHTML=items.map(function(s){
-      var fecha=s.fecha_solicitud||s.created_at;
-      var hace=fecha?new Date(fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
-      var presup=s.precio_estimado?'$'+Number(s.precio_estimado).toLocaleString():'—';
-      var desc=(s.descripcion||'').toString().replace(/</g,'&lt;');
-      var arch=s.archivo_url?'<a href="'+s.archivo_url+'" target="_blank" style="font-size:10px;color:var(--blue);text-decoration:none">📎 '+(s.archivo_nombre||'archivo')+'</a>':'';
-      return '<div style="border:1px solid var(--brd);border-radius:var(--r2);padding:14px;margin-bottom:8px;background:var(--bg2)">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+
-          '<div style="font-size:14px;font-weight:600">'+(s.nombre_cliente||'Cliente')+'</div>'+
-          '<span class="badge" style="font-size:9px;background:rgba(245,158,11,0.12);color:var(--acc)">'+s.estado+'</span>'+
-        '</div>'+
-        '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11px;color:var(--txt2);margin-bottom:8px">'+
-          '<span style="color:var(--txt3)">m²</span><span style="color:var(--acc);font-weight:600">'+(s.metros_cuadrados||'—')+'</span>'+
-          '<span style="color:var(--txt3)">Presupuesto</span><span>'+presup+'</span>'+
-          '<span style="color:var(--txt3)">Cerrador</span><span>'+(s.cerrador||'—')+'</span>'+
-          '<span style="color:var(--txt3)">Solicitada</span><span>'+hace+'</span>'+
-          '<span style="color:var(--txt3)">Ciudad</span><span>'+(s.ciudad||'—')+'</span>'+
-          (desc?'<span style="color:var(--txt3)">Detalles</span><span style="font-style:italic">'+desc+'</span>':'')+
-        '</div>'+
-        (arch?'<div style="margin-bottom:8px">'+arch+'</div>':'')+
-        '<button class="btn btn-sm btn-primary" title="Cambiar estado a entregada y notificar al cerrador" onclick="marcarSolicitudEntregada('+s.id+')">✓ Marcar como entregada</button>'+
-      '</div>';
-    }).join('');
-  }catch(e){
-    el.innerHTML='<div class="empty" style="padding:24px"><div class="empty-icon">⚠</div><div class="empty-title">No se pudieron cargar las solicitudes</div><div class="empty-sub">'+(e.message||e)+'</div></div>';
-  }
-}
-
-async function marcarSolicitudEntregada(id){
-  if(!confirm('¿Marcar esta solicitud como entregada? Se le avisará al cerrador.')) return;
-  try{
-    var {data:s}=await sb.from('solicitudes_propuesta').select('*').eq('id',id).single();
-    await sb.from('solicitudes_propuesta').update({estado:'entregada',fecha_entrega:new Date().toISOString()}).eq('id',id);
-    // Actualizar la cotización vinculada (si existe)
-    if(s&&s.lead_id){
-      try{ await sb.from('cotizaciones').update({estado:'entregada',updated_at:new Date().toISOString()}).eq('lead_id',s.lead_id); }catch(_){}
-    }
-    // Notificar al cerrador
-    if(s&&s.cerrador){
-      try{
-        await sb.from('notificaciones').insert([{
-          para:s.cerrador, de:'Arquitectura GEAT', tipo:'propuesta_lista',
-          mensaje:'La propuesta de '+(s.nombre_cliente||'cliente')+' ya está lista.',
-          lead_id:s.lead_id||null
-        }]);
-      }catch(_){}
-    }
-    toast('Marcada como entregada');
-    renderArquitecturaPanel();
-  }catch(e){ toast('Error: '+(e.message||e),'error'); }
 }
 
 
@@ -5082,8 +4603,7 @@ async function renderComisiones(el){
       if(!c.pagado_cerrador) porPersona[cer].pendiente+=(c.comision_cerrador_usd||0);
     });
 
-    var html = '<div style="padding:8px 10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.18);border-radius:var(--r);margin-bottom:10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Las comisiones se calculan automáticamente al marcar un lead como Ganado.</div>'+
-      '<div class="kpi-grid" style="margin-bottom:14px">'+
+    var html = '<div class="kpi-grid" style="margin-bottom:14px">'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+items.length+'</div><div class="kpi-l">Ventas</div></div>'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--green)">'+totalM2.toLocaleString()+'</div><div class="kpi-l">m² totales</div></div>'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--red)">$'+(totalPendCap+totalPendCer)+'</div><div class="kpi-l">Comisiones pend.</div></div>'+
@@ -5115,14 +4635,14 @@ async function renderComisiones(el){
         html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Captador: '+(c.captador||'-').split(' ')[0]+'</div>';
         html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_captador_usd+'</div>';
         html += '<div style="font-size:10px;color:'+(c.pagado_captador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_captador?'Pagado':'Pendiente')+'</div>';
-        if(!c.pagado_captador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'captador\')" title="Registrar comisión pagada (admin)" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
+        if(!c.pagado_captador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'captador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
         html += '</div>';
         // Cerrador
         html += '<div style="background:var(--bg3);border-radius:var(--r);padding:10px">';
         html += '<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">Cerrador: '+(c.cerrador||'-').split(' ')[0]+'</div>';
         html += '<div style="font-size:16px;font-weight:700;color:var(--green)">$'+c.comision_cerrador_usd+'</div>';
         html += '<div style="font-size:10px;color:'+(c.pagado_cerrador?'var(--green)':'var(--red)')+';margin-top:4px">'+(c.pagado_cerrador?'Pagado':'Pendiente')+'</div>';
-        if(!c.pagado_cerrador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'cerrador\')" title="Registrar comisión pagada (admin)" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
+        if(!c.pagado_cerrador&&cu.rol==='admin'){ html += '<button onclick="pagarComision('+c.id+',\'cerrador\')" style="width:100%;margin-top:6px;padding:5px;background:none;border:1px solid var(--brd);border-radius:var(--r);color:var(--txt3);cursor:pointer;font-size:10px">Marcar pagado</button>'; }
         html += '</div>';
         html += '</div></div>';
       });
@@ -5273,48 +4793,33 @@ function filtrarNotas(){
   renderNotas();
 }
 
-function limpiarFormNota(){
+function abrirNuevaNota(){
   notaEditId = null;
   notaColorActual = '#334155';
-  var t=document.getElementById('nota-titulo'); if(t) t.value='';
-  var x=document.getElementById('nota-texto'); if(x) x.value='';
-  var r=document.getElementById('nota-recordar'); if(r) r.value='';
-  var st=document.getElementById('nota-sheet-title'); if(st) st.textContent='Nueva nota';
-  var cb=document.getElementById('nota-cancel-btn'); if(cb) cb.style.display='none';
-  document.querySelectorAll('#calendario-notas [id^="nc-"]').forEach(function(b){
+  document.getElementById('nota-titulo').value='';
+  document.getElementById('nota-cat').value='general';
+  document.getElementById('nota-texto').value='';
+  document.getElementById('nota-recordar').value='';
+  document.getElementById('nota-sheet-title').textContent='Nueva nota';
+  document.querySelectorAll('[id^="nc-"]').forEach(function(b){
     if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
   });
-  var gris=document.getElementById('nc-gris');
+  var gris = document.getElementById('nc-gris');
   if(gris) gris.style.borderColor='var(--acc)';
-}
-
-function abrirNuevaNota(){
-  limpiarFormNota();
-  // Si el drawer está cerrado, abrirlo
-  var dr=document.getElementById('calendario-notas');
-  if(dr && !dr.classList.contains('open')) toggleNotasDrawer();
-  // Foco en título
-  setTimeout(function(){ var t=document.getElementById('nota-titulo'); if(t) t.focus(); }, 280);
-}
-
-function cancelarEdicionNota(){
-  limpiarFormNota();
+  document.getElementById('sheet-nota').classList.add('open');
 }
 
 async function guardarNotaMejorada(){
-  var tEl=document.getElementById('nota-titulo');
-  var xEl=document.getElementById('nota-texto');
-  var titulo = tEl ? tEl.value.trim() : '';
-  var texto = xEl ? xEl.value.trim() : '';
+  var titulo = document.getElementById('nota-titulo').value.trim();
+  var texto = document.getElementById('nota-texto').value.trim();
   if(!titulo&&!texto){ toast('Escribe algo en la nota','error'); return; }
-  var rEl=document.getElementById('nota-recordar');
   var datos = {
     colaborador: cu.nombre,
     titulo: titulo||'Sin titulo',
     texto: texto,
-    categoria: 'general',
+    categoria: document.getElementById('nota-cat').value||'general',
     color: notaColorActual,
-    recordar_en: rEl && rEl.value ? new Date(rEl.value).toISOString() : null,
+    recordar_en: document.getElementById('nota-recordar').value ? new Date(document.getElementById('nota-recordar').value).toISOString() : null,
     privada: true
   };
   try{
@@ -5323,7 +4828,7 @@ async function guardarNotaMejorada(){
     } else {
       await sb.from('notas_personales').insert([datos]);
     }
-    limpiarFormNota();
+    closeSheet('nota');
     toast('Nota guardada');
     renderNotas();
   }catch(e){ toast('Error: '+e.message,'error'); }
@@ -5341,19 +4846,7 @@ async function renderNotas(){
     var q = (document.getElementById('notas-q')?.value||'').toLowerCase();
     if(q) items = items.filter(function(n){ return (n.titulo||'').toLowerCase().includes(q)||(n.texto||'').toLowerCase().includes(q); });
     if(!items.length){
-      var ghostNota=function(col,icono,titulo,texto){
-        return '<div style="background:'+col+'30;border:1px solid '+col+'50;border-left:4px solid '+col+';border-radius:var(--r2);padding:13px 14px;margin-bottom:8px;opacity:0.32;pointer-events:none">'+
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'+
-            '<span style="font-size:14px">'+icono+'</span>'+
-            '<span style="font-size:13px;font-weight:600">'+titulo+'</span>'+
-          '</div>'+
-          '<div style="font-size:12px;color:var(--txt2);line-height:1.6">'+texto+'</div>'+
-        '</div>';
-      };
-      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">&#128221;</div><div class="empty-title">Aquí van tus notas privadas</div><div class="empty-sub">Solo vos las ves. Escribí abajo para crear la primera. Así se ven:</div></div>'+
-        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-        ghostNota('#1e3a5f','&#9201;','Llamar Señor Ejemplo','Pasarle modelo de 120m² al contado.')+
-        ghostNota('#14532d','&#128161;','Idea propuesta Señora Ejemplo','Mostrar fachada estilo industrial, le gustó.');
+      el.innerHTML='<div class="empty"><div class="empty-icon">&#128221;</div><div class="empty-title">Aquí van tus notas privadas</div><div class="empty-sub">Solo vos las ves. Tocá <b>+ Nueva</b> para crear una (recordatorio de Señor X, idea de propuesta, etc.).</div></div>';
       return;
     }
     var catIcons = {general:'&#128203;',recordatorio:'&#9201;',lead:'&#128101;',idea:'&#128161;'};
@@ -5386,21 +4879,12 @@ async function editarNota(id){
     if(!data) return;
     notaEditId = id;
     notaColorActual = data.color||'#334155';
-    var t=document.getElementById('nota-titulo'); if(t) t.value = data.titulo||'';
-    var x=document.getElementById('nota-texto'); if(x) x.value = data.texto||'';
-    var r=document.getElementById('nota-recordar'); if(r) r.value = data.recordar_en ? new Date(data.recordar_en).toISOString().slice(0,16) : '';
-    var st=document.getElementById('nota-sheet-title'); if(st) st.textContent = 'Editar nota';
-    var cb=document.getElementById('nota-cancel-btn'); if(cb) cb.style.display='';
-    // Marcar el color seleccionado
-    document.querySelectorAll('#calendario-notas [id^="nc-"]').forEach(function(b){
-      if(b.style&&b.style.borderRadius==='50%') b.style.borderColor='transparent';
-    });
-    var colorMap={'#334155':'nc-gris','#1e3a5f':'nc-azul','#14532d':'nc-verde','#78350f':'nc-naranjo','#4c1d95':'nc-morado','#7f1d1d':'nc-rojo'};
-    var btnColor=document.getElementById(colorMap[notaColorActual]||'nc-gris');
-    if(btnColor) btnColor.style.borderColor='var(--acc)';
-    var dr=document.getElementById('calendario-notas');
-    if(dr && !dr.classList.contains('open')) toggleNotasDrawer();
-    setTimeout(function(){ if(t) t.focus(); }, 280);
+    document.getElementById('nota-titulo').value = data.titulo||'';
+    document.getElementById('nota-cat').value = data.categoria||'general';
+    document.getElementById('nota-texto').value = data.texto||'';
+    document.getElementById('nota-recordar').value = data.recordar_en ? new Date(data.recordar_en).toISOString().slice(0,16) : '';
+    document.getElementById('nota-sheet-title').textContent = 'Editar nota';
+    document.getElementById('sheet-nota').classList.add('open');
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -5436,31 +4920,32 @@ async function guardarEventoCal(){
   if(!titulo){ toast('Escribe un titulo','error'); return; }
   if(!inicio){ toast('Selecciona fecha de inicio','error'); return; }
   var visible = document.getElementById('ev-visible').value==='1';
-  var fechaIso = new Date(inicio).toISOString();
-  // Persistir en agenda_personal (fuente unificada). eventos_calendario quedó deprecada el 7-may-2026.
   var datos = {
     colaborador: cu.nombre,
     titulo: titulo,
-    nota: document.getElementById('ev-desc').value||null,
-    fecha_programada: fechaIso,
-    tipo: document.getElementById('ev-tipo').value || 'personal',
+    descripcion: document.getElementById('ev-desc').value||null,
+    fecha_inicio: new Date(inicio).toISOString(),
+    fecha_fin: document.getElementById('ev-fin').value ? new Date(document.getElementById('ev-fin').value).toISOString() : null,
+    tipo: document.getElementById('ev-tipo').value,
     lead_id: document.getElementById('ev-lead').value ? parseInt(document.getElementById('ev-lead').value) : null,
-    completada: false
+    visible_equipo: visible,
+    color: visible ? '#3B82F6' : '#F59E0B'
   };
   try{
-    await sb.from('agenda_personal').insert([datos]);
-    // Si es visible para el equipo, agregar a agenda_grupal también
+    await sb.from('eventos_calendario').insert([datos]);
+    // Si es visible para el equipo, agregar a agenda_grupal tambien
     if(visible){
       await sb.from('agenda_grupal').insert([{
         titulo: titulo,
         colaborador: cu.nombre,
         rol_colaborador: cu.rol,
-        fecha_actividad: fechaIso,
+        fecha_actividad: datos.fecha_inicio,
         lead_id: datos.lead_id||null
       }]).catch(function(){});
     }
     closeSheet('evento-cal');
     toast('Evento creado');
+    // Recargar agenda
     cargarAgendaPersonal();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
@@ -5777,8 +5262,20 @@ function renderContactosHoy(){
     return l.proximo_contacto===hoy&&
            l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
   });
-  // El pill "🔴 X atrasadas" ahora lo escribe renderStatsAgenda() desde calEventos (única fuente).
   var html = '';
+  if(atrasados.length){
+    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px">ATRASADOS ('+atrasados.length+')</div>';
+    atrasados.slice(0,5).forEach(function(l){
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
+      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
+      html += '<div style="font-size:10px;color:var(--txt3)">'+l.proximo_contacto+'</div></div>';
+      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none">W</a>';
+      html += '</div>';
+    });
+    if(atrasados.length>5) html += '<div style="font-size:10px;color:var(--red);margin-top:4px">+'+(atrasados.length-5)+' mas</div>';
+    html += '</div>';
+  }
   if(paraHoy.length){
     html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
     html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;margin-bottom:8px">CONTACTAR HOY ('+paraHoy.length+')</div>';
@@ -6033,17 +5530,7 @@ async function renderReporteLlamadas(el){
     var listaDiv=document.createElement('div');
     listaDiv.id='llamadas-lista';
     if(!items.length){
-      var ghostLla=function(nom,res,resCol,fec){
-        return '<div class="card" style="padding:10px 14px;margin-bottom:6px;opacity:0.4;pointer-events:none">'+
-          '<div style="display:flex;align-items:center;gap:10px">'+
-          '<div style="flex:1"><div style="font-size:13px;font-weight:500">'+nom+'</div>'+
-          '<div style="font-size:11px;color:var(--txt3)">'+fec+' · captador</div></div>'+
-          '<span class="badge" style="font-size:9px;background:'+resCol+'22;color:'+resCol+'">'+res+'</span></div></div>';
-      };
-      listaDiv.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">&#128222;</div><div class="empty-title">Sin llamadas registradas</div><div class="empty-sub">Acá vas a ver el historial de cada intento. Así se verá cuando tengas datos:</div></div>'+
-        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
-        ghostLla('Señor X','Contestó','#10B981','Hoy 09:30')+
-        ghostLla('Señora X','No contestó','#EF4444','Ayer 17:00');
+      listaDiv.innerHTML='<div class="empty"><div class="empty-icon">&#128222;</div><div class="empty-title">Sin llamadas registradas</div></div>';
     } else {
       listaDiv.innerHTML=_renderListaLlamadas(items);
     }
@@ -6354,7 +5841,7 @@ initLogin();
     </div>
     <div class="sheet-body">
       <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r);padding:10px;margin-bottom:14px;font-size:11px;color:var(--txt2)">
-        Estos 9 campos ayudan al cerrador. Llenalos cuando puedas, no son obligatorios.
+        Completa estos 9 campos para calificar correctamente al cliente. Son la base para definir si avanza o no.
       </div>
 
       <div class="fg" style="margin-bottom:10px">
@@ -6426,7 +5913,54 @@ initLogin();
 
 
 <!-- SHEET: NUEVA NOTA -->
-<!-- (sheet-nota eliminado: el formulario de notas ahora vive inline en el drawer del calendario grupal) -->
+<div class="sheet-overlay" id="sheet-nota" onclick="if(event.target===this)closeSheet('nota')">
+  <div class="sheet" style="max-height:70vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('nota')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title" id="nota-sheet-title">Nueva nota</div>
+      <button class="sheet-close" onclick="closeSheet('nota')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="fg" style="margin-bottom:10px">
+        <label>Titulo</label>
+        <input class="fi" id="nota-titulo" placeholder="Titulo de la nota...">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Categoria</label>
+        <select class="fsel" id="nota-cat">
+          <option value="general">General</option>
+          <option value="recordatorio">Recordatorio</option>
+          <option value="lead">Lead</option>
+          <option value="idea">Idea</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Color</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="setNotaColor('#334155',this)" id="nc-gris" style="width:28px;height:28px;border-radius:50%;background:#334155;border:2px solid var(--acc);cursor:pointer" title="Gris"></button>
+          <button onclick="setNotaColor('#1e3a5f',this)" id="nc-azul" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid transparent;cursor:pointer" title="Azul"></button>
+          <button onclick="setNotaColor('#14532d',this)" id="nc-verde" style="width:28px;height:28px;border-radius:50%;background:#14532d;border:2px solid transparent;cursor:pointer" title="Verde"></button>
+          <button onclick="setNotaColor('#78350f',this)" id="nc-naranjo" style="width:28px;height:28px;border-radius:50%;background:#78350f;border:2px solid transparent;cursor:pointer" title="Naranja"></button>
+          <button onclick="setNotaColor('#4c1d95',this)" id="nc-morado" style="width:28px;height:28px;border-radius:50%;background:#4c1d95;border:2px solid transparent;cursor:pointer" title="Morado"></button>
+          <button onclick="setNotaColor('#7f1d1d',this)" id="nc-rojo" style="width:28px;height:28px;border-radius:50%;background:#7f1d1d;border:2px solid transparent;cursor:pointer" title="Rojo"></button>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Contenido</label>
+        <textarea class="fi" id="nota-texto" rows="6" style="resize:vertical;min-height:120px" placeholder="Escribe tu nota aqui..."></textarea>
+      </div>
+      <div class="fg">
+        <label>Recordar el (opcional)</label>
+        <input class="fi" id="nota-recordar" type="datetime-local">
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" style="flex:1" onclick="guardarNotaMejorada()">Guardar</button>
+      <button class="btn btn-g" onclick="closeSheet('nota')">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- SHEET: NUEVO EVENTO CALENDARIO -->
