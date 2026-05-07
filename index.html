@@ -376,6 +376,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <button title="Mes anterior" onclick="navMesInicio(-1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">‹</button>
             <div style="font-size:13px;font-weight:600;min-width:110px;text-align:center" id="inicio-cal-label">—</div>
             <button title="Mes siguiente" onclick="navMesInicio(1)" style="width:26px;height:26px;border-radius:50%;background:none;border:1px solid var(--brd);color:var(--txt2);cursor:pointer;font-size:12px">›</button>
+            <button id="inicio-cal-atrasadas" title="Ver atrasadas" onclick="abrirAtrasadasSheet()" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:var(--red);font-size:10px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;white-space:nowrap">🔴 <span id="inicio-cal-atrasadas-n">0</span> atrasadas</button>
           </div>
           <div style="display:flex;gap:4px">
             <button class="tab active" id="inicio-view-dia" onclick="setInicioView('dia',this)" style="padding:4px 8px;font-size:10px">Día</button>
@@ -790,6 +791,18 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px" onclick="iniciarGrabacion()">Reintentar</button>
       <button class="btn btn-ghost btn-sm" style="width:100%" onclick="cancelarAudio()">Cancelar</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ SHEET: ATRASADAS (lista de leads con proximo_contacto vencido) ══ -->
+<div class="sheet-overlay" id="sheet-atrasadas" onclick="if(event.target===this)closeSheet('atrasadas')">
+  <div class="sheet" style="max-height:85vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">🔴 Atrasadas</div>
+      <button class="sheet-close" title="Cerrar" onclick="closeSheet('atrasadas')">x</button>
+    </div>
+    <div class="sheet-body" id="sheet-atrasadas-body"></div>
   </div>
 </div>
 
@@ -3803,6 +3816,36 @@ function closeSheet(name,event){
   document.getElementById('sheet-'+name).classList.remove('open');
 }
 
+function abrirAtrasadasSheet(){
+  var hoy=new Date().toISOString().slice(0,10);
+  var base = (cu.rol==='admin'||cu.rol==='commercial_lead') ? allLeads :
+    cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
+    cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
+  var atrasados = base.filter(function(l){
+    return l.proximo_contacto && l.proximo_contacto<hoy &&
+           l.estado!=='cerrado_ganado' && l.estado!=='cerrado_perdido';
+  }).sort(function(a,b){ return (a.proximo_contacto||'').localeCompare(b.proximo_contacto||''); });
+  var body=document.getElementById('sheet-atrasadas-body');
+  if(!body) return;
+  if(!atrasados.length){
+    body.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:24px">No hay atrasadas. ✅</div>';
+  }else{
+    body.innerHTML='<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">'+atrasados.length+' lead'+(atrasados.length!==1?'s':'')+' con próximo contacto vencido. Tocá uno para abrirlo.</div>'+
+      atrasados.map(function(l){
+        var est=estilo(l.estado);
+        var wa=l.celular?'<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:32px;height:32px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">W</a>':'';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid rgba(239,68,68,0.18);background:rgba(239,68,68,0.05);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="closeSheet(\'atrasadas\');abrirSheetLead('+l.id+')">'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="font-size:13px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span>'+l.nombre+'</span><span class="badge '+est.cls+'">'+est.label+'</span></div>'+
+              '<div style="font-size:11px;color:var(--red);margin-top:2px">⚠ Vencido el '+l.proximo_contacto+(l.celular?' · '+l.celular:'')+'</div>'+
+            '</div>'+
+            wa+
+          '</div>';
+      }).join('');
+  }
+  document.getElementById('sheet-atrasadas').classList.add('open');
+}
+
 // -- AUDIO --
 let srec=null,mRec=null,audioChunks=[];
 let audioTimerInt=null,audioStartT=null;
@@ -5282,20 +5325,12 @@ function renderContactosHoy(){
     return l.proximo_contacto===hoy&&
            l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
   });
+  // Pill de atrasadas en el header del calendario (reemplaza el panel grande viejo)
+  var pill=document.getElementById('inicio-cal-atrasadas');
+  var pillN=document.getElementById('inicio-cal-atrasadas-n');
+  if(pill){ pill.style.display = atrasados.length ? '' : 'none'; }
+  if(pillN){ pillN.textContent = atrasados.length; }
   var html = '';
-  if(atrasados.length){
-    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px">ATRASADOS ('+atrasados.length+')</div>';
-    atrasados.slice(0,5).forEach(function(l){
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
-      html += '<div><div style="font-size:12px;font-weight:500">'+l.nombre+'</div>';
-      html += '<div style="font-size:10px;color:var(--txt3)">'+l.proximo_contacto+'</div></div>';
-      if(l.celular) html += '<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none">W</a>';
-      html += '</div>';
-    });
-    if(atrasados.length>5) html += '<div style="font-size:10px;color:var(--red);margin-top:4px">+'+(atrasados.length-5)+' mas</div>';
-    html += '</div>';
-  }
   if(paraHoy.length){
     html += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--r2);padding:12px;margin-bottom:8px">';
     html += '<div style="font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;margin-bottom:8px">CONTACTAR HOY ('+paraHoy.length+')</div>';
