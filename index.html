@@ -667,6 +667,16 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     </div>
 
     <!-- PANEL TECNICO — Solicitudes de propuesta -->
+    <!-- ══ PANEL ARQUITECTURA: SOLICITUDES PENDIENTES ══ -->
+    <div class="panel" id="pn-arquitectura">
+      <div class="ph">
+        <div><div class="ph-title">Solicitudes pendientes</div><div class="ph-sub" id="arq-sub">Cotizaciones enviadas por los cerradores</div></div>
+        <button class="btn btn-sm btn-ghost" title="Recargar lista" onclick="renderArquitecturaPanel()">⟳</button>
+      </div>
+      <div style="padding:8px 10px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:var(--r);margin-bottom:10px;font-size:11px;color:var(--txt2);line-height:1.4">💡 Cuando un cerrador manda una cotización al grupo, aparece acá. Tocá <b>Marcar como entregada</b> al subir la propuesta.</div>
+      <div id="arq-lista"><div class="loading"><span class="spin"></span>Cargando solicitudes...</div></div>
+    </div>
+
     <div class="panel" id="pn-tecnico-upload">
       <div class="ph">
         <div><div class="ph-title">Subir Propuesta</div><div class="ph-sub">Selecciona la solicitud y sube el archivo</div></div>
@@ -1377,7 +1387,7 @@ const NAVS={
     {id:'admin',icon:'&#9881;',label:'Admin'},
   ],
   tecnico:[
-    {id:'inicio',icon:'&#128196;',label:'Solicitudes'},
+    {id:'arquitectura',icon:'&#128196;',label:'Solicitudes'},
     {id:'tecnico-upload',icon:'&#128228;',label:'Subir'},
   ],
 };
@@ -1399,6 +1409,7 @@ function sw(id,btn){
   else{const b=document.querySelector(`[data-nav="${id}"]`);if(b)b.classList.add('active');}
   // Cargar al cambiar de panel
   if(id==='leads')renderLeads();
+  if(id==='arquitectura')renderArquitecturaPanel();
   if(id==='tecnico-upload')cargarSelectSolicitudes();
   if(id==='todos')renderTodos();
   if(id==='notas')renderNotas();
@@ -1412,6 +1423,11 @@ function sw(id,btn){
 async function initApp(){
   document.getElementById('tb-user').textContent=cu.nombre;
   buildNav();
+  // Rol tecnico: arrancar en panel de Arquitectura, no en Inicio comercial.
+  if(cu.rol==='tecnico'){
+    sw('arquitectura', document.querySelector('[data-nav="arquitectura"]'));
+    return;
+  }
   // Botón reunión extra solo para admin y commercial_lead
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
     const btn=document.getElementById('btn-reunion-extra');
@@ -4850,9 +4866,101 @@ async function guardarSolicitudArquitectura(leadId, datos){
       metros_cuadrados: datos.metros_cuadrados||null,
       precio_estimado: datos.precio_estimado||null,
       descripcion: datos.descripcion||null,
-      estado: 'pendiente'
+      estado: 'pendiente',
+      fecha_solicitud: new Date().toISOString()
     }]);
+    // Si existe una cotización para ese lead, marcarla como pendiente_arquitectura
+    try{
+      await sb.from('cotizaciones').update({estado:'pendiente_arquitectura',updated_at:new Date().toISOString()}).eq('lead_id',leadId);
+    }catch(e2){ console.log('Update cotizacion estado:', e2.message); }
   }catch(e){ console.log('Solicitud arq error:', e.message); }
+}
+
+// ══════════════════════════════════════
+// PANEL ARQUITECTURA — Solicitudes pendientes
+// ══════════════════════════════════════
+async function renderArquitecturaPanel(){
+  var el=document.getElementById('arq-lista');
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando solicitudes...</div>';
+  try{
+    var {data,error}=await sb.from('solicitudes_propuesta')
+      .select('*')
+      .in('estado',['pendiente','en_proceso','pendiente_arquitectura'])
+      .order('fecha_solicitud',{ascending:false,nullsLast:true})
+      .order('created_at',{ascending:false})
+      .limit(200);
+    if(error) throw error;
+    var items=data||[];
+    var sub=document.getElementById('arq-sub');
+    if(sub) sub.textContent=items.length+' pendiente'+(items.length!==1?'s':'');
+    if(!items.length){
+      // Empty state con ghost
+      var ghost=function(nom,m2,cer,hace){
+        return '<div style="border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:8px;opacity:0.4;pointer-events:none">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+            '<div style="font-size:13px;font-weight:600">'+nom+'</div>'+
+            '<span class="badge" style="font-size:9px;background:rgba(245,158,11,0.12);color:var(--acc)">Pendiente</span>'+
+          '</div>'+
+          '<div style="font-size:11px;color:var(--txt3)">'+m2+' m² · cerrador: '+cer+' · hace '+hace+'</div>'+
+        '</div>';
+      };
+      el.innerHTML='<div class="empty" style="padding-bottom:8px"><div class="empty-icon">📐</div><div class="empty-title">Sin solicitudes pendientes</div><div class="empty-sub">Cuando un cerrador envíe una cotización al grupo, aparecerá acá. Así se verá:</div></div>'+
+        '<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin:4px 2px 6px">Ejemplo · no son reales</div>'+
+        ghost('Señor X','120','Gustavo','2 h')+
+        ghost('Señora X','85','David','1 día');
+      return;
+    }
+    el.innerHTML=items.map(function(s){
+      var fecha=s.fecha_solicitud||s.created_at;
+      var hace=fecha?new Date(fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+      var presup=s.precio_estimado?'$'+Number(s.precio_estimado).toLocaleString():'—';
+      var desc=(s.descripcion||'').toString().replace(/</g,'&lt;');
+      var arch=s.archivo_url?'<a href="'+s.archivo_url+'" target="_blank" style="font-size:10px;color:var(--blue);text-decoration:none">📎 '+(s.archivo_nombre||'archivo')+'</a>':'';
+      return '<div style="border:1px solid var(--brd);border-radius:var(--r2);padding:14px;margin-bottom:8px;background:var(--bg2)">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+
+          '<div style="font-size:14px;font-weight:600">'+(s.nombre_cliente||'Cliente')+'</div>'+
+          '<span class="badge" style="font-size:9px;background:rgba(245,158,11,0.12);color:var(--acc)">'+s.estado+'</span>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11px;color:var(--txt2);margin-bottom:8px">'+
+          '<span style="color:var(--txt3)">m²</span><span style="color:var(--acc);font-weight:600">'+(s.metros_cuadrados||'—')+'</span>'+
+          '<span style="color:var(--txt3)">Presupuesto</span><span>'+presup+'</span>'+
+          '<span style="color:var(--txt3)">Cerrador</span><span>'+(s.cerrador||'—')+'</span>'+
+          '<span style="color:var(--txt3)">Solicitada</span><span>'+hace+'</span>'+
+          '<span style="color:var(--txt3)">Ciudad</span><span>'+(s.ciudad||'—')+'</span>'+
+          (desc?'<span style="color:var(--txt3)">Detalles</span><span style="font-style:italic">'+desc+'</span>':'')+
+        '</div>'+
+        (arch?'<div style="margin-bottom:8px">'+arch+'</div>':'')+
+        '<button class="btn btn-sm btn-primary" title="Cambiar estado a entregada y notificar al cerrador" onclick="marcarSolicitudEntregada('+s.id+')">✓ Marcar como entregada</button>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<div class="empty" style="padding:24px"><div class="empty-icon">⚠</div><div class="empty-title">No se pudieron cargar las solicitudes</div><div class="empty-sub">'+(e.message||e)+'</div></div>';
+  }
+}
+
+async function marcarSolicitudEntregada(id){
+  if(!confirm('¿Marcar esta solicitud como entregada? Se le avisará al cerrador.')) return;
+  try{
+    var {data:s}=await sb.from('solicitudes_propuesta').select('*').eq('id',id).single();
+    await sb.from('solicitudes_propuesta').update({estado:'entregada',fecha_entrega:new Date().toISOString()}).eq('id',id);
+    // Actualizar la cotización vinculada (si existe)
+    if(s&&s.lead_id){
+      try{ await sb.from('cotizaciones').update({estado:'entregada',updated_at:new Date().toISOString()}).eq('lead_id',s.lead_id); }catch(_){}
+    }
+    // Notificar al cerrador
+    if(s&&s.cerrador){
+      try{
+        await sb.from('notificaciones').insert([{
+          para:s.cerrador, de:'Arquitectura GEAT', tipo:'propuesta_lista',
+          mensaje:'La propuesta de '+(s.nombre_cliente||'cliente')+' ya está lista.',
+          lead_id:s.lead_id||null
+        }]);
+      }catch(_){}
+    }
+    toast('Marcada como entregada');
+    renderArquitecturaPanel();
+  }catch(e){ toast('Error: '+(e.message||e),'error'); }
 }
 
 
