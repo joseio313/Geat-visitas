@@ -3660,6 +3660,125 @@ async function renderAdmin(){
 
       const sinDatos = !leadsFiltrados.length;
 
+      // ═══════════ REPORTES CEO AVANZADOS ═══════════
+      // A) Velocidad del embudo (días promedio entre fases)
+      const diffDays=(a,b)=>{ if(!a||!b)return null; const ms=new Date(b)-new Date(a); return ms>0?ms/86400000:null; };
+      const sample=arr=>arr.filter(v=>v!=null&&!isNaN(v));
+      const avg=arr=>{const s=sample(arr); return s.length?(s.reduce((x,y)=>x+y,0)/s.length).toFixed(1):'—';};
+      const dCapPriContacto = avg(leadsFiltrados.map(l=>diffDays(l.fecha_ingreso,l.intento1_fecha)));
+      const dPriContVisita  = avg(leadsFiltrados.map(l=>diffDays(l.intento1_fecha,l.visita_fecha)));
+      // visita → cierre: aproximado con created_at del lead ganado vs visita_fecha
+      const dVisitaCierre   = avg(leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').map(l=>diffDays(l.visita_fecha,l.created_at)));
+
+      // B) Productividad por persona (top 3 captadoras + top 2 cerradores)
+      const colByRole = (colaboradores||[]).reduce((acc,c)=>{ acc[c.nombre]=c.rol; return acc; },{});
+      const captadores = Object.entries(porColab)
+        .filter(([n])=>colByRole[n]==='field_capturer')
+        .map(([n,r])=>({n, leads:r.leads.size, ventas:r.ventas, m2: leadsFiltrados.filter(l=>l.captador===n&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(parseFloat(l.metros_cuadrados)||0),0)}))
+        .sort((a,b)=>b.ventas-a.ventas||b.m2-a.m2).slice(0,3);
+      const cerradores = Object.entries(porColab)
+        .filter(([n])=>colByRole[n]==='closer'||colByRole[n]==='commercial_lead')
+        .map(([n,r])=>({n, leads:r.leads.size, ventas:r.ventas, m2: leadsFiltrados.filter(l=>l.cerrador===n&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(parseFloat(l.metros_cuadrados)||0),0)}))
+        .sort((a,b)=>b.ventas-a.ventas||b.m2-a.m2).slice(0,2);
+      // Actividades programadas vs completadas (semana actual)
+      const lunesSem=new Date(ahora); lunesSem.setDate(ahora.getDate()-((ahora.getDay()+6)%7)); lunesSem.setHours(0,0,0,0);
+      const finSem=new Date(lunesSem); finSem.setDate(lunesSem.getDate()+7);
+      const actSemana = (typeof calEventos!=='undefined'?calEventos:[]).filter(e=>e.fecha>=lunesSem&&e.fecha<finSem);
+      const progSem = actSemana.filter(e=>e.tipo==='programado').length;
+      const compSem = actSemana.filter(e=>e.tipo==='realizado'||e.completada).length;
+
+      // C) Tendencias: leads por semana últimas 8 semanas
+      const semanas=[];
+      for(let w=7;w>=0;w--){
+        const ini=new Date(lunesSem); ini.setDate(lunesSem.getDate()-7*w);
+        const fin=new Date(ini); fin.setDate(ini.getDate()+7);
+        const n=(allLeads||[]).filter(l=>{
+          if(!l.fecha_ingreso) return false;
+          const d=new Date(l.fecha_ingreso);
+          return d>=ini && d<fin && (!personaFiltro||l.captador===personaFiltro||l.cerrador===personaFiltro);
+        }).length;
+        semanas.push({ini, n});
+      }
+      const maxSem=Math.max(1,...semanas.map(s=>s.n));
+      const svgW=320, svgH=80, barW=Math.floor(svgW/8)-3;
+      const barsSvg = semanas.map((s,i)=>{
+        const h=Math.round(s.n/maxSem*(svgH-18));
+        const x=i*(barW+3);
+        const y=svgH-h-2;
+        return `<g><rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="#F59E0B" rx="2"/><text x="${x+barW/2}" y="${svgH-h-5}" text-anchor="middle" font-size="9" fill="#94A3B8">${s.n||''}</text></g>`;
+      }).join('');
+      // Tasa de pérdida por fase
+      const fases=['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado'];
+      const tasaPerdida = fases.map(f=>{
+        const enFase = leadsFiltrados.filter(l=>l.estado===f||l.resultado_estado===f).length;
+        const perdidosDeFase = leadsFiltrados.filter(l=>l.estado==='cerrado_perdido'&&l.resultado_estado===f).length;
+        const denom = enFase + perdidosDeFase;
+        return { fase:f.replace(/_/g,' '), pct: denom?Math.round(perdidosDeFase/denom*100):0, n:perdidosDeFase };
+      });
+
+      // D) Proyección
+      const probPorFase={nuevo:0.05,en_seguimiento:0.15,visita_agendada:0.30,visita_realizada:0.50,seguimiento_cierre:0.65,reservado:0.85,cerrado_ganado:1};
+      const pipelineM2 = leadsFiltrados
+        .filter(l=>l.estado!=='cerrado_perdido'&&l.estado!=='cerrado_ganado')
+        .reduce((s,l)=>s+((parseFloat(l.metros_cuadrados)||0)*(probPorFase[l.estado]||0.1)),0);
+      const ganadosMesActual = (allLeads||[]).filter(l=>{
+        if(l.estado!=='cerrado_ganado') return false;
+        const d=new Date(l.created_at);
+        return d.getFullYear()===ahora.getFullYear() && d.getMonth()===ahora.getMonth() && (!personaFiltro||l.captador===personaFiltro||l.cerrador===personaFiltro);
+      }).length;
+      const diaMes=ahora.getDate();
+      const diasMes=new Date(ahora.getFullYear(),ahora.getMonth()+1,0).getDate();
+      const proyeccionVentas = diaMes>0 ? Math.round(ganadosMesActual/diaMes*diasMes*10)/10 : 0;
+
+      const rowProd = function(p){ return `<tr style="border-bottom:1px solid var(--brd)"><td style="padding:6px 8px;font-weight:500">${p.n.split(' ')[0]}</td><td style="text-align:center;padding:6px 4px">${p.leads}</td><td style="text-align:center;padding:6px 4px;color:var(--green);font-weight:600">${p.ventas}</td><td style="text-align:right;padding:6px 8px;color:var(--acc)">${Math.round(p.m2).toLocaleString()} m²</td></tr>`; };
+
+      const reportesCEO = `
+      <!-- A) Velocidad del embudo -->
+      <div style="margin-top:18px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">⚡ Velocidad del embudo</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--blue)">${dCapPriContacto}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días captación → 1er contacto</div></div>
+          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--acc)">${dPriContVisita}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días contacto → visita</div></div>
+          <div style="background:var(--bg2);padding:10px;border-radius:var(--r);text-align:center"><div style="font-size:18px;font-weight:700;color:var(--green)">${dVisitaCierre}</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">días visita → cierre</div></div>
+        </div>
+      </div>
+
+      <!-- B) Productividad por persona -->
+      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🏆 Top productividad (m², sin USD)</div>
+        <div style="font-size:10px;color:var(--txt3);margin-bottom:6px">Actividades semana: ${progSem} programadas · ${compSem} completadas · ratio ${progSem?Math.round(compSem/progSem*100):0}%</div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin:10px 0 4px">Top 3 captadoras</div>
+        ${captadores.length?`<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--brd)"><th style="text-align:left;padding:4px 8px;color:var(--txt3);font-weight:500">Persona</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Leads</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Ventas</th><th style="text-align:right;padding:4px 8px;color:var(--txt3);font-weight:500">m² ganados</th></tr></thead><tbody>${captadores.map(rowProd).join('')}</tbody></table>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes.</div>'}
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin:14px 0 4px">Top 2 cerradores</div>
+        ${cerradores.length?`<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--brd)"><th style="text-align:left;padding:4px 8px;color:var(--txt3);font-weight:500">Persona</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Leads</th><th style="text-align:center;padding:4px;color:var(--txt3);font-weight:500">Ventas</th><th style="text-align:right;padding:4px 8px;color:var(--txt3);font-weight:500">m² ganados</th></tr></thead><tbody>${cerradores.map(rowProd).join('')}</tbody></table>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes.</div>'}
+      </div>
+
+      <!-- C) Tendencias -->
+      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📈 Tendencias · últimas 8 semanas</div>
+        ${maxSem>1?`<svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;max-width:100%">${barsSvg}</svg><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt3);margin-top:4px">${semanas.map(s=>'<span>'+(s.ini.getDate())+'/'+(s.ini.getMonth()+1)+'</span>').join('')}</div>`:'<div style="font-size:11px;color:var(--txt3);padding:8px">Sin datos suficientes para graficar tendencia.</div>'}
+        <div style="margin-top:14px;font-size:11px;font-weight:600;color:var(--txt2)">Tasa de pérdida por fase</div>
+        <div style="margin-top:6px">${tasaPerdida.filter(t=>t.n>0).length?tasaPerdida.filter(t=>t.n>0).map(t=>`<div style="display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:4px"><div style="flex:1;text-transform:capitalize">${t.fase}</div><div style="width:120px;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden"><div style="height:100%;background:var(--red);width:${Math.min(100,t.pct)}%"></div></div><div style="min-width:48px;text-align:right;color:var(--red);font-weight:600">${t.pct}% (${t.n})</div></div>`).join(''):'<div style="font-size:11px;color:var(--txt3);padding:6px">Sin pérdidas registradas en este período.</div>'}</div>
+      </div>
+
+      <!-- D) Proyección -->
+      <div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🔮 Proyección</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:var(--bg2);padding:12px;border-radius:var(--r);text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--green)">${proyeccionVentas}</div>
+            <div style="font-size:10px;color:var(--txt3);margin-top:2px">Ventas estimadas mes (ritmo actual)</div>
+            <div style="font-size:9px;color:var(--txt3);margin-top:2px">${ganadosMesActual} ganados en ${diaMes} días</div>
+          </div>
+          <div style="background:var(--bg2);padding:12px;border-radius:var(--r);text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--acc)">${Math.round(pipelineM2).toLocaleString()}</div>
+            <div style="font-size:10px;color:var(--txt3);margin-top:2px">Pipeline esperado (m²)</div>
+            <div style="font-size:9px;color:var(--txt3);margin-top:2px">m² activos × prob por fase</div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--txt3);margin-top:8px;line-height:1.4">Probabilidades: nuevo 5%, seguimiento 15%, visita agend. 30%, visita realiz. 50%, seg. cierre 65%, reservado 85%.</div>
+      </div>`;
+
       el.innerHTML=`
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
         ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':'Año'}</button>`).join('')}
@@ -3712,7 +3831,8 @@ async function renderAdmin(){
             <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--txt3);font-size:11px">Sin colaboradores con leads en este período.</td></tr>'}</tbody>
           </table>
         </div>`}
-      </div>`;
+      </div>
+      ${reportesCEO}`;
     }catch(err){
       console.error('Stats render error:', err);
       el.innerHTML='<div class="empty" style="padding:30px"><div class="empty-icon">⚠</div><div class="empty-title">No se pudieron cargar las estadísticas</div><div class="empty-sub">'+(err&&err.message?err.message:'Error desconocido')+'</div><button class="btn btn-sm btn-ghost" style="margin-top:14px" onclick="setAdminTab(\'stats\',null)">Reintentar</button></div>';
