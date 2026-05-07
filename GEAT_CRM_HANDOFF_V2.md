@@ -1,93 +1,96 @@
-[GEAT_CRM_HANDOFF_V2.md](https://github.com/user-attachments/files/27422604/GEAT_CRM_HANDOFF_V2.md)
-# GEAT CRM — HANDOFF PARA CLAUDE CODE V2
-## Fecha: 5 Mayo 2026
+# GEAT CRM — HANDOFF V2
 
-## ARCHIVO PRINCIPAL
-- `index.html` (sin acento) — único HTML en la raíz del repo
-- Repo: `joseio313/Geat-visitas`
-- Deploy: `joseio313.github.io/Geat-visitas/`
-- Backend: Supabase `jsacnpgpnvoslrpurfxc`
+## Estado al 7 mayo 2026
 
-## REGLAS INVIOLABLES
-1. NUNCA rebuild desde cero — siempre editar el archivo existente
-2. NUNCA borrar features sin confirmación de Josemiguel
-3. NUNCA mostrar montos USD individuales del equipo — usar m²
-4. NUNCA hardcodear API keys — viven en `app_config` de Supabase
-5. Validar JS con `node --check` antes de cada commit
-6. Screenshot post-deploy en incógnito antes de marcar como hecho
-7. Timestamps SIEMPRE automáticos del sistema
+### Archivo principal
+- `index.html` (sin acento) — único HTML en raíz del repo.
+- Repo: `joseio313/Geat-visitas`.
+- Deploy: `joseio313.github.io/Geat-visitas/`.
+- Backend: Supabase `jsacnpgpnvoslrpurfxc`.
 
-## EQUIPO Y PINs
-- Josemiguel (admin) — 1024
-- Gustavo Vaca (commercial_lead/cerrador) — 4454
-- Genoveva Alata (captadora) — 3343
-- Steffi Villarpando (captadora + abogada) — 2232
-- David Gambarte (cerrador) — 5565
-- Arq. Raí (campo, solo Contratistas) — 6677
-- Fátima (carga obras) — 2232
-- María Luisa: DESACTIVADA, no debe aparecer
+### Reglas inviolables
+1. NUNCA rebuild desde cero — siempre editar el archivo existente.
+2. NUNCA borrar features sin confirmación de Josemiguel.
+3. NUNCA mostrar montos USD individuales del equipo — usar m².
+4. NUNCA hardcodear API keys — viven en `app_config` de Supabase.
+5. Validar JS con `node --check` antes de cada commit.
+6. Screenshot post-deploy en incógnito antes de marcar como hecho.
+7. Timestamps SIEMPRE automáticos del sistema.
 
-## PROTOCOLO DE 5 FASES
-1. PRESENTACIÓN — 3 intentos + video
-2. INDAGACIÓN — 9 campos (flexible, no bloquear)
-3. ENVÍO INFO — 2-3 modelos según presupuesto
-4. VISITA — invitación + ultimátum + recordatorio
-5. CIERRE — 8 pasos checklist
+### Equipo y PINs
+| Nombre | Rol | PIN | Notas |
+|---|---|---|---|
+| José Miguel Gambarte | admin | 1024 | CEO |
+| Gustavo Vaca | commercial_lead | 4454 | Cerrador + jefe |
+| Steffi Villarpando | field_capturer | 2232 | Captadora + abogada |
+| Genoveva Alata | field_capturer | 3343 | Captadora |
+| David Gambarte | closer | 5565 | Cerrador |
+| Arquitectura GEAT | tecnico | 7788 | Solicitudes + Subir propuestas |
+| Maria Luisa | field_capturer | 1121 | DESACTIVADA (`activo=false`) |
 
-## TAREAS PENDIENTES PARA CLAUDE CODE
+### Roles → nav
+- **admin**: Inicio, Todos, Grupal, Cierre, Admin.
+- **commercial_lead**: igual que admin (Gustavo).
+- **field_capturer**: Inicio, Leads, Grupal.
+- **closer**: Inicio, Leads, Cierre.
+- **tecnico**: Solicitudes (panel Arquitectura), Subir.
 
-### PRIORIDAD 1: Calendario grupal con horarios
-El calendario grupal existe (`pn-calendario`, `renderCalendario`) pero es solo una lista.
-Josemiguel quiere un GRID DE HORAS tipo Google Calendar:
-- Eje Y: horas 8:00 a 18:00
-- Eje X: días de la semana
-- Eventos como bloques de color con nombre del cliente + cerrador
-- Fuente: tabla `agenda_grupal` en Supabase
-- Vista semana como default
+### Tablas activas
+| Tabla | Tipo | Uso |
+|---|---|---|
+| `leads` | base | núcleo del CRM (1 sola fuente). |
+| `agenda_personal` | base | **fuente unificada** de actividades del calendario personal. |
+| `eventos_calendario` | base | DEPRECADA para escritura — datos migrados el 7-may-2026. Lectura redundante hasta validar 1 semana, después se elimina. |
+| `agenda_unificada` | VIEW | NO se usa (no expone `colaborador` ni `completada`). |
+| `agenda_grupal` | base | calendario grupal — visitas/reuniones del equipo. |
+| `historial_lead` | base | actividades realizadas. |
+| `cotizaciones` | base | cotizaciones del cerrador (estado puede ser `pendiente_arquitectura`/`entregada`). |
+| `solicitudes_propuesta` | base | flujo arquitectura: pendiente → en_proceso → entregada. |
+| `comisiones_calculadas` | base | comisiones (m²). |
+| `notificaciones` | base | mensajes entre colaboradores. |
+| `notas_personales` | base | notas privadas (drawer del calendario grupal). |
+| `config_cerradores` | base | turnos de cerradores. |
+| `metricas_vendedor` | base | NO se usa más (rotura del Stats fix). |
+| `colaboradores` | base | usuarios + PIN + rol. |
 
-### PRIORIDAD 2: Panel Notas → pestaña dentro de Calendario
-- Eliminar `pn-notas` como panel separado (ya no está en nav)
-- Mover la funcionalidad de notas como una pestaña/sidebar dentro del panel Calendario
-- Tipo "task panel" que se abre a la derecha o como tab
-- Las notas ya se guardan en `notas_personales` en Supabase
+### Bugs cerrados (mayo 2026)
+- ✅ Calendario solo leía `agenda_personal` → ahora unifica las 3 fuentes; `eventos_calendario` deprecada y migrada.
+- ✅ Admin → Stats colgaba en "Cargando..." (`rows` undefined + await sin try/catch). Ahora con try/catch global, fallback con botón Reintentar y tabla actividad rebuild desde `leadsFiltrados`.
+- ✅ KPIs Hoy/Atrasadas/Mes inconsistentes con badge "🔴 X atrasadas". Fuente única `calEventos` para todo.
+- ✅ Bug timezone (UTC vs local) — helper `ymdLocal()` aplicado a comparaciones de día.
+- ✅ Eventos en `eventos_calendario` no aparecían en grid Semana — embed PostgREST fallaba por falta de FK con `leads`. Workaround: lookup en JS desde `allLeads`.
+- ✅ Notas como sidebar inline (drawer derecho) en vez de modal centrado.
+- ✅ Empty states con ghost cards (opacity 0.4) en Leads, Calendario, Cierre, Notas, Llamadas.
+- ✅ Pill discreto "🔴 atrasadas" reemplaza panel grande del Inicio.
+- ✅ Tooltips en pills temperatura, llamada/WA, reactivar, marcar pagado.
+- ✅ Banners contextuales: Indagación, Comisiones, Calendario grupal.
 
-### PRIORIDAD 3: Guías contextuales distribuidas
-Las guías NO deben estar centralizadas en un solo lugar.
-Deben estar en CADA pantalla/botón donde correspondan:
-- En panel Leads vacío: "Aquí aparecen tus clientes. Tocá + Lead para registrar uno nuevo."
-- En agenda vacía: "Aquí verás tus actividades del día. Registrá un lead para empezar."
-- En cada botón de acción: ya tienen `title=""` — verificar que son claros
-- En módulo Cierre: "Este es tu panel de cierre. Seleccioná un cliente para ver su proceso."
-- Usar `Señor X` y `Señora X` como nombres de ejemplo en placeholders
+### Reportes CEO (Admin → Stats)
+A. **Velocidad del embudo**: días captación→contacto, contacto→visita, visita→cierre.
+B. **Productividad por persona**: top 3 captadoras + top 2 cerradores en m². Actividades semana programadas vs completadas.
+C. **Tendencias**: gráfico SVG de leads últimas 8 semanas + tasa de pérdida por fase.
+D. **Proyección**: ventas estimadas mes (ritmo actual) + pipeline esperado en m² (m² activos × prob por fase: nuevo 5% → reservado 85%).
 
-### PRIORIDAD 4: Micrófono (diagnóstico final)
-El SpeechRecognition ya tiene:
-- `continuous:true` + `interimResults:true`
-- Auto-timeout 30 seg si no hay texto
-- Botón "Prefiero escribir" siempre visible
-- Fallback a textarea para iOS/Firefox
-Si sigue sin funcionar en Chrome Desktop, el problema puede ser:
-- Permisos de micrófono a nivel del OS
-- Antivirus bloqueando acceso
-- Probar con: chrome://flags → Web Speech API → enabled
+### Panel Arquitectura (rol `tecnico`)
+- Login con PIN 7788 (`Arquitectura GEAT`) → arranca en `pn-arquitectura`.
+- Lista solicitudes con `estado IN ('pendiente','en_proceso','pendiente_arquitectura')`.
+- Cada card: cliente, m², presupuesto, cerrador, fecha, descripción, archivo.
+- Botón **"✓ Marcar como entregada"** → cambia estado a `entregada`, fija `fecha_entrega`, marca cotización como `entregada`, notifica al cerrador.
+- Botón "Enviar al grupo Arquitectura" del cerrador (`generarImagenReq`) crea `solicitudes_propuesta` Y marca la cotización del lead con `estado='pendiente_arquitectura'`.
 
-### DATOS DE EJEMPLO EN BD
-Se insertaron 6 leads ejemplo (IDs 5462-5467):
-- Señor Ejemplo A (nuevo, Steffi)
-- Señora Ejemplo B (en_seguimiento, Genoveva)
-- Señor Ejemplo C (visita_agendada, Steffi→Gustavo)
-- Señora Ejemplo D (seg_cierre, Genoveva→David)
-- Señor Ejemplo E (reservado, Steffi→Gustavo)
-- Señora Ejemplo F (perdido, Genoveva)
-+ 5 actividades en agenda_personal
-+ 6 registros en historial_lead
-→ Eliminar cuando el equipo ya entienda el sistema
+### Próximos pasos pendientes
+1. **Borrar `eventos_calendario`** después de 1 semana de validación (~14-may-2026). Antes: confirmar que no hay más writes a esa tabla y que los IDs migrados (50-56 en `agenda_personal`) cubren todo.
+2. **Limpiar captador "Corp Genoveva"** (2712 leads sin colaborador real asociado). Decidir si reasignar a Genoveva Alata o crear colaborador alias.
+3. **Steffi tiene 1634 leads** y `loadLeads()` usa `.limit(500)` → considerar paginación o aumentar el límite si afecta búsquedas/filtros.
+4. **Extender rango horario del grid** (HORA_FIN actual=20) para que se vean eventos nocturnos.
+5. **Calendario grupal con grid horas** (priority histórica, ya parcial — la vista Lista funciona, falta vista Semana en grid).
+6. **Micrófono** (Web Speech API): seguir validando con Chrome Desktop.
+7. **Rol commercial_lead vs admin**: confirmar si Gustavo debería ver tab Admin o no.
 
-## ESTADO ACTUAL DEL ARCHIVO
-- 5,922 líneas / 332 KB
-- JS validado ✓
-- Funciones implementadas: 60+
-- Nav captadores: Inicio, Leads (2 items)
-- Nav cerradores: Inicio, Leads, Cierre (3 items)
-- Nav admin: Inicio, Todos, Cierre, Admin, Notas (5 items)
-- Nav jefe comercial: Inicio, Todos, Cierre, Admin (4 items)
+### Datos de ejemplo en BD
+6 leads ejemplo (IDs 5462-5467) + 5 actividades + 6 historiales — eliminar cuando el equipo esté entrenado.
+
+### Estado del archivo
+- ~6,200 líneas / ~360 KB.
+- JS validado ✓ en cada commit.
+- Funciones implementadas: 70+.
