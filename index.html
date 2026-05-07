@@ -3564,87 +3564,116 @@ async function renderAdmin(){
       </div>
     </div>`).join('');
   }else if(adminTabActual==='stats'){
-    // Filtro por persona
-    const personaFiltro = window.adminPersonaFiltro || '';
-    const periodoFiltro = window.adminPeriodoFiltro || 'mes';
-    const ahora = new Date();
-    const desde = {
-      dia: new Date(ahora.getFullYear(),ahora.getMonth(),ahora.getDate()).toISOString().slice(0,10),
-      semana: new Date(ahora.getTime()-7*86400000).toISOString().slice(0,10),
-      mes: new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString().slice(0,10),
-      anio: new Date(ahora.getFullYear(),0,1).toISOString().slice(0,10),
-    }[periodoFiltro];
-    const leadsFiltrados = allLeads.filter(l=>{
-      const enPeriodo = !l.fecha_ingreso || l.fecha_ingreso >= desde;
-      const esPersona = !personaFiltro || l.captador===personaFiltro || l.cerrador===personaFiltro;
-      return enPeriodo && esPersona;
-    });
-    const total=leadsFiltrados.length;
-    const activos=allLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
-    const ganados=allLeads.filter(l=>l.estado==='cerrado_ganado').length;
-    const perdidos=allLeads.filter(l=>l.estado==='cerrado_perdido').length;
-    const conVisita=allLeads.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
-    // Turnos de cerradores
-    const turnos=await verEstadoTurnos();
-    // Métricas de vendedores este mes
-    const{data:metricas}=await sb.from('metricas_vendedor').select('*');
-    const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
-    const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
-    const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
-    const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
-    el.innerHTML=`
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-      ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':' Año'}</button>`).join('')}
-    </div>
-    <div style="margin-bottom:12px">
-      <select style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window.adminPersonaFiltro=this.value;setAdminTab('stats',null)">
-        <option value="">Todos los colaboradores</option>
-        ${colaboradores.map(c=>`<option value="${c.nombre}" ${personaFiltro===c.nombre?'selected':''}>${c.nombre} · ${c.rol}</option>`).join('')}
-      </select>
-    </div>
-    <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Leads</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos2}</div><div class="kpi-l">Activos</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados2}</div><div class="kpi-l">Ganados</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos2}</div><div class="kpi-l">Perdidos</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
-      <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
-      <div class="kpi"><div class="kpi-n" style="color:#8B5CF6">${leadsFiltrados.filter(function(l){return l.visito_oficina===true;}).length}</div><div class="kpi-l">Visitaron oficina</div></div>
-    </div>
-    <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
-      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
-          <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
-          <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
-        </div>
-        <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
-          <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
-          <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
-        </div>
+    try{
+      const personaFiltro = window.adminPersonaFiltro || '';
+      const periodoFiltro = window.adminPeriodoFiltro || 'mes';
+      const ahora = new Date();
+      const desde = {
+        dia: new Date(ahora.getFullYear(),ahora.getMonth(),ahora.getDate()).toISOString().slice(0,10),
+        semana: new Date(ahora.getTime()-7*86400000).toISOString().slice(0,10),
+        mes: new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString().slice(0,10),
+        anio: new Date(ahora.getFullYear(),0,1).toISOString().slice(0,10),
+      }[periodoFiltro];
+      const leadsFiltrados = (allLeads||[]).filter(l=>{
+        const enPeriodo = !l.fecha_ingreso || l.fecha_ingreso >= desde;
+        const esPersona = !personaFiltro || l.captador===personaFiltro || l.cerrador===personaFiltro;
+        return enPeriodo && esPersona;
+      });
+      const total=leadsFiltrados.length;
+      const activos2=leadsFiltrados.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido').length;
+      const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
+      const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
+      const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+
+      // Turnos de cerradores (tolerante a errores)
+      let turnos={proximo:'—',vDavid:0,vGustavo:0};
+      try{ turnos = await verEstadoTurnos() || turnos; }catch(e){ console.warn('Stats: verEstadoTurnos falló', e); }
+
+      // Tabla actividad del equipo: agrupar leadsFiltrados por colaborador (captador o cerrador)
+      const porColab = {};
+      leadsFiltrados.forEach(l=>{
+        [l.captador,l.cerrador].filter(Boolean).forEach(nombre=>{
+          if(!porColab[nombre]) porColab[nombre]={leads:new Set(),intentos:0,seguimientos:0,visitas:0,ventas:0};
+          porColab[nombre].leads.add(l.id);
+          ['intento1_estado','intento2_estado','intento3_estado'].forEach(k=>{
+            if(l[k]&&l[k]!=='pendiente') porColab[nombre].intentos++;
+          });
+          if(l.estado==='en_seguimiento'||l.estado==='seguimiento_cierre') porColab[nombre].seguimientos++;
+          if(l.estado==='visita_agendada'||l.estado==='visita_realizada') porColab[nombre].visitas++;
+          if(l.estado==='cerrado_ganado') porColab[nombre].ventas++;
+        });
+      });
+      const rows = Object.keys(porColab).sort().map(n=>{
+        const r=porColab[n];
+        return `<tr style="border-bottom:1px solid var(--brd)">
+          <td style="padding:6px 8px;font-weight:500">${n.split(' ')[0]}</td>
+          <td style="text-align:center;padding:6px 4px">${r.leads.size}</td>
+          <td style="text-align:center;padding:6px 4px">${r.intentos}</td>
+          <td style="text-align:center;padding:6px 4px">${r.seguimientos}</td>
+          <td style="text-align:center;padding:6px 4px;color:var(--blue)">${r.visitas}</td>
+          <td style="text-align:center;padding:6px 4px;color:var(--green);font-weight:600">${r.ventas}</td>
+        </tr>`;
+      }).join('');
+
+      const sinDatos = !leadsFiltrados.length;
+
+      el.innerHTML=`
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':'Año'}</button>`).join('')}
       </div>
-      <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
-      ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
-    </div>
-    ${metricas&&metricas.length?`
-    <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo - ${new Date().toLocaleString('es-BO',{month:'long'})}</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;font-size:11px;border-collapse:collapse">
-          <thead>
-            <tr style="border-bottom:1px solid var(--brd)">
-              <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
-              <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div style="margin-bottom:12px">
+        <select style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window.adminPersonaFiltro=this.value;setAdminTab('stats',null)">
+          <option value="">Todos los colaboradores</option>
+          ${(colaboradores||[]).map(c=>`<option value="${c.nombre}" ${personaFiltro===c.nombre?'selected':''}>${c.nombre} · ${c.rol}</option>`).join('')}
+        </select>
       </div>
-    </div>`:''}`;
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-n">${total}</div><div class="kpi-l">Leads</div></div>
+        <div class="kpi"><div class="kpi-n" style="color:var(--acc)">${activos2}</div><div class="kpi-l">Activos</div></div>
+        <div class="kpi"><div class="kpi-n" style="color:var(--green)">${ganados2}</div><div class="kpi-l">Ganados</div></div>
+        <div class="kpi"><div class="kpi-n" style="color:var(--red)">${perdidos2}</div><div class="kpi-l">Perdidos</div></div>
+        <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
+        <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
+        <div class="kpi"><div class="kpi-n" style="color:#8B5CF6">${leadsFiltrados.filter(l=>l.visito_oficina===true).length}</div><div class="kpi-l">Visitaron oficina</div></div>
+      </div>
+      <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+            <div style="font-size:18px;font-weight:600;color:var(--blue)">${turnos.vDavid}</div>
+            <div style="font-size:11px;color:var(--txt3)">David Gambarte</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r)">
+            <div style="font-size:18px;font-weight:600;color:var(--purple)">${turnos.vGustavo}</div>
+            <div style="font-size:11px;color:var(--txt3)">Gustavo Vaca</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--txt2)">Próxima visita va a: <strong style="color:var(--acc)">${turnos.proximo}</strong></div>
+        ${cu.rol==='admin'?`<button class="btn btn-sm btn-ghost" title="Forzar el próximo cerrador en la rotación" style="margin-top:10px;width:100%" onclick="cambiarTurnoManual()">[!] Cambiar turno manualmente</button>`:''}
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividad del equipo${personaFiltro?' · '+personaFiltro.split(' ')[0]:''}</div>
+        ${sinDatos ? `<div class="empty" style="padding:24px"><div class="empty-icon">📊</div><div class="empty-title">Sin datos en este período</div><div class="empty-sub">Probá con otro período o cambiá el filtro de colaborador.</div></div>` : `
+        <div style="overflow-x:auto">
+          <table style="width:100%;font-size:11px;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--brd)">
+                <th style="text-align:left;padding:6px 8px;color:var(--txt3);font-weight:500">Colaborador</th>
+                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Leads</th>
+                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Intentos</th>
+                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Seg.</th>
+                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Visitas</th>
+                <th style="text-align:center;padding:6px 4px;color:var(--txt3);font-weight:500">Ventas</th>
+              </tr>
+            </thead>
+            <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--txt3);font-size:11px">Sin colaboradores con leads en este período.</td></tr>'}</tbody>
+          </table>
+        </div>`}
+      </div>`;
+    }catch(err){
+      console.error('Stats render error:', err);
+      el.innerHTML='<div class="empty" style="padding:30px"><div class="empty-icon">⚠</div><div class="empty-title">No se pudieron cargar las estadísticas</div><div class="empty-sub">'+(err&&err.message?err.message:'Error desconocido')+'</div><button class="btn btn-sm btn-ghost" style="margin-top:14px" onclick="setAdminTab(\'stats\',null)">Reintentar</button></div>';
+    }
   }
 }
 
