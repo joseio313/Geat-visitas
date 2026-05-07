@@ -2111,15 +2111,17 @@ async function cargarAgendaPersonal(){
   }catch(e){ console.warn('agenda_personal:', e.message); }
 
   // Cargar eventos_calendario (formulario "+ Agendar actividad", llamadas, etc.)
+  // Nota: no usamos join con leads porque eventos_calendario NO tiene FK declarada — el lookup se hace en JS abajo.
   let evCal=[];
   try{
     const r=await sb.from('eventos_calendario')
-      .select('*,leads(nombre,celular,estado)')
+      .select('*')
       .eq('colaborador',cu.nombre)
       .order('fecha_inicio',{ascending:true})
       .limit(500);
+    if(r.error) throw r.error;
     evCal=r.data||[];
-  }catch(e){ console.warn('eventos_calendario:', e.message); }
+  }catch(e){ console.warn('eventos_calendario:', e.message||e); }
 
   // Cargar historial propio (lo que YA hizo) para mostrar en el calendario
   let hist=[];
@@ -2148,21 +2150,24 @@ async function cargarAgendaPersonal(){
       celular:a.leads?.celular,
       color:a.completada?'#475569':getEtapaColor(a.leads?.estado||'nuevo'),
     })),
-    ...evCal.map(e=>({
-      id:'ec_'+e.id,
-      raw_id:e.id,
-      tipo:'programado',
-      fecha:new Date(e.fecha_inicio),
-      titulo:e.leads?.nombre||e.titulo||'Evento',
-      sub:e.tipo?String(e.tipo).replace(/_/g,' '):(e.descripcion||''),
-      nota:e.descripcion,
-      completada:false,
-      estado:e.leads?.estado||'nuevo',
-      lead_id:e.lead_id,
-      celular:e.leads?.celular,
-      color:e.color||getEtapaColor(e.leads?.estado||'nuevo'),
-      _origen:'eventos_calendario',
-    })),
+    ...evCal.map(e=>{
+      var ld = e.lead_id ? (allLeads||[]).find(l=>l.id===e.lead_id) : null;
+      return {
+        id:'ec_'+e.id,
+        raw_id:e.id,
+        tipo:'programado',
+        fecha:new Date(e.fecha_inicio),
+        titulo: ld?.nombre || e.titulo || 'Evento',
+        sub: e.tipo?String(e.tipo).replace(/_/g,' '):(e.descripcion||''),
+        nota: e.descripcion,
+        completada:false,
+        estado: ld?.estado || 'nuevo',
+        lead_id: e.lead_id,
+        celular: ld?.celular,
+        color: e.color || getEtapaColor(ld?.estado||'nuevo'),
+        _origen:'eventos_calendario',
+      };
+    }),
     ...hist.map(h=>({
       id:'hl_'+h.id,
       raw_id:h.id,
