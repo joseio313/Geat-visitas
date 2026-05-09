@@ -343,6 +343,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div>
           <div style="font-size:17px;font-weight:600" id="inicio-saludo">Buenos días</div>
           <div style="font-size:11px;color:var(--txt3)" id="inicio-fecha">—</div>
+          <div style="font-size:9px;color:var(--txt3);opacity:0.6" id="sync-indicator"></div>
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-sm btn-primary" title="Registrar un nuevo cliente / lead" onclick="elegirModoNuevoLead()">+ Lead</button>
@@ -1302,7 +1303,7 @@ async function initLogin(){
       ANTHROPIC_KEY = cfg.anthropic_key || '';
       WA_ARQUITECTURA = cfg.whatsapp_arquitectura || WA_ARQUITECTURA;
     }
-  }catch(e){ console.log('Config:', e.message); }
+  }catch(e){ /* config error silenciado */; }
 }
 function resetPin(){
   pinVal='';
@@ -2093,7 +2094,7 @@ async function cargarAgendaPersonal(){
       .eq('colaborador', cu.nombre)
       .order('fecha_programada',{ascending:true});
     seguimientosAuto = (segAuto||[]).filter(function(s){ return s.fecha_programada; });
-  }catch(e){ console.log('Cal personal:', e.message); }
+  }catch(e){ /* cal error silenciado */; }
   // Agregar a agendaData despues de cargar
 
   // Cargar actividades de la agenda personal
@@ -4567,7 +4568,7 @@ async function guardarSolicitudArquitectura(leadId, datos){
       descripcion: datos.descripcion||null,
       estado: 'pendiente'
     }]);
-  }catch(e){ console.log('Solicitud arq error:', e.message); }
+  }catch(e){ /* arq error silenciado */; }
 }
 
 
@@ -4607,7 +4608,7 @@ async function checkTramitesAtascados(){
         toast('ALERTA: Tramite de '+mioAtascado.nombre_cliente+' lleva mas de 7 dias en Paso '+mioAtascado.paso_atascado, 'error');
       }
     }
-  }catch(e){ console.log('checkTramites:', e.message); }
+  }catch(e){ /* tramites error silenciado */; }
 }
 
 // Agregar en panel CEO
@@ -4661,7 +4662,7 @@ async function calcularYGuardarComision(leadId, precioUSD, m2){
       fecha_venta: new Date().toISOString().slice(0,10)
     }],{onConflict:'lead_id'});
     toast('Comision calculada: Cap $'+comCaptador+' / Cerr $'+comCerrador);
-  }catch(e){ console.log('Comision error:', e.message); }
+  }catch(e){ /* comision error silenciado */; }
 }
 
 async function renderComisiones(el){
@@ -5113,7 +5114,7 @@ async function enviarReqAlGrupo(){
     var {data:upData} = await sb.storage.from('propuestas').upload(path, imgBlob, {contentType:'image/png',upsert:true});
     var {data:urlData} = sb.storage.from('propuestas').getPublicUrl(path);
     imgUrl = urlData?.publicUrl||'';
-  }catch(e){ console.log('Upload img:', e.message); }
+  }catch(e){ /* upload error silenciado */; }
 
   // Registrar solicitud en BD automaticamente
   if(lead){
@@ -5129,7 +5130,7 @@ async function enviarReqAlGrupo(){
       var docPath = 'doc_terreno_'+lead.id+'_'+Date.now()+'.'+_propDocFile.name.split('.').pop();
       sb.storage.from('propuestas').upload(docPath, _propDocFile, {upsert:true})
         .then(function(){ toast('Documento de terreno subido'); })
-        .catch(function(e){ console.log('Doc upload:', e.message); });
+        .catch(function(e){ /* doc upload silenciado */; });
     }
   }
 
@@ -5725,6 +5726,147 @@ async function actualizarPasoFin(paso, estado){
 
 
 function _fLlam(r,b){ filtrarLlamadasPor(r,b); }
+
+// ══════════════════════════════════════
+// GUARDAR COTIZACIÓN (panel cierre)
+// ══════════════════════════════════════
+async function guardarCotizacion(){
+  var leadId=document.getElementById('cotiz-lead-sel')?.value;
+  if(!leadId){toast('Selecciona un lead','error');return;}
+  var titulo=document.getElementById('cotiz-titulo')?.value?.trim();
+  if(!titulo){toast('Ingresa un título','error');return;}
+  closeSheet('cotiz');
+  toast('Guardando cotización...');
+  try{
+    var data={
+      lead_id:parseInt(leadId),
+      cerrador:cu.nombre,
+      titulo:titulo,
+      metros_cuadrados:parseFloat(document.getElementById('cotiz-m2')?.value)||null,
+      precio_estimado:parseFloat(document.getElementById('cotiz-precio')?.value)||null,
+      descripcion:document.getElementById('cotiz-desc')?.value||null,
+      estado:document.getElementById('cotiz-estado')?.value||'borrador',
+      created_at:new Date().toISOString()
+    };
+    await sb.from('propuestas').insert([data]);
+    toast('Cotización guardada ✓');
+    regAudit('guardar_cotizacion','propuestas',data.lead_id,{titulo:data.titulo});
+    renderCierre();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════
+// GUARDAR REUNIÓN + REGISTRAR RESERVA
+// ══════════════════════════════════════
+async function guardarReunionYReserva(){
+  var leadId=document.getElementById('reu-lead-sel')?.value;
+  if(!leadId){toast('Selecciona un lead','error');return;}
+  var fecha=document.getElementById('reu-fecha')?.value;
+  if(!fecha){toast('Selecciona fecha y hora','error');return;}
+  closeSheet('reunion');
+  toast('Guardando reunión + reserva...');
+  try{
+    var dataR={
+      lead_id:parseInt(leadId),
+      cerrador:cu.nombre,
+      numero_reunion:parseInt(document.getElementById('reu-numero')?.value)||1,
+      tipo:document.getElementById('reu-tipo')?.value||'primera_reunion',
+      fecha:new Date(fecha).toISOString(),
+      resultado:null,
+      notas:document.getElementById('reu-notas')?.value||null,
+      con_propuesta:document.getElementById('reu-con-propuesta')?.value==='si'
+    };
+    await sb.from('reuniones_cerrador').insert([dataR]);
+    regAudit('guardar_reunion','reuniones',dataR.lead_id,{tipo:dataR.tipo});
+    // Agendar en agenda grupal
+    var lR=allLeads.find(function(l){return l.id===dataR.lead_id;});
+    await sb.from('agenda_grupal').insert([{
+      titulo:'Reunion '+(lR?'con '+lR.nombre:'')+' - '+dataR.tipo,
+      colaborador:cu.nombre,rol_colaborador:cu.rol,
+      fecha_actividad:dataR.fecha,lead_id:dataR.lead_id
+    }]).catch(function(){});
+    // Crear reserva automática
+    await sb.from('reservas').insert([{
+      lead_id:parseInt(leadId),
+      cerrador:cu.nombre,
+      fecha_reserva:new Date().toISOString(),
+      estado:'pendiente',
+      notas:'Reserva generada desde reunión'
+    }]);
+    toast('Reunión + reserva guardadas ✓');
+    regAudit('guardar_reserva','reservas',parseInt(leadId),{origen:'reunion'});
+    renderCierre();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════
+// ENVIAR REQUERIMIENTO A ARQUITECTURA (WhatsApp)
+// ══════════════════════════════════════
+function enviarArquitectura(){
+  var leadId=document.getElementById('cotiz-lead-sel')?.value;
+  var lead=leadId?allLeads.find(function(l){return l.id===parseInt(leadId);}):null;
+  var titulo=document.getElementById('cotiz-titulo')?.value||'Sin título';
+  var m2=document.getElementById('cotiz-m2')?.value||'N/D';
+  var desc=document.getElementById('cotiz-desc')?.value||'';
+  var msg='📐 *SOLICITUD DE DISEÑO ARQUITECTÓNICO*\n\n'+
+    '👤 Cliente: '+(lead?lead.nombre:'N/D')+'\n'+
+    '📏 M²: '+m2+'\n'+
+    '🏗️ Proyecto: '+titulo+'\n'+
+    (desc?'📝 Detalles: '+desc+'\n':'')+
+    '📅 Fecha: '+new Date().toLocaleDateString('es-BO')+'\n'+
+    '👷 Cerrador: '+cu.nombre;
+  var url=WA_ARQUITECTURA||'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
+  // Si el link es de grupo, abrir WhatsApp con texto copiado al clipboard
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(msg).then(function(){
+      toast('Texto copiado — pegalo en el grupo');
+      window.open(url,'_blank');
+    }).catch(function(){
+      window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    });
+  }else{
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  }
+  regAudit('enviar_arquitectura','propuestas',leadId?parseInt(leadId):null,{titulo:titulo});
+}
+
+// ══════════════════════════════════════
+// OFFLINE / RECONEXIÓN HANDLER
+// ══════════════════════════════════════
+(function(){
+  var offlineBanner=null;
+  function showOffline(){
+    if(offlineBanner)return;
+    offlineBanner=document.createElement('div');
+    offlineBanner.id='offline-banner';
+    offlineBanner.style.cssText='position:fixed;top:0;left:0;right:0;background:#DC2626;color:#fff;text-align:center;padding:8px 16px;font-size:12px;font-weight:600;z-index:9999;display:flex;align-items:center;justify-content:center;gap:8px';
+    offlineBanner.innerHTML='📡 Sin conexión — los cambios no se guardarán';
+    document.body.appendChild(offlineBanner);
+  }
+  function hideOffline(){
+    if(offlineBanner){offlineBanner.remove();offlineBanner=null;}
+    // Mostrar toast de reconexión
+    if(typeof toast==='function')toast('Conexión restaurada ✓');
+  }
+  window.addEventListener('offline',showOffline);
+  window.addEventListener('online',hideOffline);
+  if(!navigator.onLine)showOffline();
+})();
+
+// ══════════════════════════════════════
+// ÚLTIMA SINCRONIZACIÓN — indicador
+// ══════════════════════════════════════
+var _lastSync=null;
+var _origCargarDatos=typeof cargarDatos==='function'?cargarDatos:null;
+if(_origCargarDatos){
+  cargarDatos=async function(){
+    var r=await _origCargarDatos.apply(this,arguments);
+    _lastSync=new Date();
+    var el=document.getElementById('sync-indicator');
+    if(el)el.textContent='Sync: '+_lastSync.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    return r;
+  };
+}
 
 initLogin();
 </script>
