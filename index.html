@@ -2789,6 +2789,24 @@ function toggleEstadoCampos(){
   document.getElementById('f-visita-block').style.display=est==='visita_agendada'||est==='visita_realizada'?'':'none';
   document.getElementById('f-ganado-block').style.display=est==='cerrado_ganado'?'':'none';
   document.getElementById('f-perdido-block').style.display=est==='cerrado_perdido'?'':'none';
+  // Filtrar opciones permitidas según estado actual del lead
+  if(editingLeadId){
+    const lead=allLeads.find(x=>x.id===editingLeadId);
+    if(lead){
+      const FASES=['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado','cerrado_perdido'];
+      const iAct=FASES.indexOf(lead.estado);
+      const sel=document.getElementById('f-estado');
+      Array.from(sel.options).forEach(function(opt){
+        const iOpt=FASES.indexOf(opt.value);
+        // Permitir: estado actual, siguiente inmediato, perdido, o retroceder
+        if(opt.value==='cerrado_perdido'||iOpt<=iAct||iOpt===iAct+1){
+          opt.disabled=false;opt.style.color='';
+        }else{
+          opt.disabled=true;opt.style.color='var(--txt3)';
+        }
+      });
+    }
+  }
 }
 
 // Validacion de etapa - evitar saltos criticos
@@ -2817,6 +2835,44 @@ async function guardarLead(){
   if(!medio){toast('Selecciona el medio de difusión','error');return;}
 
   const estado=document.getElementById('f-estado').value;
+
+  // ═══ ENFORCEMENT PROTOCOLO 5 FASES ═══
+  // Solo aplica al EDITAR (editingLeadId existe), no al crear
+  if(editingLeadId){
+    const leadActual=allLeads.find(x=>x.id===editingLeadId);
+    if(leadActual && estado!==leadActual.estado){
+      const FASES_ORD=['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado'];
+      const iActual=FASES_ORD.indexOf(leadActual.estado);
+      const iNuevo=FASES_ORD.indexOf(estado);
+      // Permitir siempre: marcar como perdido o retroceder
+      if(estado!=='cerrado_perdido' && iNuevo>iActual+1 && iActual>=0 && iNuevo>=0){
+        toast('No se puede saltar fases. De "'+estilo(leadActual.estado).label+'" solo puede avanzar a "'+estilo(FASES_ORD[iActual+1]).label+'"','error');
+        document.getElementById('f-estado').value=leadActual.estado;
+        return;
+      }
+      // PRESENTACIÓN: necesita al menos 1 intento para avanzar de "nuevo"
+      if(leadActual.estado==='nuevo' && iNuevo>0 && estado!=='cerrado_perdido'){
+        const intentos=(leadActual.intento1_estado&&leadActual.intento1_estado!=='pendiente'?1:0)+
+                       (leadActual.intento2_estado&&leadActual.intento2_estado!=='pendiente'?1:0)+
+                       (leadActual.intento3_estado&&leadActual.intento3_estado!=='pendiente'?1:0);
+        if(intentos<1){
+          toast('Fase PRESENTACIÓN: registra al menos 1 intento de contacto antes de avanzar','error');
+          document.getElementById('f-estado').value=leadActual.estado;
+          return;
+        }
+      }
+      // INDAGACIÓN: necesita indagación completa para pasar de en_seguimiento a visita
+      if(leadActual.estado==='en_seguimiento' && (estado==='visita_agendada'||estado==='visita_realizada')){
+        if(!leadActual.indagacion_completa){
+          toast('Fase INDAGACIÓN: completa los 9 campos de indagación antes de agendar visita','error');
+          document.getElementById('f-estado').value=leadActual.estado;
+          return;
+        }
+      }
+    }
+  }
+  // ═══ FIN ENFORCEMENT ═══
+
   const visitaDia=document.getElementById('f-visita-dia').value;
   const visitaHora=document.getElementById('f-visita-hora').value||'09:00';
   let visitaFecha=null;
