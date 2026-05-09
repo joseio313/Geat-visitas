@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -707,7 +708,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div><div class="ph-title">Todos los Leads</div><div class="ph-sub" id="todos-count">—</div></div>
         <div class="ph-actions">
           <button class="btn btn-sm btn-ghost" onclick="generarReporteSemanal()">📊 Reporte</button>
-          <button class="btn btn-sm btn-ghost" onclick="exportarCSV()">↗ CSV</button>
+          <button class="btn btn-sm btn-ghost" onclick="exportarExcel()">↗ Excel</button>
           <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
       </div>
@@ -3785,19 +3786,31 @@ async function reactivarLead(leadId,perdidoId){
   renderAdmin();
 }
 
-// -- EXPORTAR CSV --
-function exportarCSV(){
+// -- EXPORTAR EXCEL --
+function exportarExcel(){
   const leads=allLeads.filter(l=>{
     if(todosTabActual!=='todos')return l.estado===todosTabActual;
     return true;
   });
-  const headers=['ID','Nombre','Celular','Ciudad','Captador','Cerrador','Estado','Financiamiento','Medio','Fecha ingreso'];
-  const rows=leads.map(l=>[l.id,l.nombre,l.celular,l.ciudad,l.captador,l.cerrador,l.estado,l.financiamiento,l.medio_difusion,l.fecha_ingreso]);
-  const csv=[headers,...rows].map(r=>r.map(v=>`"${v||''}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='leads_geat_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click();
+  const datos=leads.map(l=>({
+    nombre:l.nombre||'',
+    celular:l.celular||'',
+    ciudad:l.ciudad||'',
+    estado:l.estado||'',
+    captador:l.captador||'',
+    cerrador:l.cerrador||'',
+    financiamiento:l.financiamiento||'',
+    fecha_ingreso:l.fecha_ingreso||'',
+    visita_fecha:l.visita_fecha||'',
+    metros_cuadrados:l.metros_cuadrados||'',
+    medio_difusion:l.medio_difusion||'',
+    notas:l.notas||''
+  }));
+  const ws=XLSX.utils.json_to_sheet(datos);
+  ws['!cols']=[{wch:25},{wch:12},{wch:15},{wch:18},{wch:20},{wch:20},{wch:15},{wch:12},{wch:18},{wch:8},{wch:20},{wch:30}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Leads GEAT');
+  XLSX.writeFile(wb,'leads_geat_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 function generarReporteSemanal(){
