@@ -4292,11 +4292,14 @@ async function renderFinanciamiento(el){
   try{
     var {data} = await sb.from('financiamiento_tramite').select('*').eq('lead_id',leadId).maybeSingle();
     var pasos = [
-      {num:1,label:'Firma propietario GEAT',desc:'Contrato firmado por la empresa'},
-      {num:2,label:'Presupuesto bancario',desc:'Cliente presenta documentos al banco'},
-      {num:3,label:'Aprobacion de credito',desc:'Banco aprueba el monto'},
-      {num:4,label:'Firma de contrato',desc:'Firma del contrato de compraventa'},
-      {num:5,label:'Desembolso',desc:'Banco deposita el monto a GEAT'}
+      {num:1,label:'Conocer motivo del cliente',desc:'Saber qué lo motiva para llegarle correctamente'},
+      {num:2,label:'Indagar GPS, presupuesto, calificación',desc:'GPS terreno, presupuesto, cuándo construir'},
+      {num:3,label:'Presentación de proyectos y empresa',desc:'Mostrar portafolio, evidencia, confianza'},
+      {num:4,label:'Verificar calificación financiamiento',desc:'¿Califica a crédito bancario? ¿Contado?'},
+      {num:5,label:'Visita al terreno + propuesta',desc:'Coordinar visita inmediata con propuesta en mano'},
+      {num:6,label:'Gestionar financiamiento → desembolso',desc:'Trámite bancario completo hasta el depósito'},
+      {num:7,label:'Beneficios extras según necesidades',desc:'Ofrecer valor adicional para cerrar'},
+      {num:8,label:'Estrategia de confirmación',desc:'Hacer sentir que la ayuda depende de su confirmación'}
     ];
     var html = selHtml + '<div style="display:flex;flex-direction:column;gap:8px">';
     pasos.forEach(function(p){
@@ -4646,7 +4649,7 @@ async function checkTramitesAtascados(){
     banner.id = 'alerta-tramite-banner';
     banner.style.cssText = 'background:rgba(239,68,68,0.1);border-bottom:1px solid rgba(239,68,68,0.3);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--red)';
 
-    var pasos = ['Firma GEAT','Ppto bancario','Aprobacion','Firma contrato','Desembolso'];
+    var pasos = ['Motivo cliente','GPS/presupuesto','Presentación','Calif. financ.','Visita+propuesta','Financ.→desembolso','Beneficios extras','Estrategia cierre'];
     var msgs = atascados.map(function(t){
       return t.nombre_cliente + ' — Paso ' + t.paso_atascado + ': ' + (pasos[t.paso_atascado-1]||'');
     }).join(' | ');
@@ -4673,7 +4676,7 @@ async function checkTramitesBanner(el){
     var {data} = await sb.from('tramites_atascados').select('*');
     var items = data||[];
     if(!items.length) return '';
-    var pasos = ['Firma GEAT','Ppto bancario','Aprobacion credito','Firma contrato','Desembolso'];
+    var pasos = ['Motivo cliente','GPS/presupuesto','Presentación','Calif. financ.','Visita+propuesta','Financ.→desembolso','Beneficios extras','Estrategia cierre'];
     var html = '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r2);padding:12px;margin-bottom:14px">';
     html += '<div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">TRAMITES BANCARIOS ATASCADOS (' + items.length + ')</div>';
     items.forEach(function(t){
@@ -5769,11 +5772,12 @@ async function actualizarPasoFin(paso, estado){
     } else {
       var nuevo={lead_id:parseInt(leadId),cerrador:cu.nombre,
         paso_1_estado:'pendiente',paso_2_estado:'pendiente',paso_3_estado:'pendiente',
-        paso_4_estado:'pendiente',paso_5_estado:'pendiente'};
+        paso_4_estado:'pendiente',paso_5_estado:'pendiente',paso_6_estado:'pendiente',
+        paso_7_estado:'pendiente',paso_8_estado:'pendiente'};
       nuevo[campoEst]=estado; nuevo[campoFec]=updates[campoFec];
       await sb.from('financiamiento_tramite').insert([nuevo]);
     }
-    var pasos=['Firma GEAT','Ppto bancario','Aprobacion','Firma contrato','Desembolso'];
+    var pasos=['Motivo cliente','GPS/presupuesto','Presentación','Calif. financ.','Visita+propuesta','Financ.→desembolso','Beneficios extras','Estrategia cierre'];
     toast('Paso '+(pasos[paso-1]||paso)+': '+estado);
     regAudit('financiamiento','financiamiento',parseInt(leadId),{paso:paso,estado:estado});
     var el=document.getElementById('cierre-content'); if(el) renderFinanciamiento(el);
