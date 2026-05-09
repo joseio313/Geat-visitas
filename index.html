@@ -1531,6 +1531,28 @@ async function checkNotifsPendientes(){
       tag:'geat-atrasadas'
     });
   }
+  checkRecordatoriosVisita();
+}
+function checkRecordatoriosVisita(){
+  var ahora=new Date();
+  var hoy=ahora.toISOString().slice(0,10);
+  var visitasHoy=[];
+  (window.allLeads||[]).forEach(function(l){
+    if(!l.visita_fecha)return;
+    var vf=new Date(l.visita_fecha);
+    var diff=(vf-ahora)/36e5;
+    if(diff>=23&&diff<=25)new Notification('GEAT — Visita mañana con '+l.nombre,{tag:'geat-vis24-'+l.id});
+    if(diff>=1.5&&diff<=2.5)new Notification('GEAT — Visita en 2 horas: '+l.nombre,{tag:'geat-vis2h-'+l.id});
+    if(l.visita_fecha.slice(0,10)===hoy)visitasHoy.push(l);
+  });
+  if(visitasHoy.length){
+    var el=document.getElementById('inicio-notifs');
+    if(el){
+      var banner=document.getElementById('geat-banner-visitas-hoy');
+      if(!banner){banner=document.createElement('div');banner.id='geat-banner-visitas-hoy';banner.style.cssText='background:#16A34A;color:#fff;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px;font-weight:600';el.insertBefore(banner,el.firstChild);}
+      banner.innerHTML='📅 Visitas hoy: '+visitasHoy.map(function(l){return '<span style="text-decoration:underline;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'+l.nombre+'</span>';}).join(', ');
+    }
+  }
 }
 
 // -- RENDER INICIO --
@@ -3489,12 +3511,13 @@ async function renderAdmin(){
     var hoyC=new Date().toISOString().slice(0,10);
     var mesActC=new Date().toISOString().slice(0,7);
     var periodoC=window.campanaFiltro||'mes';
-    var desdeC={
+    var desdeC=periodoC==='custom'?(window._campDesde||hoyC):{
       dia:hoyC, semana:new Date(Date.now()-7*864e5).toISOString().slice(0,10),
       mes:new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10),
       anio:new Date().getFullYear()+'-01-01'
     }[periodoC]||hoyC;
-    var leadsP=allLeads.filter(function(l){return l.fecha_ingreso&&l.fecha_ingreso>=desdeC;});
+    var hastaC=periodoC==='custom'?(window._campHasta||hoyC):hoyC;
+    var leadsP=allLeads.filter(function(l){return l.fecha_ingreso&&l.fecha_ingreso>=desdeC&&(periodoC!=='custom'||!window._campHasta||l.fecha_ingreso<=hastaC);});
     var ganadosP=leadsP.filter(function(l){return l.estado==='cerrado_ganado';}).length;
     var perdidosP=leadsP.filter(function(l){return l.estado==='cerrado_perdido';}).length;
     var visitasP=leadsP.filter(function(l){return l.estado==='visita_agendada'||l.estado==='visita_realizada';}).length;
@@ -3519,10 +3542,17 @@ async function renderAdmin(){
     var capSorted=Object.entries(porCap).sort(function(a,b){return b[1].total-a[1].total;});
     el.innerHTML=
       '<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none">'+
-      ['dia','semana','mes','anio'].map(function(p){
-        var lbl=p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Este mes':'Año';
+      ['dia','semana','mes','anio','custom'].map(function(p){
+        var lbl=p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Este mes':p==='anio'?'Año':'📅 Rango';
         return '<button class="tab'+(periodoC===p?' active':'')+'" style="white-space:nowrap;font-size:11px" onclick="window.campanaFiltro=\''+p+'\';setAdminTab(\'campanas\',null)">'+lbl+'</button>';
       }).join('')+'</div>'+
+      (periodoC==='custom'?
+        '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">'+
+        '<label style="font-size:11px;color:var(--txt3)">Desde</label>'+
+        '<input type="date" value="'+(window._campDesde||hoyC)+'" style="flex:1;padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window._campDesde=this.value;setAdminTab(\'campanas\',null)">'+
+        '<label style="font-size:11px;color:var(--txt3)">Hasta</label>'+
+        '<input type="date" value="'+(window._campHasta||hoyC)+'" style="flex:1;padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px" onchange="window._campHasta=this.value;setAdminTab(\'campanas\',null)">'+
+        '</div>':'')+
       // KPIs principales
       '<div class="kpi-grid" style="margin-bottom:14px">'+
       '<div class="kpi"><div class="kpi-n" style="color:var(--acc)">'+leadsP.length+'</div><div class="kpi-l">Leads</div><div style="font-size:9px;color:'+(diffLeads>=0?'var(--green)':'var(--red)')+'">'+
@@ -5893,6 +5923,21 @@ function enviarArquitectura(){
 // ══════════════════════════════════════
 // OFFLINE / RECONEXIÓN HANDLER
 // ══════════════════════════════════════
+var _offlineQueue=[];
+function queueOfflineOp(tabla,tipo,datos){_offlineQueue.push({tabla:tabla,tipo:tipo,datos:datos,ts:Date.now()});}
+async function flushOfflineQueue(){
+  if(!_offlineQueue.length)return;
+  var ops=_offlineQueue.splice(0);
+  for(var i=0;i<ops.length;i++){
+    var op=ops[i];
+    try{
+      if(op.tipo==='insert')await sb.from(op.tabla).insert(op.datos);
+      else if(op.tipo==='update')await sb.from(op.tabla).update(op.datos.cambios).eq('id',op.datos.id);
+      else if(op.tipo==='upsert')await sb.from(op.tabla).upsert(op.datos);
+    }catch(e){_offlineQueue.push(op);}
+  }
+  if(typeof toast==='function'&&ops.length)toast(ops.length+' operaciones sincronizadas ✓');
+}
 (function(){
   var offlineBanner=null;
   function showOffline(){
@@ -5900,12 +5945,12 @@ function enviarArquitectura(){
     offlineBanner=document.createElement('div');
     offlineBanner.id='offline-banner';
     offlineBanner.style.cssText='position:fixed;top:0;left:0;right:0;background:#DC2626;color:#fff;text-align:center;padding:8px 16px;font-size:12px;font-weight:600;z-index:9999;display:flex;align-items:center;justify-content:center;gap:8px';
-    offlineBanner.innerHTML='📡 Sin conexión — los cambios no se guardarán';
+    offlineBanner.innerHTML='📡 Sin conexión — los cambios se guardan en cola local';
     document.body.appendChild(offlineBanner);
   }
   function hideOffline(){
     if(offlineBanner){offlineBanner.remove();offlineBanner=null;}
-    // Mostrar toast de reconexión
+    if(_offlineQueue.length)flushOfflineQueue();
     if(typeof toast==='function')toast('Conexión restaurada ✓');
   }
   window.addEventListener('offline',showOffline);
