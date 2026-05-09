@@ -1004,6 +1004,12 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           </div>
         </div>
       </div>
+      <!-- G4: Historial inline -->
+      <div id="lead-historial-section" style="display:none;margin-top:16px">
+        <div style="height:1px;background:var(--brd);margin-bottom:14px"></div>
+        <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Historial</div>
+        <div id="lead-historial-content" style="max-height:260px;overflow-y:auto"></div>
+      </div>
     </div>
     <div class="sheet-footer">
       <button class="btn btn-primary" style="flex:1" onclick="guardarLead()">Guardar lead</button>
@@ -1066,6 +1072,11 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 
       <div class="fgroup" style="margin-bottom:12px">
         <label>Nota de lo que pasó</label>
+        <div style="display:flex;gap:6px;margin-bottom:7px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:3px 9px;border-color:rgba(245,158,11,0.35);color:var(--acc)" onclick="copiarTemplateIntento(1)">💬 Template 1</button>
+          <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:3px 9px;border-color:rgba(245,158,11,0.35);color:var(--acc)" onclick="copiarTemplateIntento(2)">💬 Template 2</button>
+          <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:3px 9px;border-color:rgba(245,158,11,0.35);color:var(--acc)" onclick="copiarTemplateIntento(3)">💬 Template 3</button>
+        </div>
         <textarea class="ftextarea" id="intento-nota" placeholder="Ej: Contestó, tiene terreno en 8vo anillo, trabaja en empresa privada, muy interesado en financiamiento bancario..." style="min-height:80px"></textarea>
       </div>
 
@@ -2712,7 +2723,7 @@ async function renderCalendario(){
 }
 
 // -- SHEET LEAD (ver + editar) --
-function abrirSheetLead(id){
+async function abrirSheetLead(id){
   // Cerradores: solo pueden VER datos originales, no editarlos
   const esCerrador = cu.rol==='closer';
   const esLead = !!id; // true si es edicion, false si es nuevo
@@ -2767,6 +2778,30 @@ function abrirSheetLead(id){
   document.getElementById('fgroup-notas').style.display='';
   document.getElementById('fgroup-primer-intento').style.display='none';
   document.getElementById('sheet-lead').classList.add('open');
+
+  // G4: cargar historial inline
+  const histSec=document.getElementById('lead-historial-section');
+  const histCont=document.getElementById('lead-historial-content');
+  if(histSec&&histCont){
+    histSec.style.display='';
+    histCont.innerHTML='<div style="font-size:11px;color:var(--txt3);padding:4px 0"><span class="spin"></span> Cargando historial...</div>';
+    sb.from('historial_lead').select('*').eq('lead_id',id).order('fecha_actividad',{ascending:false}).limit(10).then(function(r){
+      const entradas=r.data||[];
+      if(!entradas.length){histCont.innerHTML='<div style="font-size:11px;color:var(--txt3);padding:4px 0">Sin historial registrado aún</div>';return;}
+      const tipoLabel={intento_contacto:'Intento',nota_seguimiento:'Seguimiento',visita:'Visita',cierre:'Cierre',perdida:'Pérdida'};
+      histCont.innerHTML=entradas.map(function(e){
+        const est=estilo(e.etapa||'nuevo');
+        const fecha=new Date(e.fecha_actividad).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'2-digit'});
+        return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd)">'
+          +'<div style="width:3px;border-radius:2px;flex-shrink:0;background:'+est.dot+';align-self:stretch"></div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:10px;color:var(--txt3);margin-bottom:2px">'+fecha+' · '+(tipoLabel[e.tipo_actividad]||e.tipo_actividad)+(e.resultado?' · '+e.resultado:'')+'</div>'
+            +(e.nota?'<div style="font-size:11px;color:var(--txt2);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">"'+e.nota.slice(0,90)+(e.nota.length>90?'...':'')+'"</div>':'')
+          +'</div>'
+        +'</div>';
+      }).join('');
+    });
+  }
 }
 function elegirModoNuevoLead(){
   if(cu.rol==='closer'){
@@ -2801,6 +2836,9 @@ function abrirNuevoLead(){
   document.getElementById('fgroup-proximo').style.display='none';
   document.getElementById('fgroup-notas').style.display='none';
   document.getElementById('fgroup-primer-intento').style.display='';
+  // Ocultar historial en modo creación
+  var hSec=document.getElementById('lead-historial-section');
+  if(hSec)hSec.style.display='none';
   // Default fecha = hoy
   document.getElementById('f-primer-fecha').value=new Date().toISOString().slice(0,10);
   document.getElementById('f-primer-nota').value='';
@@ -3048,6 +3086,29 @@ async function abrirIntento(id){
     }).join('');
   }
 }
+function copiarTemplateIntento(num){
+  const l=allLeads.find(x=>x.id===intentoLeadId);
+  const nombre=l?l.nombre:'[nombre]';
+  const templates={
+    1:'Muy buenas tardes Sr@ '+nombre+', le saluda Gustavo Vaca asesor comercial de la empresa grupo GEAT constructora y consultoría. Me gustaría conversar con su persona ya que solicitó información de las construcciones y beneficios que brindamos, nos avisa su disponibilidad de tiempo para llamarlo o desea recibir información por escrito, quedo atento a su respuesta por favor',
+    2:'Muy buenas tardes Sr@ '+nombre+', le escribimos nuevamente de la constructora grupo GEAT, quisiéramos conversar con su persona sobre la solicitud de información, tal vez se ha encontrado ocupado por eso no hemos tenido respuesta, nos podría avisar en qué momento tiene disponibilidad de tiempo para poder brindarle información por favor',
+    3:'Buenas tardes Sr@ '+nombre+', este es nuestro último intento de comunicación. Entendemos que puede estar ocupado. Si en algún momento desea retomar la conversación sobre su proyecto de construcción, estamos a su disposición. Le deseamos éxito.'
+  };
+  const msg=templates[num]||templates[1];
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(msg).then(function(){toast('Mensaje copiado — pegalo en WhatsApp');}).catch(function(){_copiarFallback(msg);});
+  } else {
+    _copiarFallback(msg);
+  }
+}
+function _copiarFallback(txt){
+  var ta=document.createElement('textarea');
+  ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');toast('Mensaje copiado — pegalo en WhatsApp');}catch(e){toast('No se pudo copiar','error');}
+  document.body.removeChild(ta);
+}
+
 function mostrarGuiaIntento(num){
   var guia=document.getElementById('intento-guia-script');
   var titulo=document.getElementById('intento-guia-titulo');
@@ -3124,10 +3185,30 @@ async function guardarIntento(){
   }
   const i=allLeads.findIndex(x=>x.id===intentoLeadId);
   if(i>-1)allLeads[i]={...allLeads[i],...upd};
+
+  // G3: auto-marcar perdido si 3er intento y todos negativos
+  const resultNeg=['no_contesto','buzon','apagado','no_respondio'];
+  const esNeg=v=>resultNeg.includes(v);
+  if(num===3 && esNeg(res) && esNeg(l.intento1_estado) && esNeg(l.intento2_estado)){
+    const updPerd={estado:'cerrado_perdido',motivo_perdida:'no_respondio_presentacion'};
+    await sb.from('leads').update(updPerd).eq('id',intentoLeadId);
+    await registrarHistorial(intentoLeadId,'cerrado_perdido','perdida',null,'Auto: 3 intentos sin respuesta','no_respondio_presentacion',null);
+    await sb.from('leads_perdidos').insert([{lead_id:intentoLeadId,captador:l.captador,cerrador:l.cerrador||null,motivo:'no_respondio_presentacion',nota:'Automático: 3 intentos sin respuesta',fecha_perdida:new Date().toISOString()}]);
+    if(i>-1)allLeads[i]={...allLeads[i],...updPerd};
+    closeSheet('intento');
+    toast('3 intentos sin respuesta — marcando como perdido');
+    renderLeads();cargarAgendaPersonal();
+    return;
+  }
+
   closeSheet('intento');
   toast('Intento registrado ✓');
   renderLeads();cargarAgendaPersonal();
-  
+
+  // G2: si resultado negativo y no se programó prox en el sheet, mostrar modal de agendado
+  if(esNeg(res)&&!prox){
+    setTimeout(function(){abrirProgramarIntento(intentoLeadId,l.nombre,num+1,'intento');},400);
+  }
 }
 
 // -- SHEET SEGUIMIENTO --
