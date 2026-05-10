@@ -437,17 +437,16 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         </button>
       </div>
 
+      <!-- Periodo de ingreso — siempre visible -->
+      <div style="display:flex;gap:5px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none">
+        <button class="tab" id="lf-hoy" onclick="setLeadFecha('hoy',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Hoy</button>
+        <button class="tab" id="lf-sem" onclick="setLeadFecha('semana',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Semana</button>
+        <button class="tab" id="lf-mes" onclick="setLeadFecha('mes',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Mes</button>
+        <button class="tab" id="lf-anio" onclick="setLeadFecha('anio',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Año</button>
+      </div>
+
       <!-- PANEL FILTROS EXPANDIBLE (oculto por defecto) -->
       <div id="filtros-leads-panel" style="display:none;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:10px">
-
-        <!-- Chips periodo -->
-        <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Periodo de ingreso</div>
-        <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">
-          <button class="tab" id="lf-hoy" onclick="setLeadFecha('hoy',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Hoy</button>
-          <button class="tab" id="lf-sem" onclick="setLeadFecha('semana',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Semana</button>
-          <button class="tab" id="lf-mes" onclick="setLeadFecha('mes',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Mes</button>
-          <button class="tab" id="lf-anio" onclick="setLeadFecha('anio',this)" style="font-size:10px;padding:4px 9px;white-space:nowrap">Año</button>
-        </div>
 
         <!-- Chips estado -->
         <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Estado</div>
@@ -1438,8 +1437,8 @@ async function initApp(){
 }
 
 function llenarSelects(){
-  const caps=colaboradores.filter(c=>c.rol==='field_capturer'||c.rol==='admin');
-  const cers=colaboradores.filter(c=>c.rol==='closer'||c.rol==='commercial_lead'||c.rol==='admin');
+  const caps=colaboradores.filter(c=>(c.rol==='field_capturer'||c.rol==='admin')&&c.nombre!=='Arquitectura GEAT');
+  const cers=colaboradores.filter(c=>(c.rol==='closer'||c.rol==='commercial_lead'||c.rol==='admin')&&c.nombre!=='Arquitectura GEAT');
   const selCap=document.getElementById('f-captador');
   const selCer=document.getElementById('f-cerrador');
   selCap.innerHTML='<option value="">Sin asignar</option>'+caps.map(c=>`<option>${c.nombre}</option>`).join('');
@@ -1459,7 +1458,7 @@ function llenarSelects(){
   // Llenar filtro captador en todos
   const todCap=document.getElementById('todos-cap');
   if(todCap){
-    todCap.innerHTML='<option value="">Todos</option>'+colaboradores.map(c=>`<option>${c.nombre}</option>`).join('');
+    todCap.innerHTML='<option value="">Todos</option>'+colaboradores.filter(c=>c.nombre!=='Arquitectura GEAT').map(c=>`<option>${c.nombre}</option>`).join('');
   }
 }
 
@@ -1747,7 +1746,7 @@ function renderInicio(){
       filtroWrap.style.display='';
       const sel=document.getElementById('filtro-persona');
       if(sel.options.length<=1){
-        colaboradores.filter(function(c){return c.activo!==false;}).forEach(function(c){
+        colaboradores.filter(function(c){return c.activo!==false&&c.nombre!=='Arquitectura GEAT';}).forEach(function(c){
           var opt=document.createElement('option');opt.value=c.nombre;opt.textContent=c.nombre+' ('+c.rol.replace(/_/g,' ')+')';
           sel.appendChild(opt);
         });
@@ -1836,7 +1835,7 @@ async function renderAgendaInicio(){
   let query=sb.from('agenda_personal')
     .select('*,leads(nombre,celular,estado)')
     .eq('completada',false)
-    .lte('fecha_programada',hoy+'T23:59:59')
+    .lt('fecha_programada',hoy+'T00:00:00')
     .order('fecha_programada',{ascending:true}).limit(15);
   // Si admin sin filtro, ver todas; si con filtro, solo esa persona; si captador/cerrador, solo las suyas
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
@@ -1852,8 +1851,8 @@ async function renderAgendaInicio(){
   const el=document.getElementById('inicio-agenda');
   // Opción C: field_capturer y closer solo ven el badge de atrasadas en los stats (s-sem via renderStatsAgenda), no el panel grande
   if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
-  if(!items.length){el.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:16px">Sin actividades pendientes '+(filtroPersona?'para '+filtroPersona:'')+'</div>';return;}
-  el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Actividades pendientes '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
+  if(!items.length){el.innerHTML='';return;}
+  el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--red);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">⚠ Atrasadas '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
   items.map(function(a){
     var est=estilo(a.leads?.estado);
     var hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
