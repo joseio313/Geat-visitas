@@ -357,6 +357,12 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <!-- Notifs -->
       <div id="inicio-notifs"></div>
 
+      <!-- Widget visitas diarias -->
+      <div id="widget-visitas-dia"></div>
+
+      <!-- Widget KPIs commercial_lead -->
+      <div id="widget-kpis-cl"></div>
+
       <!-- MINI STATS -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-hoy" style="font-size:18px">—</div><div class="stat-l">Hoy</div></div>
@@ -887,6 +893,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Ej: Señor X, Señora X"></div>
         <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 70000000"></div>
         <div class="fgroup"><label>Ciudad</label><input class="finput" id="f-ciudad" placeholder="Santa Cruz" value="Santa Cruz"></div>
+        <div class="fgroup"><label>GPS del terreno</label><div style="display:flex;gap:6px;align-items:center"><input class="finput" id="f-gps" placeholder="Ej: -17.783, -63.182" style="flex:1"><button type="button" style="background:var(--acc);color:#000;border:none;border-radius:var(--r);padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0" onclick="(function(){if(!navigator.geolocation){toast('GPS no disponible','error');return;}navigator.geolocation.getCurrentPosition(function(p){document.getElementById('f-gps').value=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);},function(){toast('No se pudo obtener ubicación','error');});})()" title="Obtener ubicación actual">📍</button></div></div>
         <div class="fgroup"><label>Financiamiento</label>
           <select class="fselect" id="f-financiamiento">
             <option value="recursos_propios">Recursos propios</option>
@@ -1164,6 +1171,16 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <option value="correo">📧 Correo</option>
             <option value="visita_terreno">📍 Visita terreno</option>
           </select>
+        </div>
+      </div>
+      <div class="fgroup" style="margin-bottom:14px">
+        <label style="margin-bottom:8px;display:block">Información enviada</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="info-cat" style="width:16px;height:16px;accent-color:var(--acc)"> Catálogo general</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="info-modelo" style="width:16px;height:16px;accent-color:var(--acc)"> Modelo específico</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="info-caract" style="width:16px;height:16px;accent-color:var(--acc)"> Características del modelo</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="info-planos" style="width:16px;height:16px;accent-color:var(--acc)"> Planos/distribución</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="info-precios" style="width:16px;height:16px;accent-color:var(--acc)"> Lista de precios</label>
         </div>
       </div>
       <div class="fgroup" style="margin-bottom:14px">
@@ -1469,7 +1486,7 @@ function llenarSelects(){
 var mostrarArchivados=false;
 async function loadLeads(){
   var q=sb.from('leads')
-    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado')
+    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado,gps_terreno,info_enviada,created_at')
     .order('created_at',{ascending:false});
   if(!mostrarArchivados) q=q.eq('archivado',false);
   const{data}=await q;
@@ -1503,6 +1520,14 @@ function iniciarRealtime(){
       if(active==='pn-leads')renderLeads();
       if(active==='pn-todos')renderTodos();
       if(active==='pn-inicio')renderInicio();
+    }).subscribe();
+  sb.channel('agenda-personal-rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'agenda_personal'},()=>{
+      cargarAgendaPersonal();
+    }).subscribe();
+  sb.channel('agenda-grupal-rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'agenda_grupal'},()=>{
+      renderCalendario();
     }).subscribe();
 }
 
@@ -1598,6 +1623,24 @@ async function checkNotifsPendientes(){
       tag:'geat-atrasadas'
     });
   }
+  // P6: Recordatorio reunión semanal (lunes 8-10h, admin y commercial_lead)
+  if(ahora.getDay()===1){
+    const hora=ahora.getHours();
+    if(hora>=8&&hora<=10&&(cu.rol==='admin'||cu.rol==='commercial_lead')){
+      playNotifSound();
+      new Notification('GEAT — Reunión semanal del equipo comercial',{body:'Recordatorio: reunión de equipo hoy. Revisa tus métricas.',tag:'geat-reunion-semanal'});
+    }
+  }
+  // P7: Alerta leads nuevos sin contactar hace más de 5 minutos
+  (window.allLeads||[]).filter(l=>l.estado==='nuevo'&&(!l.intento1_estado||l.intento1_estado==='pendiente')).forEach(function(l){
+    var base=l.created_at?new Date(l.created_at):null;
+    if(!base)return;
+    var diffMin=(Date.now()-base.getTime())/60000;
+    if(diffMin>5&&diffMin<120){
+      playNotifSound();
+      new Notification('⚡ Lead sin contactar: '+l.nombre,{body:'Hace más de 5 min sin contacto',tag:'geat-urgente-'+l.id});
+    }
+  });
   checkRecordatoriosVisita();
 }
 function checkRecordatoriosVisita(){
@@ -1832,6 +1875,67 @@ function renderInicio(){
   renderAgendaInicio();
   // Notifs en inicio
   renderNotifsInicio();
+  // P8: Contador visitas diarias
+  renderContadorVisitas();
+  // P10: KPIs commercial_lead
+  if(cu.rol==='commercial_lead')renderKpisCommercialLead();
+}
+function renderKpisCommercialLead(){
+  var el=document.getElementById('widget-kpis-cl');
+  if(!el)return;
+  var hoyStr=new Date().toISOString().slice(0,10);
+  var semStr=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  var mesStr=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
+  var leads=allLeads;
+  var activos=leads.filter(function(l){return l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido'&&!l.archivado;}).length;
+  var visitasSem=leads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)>=semStr;}).length;
+  var cierresMes=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesStr;}).length;
+  var agendados=leads.filter(function(l){return l.visita_fecha;}).length;
+  var realizados=leads.filter(function(l){var e=l.estado;return e==='visita_realizada'||e==='seguimiento_cierre'||e==='reservado'||e==='en_tramite'||e==='cerrado_ganado';}).length;
+  var tasaAsist=agendados>0?Math.round(realizados/agendados*100):0;
+  var proxVisita=leads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)>=hoyStr;}).sort(function(a,b){return a.visita_fecha>b.visita_fecha?1:-1;})[0];
+  el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">📈 Resumen comercial</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">'+activos+'</div><div class="stat-l">Leads activos</div></div>'
+    +'<div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">'+visitasSem+'</div><div class="stat-l">Visitas esta sem.</div></div>'
+    +'<div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px;color:var(--green)">'+cierresMes+'</div><div class="stat-l">Cierres este mes</div></div>'
+    +'<div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">'+tasaAsist+'%</div><div class="stat-l">Asistencia visitas</div></div>'
+    +'</div>'
+    +(proxVisita?'<div style="font-size:11px;color:var(--txt3)">📅 Próx. visita: <strong style="color:var(--txt)">'+proxVisita.nombre+'</strong> · '+new Date(proxVisita.visita_fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>':'')
+    +'</div>';
+}
+function renderContadorVisitas(){
+  var el=document.getElementById('widget-visitas-dia');
+  if(!el)return;
+  var hoyStr=new Date().toISOString().slice(0,10);
+  if(cu.rol==='field_capturer'){
+    var cnt=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===cu.nombre;}).length;
+    var color=cnt>=2?'var(--green)':cnt===1?'#F59E0B':'var(--red)';
+    var pct=Math.min(cnt/2*100,100);
+    el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:8px">📍 Visitas hoy</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+      +'<span style="font-size:13px;color:'+color+';font-weight:700">'+cnt+'/2</span>'
+      +'<span style="font-size:11px;color:var(--txt3)">'+(cnt>=2?'Meta cumplida ✓':cnt===1?'Falta 1':'Sin visitas')+'</span>'
+      +'</div>'
+      +'<div style="background:var(--bg3);border-radius:99px;height:6px;overflow:hidden">'
+      +'<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px;transition:width .3s"></div></div></div>';
+  }else if(cu.rol==='admin'||cu.rol==='commercial_lead'){
+    var caps=colaboradores.filter(function(c){return c.rol==='field_capturer'&&c.activo!==false&&c.nombre!=='Arquitectura GEAT';});
+    if(!caps.length){el.innerHTML='';return;}
+    var rows=caps.map(function(c){
+      var cnt=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===c.nombre;}).length;
+      var color=cnt>=2?'var(--green)':cnt===1?'#F59E0B':'var(--red)';
+      var pct=Math.min(cnt/2*100,100);
+      return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:11px;color:var(--txt2)">'+c.nombre.split(' ')[0]+'</span><span style="font-size:11px;font-weight:600;color:'+color+'">'+cnt+'/2</span></div>'
+        +'<div style="background:var(--bg3);border-radius:99px;height:5px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px"></div></div></div>';
+    }).join('');
+    el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:10px">📍 Visitas hoy por captador</div>'+rows+'</div>';
+  }else{
+    el.innerHTML='';
+  }
 }
 
 async function renderNotifsInicio(){
@@ -2104,6 +2208,11 @@ function limpiarBusqueda(){
 }
 
 // -- RENDER LEAD CARDS --
+function _badgeInfoEnviada(l){
+  if(!l.info_enviada)return '';
+  try{var d=JSON.parse(l.info_enviada);if(d.length>0)return '<span style="font-size:10px;color:var(--blue)">📄 '+d.length+'/5 docs enviados</span>';}catch(e){}
+  return '';
+}
 function renderLeadCards(leads,containerId,rol){
   const el=document.getElementById(containerId);
   if(!leads.length){
@@ -2135,6 +2244,7 @@ function renderLeadCards(leads,containerId,rol){
         ${l.financiamiento?`<span style="font-size:10px;color:var(--txt3)">${l.financiamiento==='bancario'?'[B] Banco':'💵 Contado'}</span>`:''}
         ${l.medio_difusion?`<span style="font-size:10px;color:var(--txt3)">📢 ${l.medio_difusion.replace(/_/g,' ')}</span>`:''}
         ${numIntento>0?`<span style="font-size:10px;color:var(--txt3)">Intentos: ${numIntento}/3</span>`:''}
+        ${_badgeInfoEnviada(l)}
         ${horaVisita?`<span style="font-size:10px;font-weight:600;color:var(--green)">📅 ${horaVisita}</span>`:''}
         ${(function(){
           if(!l.proximo_contacto) return '';
@@ -2792,6 +2902,7 @@ async function abrirSheetLead(id){
   document.getElementById('f-nombre').value=l.nombre||'';
   document.getElementById('f-celular').value=l.celular||'';
   document.getElementById('f-ciudad').value=l.ciudad||'Santa Cruz';
+  document.getElementById('f-gps').value=l.gps_terreno||'';
   document.getElementById('f-financiamiento').value=l.financiamiento||'recursos_propios';
   document.getElementById('f-medio').value=l.medio_difusion||'';
   document.getElementById('f-estado').value=l.estado||'nuevo';
@@ -3013,6 +3124,7 @@ async function guardarLead(){
     monto_contrato:estado==='cerrado_ganado'?parseFloat(document.getElementById('f-monto').value)||null:null,
     metros_cuadrados:estado==='cerrado_ganado'?parseFloat(document.getElementById('f-metros').value)||null:null,
     codigo_venta:estado==='cerrado_ganado'?document.getElementById('f-codigo').value||null:null,
+    gps_terreno:document.getElementById('f-gps').value.trim()||null,
   };
   if(!editingLeadId)data.fecha_ingreso=new Date().toISOString().slice(0,10);
 
@@ -3293,6 +3405,10 @@ function abrirSeguimiento(id){
   }
   var horaEl = document.getElementById('hora-seg-auto');
   if(horaEl) horaEl.textContent = new Date().toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+  // Pre-cargar checkboxes info_enviada
+  var infoIds=['info-cat','info-modelo','info-caract','info-planos','info-precios'];
+  var prevInfo=[];try{if(l.info_enviada)prevInfo=JSON.parse(l.info_enviada);}catch(e){}
+  infoIds.forEach(function(iid){var cb=document.getElementById(iid);if(cb)cb.checked=prevInfo.includes(iid);});
   document.getElementById('sheet-seg').classList.add('open');
 }
 async function guardarSeguimiento(){
@@ -3316,6 +3432,8 @@ async function guardarSeguimiento(){
   if(prox)upd.proximo_contacto=prox;
   if(vFecha){upd.estado='visita_agendada';upd.visita_fecha=vFecha+'T'+vHora+':00';upd.visita_sala=vSala;}
 
+  const infoChecked=['info-cat','info-modelo','info-caract','info-planos','info-precios'].filter(id=>document.getElementById(id)?.checked);
+  if(infoChecked.length>0)upd.info_enviada=JSON.stringify(infoChecked);
   await sb.from('leads').update(upd).eq('id',segLeadId);
   await sb.from('seguimientos').insert([{lead_id:segLeadId,colaborador:cu.nombre,fecha_seguimiento:new Date().toISOString(),nota_previa:nota,resultado:selPillVal.seg,estado:'realizado',tipo:tipoSeg,medio:medioSeg}]);
   await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha,tipoSeg,medioSeg);
@@ -3858,7 +3976,50 @@ async function renderAdmin(){
   }else if(adminTabActual==='llamadas'){
     await renderReporteLlamadas(el);
   }else if(adminTabActual==='ceo'){
-    el.innerHTML='<div class="empty"><div class="empty-icon">&#128200;</div><div class="empty-title">Panel CEO</div><div class="empty-sub">Próximamente disponible</div></div>';
+    // P10: KPIs CEO
+    var hoyStr=new Date().toISOString().slice(0,10);
+    var mesInicio=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
+    var semInicio=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    var leads=allLeads;
+    // Tasa asistencia visitas
+    var agendados=leads.filter(function(l){return l.visita_fecha;}).length;
+    var realizados=leads.filter(function(l){return l.estado==='visita_realizada'||l.estado==='seguimiento_cierre'||l.estado==='reservado'||l.estado==='en_tramite'||l.estado==='cerrado_ganado';}).length;
+    var tasaAsist=agendados>0?Math.round(realizados/agendados*100):0;
+    // Tiempo promedio cierre (fecha_ingreso -> cerrado_ganado aproximado con fecha hoy como proxy)
+    var ganados=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso;});
+    var promCierre=ganados.length>0?Math.round(ganados.reduce(function(s,l){return s+(Date.now()-new Date(l.fecha_ingreso).getTime())/864e5;},0)/ganados.length):null;
+    // Conversión por fase
+    var fases=['nuevo','en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre','cerrado_ganado'];
+    var faseCounts=fases.map(function(f){return leads.filter(function(l){return l.estado===f;}).length;});
+    // Sin contactar +48h
+    var hace48=new Date(Date.now()-2*864e5).toISOString().slice(0,10);
+    var sinCont=leads.filter(function(l){return l.estado==='nuevo'&&l.fecha_ingreso&&l.fecha_ingreso<=hace48;}).length;
+    // Meta mensual
+    var cierresMes=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesInicio;}).length;
+    var visitasMes=leads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)>=mesInicio;}).length;
+    var m2Mes=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesInicio;}).reduce(function(s,l){return s+(l.metros_cuadrados||0);},0);
+    function pctBar(val,meta,color){var p=Math.min(val/meta*100,100);return '<div style="background:var(--bg3);border-radius:99px;height:8px;overflow:hidden;margin-top:4px"><div style="width:'+p+'%;height:100%;background:'+color+';border-radius:99px"></div></div>';}
+    var convHtml=fases.slice(0,-1).map(function(f,i){
+      var de=faseCounts[i]+(faseCounts[i+1]||0);
+      var pct=de>0?Math.round((faseCounts[i+1]||0)/de*100):0;
+      return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt3);padding:3px 0"><span>'+f.replace(/_/g,' ')+' → '+fases[i+1].replace(/_/g,' ')+'</span><span style="font-weight:600;color:var(--txt)">'+pct+'%</span></div>';
+    }).join('');
+    el.innerHTML='<div style="padding:4px 0">'
+      +'<div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:14px">📊 Panel CEO</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+      +'<div class="stat"><div class="stat-n" style="color:var(--green)">'+tasaAsist+'%</div><div class="stat-l">Asistencia visitas</div></div>'
+      +'<div class="stat"><div class="stat-n">'+(promCierre!==null?promCierre+'d':'—')+'</div><div class="stat-l">Tiempo prom. cierre</div></div>'
+      +'<div class="stat"><div class="stat-n" style="color:'+(sinCont>0?'var(--red)':'var(--green)')+'">'+sinCont+'</div><div class="stat-l">Sin contactar +48h</div></div>'
+      +'<div class="stat"><div class="stat-n">'+ganados.length+'</div><div class="stat-l">Cierres totales</div></div>'
+      +'</div>'
+      +'<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:12px">'
+      +'<div style="font-size:12px;font-weight:600;margin-bottom:10px">🎯 Meta mensual</div>'
+      +'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px"><span>Cierres</span><span style="font-weight:600;color:'+(cierresMes>=3?'var(--green)':'var(--txt)')+'">'+cierresMes+'/3</span></div>'+pctBar(cierresMes,3,'var(--green)')+'</div>'
+      +'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px"><span>Visitas</span><span style="font-weight:600;color:'+(visitasMes>=40?'var(--green)':'var(--txt)')+'">'+visitasMes+'/40</span></div>'+pctBar(visitasMes,40,'var(--blue)')+'</div>'
+      +'<div><div style="display:flex;justify-content:space-between;font-size:12px"><span>M²</span><span style="font-weight:600;color:'+(m2Mes>=800?'var(--green)':'var(--txt)')+'">'+Math.round(m2Mes)+'/800</span></div>'+pctBar(m2Mes,800,'var(--acc)')+'</div>'
+      +'</div>'
+      +'<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px">'
+      +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">🔄 Tasa de conversión por fase</div>'+convHtml+'</div></div>';
   }else{
     el.innerHTML='';
   }
