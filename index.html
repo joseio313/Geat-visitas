@@ -519,6 +519,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div class="ph-title" id="cal-ph-title">Agenda Grupal</div>
           <div class="ph-sub" id="cal-ph-sub">Visitas y reuniones del equipo</div>
         </div>
+        <button class="btn btn-sm btn-primary" onclick="abrirAgendar()">+ Agendar</button>
       </div>
       <div class="tabs">
         <button class="tab active" id="cal-tab-semana" onclick="setCalTab('semana',this)">Semana</button>
@@ -769,13 +770,30 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="admin-content"></div>
     </div>
 
-    <!-- NOTAS PERSONALES (privadas) -->
+    <!-- NOTAS PERSONALES (panel captadoras) -->
+    <div class="panel" id="pn-notas-panel">
+      <div class="ph">
+        <div><div class="ph-title">📝 Mis Notas</div><div class="ph-sub">Solo vos las ves</div></div>
+        <button class="btn btn-sm btn-primary" onclick="abrirNuevaNota()">+ Nueva nota</button>
+      </div>
+      <div id="notas-panel-list"></div>
+    </div>
   </div><!-- /content -->
 
   <!-- BOTTOM NAV -->
   <div class="bottomnav" id="bottomnav"></div>
 
 </div><!-- /app -->
+
+<!-- ONBOARDING MODAL -->
+<div id="onboarding-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:700;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--bg2);border-radius:var(--r3);padding:32px;max-width:400px;width:100%;text-align:center">
+    <div id="onboarding-dots" style="display:flex;gap:8px;justify-content:center;margin-bottom:24px"></div>
+    <div id="onboarding-titulo" style="font-size:20px;font-weight:700;color:var(--txt);margin-bottom:12px"></div>
+    <div id="onboarding-texto" style="font-size:14px;color:var(--txt2);line-height:1.6;margin-bottom:0"></div>
+    <button id="onboarding-btn" class="btn btn-primary" style="width:100%;margin-top:24px;padding:14px" onclick="avanzarOnboarding()"></button>
+  </div>
+</div>
 
 <!-- TOAST -->
 <div id="toast"></div>
@@ -1352,6 +1370,7 @@ async function initLogin(){
       document.getElementById('app').style.display='flex';
       var btnLogout=document.getElementById('btn-logout');if(btnLogout)btnLogout.style.display='';
       initApp();
+      mostrarOnboarding();
       return;
     }
   }
@@ -1386,6 +1405,7 @@ function checkPin(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   initApp();
+  mostrarOnboarding();
 }
 function cerrarSesion(){
   localStorage.removeItem('geat_session');
@@ -1398,6 +1418,7 @@ const NAVS={
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
     {id:'calendario',icon:'&#128197;',label:'Grupal'},
+    {id:'notas-panel',icon:'📝',label:'Notas'},
   ],
   closer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -1445,6 +1466,7 @@ function sw(id,btn){
   if(id==='tecnico-upload')cargarSelectSolicitudes();
   if(id==='todos')renderTodos();
   if(id==='notas')renderNotas();
+  if(id==='notas-panel')renderNotasPanel();
   // pn-agenda eliminado - el calendario personal está en el inicio
   if(id==='calendario')renderCalendario();
   if(id==='notif')renderNotifs();
@@ -2237,6 +2259,48 @@ function limpiarBusqueda(){
 }
 
 // -- RENDER LEAD CARDS --
+function _botonesCard(l){
+  if(cu.rol==='field_capturer') return _botonesCardCaptadora(l);
+  var n=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
+  var nom=(l.nombre||'').replace(/'/g,'');
+  var bts='';
+  if(l.estado==='nuevo'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirIntento('+l.id+')" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>';
+    bts+='<button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento('+l.id+',\''+nom+'\','+n+',\'intento\')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>';
+  }else if(l.estado==='en_seguimiento'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>';
+    bts+='<button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento('+l.id+',\''+nom+'\',1,\'seguimiento\')" title="Programá cuándo llamar o escribir de nuevo">📅 Programar</button>';
+  }else if(l.estado==='visita_realizada'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="¿Cómo fue la visita? Registrá el resultado">[O] Resultado visita</button>';
+  }else if(l.estado==='visita_agendada'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="Actualizá el estado de la visita">✏️ Actualizar</button>';
+  }else if(l.estado==='seguimiento_cierre'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="Seguimiento post-visita — ¿va a reservar?">🔄 Seg. cierre</button>';
+  }
+  bts+='<button class="btn btn-sm btn-ghost" onclick="abrirHistorial('+l.id+')" title="Ver todo lo que se hizo con este cliente desde el día 1">📋 Historial</button>';
+  bts+='<button class="btn btn-sm btn-red" onclick="abrirPerder('+l.id+')" title="Marcar como perdido con motivo">✕ Perder</button>';
+  if(l.estado==='cerrado_perdido') bts+='<button onclick="reactivarDesdeCard('+l.id+')" style="width:100%;margin-top:8px;padding:10px;background:rgba(34,197,94,0.12);border:2px solid rgba(34,197,94,0.4);border-radius:var(--r);color:#22C55E;font-size:13px;font-weight:600;text-align:center;cursor:pointer">🔄 REACTIVAR ESTE CLIENTE</button>';
+  return bts;
+}
+function _botonesCardCaptadora(l){
+  if(l.estado==='cerrado_perdido') return '<button onclick="reactivarDesdeCard('+l.id+')" style="width:100%;margin-top:8px;padding:10px;background:rgba(34,197,94,0.12);border:2px solid rgba(34,197,94,0.4);border-radius:var(--r);color:#22C55E;font-size:13px;font-weight:600;text-align:center;cursor:pointer">🔄 REACTIVAR ESTE CLIENTE</button>';
+  var bts='';
+  if(l.estado==='nuevo'){
+    bts='<button class="btn btn-sm btn-red" onclick="registrarNoContesto('+l.id+')">📵 No contestó</button>';
+    bts+='<button class="btn btn-sm btn-ghost" onclick="abrirIntento('+l.id+')">📞 Registrar intento</button>';
+  }else if(l.estado==='en_seguimiento'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')">💬 Seguimiento</button>';
+    bts+='<button class="btn btn-sm btn-red" onclick="registrarNoContesto('+l.id+')">📵 No contestó</button>';
+  }else if(l.estado==='visita_realizada'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')">[O] Resultado visita</button>';
+  }else if(l.estado==='visita_agendada'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')">✏️ Actualizar</button>';
+  }else if(l.estado==='seguimiento_cierre'){
+    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')">🔄 Seg. cierre</button>';
+  }
+  bts+='<div style="text-align:right;margin-top:4px"><button style="background:none;border:none;color:var(--red);font-size:10px;cursor:pointer;padding:2px 4px" onclick="abrirPerder('+l.id+')">✕ Perder</button></div>';
+  return bts;
+}
 function _barraProtocolo(l){
   var etapas=['Contacto','Seguimiento','Visita ag.','Visita real.','Cierre'];
   var paso={nuevo:0,en_seguimiento:1,visita_agendada:2,visita_realizada:3,seguimiento_cierre:4,reservado:4,en_tramite:4,cerrado_ganado:4,cerrado_perdido:4}[l.estado];
@@ -2302,23 +2366,7 @@ function renderLeadCards(leads,containerId,rol){
       </div>
       ${_barraProtocolo(l)}
       <div class="btn-row" onclick="event.stopPropagation()">
-        ${l.estado==='nuevo'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>
-          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',(${(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1}),'intento')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>
-        `:l.estado==='en_seguimiento'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>
-          <button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento(${l.id},'${(l.nombre||'').replace(/'/g,'')}',1,'seguimiento')" title="Programá cuándo llamar o escribir de nuevo">📅 Programar</button>
-        `:l.estado==='visita_realizada'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="¿Cómo fue la visita? Registrá el resultado">[O] Resultado visita</button>
-        `:l.estado==='visita_agendada'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Actualizá el estado de la visita">✏️ Actualizar</button>
-        `:l.estado==='seguimiento_cierre'?`
-          <button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento(${l.id})" title="Seguimiento post-visita — ¿va a reservar?">🔄 Seg. cierre</button>
-
-        `:''}
-        <button class="btn btn-sm btn-ghost" onclick="abrirHistorial(${l.id})" title="Ver todo lo que se hizo con este cliente desde el día 1">📋 Historial</button>
-        <button class="btn btn-sm btn-red" onclick="abrirPerder(${l.id})" title="Marcar como perdido con motivo">✕ Perder</button>
-        ${l.estado==='cerrado_perdido'?`<button class="btn btn-sm btn-ghost" style="color:var(--green)" onclick="reactivarDesdeCard(${l.id})">🔄 Reactivar</button>`:''}
+        ${_botonesCard(l)}
       </div>
     </div>`;
   }).join('');
@@ -3919,7 +3967,7 @@ async function renderAdmin(){
           <span class="badge e-perdido" style="font-size:9px">${l.motivo_perdida}</span>
           <div style="font-size:10px;color:var(--txt3);margin-top:4px">${new Date(l.fecha_perdida).toLocaleDateString('es-BO')}</div>
         </div>
-        ${!l.reactivado&&l.lead_id?`<button class="btn btn-sm btn-ghost" onclick="reactivarLead(${l.lead_id},${l.id})">🔄 Reactivar</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
+        ${!l.reactivado&&l.lead_id?`<button onclick="reactivarLead(${l.lead_id},${l.id})" style="width:100%;margin-top:8px;padding:10px;background:rgba(34,197,94,0.12);border:2px solid rgba(34,197,94,0.4);border-radius:var(--r);color:#22C55E;font-size:13px;font-weight:600;text-align:center;cursor:pointer">🔄 REACTIVAR ESTE CLIENTE</button>`:'<span style="font-size:10px;color:var(--green)">✓ Reactivado</span>'}
       </div>
     </div>`).join('');
   }else if(adminTabActual==='stats'){
@@ -4351,6 +4399,32 @@ async function marcarPagado(id,tipo){
   await sb.from('comisiones').update({[campo]:true}).eq('id',id);
   toast('Comisión marcada como pagada ✓');
   renderAdmin();
+}
+async function registrarNoContesto(id){
+  var l=allLeads.find(function(x){return x.id===id;});
+  if(!l)return;
+  var num=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
+  if(num>3){toast('Ya se registraron 3 intentos','error');return;}
+  var upd={};
+  upd['intento'+num+'_estado']='no_contesto';
+  upd['intento'+num+'_fecha']=new Date().toISOString().slice(0,10);
+  await sb.from('leads').update(upd).eq('id',id);
+  await sb.from('intentos_contacto').insert([{lead_id:id,colaborador:cu.nombre,numero_intento:num,resultado:'no_contesto',nota:null,siguiente_fecha:null}]);
+  await registrarHistorial(id,'intento_'+num,'intento_contacto','no_contesto',null,null,null);
+  var i=allLeads.findIndex(function(x){return x.id===id;});
+  if(i>-1)allLeads[i]=Object.assign({},allLeads[i],upd);
+  var resultNeg=['no_contesto','buzon','apagado','no_respondio'];
+  if(num===3&&resultNeg.includes(l.intento1_estado)&&resultNeg.includes(l.intento2_estado)){
+    var updPerd={estado:'cerrado_perdido',motivo_perdida:'no_respondio_presentacion'};
+    await sb.from('leads').update(updPerd).eq('id',id);
+    await registrarHistorial(id,'cerrado_perdido','perdida',null,'Auto: 3 intentos sin respuesta','no_respondio_presentacion',null);
+    await sb.from('leads_perdidos').insert([{lead_id:id,captador:l.captador,cerrador:l.cerrador||null,motivo:'no_respondio_presentacion',nota:'Automático: 3 intentos sin respuesta',fecha_perdida:new Date().toISOString()}]);
+    if(i>-1)allLeads[i]=Object.assign({},allLeads[i],updPerd);
+    toast('3 intentos sin respuesta — marcado como perdido');
+  }else{
+    toast('Registrado: No contestó (intento '+num+'/3)');
+  }
+  renderLeads();
 }
 async function reactivarDesdeCard(leadId){
   if(!confirm('¿Reactivar este lead? Volverá a "En seguimiento".')) return;
@@ -5608,6 +5682,64 @@ async function guardarNotaMejorada(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+async function renderNotasPanel(){
+  var el=document.getElementById('notas-panel-list');
+  if(!el)return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var {data}=await sb.from('notas_personales').select('*').eq('colaborador',cu.nombre).order('created_at',{ascending:false});
+    var items=data||[];
+    if(!items.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📝</div><div class="empty-title">Sin notas aún</div><div class="empty-sub">Tocá <b>+ Nueva nota</b> para crear una.</div></div>';
+      return;
+    }
+    var catIcons={general:'📋',recordatorio:'⏱',lead:'👤',idea:'💡'};
+    el.innerHTML=items.map(function(n){
+      var col=n.color||'#334155';
+      var icono=catIcons[n.categoria]||'📝';
+      var fecha=n.created_at?new Date(n.created_at).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
+      return '<div style="background:'+col+'30;border:1px solid '+col+'50;border-left:4px solid '+col+';border-radius:var(--r2);padding:13px 14px;margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'+
+        '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px">'+icono+'</span><span style="font-size:13px;font-weight:600">'+n.titulo+'</span></div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+        '<span style="font-size:10px;color:var(--txt3)">'+fecha+'</span>'+
+        '<button onclick="editarNota('+n.id+');renderNotasPanel()" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:12px;padding:0 2px">✏</button>'+
+        '<button onclick="eliminarNota('+n.id+').then(renderNotasPanel)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 2px">✕</button>'+
+        '</div></div>'+
+        (n.texto?'<div style="font-size:12px;color:var(--txt2);line-height:1.6;white-space:pre-wrap">'+n.texto+'</div>':'')+
+        '</div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div class="empty"><div class="et">Error: '+e.message+'</div></div>';}
+}
+var _onbPaso=0;
+var _onbSteps=[
+  {titulo:'Bienvenida a GEAT CRM 👋',texto:'Aquí vas a registrar y dar seguimiento a tus clientes. Veamos lo básico en 30 segundos.',btn:'Siguiente'},
+  {titulo:'Tus leads 📋',texto:'Cada cliente tiene una barra de progreso. Registrá intentos de contacto y el sistema te guía paso a paso.',btn:'Siguiente'},
+  {titulo:'¡Listo! 🎯',texto:'Tocá + Lead para registrar tu primer cliente. Si necesitás ayuda, preguntale a Gustavo.',btn:'Empezar'}
+];
+function mostrarOnboarding(){
+  if(localStorage.getItem('geat_onboarding_'+cu.nombre)==='done')return;
+  _onbPaso=0;
+  _renderOnbPaso();
+  document.getElementById('onboarding-modal').style.display='flex';
+}
+function _renderOnbPaso(){
+  var s=_onbSteps[_onbPaso];
+  document.getElementById('onboarding-titulo').textContent=s.titulo;
+  document.getElementById('onboarding-texto').textContent=s.texto;
+  document.getElementById('onboarding-btn').textContent=s.btn;
+  var dots=document.getElementById('onboarding-dots');
+  if(dots)dots.innerHTML=_onbSteps.map(function(_,i){return '<div style="width:8px;height:8px;border-radius:50%;background:'+(i===_onbPaso?'var(--acc)':'var(--bg3)')+'"></div>';}).join('');
+}
+function avanzarOnboarding(){
+  _onbPaso++;
+  if(_onbPaso>=_onbSteps.length){
+    localStorage.setItem('geat_onboarding_'+cu.nombre,'done');
+    document.getElementById('onboarding-modal').style.display='none';
+    return;
+  }
+  _renderOnbPaso();
+}
 async function renderNotas(){
   var el = document.getElementById('notas-list');
   if(!el) return;
@@ -5688,6 +5820,10 @@ function abrirNuevoEventoCal(fechaStr){
   document.getElementById('sheet-evento-cal').classList.add('open');
 }
 
+function abrirAgendar(){
+  abrirNuevoEventoCal(null);
+  document.getElementById('ev-visible').value='1';
+}
 async function guardarEventoCal(){
   var titulo = document.getElementById('ev-titulo').value.trim();
   var inicio = document.getElementById('ev-inicio').value;
