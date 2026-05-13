@@ -329,6 +329,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   <div class="topbar">
     <div class="topbar-brand">GEAT CRM</div>
     <div class="topbar-user" id="tb-user">—</div>
+    <button id="btn-logout" onclick="cerrarSesion()" style="display:none;background:none;border:1px solid var(--brd);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--txt3);cursor:pointer;font-family:var(--font);flex-shrink:0">Salir</button>
     <button class="topbar-notif" id="btn-notif" onclick="sw('notif')" title="Notificaciones">
       🔔<span class="notif-badge" id="notif-badge"></span>
     </button>
@@ -359,6 +360,9 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 
       <!-- Widget visitas diarias -->
       <div id="widget-visitas-dia"></div>
+
+      <!-- Widget clientes potenciales -->
+      <div id="widget-potenciales"></div>
 
       <!-- Widget KPIs commercial_lead -->
       <div id="widget-kpis-cl"></div>
@@ -1337,6 +1341,21 @@ async function initLogin(){
       WA_ARQUITECTURA = cfg.whatsapp_arquitectura || WA_ARQUITECTURA;
     }
   }catch(e){ /* config error silenciado */; }
+  // Módulo 5 — restaurar sesión si existe y tiene menos de 12h
+  var sess=null;
+  try{sess=JSON.parse(localStorage.getItem('geat_session')||'null');}catch(e){}
+  if(sess&&(Date.now()-sess.timestamp)<12*3600000){
+    var col=colaboradores.find(function(c){return c.pin===sess.pin;});
+    if(col){
+      cu=col;
+      document.getElementById('login').style.display='none';
+      document.getElementById('app').style.display='flex';
+      var btnLogout=document.getElementById('btn-logout');if(btnLogout)btnLogout.style.display='';
+      initApp();
+      return;
+    }
+  }
+  localStorage.removeItem('geat_session');
 }
 function resetPin(){
   pinVal='';
@@ -1362,9 +1381,15 @@ function checkPin(){
     return;
   }
   cu=col;
-    document.getElementById('login').style.display='none';
-    document.getElementById('app').style.display='flex';
-    initApp();
+  localStorage.setItem('geat_session',JSON.stringify({pin:pinVal,nombre:cu.nombre,timestamp:Date.now()}));
+  var btnLogout=document.getElementById('btn-logout');if(btnLogout)btnLogout.style.display='';
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  initApp();
+}
+function cerrarSesion(){
+  localStorage.removeItem('geat_session');
+  location.reload();
 }
 
 // -- NAV --
@@ -1879,6 +1904,8 @@ function renderInicio(){
   renderNotifsInicio();
   // P8: Contador visitas diarias
   renderContadorVisitas();
+  // Módulo 4: Clientes potenciales
+  renderPotenciales();
   // P10: KPIs commercial_lead
   if(cu.rol==='commercial_lead')renderKpisCommercialLead();
 }
@@ -2234,6 +2261,7 @@ function renderLeadCards(leads,containerId,rol){
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
             <span style="font-size:14px;font-weight:600;color:var(--txt)">${l.nombre||'Sin nombre'}</span>
             <span class="badge ${est.cls}">${est.label}</span>
+            ${esPotencial(l)?'<span style="font-size:10px;background:rgba(245,158,11,0.18);color:#F59E0B;padding:2px 8px;border-radius:20px;font-weight:600;border:1px solid rgba(245,158,11,0.3)">⭐ Potencial</span>':''}
             ${l.archivado?'<span title="Lead archivado" style="font-size:10px;background:rgba(150,150,150,0.18);color:var(--txt3);padding:2px 6px;border-radius:4px;font-weight:600">📦 Archivado</span>':''}
             ${atrasado?'<span style="font-size:10px;color:var(--red);font-weight:600">⚠ Atrasado</span>':''}
           </div>
@@ -3920,6 +3948,7 @@ async function renderAdmin(){
     const ganados2=leadsFiltrados.filter(l=>l.estado==='cerrado_ganado').length;
     const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
     const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
+    const potenciales2=leadsFiltrados.filter(l=>esPotencial(l)).length;
     el.innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':' Año'}</button>`).join('')}
@@ -3938,6 +3967,7 @@ async function renderAdmin(){
       <div class="kpi"><div class="kpi-n" style="color:var(--blue)">${conVisita2}</div><div class="kpi-l">En visita</div></div>
       <div class="kpi"><div class="kpi-n">${ganados2+perdidos2>0?((ganados2/(ganados2+perdidos2))*100).toFixed(1)+'%':'-'}</div><div class="kpi-l">Conversión</div></div>
       <div class="kpi"><div class="kpi-n" style="color:#8B5CF6">${leadsFiltrados.filter(function(l){return l.visito_oficina===true;}).length}</div><div class="kpi-l">Visitaron oficina</div></div>
+      <div class="kpi"><div class="kpi-n" style="color:#F59E0B">${potenciales2}</div><div class="kpi-l">Potenciales</div></div>
     </div>
     <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--r2)">
       <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Turnos de cerradores</div>
@@ -4000,6 +4030,7 @@ async function renderAdmin(){
     var cierresMes=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesInicio;}).length;
     var visitasMes=leads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)>=mesInicio;}).length;
     var m2Mes=leads.filter(function(l){return l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesInicio;}).reduce(function(s,l){return s+(l.metros_cuadrados||0);},0);
+    var potencialesCeo=leads.filter(function(l){return esPotencial(l);}).length;
     function pctBar(val,meta,color){var p=Math.min(val/meta*100,100);return '<div style="background:var(--bg3);border-radius:99px;height:8px;overflow:hidden;margin-top:4px"><div style="width:'+p+'%;height:100%;background:'+color+';border-radius:99px"></div></div>';}
     var convHtml=fases.slice(0,-1).map(function(f,i){
       var de=faseCounts[i]+(faseCounts[i+1]||0);
@@ -4013,6 +4044,7 @@ async function renderAdmin(){
       +'<div class="stat"><div class="stat-n">'+(promCierre!==null?promCierre+'d':'—')+'</div><div class="stat-l">Tiempo prom. cierre</div></div>'
       +'<div class="stat"><div class="stat-n" style="color:'+(sinCont>0?'var(--red)':'var(--green)')+'">'+sinCont+'</div><div class="stat-l">Sin contactar +48h</div></div>'
       +'<div class="stat"><div class="stat-n">'+ganados.length+'</div><div class="stat-l">Cierres totales</div></div>'
+      +'<div class="stat"><div class="stat-n" style="color:#F59E0B">'+potencialesCeo+'</div><div class="stat-l">Potenciales activos</div></div>'
       +'</div>'
       +'<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px;margin-bottom:12px">'
       +'<div style="font-size:12px;font-weight:600;margin-bottom:10px">🎯 Meta mensual</div>'
@@ -4029,6 +4061,39 @@ async function renderAdmin(){
   }else{
     el.innerHTML='';
   }
+}
+
+// ══════════════════════════════════════
+// MÓDULO 4 — LEADS POTENCIALES
+// ══════════════════════════════════════
+function esPotencial(l){
+  return l.indagacion_completa===true&&l.financiamiento==='bancario'&&
+    ['en_seguimiento','visita_agendada','visita_realizada','seguimiento_cierre'].indexOf(l.estado)>-1;
+}
+function renderPotenciales(){
+  var el=document.getElementById('widget-potenciales');
+  if(!el)return;
+  var misPot;
+  if(cu.rol==='field_capturer'){
+    misPot=allLeads.filter(function(l){return esPotencial(l)&&l.captador===cu.nombre;});
+  }else if(cu.rol==='closer'){
+    misPot=allLeads.filter(function(l){return esPotencial(l)&&l.cerrador===cu.nombre;});
+  }else{
+    misPot=allLeads.filter(function(l){return esPotencial(l);});
+  }
+  if(!misPot.length){el.innerHTML='';return;}
+  var html='<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">';
+  html+='<div style="font-size:11px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">⭐ Clientes potenciales ('+misPot.length+')</div>';
+  misPot.forEach(function(l){
+    var est=estilo(l.estado);
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;margin-bottom:4px;border-left:3px solid #F59E0B;border-radius:4px;background:rgba(245,158,11,0.04);cursor:pointer" onclick="abrirSheetLead('+l.id+')">';
+    html+='<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+l.nombre+'</div>';
+    html+='<div style="font-size:10px;color:var(--txt3);margin-top:2px"><span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span> · Banco</div></div>';
+    if(l.celular)html+='<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:30px;height:30px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;flex-shrink:0">W</a>';
+    html+='</div>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
 }
 
 // ══════════════════════════════════════
