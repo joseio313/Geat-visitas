@@ -754,6 +754,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab active" onclick="setAdminTab('equipo',this)">Equipo</button>
         <button class="tab" onclick="setAdminTab('comisiones',this)">Comisiones</button>
         <button class="tab" onclick="setAdminTab('campanas',this)">Campañas</button>
+        <button class="tab" onclick="setAdminTab('semaforo',this)">Semáforo</button>
+        <button class="tab" onclick="setAdminTab('control_leads',this)">Control Leads</button>
         <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
         <button class="tab" onclick="setAdminTab('stats',this)">Stats</button>
         <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
@@ -1857,8 +1859,8 @@ function renderInicio(){
   }
   // Stats
   const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
-  const hoy=new Date().toISOString().slice(0,10);
-  const hoyLeads=misLeads.filter(l=>l.fecha_ingreso===hoy);
+  var _hd=new Date();if(_hd.getDay()===1)_hd.setDate(_hd.getDate()-2);const hoy=new Date().toISOString().slice(0,10);const hoyDesde=_hd.toISOString().slice(0,10);
+  const hoyLeads=misLeads.filter(l=>l.fecha_ingreso>=hoyDesde&&l.fecha_ingreso<=hoy);
   const semLeads=misLeads.filter(l=>{
     const d=new Date(l.fecha_ingreso);const ahora=new Date();
     return(ahora-d)/(864e5)<=7;
@@ -4020,9 +4022,214 @@ async function renderAdmin(){
       +'</div>'
       +'<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px">'
       +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">🔄 Tasa de conversión por fase</div>'+convHtml+'</div></div>';
+  }else if(adminTabActual==='semaforo'){
+    renderSemaforo(el);
+  }else if(adminTabActual==='control_leads'){
+    await renderControlLeads(el);
   }else{
     el.innerHTML='';
   }
+}
+
+// ══════════════════════════════════════
+// MÓDULO 1 — SEMÁFORO DE VISITAS
+// ══════════════════════════════════════
+function renderSemaforo(el){
+  var periodoSem=window.semaforoFiltro||'semana_actual';
+  var hoy=new Date();
+  var desde,hasta;
+  if(periodoSem==='semana_actual'){
+    var diaSem=hoy.getDay();
+    var lunes=new Date(hoy);lunes.setDate(hoy.getDate()-(diaSem===0?6:diaSem-1));lunes.setHours(0,0,0,0);
+    var domingo=new Date(lunes);domingo.setDate(lunes.getDate()+6);
+    desde=lunes.toISOString().slice(0,10);hasta=domingo.toISOString().slice(0,10);
+  }else if(periodoSem==='mes_actual'){
+    desde=new Date(hoy.getFullYear(),hoy.getMonth(),1).toISOString().slice(0,10);
+    hasta=hoy.toISOString().slice(0,10);
+  }else{
+    var ma=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
+    desde=ma.toISOString().slice(0,10);
+    hasta=new Date(hoy.getFullYear(),hoy.getMonth(),0).toISOString().slice(0,10);
+  }
+  var leadsP=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)>=desde&&l.visita_fecha.slice(0,10)<=hasta;});
+  var estadosAsistio=['visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado'];
+  function calcFila(nombre,campo){
+    var prog=leadsP.filter(function(l){return l[campo]===nombre;});
+    var asist=prog.filter(function(l){return estadosAsistio.indexOf(l.estado)>-1;});
+    var tasa=prog.length>0?Math.round(asist.length/prog.length*100):0;
+    var col=prog.length===0?'#EF4444':tasa>=70?'#22C55E':tasa>=40?'#F59E0B':'#EF4444';
+    return{nombre:nombre,prog:prog.length,asist:asist.length,tasa:tasa,col:col};
+  }
+  function tablaHtml(filas,titulo){
+    var h='<div style="margin-bottom:16px">';
+    if(titulo)h+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">'+titulo+'</div>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
+    h+='<thead><tr style="border-bottom:1px solid var(--brd)">';
+    h+='<th style="text-align:left;padding:6px 8px;color:var(--txt3);font-size:10px;font-weight:600">Nombre</th>';
+    h+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Programadas</th>';
+    h+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Asistieron</th>';
+    h+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Tasa %</th>';
+    h+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Semáforo</th>';
+    h+='</tr></thead><tbody>';
+    var totP=0,totA=0;
+    filas.forEach(function(f){
+      totP+=f.prog;totA+=f.asist;
+      h+='<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">';
+      h+='<td style="padding:8px;font-size:12px">'+f.nombre+'</td>';
+      h+='<td style="text-align:center;padding:8px;font-size:12px">'+f.prog+'</td>';
+      h+='<td style="text-align:center;padding:8px;font-size:12px">'+f.asist+'</td>';
+      h+='<td style="text-align:center;padding:8px;font-size:12px;font-weight:600">'+(f.prog>0?f.tasa+'%':'—')+'</td>';
+      h+='<td style="text-align:center;padding:8px"><div style="width:18px;height:18px;border-radius:50%;background:'+f.col+';margin:0 auto"></div></td>';
+      h+='</tr>';
+    });
+    var totTasa=totP>0?Math.round(totA/totP*100):0;
+    var totCol=totP===0?'#EF4444':totTasa>=70?'#22C55E':totTasa>=40?'#F59E0B':'#EF4444';
+    h+='<tr style="border-top:1px solid var(--brd);font-weight:700">';
+    h+='<td style="padding:8px;font-size:12px;color:var(--acc)">TOTAL</td>';
+    h+='<td style="text-align:center;padding:8px;font-size:12px">'+totP+'</td>';
+    h+='<td style="text-align:center;padding:8px;font-size:12px">'+totA+'</td>';
+    h+='<td style="text-align:center;padding:8px;font-size:12px;font-weight:600;color:'+totCol+'">'+(totP>0?totTasa+'%':'—')+'</td>';
+    h+='<td style="text-align:center;padding:8px"><div style="width:18px;height:18px;border-radius:50%;background:'+totCol+';margin:0 auto"></div></td>';
+    h+='</tr>';
+    h+='</tbody></table></div></div>';
+    return h;
+  }
+  var captadoras=colaboradores.filter(function(c){return c.rol==='field_capturer'&&c.nombre!=='Arquitectura GEAT'&&c.activo!==false;});
+  var cerradores=colaboradores.filter(function(c){return (c.rol==='closer'||c.rol==='commercial_lead')&&c.nombre!=='Arquitectura GEAT'&&c.activo!==false;});
+  var filtroHtml='<div style="display:flex;gap:4px;margin-bottom:12px">';
+  ['semana_actual','mes_actual','mes_anterior'].forEach(function(p){
+    var lbl=p==='semana_actual'?'Esta semana':p==='mes_actual'?'Este mes':'Mes anterior';
+    filtroHtml+='<button class="tab'+(periodoSem===p?' active':'')+'" style="font-size:11px" onclick="window.semaforoFiltro=\''+p+'\';setAdminTab(\'semaforo\',null)">'+lbl+'</button>';
+  });
+  filtroHtml+='</div>';
+  el.innerHTML=filtroHtml+
+    '<div style="font-size:10px;color:var(--txt3);margin-bottom:10px">'+desde+' → '+hasta+'</div>'+
+    tablaHtml(captadoras.map(function(c){return calcFila(c.nombre,'captador');}),'Captadoras')+
+    tablaHtml(cerradores.map(function(c){return calcFila(c.nombre,'cerrador');}),'Cerradores (David / Gustavo)');
+}
+
+// ══════════════════════════════════════
+// MÓDULO 2 — CONTROL DE LEADS DIARIO
+// ══════════════════════════════════════
+async function renderControlLeads(el){
+  var hoy=new Date();
+  var hoyStr=hoy.toISOString().slice(0,10);
+  var esLunes=hoy.getDay()===1;
+  var fechas;
+  if(esLunes&&!window.controlLeadsFecha){
+    var lun=new Date(hoy);
+    var dom=new Date(hoy);dom.setDate(hoy.getDate()-1);
+    var sab=new Date(hoy);sab.setDate(hoy.getDate()-2);
+    fechas=[sab.toISOString().slice(0,10),dom.toISOString().slice(0,10),lun.toISOString().slice(0,10)];
+  }else{
+    fechas=[window.controlLeadsFecha||hoyStr];
+  }
+  var fechaSel=fechas[fechas.length-1];
+  var captadoras=colaboradores.filter(function(c){return c.rol==='field_capturer'&&c.nombre!=='Arquitectura GEAT'&&c.activo!==false;});
+  var keys=[];
+  fechas.forEach(function(f){
+    captadoras.forEach(function(c){
+      keys.push('leads_diarios_'+f+'_'+c.nombre);
+      keys.push('fb_leads_'+f+'_'+c.nombre);
+    });
+  });
+  var cfgRes=await sb.from('app_config').select('key,value').in('key',keys);
+  var cfgMap={};
+  (cfgRes.data||[]).forEach(function(r){cfgMap[r.key]=r.value;});
+  var filas=captadoras.map(function(c){
+    var crm=allLeads.filter(function(l){return l.captador===c.nombre&&fechas.some(function(f){return l.fecha_ingreso&&l.fecha_ingreso.slice(0,10)===f;});}).length;
+    var decl=fechas.reduce(function(s,f){return s+(parseInt(cfgMap['leads_diarios_'+f+'_'+c.nombre]||0)||0);},0);
+    var fb=fechas.reduce(function(s,f){return s+(parseInt(cfgMap['fb_leads_'+f+'_'+c.nombre]||0)||0);},0);
+    var diff=crm-fb;
+    return{nombre:c.nombre,crm:crm,decl:decl,fb:fb,diff:diff,ok:Math.abs(diff)<=2};
+  });
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">';
+  html+='<label style="font-size:11px;color:var(--txt3)">Fecha:</label>';
+  html+='<input type="date" value="'+fechaSel+'" max="'+hoyStr+'" style="padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-size:12px;font-family:var(--font)" onchange="window.controlLeadsFecha=this.value;setAdminTab(\'control_leads\',null)">';
+  if(esLunes&&!window.controlLeadsFecha)html+='<span style="font-size:10px;color:var(--acc);font-weight:600">Sáb+Dom+Lun</span>';
+  html+='</div>';
+  html+='<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">A — Leads declarados por captadora</div>';
+  captadoras.forEach(function(c){
+    var canEdit=cu.nombre===c.nombre||cu.rol==='admin';
+    html+='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">';
+    html+='<span style="font-size:12px;font-weight:500">'+c.nombre+'</span>';
+    if(canEdit){
+      var inp='';
+      if(fechas.length>1){
+        fechas.forEach(function(f){
+          var v=parseInt(cfgMap['leads_diarios_'+f+'_'+c.nombre]||0)||0;
+          var dl=new Date(f+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short'});
+          inp+='<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">';
+          inp+='<span style="font-size:10px;color:var(--txt3);width:28px">'+dl+'</span>';
+          inp+='<input type="number" min="0" max="999" value="'+v+'" style="width:60px;padding:4px 6px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;color:var(--txt);font-size:12px;text-align:center" onchange="guardarLeadDiario(\''+f+'\',\''+c.nombre+'\',this.value)">';
+          inp+='</div>';
+        });
+      }else{
+        var v=parseInt(cfgMap['leads_diarios_'+fechas[0]+'_'+c.nombre]||0)||0;
+        inp='<input type="number" min="0" max="999" value="'+v+'" style="width:70px;padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;color:var(--txt);font-size:13px;text-align:center" onchange="guardarLeadDiario(\''+fechas[0]+'\',\''+c.nombre+'\',this.value)">';
+      }
+      html+='<div>'+inp+'</div>';
+    }else{
+      var vShow=fechas.reduce(function(s,f){return s+(parseInt(cfgMap['leads_diarios_'+f+'_'+c.nombre]||0)||0);},0);
+      html+='<span style="font-size:14px;font-weight:700;color:var(--txt)">'+vShow+'</span>';
+    }
+    html+='</div>';
+  });
+  if(cu.rol==='admin'){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;margin-top:14px">B — Facebook (verificación admin)</div>';
+    captadoras.forEach(function(c){
+      html+='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">';
+      html+='<span style="font-size:12px;font-weight:500">'+c.nombre+'</span>';
+      var inp='';
+      if(fechas.length>1){
+        fechas.forEach(function(f){
+          var v=parseInt(cfgMap['fb_leads_'+f+'_'+c.nombre]||0)||0;
+          var dl=new Date(f+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short'});
+          inp+='<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">';
+          inp+='<span style="font-size:10px;color:var(--txt3);width:28px">'+dl+'</span>';
+          inp+='<input type="number" min="0" max="999" value="'+v+'" style="width:60px;padding:4px 6px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;color:var(--txt);font-size:12px;text-align:center" onchange="guardarFbLead(\''+f+'\',\''+c.nombre+'\',this.value)">';
+          inp+='</div>';
+        });
+      }else{
+        var v=parseInt(cfgMap['fb_leads_'+fechas[0]+'_'+c.nombre]||0)||0;
+        inp='<input type="number" min="0" max="999" value="'+v+'" style="width:70px;padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;color:var(--txt);font-size:13px;text-align:center" onchange="guardarFbLead(\''+fechas[0]+'\',\''+c.nombre+'\',this.value)">';
+      }
+      html+='<div>'+inp+'</div>';
+      html+='</div>';
+    });
+  }
+  html+='<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;margin-top:14px">Comparativa</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
+  html+='<thead><tr style="border-bottom:1px solid var(--brd)">';
+  html+='<th style="text-align:left;padding:6px 8px;color:var(--txt3);font-size:10px;font-weight:600">Nombre</th>';
+  html+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">CRM</th>';
+  html+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Declarados</th>';
+  html+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Facebook</th>';
+  html+='<th style="text-align:center;padding:6px 4px;color:var(--txt3);font-size:10px;font-weight:600">Diferencia</th>';
+  html+='</tr></thead><tbody>';
+  filas.forEach(function(f){
+    var bg=f.ok?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)';
+    var dc=f.ok?'var(--green)':'var(--red)';
+    html+='<tr style="border-bottom:1px solid rgba(255,255,255,0.05);background:'+bg+'">';
+    html+='<td style="padding:8px;font-size:12px">'+f.nombre+'</td>';
+    html+='<td style="text-align:center;padding:8px;font-size:12px">'+f.crm+'</td>';
+    html+='<td style="text-align:center;padding:8px;font-size:12px">'+f.decl+'</td>';
+    html+='<td style="text-align:center;padding:8px;font-size:12px">'+f.fb+'</td>';
+    html+='<td style="text-align:center;padding:8px;font-size:12px;font-weight:700;color:'+dc+'">'+(f.diff>0?'+':'')+f.diff+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+}
+async function guardarLeadDiario(fecha,nombre,valor){
+  var key='leads_diarios_'+fecha+'_'+nombre;
+  await sb.from('app_config').upsert({key:key,value:String(parseInt(valor)||0)},{onConflict:'key'});
+  toast('Guardado ✓','ok');
+}
+async function guardarFbLead(fecha,nombre,valor){
+  var key='fb_leads_'+fecha+'_'+nombre;
+  await sb.from('app_config').upsert({key:key,value:String(parseInt(valor)||0)},{onConflict:'key'});
+  toast('Guardado ✓','ok');
 }
 
 // ══════════════════════════════════════
@@ -5736,6 +5943,7 @@ function renderContactosHoy(){
   var el = document.getElementById('inicio-hoy-contactos');
   if(!el) return;
   if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
+  var _rhd=new Date();if(_rhd.getDay()===1)_rhd.setDate(_rhd.getDate()-2);var hoyDesde=_rhd.toISOString().slice(0,10);
   var hoy = new Date().toISOString().slice(0,10);
   var man = new Date(); man.setDate(man.getDate()+1);
   var manStr = man.toISOString().slice(0,10);
@@ -5743,11 +5951,11 @@ function renderContactosHoy(){
     cu.rol==='field_capturer' ? allLeads.filter(function(l){return l.captador===cu.nombre;}) :
     cu.rol==='closer' ? allLeads.filter(function(l){return l.cerrador===cu.nombre;}) : [];
   var atrasados = base.filter(function(l){
-    return l.proximo_contacto&&l.proximo_contacto<hoy&&
+    return l.proximo_contacto&&l.proximo_contacto<hoyDesde&&
            l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
   });
   var paraHoy = base.filter(function(l){
-    return l.proximo_contacto===hoy&&
+    return l.proximo_contacto>=hoyDesde&&l.proximo_contacto<=hoy&&
            l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';
   });
   var html = '';
