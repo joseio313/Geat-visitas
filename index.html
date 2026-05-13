@@ -1938,113 +1938,30 @@ function renderContadorVisitas(){
   var el=document.getElementById('widget-visitas-dia');
   if(!el)return;
   var hoyStr=new Date().toISOString().slice(0,10);
-  var mesStr=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
-
-  function miniCard(l){
-    var est=estilo(l.estado);
-    var pot=esPotencial(l);
-    var horaVisita=l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr?new Date(l.visita_fecha).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}):null;
-    var proxLabel='';
-    if(l.proximo_contacto){
-      if(l.proximo_contacto<hoyStr)proxLabel='<span style="font-size:10px;color:var(--red);font-weight:600">ATRASADO '+l.proximo_contacto+'</span>';
-      else if(l.proximo_contacto===hoyStr)proxLabel='<span style="font-size:10px;color:var(--acc);font-weight:700">HOY</span>';
-      else proxLabel='<span style="font-size:10px;color:var(--blue)">'+l.proximo_contacto+'</span>';
-    }
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;border-left:'+(pot?'3px solid #F59E0B':'3px solid '+est.dot)+';border-radius:4px;background:'+(pot?'rgba(245,158,11,0.06)':'var(--bg3)')+';cursor:pointer" onclick="abrirSheetLead('+l.id+')">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">'
-      +'<span style="font-size:12px;font-weight:600;color:var(--txt)">'+l.nombre+'</span>'
-      +'<span class="badge '+est.cls+'" style="font-size:9px">'+est.label+'</span>'
-      +(pot?'<span style="font-size:9px;background:rgba(245,158,11,0.18);color:#F59E0B;padding:1px 6px;border-radius:20px;font-weight:600;border:1px solid rgba(245,158,11,0.3)">⭐</span>':'')
-      +'</div>'
-      +'<div style="font-size:10px;color:var(--txt3)">'+(l.celular||'-')+(l.ciudad?' · '+l.ciudad:'')+(l.financiamiento?' · '+(l.financiamiento==='bancario'?'Banco':'Contado'):'')+'</div>'
-      +((horaVisita||proxLabel)?'<div style="margin-top:2px">'+(horaVisita?'<span style="font-size:10px;color:var(--green);font-weight:700">📅 '+horaVisita+'</span> ':'')+proxLabel+'</div>':'')
-      +'</div>'
-      +(l.celular?'<a href="https://wa.me/591'+l.celular.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="width:28px;height:28px;background:rgba(37,211,102,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;text-decoration:none;flex-shrink:0">W</a>':'')
-      +'</div>';
-  }
-
-  function sortLeads(leads){
-    return leads.slice().sort(function(a,b){
-      var ap=esPotencial(a)?0:1,bp=esPotencial(b)?0:1;
-      if(ap!==bp)return ap-bp;
-      var af=a.proximo_contacto||'9999',bf=b.proximo_contacto||'9999';
-      if(af!==bf)return af<bf?-1:1;
-      return (a.fecha_ingreso||'')<(b.fecha_ingreso||'')?-1:1;
-    });
-  }
-
-  function progBar(cnt,meta,metaLabel){
-    var color=cnt>=meta?'var(--green)':cnt>=1?'#F59E0B':'var(--red)';
-    var pct=Math.min(cnt/meta*100,100);
-    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-      +'<span style="font-size:11px;color:var(--txt3)">'+metaLabel+'</span>'
-      +'<span style="font-size:12px;font-weight:700;color:'+color+'">'+cnt+'/'+meta+'</span>'
-      +'</div>'
-      +'<div style="background:var(--bg3);border-radius:99px;height:5px;overflow:hidden;margin-bottom:8px">'
-      +'<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px;transition:width .3s"></div></div>';
-  }
-
   if(cu.rol==='field_capturer'){
-    var misL=allLeads.filter(function(l){return l.captador===cu.nombre&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-    var cntV=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===cu.nombre;}).length;
-    var html='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">';
-    html+='<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:8px">📍 Mis clientes ('+misL.length+')</div>';
-    html+=progBar(cntV,2,'Visitas hoy');
-    if(!misL.length){html+='<div style="font-size:11px;color:var(--txt3);text-align:center;padding:10px 0">Sin clientes asignados — registrá un lead con + Lead</div>';}
-    else{sortLeads(misL).forEach(function(l){html+=miniCard(l);});}
-    html+='</div>';
-    el.innerHTML=html;
-  }else if(cu.rol==='closer'){
-    var misL=allLeads.filter(function(l){return l.cerrador===cu.nombre&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-    var cntC=allLeads.filter(function(l){return l.cerrador===cu.nombre&&l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesStr;}).length;
-    var html='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">';
-    html+='<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:8px">🎯 Mis leads ('+misL.length+')</div>';
-    html+=progBar(cntC,2,'Cierres este mes');
-    if(!misL.length){html+='<div style="font-size:11px;color:var(--txt3);text-align:center;padding:10px 0">Sin leads asignados</div>';}
-    else{sortLeads(misL).forEach(function(l){html+=miniCard(l);});}
-    html+='</div>';
-    el.innerHTML=html;
+    var cnt=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===cu.nombre;}).length;
+    var color=cnt>=2?'var(--green)':cnt===1?'#F59E0B':'var(--red)';
+    var pct=Math.min(cnt/2*100,100);
+    el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:8px">📍 Visitas hoy</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+      +'<span style="font-size:13px;color:'+color+';font-weight:700">'+cnt+'/2</span>'
+      +'<span style="font-size:11px;color:var(--txt3)">'+(cnt>=2?'Meta cumplida ✓':cnt===1?'Falta 1':'Sin visitas')+'</span>'
+      +'</div>'
+      +'<div style="background:var(--bg3);border-radius:99px;height:6px;overflow:hidden">'
+      +'<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px;transition:width .3s"></div></div></div>';
   }else if(cu.rol==='admin'||cu.rol==='commercial_lead'){
     var caps=colaboradores.filter(function(c){return c.rol==='field_capturer'&&c.activo!==false&&c.nombre!=='Arquitectura GEAT';});
-    var cers=colaboradores.filter(function(c){return (c.rol==='closer'||c.rol==='commercial_lead')&&c.activo!==false&&c.nombre!=='Arquitectura GEAT'&&c.nombre!==cu.nombre;});
-    var html='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">';
-    html+='<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:10px">📍 Equipo — leads activos</div>';
-    var totActivos=0,totVisitas=0,totPot=0;
-    caps.forEach(function(c){
-      var leads=allLeads.filter(function(l){return l.captador===c.nombre&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-      var cntV=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===c.nombre;}).length;
-      var potC=leads.filter(function(l){return esPotencial(l);}).length;
-      totActivos+=leads.length;totVisitas+=cntV;totPot+=potC;
-      html+='<div style="margin-bottom:12px">';
-      html+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">'+c.nombre+(potC?' · ⭐ '+potC+' pot.':'')+'</div>';
-      html+=progBar(cntV,2,'Visitas hoy');
-      if(!leads.length){html+='<div style="font-size:11px;color:var(--txt3);padding:4px 0">Sin leads activos</div>';}
-      else{sortLeads(leads).forEach(function(l){html+=miniCard(l);});}
-      html+='</div>';
-    });
-    if(cers.length){
-      html+='<div style="border-top:1px solid var(--brd);margin:8px 0 10px;padding-top:10px"><div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Cerradores</div></div>';
-      cers.forEach(function(c){
-        var leads=allLeads.filter(function(l){return l.cerrador===c.nombre&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-        var cntC=allLeads.filter(function(l){return l.cerrador===c.nombre&&l.estado==='cerrado_ganado'&&l.fecha_ingreso>=mesStr;}).length;
-        var potC=leads.filter(function(l){return esPotencial(l);}).length;
-        totActivos+=leads.length;totPot+=potC;
-        html+='<div style="margin-bottom:12px">';
-        html+='<div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">'+c.nombre+(potC?' · ⭐ '+potC+' pot.':'')+'</div>';
-        html+=progBar(cntC,2,'Cierres mes');
-        if(!leads.length){html+='<div style="font-size:11px;color:var(--txt3);padding:4px 0">Sin leads activos</div>';}
-        else{sortLeads(leads).forEach(function(l){html+=miniCard(l);});}
-        html+='</div>';
-      });
-    }
-    html+='<div style="border-top:1px solid var(--brd);margin-top:6px;padding-top:8px;display:flex;gap:14px;flex-wrap:wrap">'
-      +'<span style="font-size:11px;color:var(--txt3)">Total equipo:</span>'
-      +'<span style="font-size:11px;font-weight:600;color:var(--txt)">'+totActivos+' activos</span>'
-      +'<span style="font-size:11px;font-weight:600;color:var(--green)">'+totVisitas+' visitas hoy</span>'
-      +'<span style="font-size:11px;font-weight:600;color:#F59E0B">'+totPot+' potenciales ⭐</span>'
-      +'</div></div>';
-    el.innerHTML=html;
+    if(!caps.length){el.innerHTML='';return;}
+    var rows=caps.map(function(c){
+      var cnt=allLeads.filter(function(l){return l.visita_fecha&&l.visita_fecha.slice(0,10)===hoyStr&&l.captador===c.nombre;}).length;
+      var color=cnt>=2?'var(--green)':cnt===1?'#F59E0B':'var(--red)';
+      var pct=Math.min(cnt/2*100,100);
+      return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:11px;color:var(--txt2)">'+c.nombre.split(' ')[0]+'</span><span style="font-size:11px;font-weight:600;color:'+color+'">'+cnt+'/2</span></div>'
+        +'<div style="background:var(--bg3);border-radius:99px;height:5px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px"></div></div></div>';
+    }).join('');
+    el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:10px">📍 Visitas hoy por captador</div>'+rows+'</div>';
   }else{
     el.innerHTML='';
   }
@@ -2320,6 +2237,20 @@ function limpiarBusqueda(){
 }
 
 // -- RENDER LEAD CARDS --
+function _barraProtocolo(l){
+  var etapas=['Contacto','Seguimiento','Visita ag.','Visita real.','Cierre'];
+  var paso={nuevo:0,en_seguimiento:1,visita_agendada:2,visita_realizada:3,seguimiento_cierre:4,reservado:4,en_tramite:4,cerrado_ganado:4,cerrado_perdido:4}[l.estado];
+  if(paso===undefined)return '';
+  var colores=['#6B7280','#3B82F6','#8B5CF6','#10B981','#F59E0B'];
+  var segs=etapas.map(function(etapa,i){
+    var done=i<=paso;
+    var col=done?colores[i]:'var(--bg3)';
+    return '<div title="'+etapa+'" style="flex:1;height:4px;background:'+col+';border-radius:2px;transition:background .2s"></div>';
+  }).join('<div style="width:2px;flex-shrink:0"></div>');
+  return '<div style="display:flex;gap:0;align-items:center;margin-bottom:8px" title="'+etapas[paso]+'">'
+    +segs
+    +'<span style="font-size:9px;color:var(--txt3);margin-left:6px;white-space:nowrap;flex-shrink:0">'+etapas[paso]+'</span></div>';
+}
 function _badgeInfoEnviada(l){
   if(!l.info_enviada)return '';
   try{var d=JSON.parse(l.info_enviada);if(d.length>0)return '<span style="font-size:10px;color:var(--blue)">📄 '+d.length+'/5 docs enviados</span>';}catch(e){}
@@ -2344,7 +2275,7 @@ function renderLeadCards(leads,containerId,rol){
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
             <span style="font-size:14px;font-weight:600;color:var(--txt)">${l.nombre||'Sin nombre'}</span>
             <span class="badge ${est.cls}">${est.label}</span>
-            ${esPotencial(l)?'<span style="font-size:10px;background:rgba(245,158,11,0.18);color:#F59E0B;padding:2px 8px;border-radius:20px;font-weight:600;border:1px solid rgba(245,158,11,0.3)">⭐ Potencial</span>':''}
+            ${esPotencial(l)?'<span style="font-size:10px;background:rgba(245,158,11,0.15);color:#F59E0B;padding:2px 6px;border-radius:4px;font-weight:600;border:1px solid rgba(245,158,11,0.3)">⭐ Potencial</span>':''}
             ${l.archivado?'<span title="Lead archivado" style="font-size:10px;background:rgba(150,150,150,0.18);color:var(--txt3);padding:2px 6px;border-radius:4px;font-weight:600">📦 Archivado</span>':''}
             ${atrasado?'<span style="font-size:10px;color:var(--red);font-weight:600">⚠ Atrasado</span>':''}
           </div>
@@ -2369,6 +2300,7 @@ function renderLeadCards(leads,containerId,rol){
           return '<span style="font-size:10px;color:var(--blue)">'+l.proximo_contacto+'</span>';
         })()}
       </div>
+      ${_barraProtocolo(l)}
       <div class="btn-row" onclick="event.stopPropagation()">
         ${l.estado==='nuevo'?`
           <button class="btn btn-sm btn-ghost" onclick="abrirIntento(${l.id})" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>
