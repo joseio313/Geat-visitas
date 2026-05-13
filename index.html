@@ -24,6 +24,11 @@
   --shadow:0 4px 24px rgba(0,0,0,0.4);
   --font:'Inter',system-ui,sans-serif;
 }
+body.light{
+  --bg:#F8FAFC;--bg2:#FFFFFF;--bg3:#F1F5F9;
+  --brd:#E2E8F0;--brd2:#CBD5E1;
+  --txt:#0F172A;--txt2:#475569;--txt3:#94A3B8;
+}
 html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);font-size:14px;line-height:1.5;overflow:hidden}
 
 /* ── LOGIN ── */
@@ -329,6 +334,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
   <div class="topbar">
     <div class="topbar-brand">GEAT CRM</div>
     <div class="topbar-user" id="tb-user">—</div>
+    <button id="btn-theme" onclick="toggleTheme()" style="width:34px;height:34px;border-radius:50%;background:none;border:1px solid var(--brd);cursor:pointer;font-size:15px;flex-shrink:0" title="Cambiar tema">🌙</button>
     <button id="btn-logout" onclick="cerrarSesion()" style="display:none;background:none;border:1px solid var(--brd);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--txt3);cursor:pointer;font-family:var(--font);flex-shrink:0">Salir</button>
     <button class="topbar-notif" id="btn-notif" onclick="sw('notif')" title="Notificaciones">
       🔔<span class="notif-badge" id="notif-badge"></span>
@@ -506,6 +512,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" onclick="setLeadTab('en_seguimiento',this)">Seguimiento</button>
         <button class="tab" onclick="setLeadTab('visita_agendada',this)">Visita</button>
         <button class="tab" onclick="setLeadTab('cerrado_ganado',this)">Ganados</button>
+        <button class="tab" onclick="setLeadTab('cerrado_perdido',this)" style="background:rgba(239,68,68,0.15);border:2px solid rgba(239,68,68,0.4);color:#EF4444;font-weight:700">Perdidos</button>
       </div>
       <div id="leads-list"></div>
     </div>
@@ -785,6 +792,57 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 
 </div><!-- /app -->
 
+<!-- BOTÓN FLOTANTE NOTAS -->
+<button id="btn-notas-float" onclick="toggleNotasFloat()" style="position:fixed;bottom:72px;right:16px;z-index:90;width:48px;height:48px;background:var(--acc);color:#000;border-radius:50%;border:none;font-size:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);cursor:pointer;display:none">📝</button>
+<div id="notas-float-drawer" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:89;height:65vh;background:var(--bg2);border-top:1px solid var(--brd);border-radius:var(--r3) var(--r3) 0 0;overflow:hidden">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="font-size:13px;font-weight:600">📝 Notas privadas</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm btn-primary" onclick="abrirNuevaNota()">+ Nueva</button>
+      <button onclick="toggleNotasFloat()" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:20px;line-height:1">✕</button>
+    </div>
+  </div>
+  <div style="overflow-y:auto;height:calc(100% - 52px);padding:12px">
+    <div id="notas-float-list"></div>
+  </div>
+</div>
+
+<!-- MODAL LEAD PERDIDO RÁPIDO -->
+<div id="modal-lead-perdido" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:600;align-items:flex-end;justify-content:center;padding-bottom:0">
+  <div style="background:var(--bg2);border-radius:var(--r3) var(--r3) 0 0;padding:24px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:700;color:#EF4444">📵 Lead Perdido</div>
+      <button onclick="document.getElementById('modal-lead-perdido').style.display='none'" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:20px">✕</button>
+    </div>
+    <div class="fgroup" style="margin-bottom:12px">
+      <label>Nombre del cliente <span class="req">*</span></label>
+      <input class="finp" id="lp-nombre" placeholder="Señor/a X">
+    </div>
+    <div class="fgroup" style="margin-bottom:12px">
+      <label>Celular</label>
+      <input class="finp" id="lp-celular" type="tel" placeholder="76543210">
+    </div>
+    <div class="fgroup" style="margin-bottom:12px">
+      <label>Medio de captación</label>
+      <select class="fsel" id="lp-medio">
+        <option value="">— Seleccionar —</option>
+        <option value="facebook">Facebook</option>
+        <option value="instagram">Instagram</option>
+        <option value="referido">Referido</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="fgroup" style="margin-bottom:20px">
+      <label>Motivo de pérdida <span class="req">*</span></label>
+      <select class="fsel" id="lp-motivo">
+        <option value="">— Seleccionar —</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="guardarLeadPerdidoRapido()">Guardar lead perdido</button>
+  </div>
+</div>
+
 <!-- ONBOARDING MODAL -->
 <div id="onboarding-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:700;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--bg2);border-radius:var(--r3);padding:32px;max-width:400px;width:100%;text-align:center">
@@ -880,6 +938,16 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div style="flex:1">
             <div style="font-size:14px;font-weight:600">Manual</div>
             <div style="font-size:11px;color:var(--txt3)">Llenar el formulario campo por campo.</div>
+          </div>
+          <div style="color:var(--txt3);font-size:20px">&#8250;</div>
+        </div>
+      </div>
+      <div style="background:rgba(239,68,68,0.06);border:2px solid rgba(239,68,68,0.35);border-radius:var(--r2);padding:16px;margin-top:12px;cursor:pointer" onclick="closeSheet('modo-lead');abrirModalLeadPerdido()">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📵</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;color:#EF4444">Lead Perdido</div>
+            <div style="font-size:11px;color:var(--txt3)">Registro rápido de lead que no contestó.</div>
           </div>
           <div style="color:var(--txt3);font-size:20px">&#8250;</div>
         </div>
@@ -1302,6 +1370,20 @@ let ANTHROPIC_KEY = ''; // Se carga desde Supabase al iniciar
 let WA_ARQUITECTURA = 'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
+// -- TEMA CLARO/OSCURO --
+(function(){
+  var t=localStorage.getItem('geat_theme');
+  if(t==='light') document.body.classList.add('light');
+  var btn=document.getElementById('btn-theme');
+  if(btn) btn.textContent=t==='light'?'☀':'🌙';
+})();
+function toggleTheme(){
+  var isLight=document.body.classList.toggle('light');
+  localStorage.setItem('geat_theme',isLight?'light':'dark');
+  var btn=document.getElementById('btn-theme');
+  if(btn) btn.textContent=isLight?'☀':'🌙';
+}
+
 // -- ESTADO GLOBAL --
 let cu=null; // colaborador actual
 let colaboradores=[];
@@ -1418,7 +1500,6 @@ const NAVS={
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
     {id:'leads',icon:'&#128203;',label:'Leads'},
     {id:'calendario',icon:'&#128197;',label:'Grupal'},
-    {id:'notas-panel',icon:'📝',label:'Notas'},
   ],
   closer:[
     {id:'inicio',icon:'&#127968;',label:'Inicio'},
@@ -1452,6 +1533,8 @@ function buildNav(){
     <div class="nav-icon">${n.icon}</div>
     <div class="nav-label">${n.label}</div>
   </button>`).join('');
+  var btnFloat=document.getElementById('btn-notas-float');
+  if(btnFloat) btnFloat.style.display=cu.rol==='field_capturer'?'block':'none';
 }
 
 function sw(id,btn){
@@ -2405,6 +2488,7 @@ async function cargarAgendaPersonal(){
     .order('fecha_actividad',{ascending:true})
     .limit(300);
 
+  const{data:evCal}=await sb.from('eventos_calendario').select('*').eq('colaborador',cu.nombre).limit(200).catch(function(){return {data:[]};});
   calEventos = [
     ...(activ||[]).map(a=>({
       id:'ap_'+a.id,
@@ -2431,8 +2515,21 @@ async function cargarAgendaPersonal(){
       completada:true,
       estado:h.etapa,
       lead_id:h.lead_id,
-      color:'#334155', // gris para realizados
-    }))
+      color:'#334155',
+    })),
+    ...(evCal||[]).filter(function(e){return e.fecha_inicio;}).map(function(e){return {
+      id:'ec_'+e.id,
+      raw_id:e.id,
+      tipo:'evento',
+      fecha:new Date(e.fecha_inicio),
+      titulo:e.titulo,
+      sub:(e.tipo||'').replace(/_/g,' '),
+      nota:e.descripcion,
+      completada:false,
+      estado:'evento',
+      lead_id:e.lead_id,
+      color:e.color||'#3B82F6',
+    };}),
   ];
   
   renderCalendarioPersonal();
@@ -4426,6 +4523,47 @@ async function registrarNoContesto(id){
   }
   renderLeads();
 }
+function abrirModalLeadPerdido(){
+  var modal=document.getElementById('modal-lead-perdido');
+  if(!modal)return;
+  document.getElementById('lp-nombre').value='';
+  document.getElementById('lp-celular').value='';
+  document.getElementById('lp-medio').value='';
+  var sel=document.getElementById('lp-motivo');
+  sel.innerHTML='<option value="">— Seleccionar —</option>'+
+    MOTIVOS_PERDIDA.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+  modal.style.display='flex';
+}
+async function guardarLeadPerdidoRapido(){
+  var nombre=document.getElementById('lp-nombre').value.trim();
+  var celular=document.getElementById('lp-celular').value.trim();
+  var medio=document.getElementById('lp-medio').value;
+  var motivo=document.getElementById('lp-motivo').value;
+  if(!nombre){toast('Ingresá el nombre del cliente','error');return;}
+  if(!motivo){toast('Seleccioná el motivo de pérdida','error');return;}
+  try{
+    var{data:lead}=await sb.from('leads').insert([{
+      nombre:nombre,celular:celular||null,medio_difusion:medio||null,
+      estado:'cerrado_perdido',motivo_perdida:motivo,
+      captador:cu.nombre,fecha_ingreso:new Date().toISOString().slice(0,10)
+    }]).select().single();
+    if(lead){
+      await sb.from('leads_perdidos').insert([{
+        lead_id:lead.id,captador:cu.nombre,cerrador:null,
+        motivo_perdida:motivo,nota:'Registro rápido',fecha_perdida:new Date().toISOString()
+      }]);
+      await sb.from('historial_lead').insert([{
+        lead_id:lead.id,colaborador:cu.nombre,tipo_actividad:'perdida',
+        etapa:'cerrado_perdido',resultado:motivo,nota:'Registro rápido lead perdido',
+        fecha_actividad:new Date().toISOString()
+      }]);
+    }
+    document.getElementById('modal-lead-perdido').style.display='none';
+    toast('Lead perdido registrado');
+    await loadLeads();
+    renderLeads();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
 async function reactivarDesdeCard(leadId){
   if(!confirm('¿Reactivar este lead? Volverá a "En seguimiento".')) return;
   await sb.from('leads').update({estado:'en_seguimiento',motivo_perdida:null}).eq('id',leadId);
@@ -5682,6 +5820,37 @@ async function guardarNotaMejorada(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+function toggleNotasFloat(){
+  var dr=document.getElementById('notas-float-drawer');
+  if(!dr)return;
+  var open=dr.style.display!=='none';
+  if(open){dr.style.display='none';}
+  else{dr.style.display='block';renderNotasFloat();}
+}
+async function renderNotasFloat(){
+  var el=document.getElementById('notas-float-list');
+  if(!el)return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>Cargando...</div>';
+  try{
+    var{data}=await sb.from('notas_personales').select('*').eq('colaborador',cu.nombre).order('created_at',{ascending:false});
+    var items=data||[];
+    if(!items.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📝</div><div class="empty-title">Sin notas aún</div><div class="empty-sub">Tocá <b>+ Nueva</b> para crear una.</div></div>';
+      return;
+    }
+    var catIcons={general:'📋',recordatorio:'⏱',lead:'👤',idea:'💡'};
+    el.innerHTML=items.map(function(n){
+      var col=n.color||'#334155';
+      var fecha=n.created_at?new Date(n.created_at).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
+      return '<div style="background:'+col+'30;border-left:4px solid '+col+';border-radius:var(--r2);padding:12px;margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'+
+        '<span style="font-size:13px;font-weight:600">'+(catIcons[n.categoria]||'📝')+' '+n.titulo+'</span>'+
+        '<span style="font-size:10px;color:var(--txt3)">'+fecha+'</span></div>'+
+        (n.texto?'<div style="font-size:12px;color:var(--txt2);white-space:pre-wrap">'+n.texto+'</div>':'')+
+        '</div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px;padding:12px">Error: '+e.message+'</div>';}
+}
 async function renderNotasPanel(){
   var el=document.getElementById('notas-panel-list');
   if(!el)return;
@@ -5855,8 +6024,8 @@ async function guardarEventoCal(){
     }
     closeSheet('evento-cal');
     toast('Evento creado');
-    // Recargar agenda
-    cargarAgendaPersonal();
+    await cargarAgendaPersonal();
+    renderInicioCal();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
