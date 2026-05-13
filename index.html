@@ -127,8 +127,15 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fgroup label{display:block;font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px}
 .fgroup label span.req{color:var(--red)}
-.finput,.fselect,.ftextarea{width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-family:var(--font);font-size:13px;outline:none;transition:border 0.15s}
-.finput:focus,.fselect:focus,.ftextarea:focus{border-color:var(--acc)}
+.finput,.fselect,.ftextarea,.fi,.finp,.fsel{width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);color:var(--txt);font-family:var(--font);font-size:13px;outline:none;transition:border 0.15s}
+.finput:focus,.fselect:focus,.ftextarea:focus,.fi:focus,.finp:focus,.fsel:focus{border-color:var(--acc)}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.sh-ftr{padding:16px 20px;border-top:1px solid var(--brd);display:flex;gap:10px;flex-shrink:0}
+.btn-p{background:var(--acc);border:1px solid var(--acc);color:#000;padding:10px 16px;border-radius:var(--r);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:500}
+.btn-p:hover{background:var(--acc2)}
+.btn-g{background:none;border:1px solid var(--brd);color:var(--txt2);padding:10px 16px;border-radius:var(--r);cursor:pointer;font-family:var(--font);font-size:13px}
+.btn-g:hover{background:var(--bg3)}
 .ftextarea{resize:vertical;min-height:72px}
 .fselect{cursor:pointer}
 
@@ -794,7 +801,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 
 <!-- BOTÓN FLOTANTE NOTAS -->
 <button id="btn-notas-float" onclick="toggleNotasFloat()" style="position:fixed;bottom:72px;right:16px;z-index:90;width:48px;height:48px;background:var(--acc);color:#000;border-radius:50%;border:none;font-size:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);cursor:pointer;display:none">📝</button>
-<div id="notas-float-drawer" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:89;height:65vh;background:var(--bg2);border-top:1px solid var(--brd);border-radius:var(--r3) var(--r3) 0 0;overflow:hidden">
+<div id="notas-float-drawer" style="display:none;position:fixed;bottom:72px;right:16px;width:340px;max-height:60vh;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r3);box-shadow:var(--shadow);z-index:200;overflow-y:auto;padding:14px">
   <div style="padding:12px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="font-size:13px;font-weight:600">📝 Notas privadas</div>
     <div style="display:flex;gap:8px">
@@ -1576,7 +1583,7 @@ async function initApp(){
   // Cargar datos
   await loadLeads();
   renderContactosHoy(); // Mostrar atrasados y contactos de hoy
-  await cargarAgendaPersonal(); // Carga eventos para el calendario de inicio
+  try{await cargarAgendaPersonal();}catch(e){var _el=document.getElementById('inicio-agenda');if(_el)_el.innerHTML='';} // Carga eventos para el calendario de inicio
   renderInicio();
   iniciarRealtime();
   iniciarNotificaciones();
@@ -5825,7 +5832,11 @@ function toggleNotasFloat(){
   if(!dr)return;
   var open=dr.style.display!=='none';
   if(open){dr.style.display='none';}
-  else{dr.style.display='block';renderNotasFloat();}
+  else{
+    var calDr=document.getElementById('calendario-notas');
+    if(calDr)calDr.style.display='none';
+    dr.style.display='block';renderNotasFloat();
+  }
 }
 async function renderNotasFloat(){
   var el=document.getElementById('notas-float-list');
