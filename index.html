@@ -4230,7 +4230,7 @@ async function renderControlLeads(el){
   html+='</div>';
   html+='<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">A — Leads declarados por captadora</div>';
   captadoras.forEach(function(c){
-    var canEdit=cu.nombre===c.nombre||cu.rol==='admin';
+    var canEdit=cu.nombre===c.nombre||cu.rol==='admin'||cu.rol==='commercial_lead';
     html+='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">';
     html+='<span style="font-size:12px;font-weight:500">'+c.nombre+'</span>';
     if(canEdit){
@@ -4255,7 +4255,7 @@ async function renderControlLeads(el){
     }
     html+='</div>';
   });
-  if(cu.rol==='admin'){
+  if(cu.rol==='admin'||cu.rol==='commercial_lead'){
     html+='<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;margin-top:14px">B — Facebook (verificación admin)</div>';
     captadoras.forEach(function(c){
       html+='<div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">';
