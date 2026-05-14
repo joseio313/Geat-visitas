@@ -1552,6 +1552,7 @@ function sw(id,btn){
   if(btn)btn.classList.add('active');
   else{const b=document.querySelector(`[data-nav="${id}"]`);if(b)b.classList.add('active');}
   // Cargar al cambiar de panel
+  if(id==='inicio'){renderInicio();renderInicioCal();}
   if(id==='leads')renderLeads();
   if(id==='tecnico-upload')cargarSelectSolicitudes();
   if(id==='todos')renderTodos();
@@ -2541,10 +2542,8 @@ async function cargarAgendaPersonal(){
   
   renderCalendarioPersonal();
   renderStatsAgenda();
-  // Si el panel inicio está activo, también actualizarlo
-  if(document.getElementById('pn-inicio')?.classList.contains('active')){
-    renderInicioCal();
-  }
+  renderInicioCal();
+  toast('Cal: '+calEventos.length+' eventos cargados');
 }
 
 function getEtapaColor(estado){
@@ -2882,6 +2881,7 @@ async function guardarNuevaActividad(){
   document.getElementById('mini-modal-flujo')?.remove();
   toast('Actividad guardada ✓');
   await cargarAgendaPersonal();
+  renderInicioCal();
   if(fecha) seleccionarDia(fecha);
 }
 
@@ -3562,13 +3562,13 @@ async function guardarIntento(){
     if(i>-1)allLeads[i]={...allLeads[i],...updPerd};
     closeSheet('intento');
     toast('3 intentos sin respuesta — marcando como perdido');
-    renderLeads();cargarAgendaPersonal();
+    renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
     return;
   }
 
   closeSheet('intento');
   toast('Intento registrado ✓');
-  renderLeads();cargarAgendaPersonal();
+  renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
 
   // G2: si resultado negativo y no se programó prox en el sheet, mostrar modal de agendado
   if(esNeg(res)&&!prox){
@@ -3636,9 +3636,10 @@ async function guardarSeguimiento(){
   await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha,tipoSeg,medioSeg);
 
   if(prox&&!vFecha){
+    const proxHora=document.getElementById('seg-prox-hora')?.value||'09:00';
     await sb.from('agenda_personal').insert([{
       colaborador:cu.nombre,lead_id:segLeadId,tipo:'seguimiento',
-      titulo:'Seguimiento: '+l.nombre,fecha_programada:prox+'T09:00:00',nota
+      titulo:'Seguimiento: '+l.nombre,fecha_programada:prox+'T'+proxHora+':00',nota
     }]);
   }
   if(vFecha){
@@ -3660,7 +3661,7 @@ async function guardarSeguimiento(){
   if(i>-1)allLeads[i]={...allLeads[i],...upd};
   closeSheet('seg');
   toast(vFecha?'Seguimiento y visita guardados ✓':'Seguimiento guardado ✓');
-  renderLeads();cargarAgendaPersonal();
+  renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
   
   // Si no agendó visita, ofrecer programar próximo seguimiento
   if(!vFecha){
