@@ -1900,7 +1900,7 @@ function renderInicioCal(){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
       const ds=d.toISOString().slice(0,10);
       const esHoy=ds===hoyStr;
-      let col=`<div onclick="selDiaInicio('${ds}')" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
+      let col=`<div onclick="abrirQuickPopupCal('${ds}',event,this,${HORA_INI},${ROW_H})" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
       for(let h=0;h<(HORA_FIN-HORA_INI);h++){
         col+=`<div style="position:absolute;top:${h*ROW_H}px;left:0;right:0;height:1px;background:var(--brd);opacity:0.5;pointer-events:none"></div>`;
       }
@@ -1971,6 +1971,72 @@ function selDiaInicio(dStr){
   const det = document.getElementById('inicio-dia-detalle');
   if(det) det.style.display = 'none'; // en vista día ya se muestra en el grid
   document.getElementById('inicio-dia-titulo').textContent = new Date(dStr+'T12:00:00').toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+}
+
+// ── QUICK POPUP: agendar tocando una hora en la vista semana ──
+var _qpDStr='', _qpHora=9;
+function abrirQuickPopupCal(ds, ev, el, horaIni, rowH){
+  cerrarQuickPopup();
+  var rect = el.getBoundingClientRect();
+  var relY = ev.clientY - rect.top;
+  var h = Math.floor(relY / rowH) + horaIni;
+  h = Math.max(horaIni, Math.min(h, 20));
+  _qpDStr = ds; _qpHora = h;
+  var x = Math.min(ev.clientX + 4, window.innerWidth - 314);
+  var y = Math.min(ev.clientY - 10, window.innerHeight - 240);
+  y = Math.max(10, y);
+  var d = new Date(ds+'T12:00:00');
+  var fechaLabel = d.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
+  var hStr = (h<10?'0':'')+h;
+  var pop = document.getElementById('cal-quick-popup');
+  if(!pop){ pop = document.createElement('div'); pop.id='cal-quick-popup'; document.body.appendChild(pop); }
+  pop.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+    '<span style="font-size:12px;font-weight:600;color:var(--acc)">'+fechaLabel+' — '+hStr+':00</span>' +
+    '<button onclick="cerrarQuickPopup()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt3);line-height:1;padding:0">✕</button></div>' +
+    '<input id="qp-titulo" class="finput" placeholder="Título de la actividad" style="margin-bottom:10px;box-sizing:border-box">' +
+    '<select id="qp-tipo" class="fselect" style="margin-bottom:12px;box-sizing:border-box">' +
+    '<option value="seguimiento">Seguimiento</option><option value="llamada">Llamada</option>' +
+    '<option value="visita">Visita</option><option value="reunion">Reunión</option><option value="personal">Personal</option></select>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button class="btn btn-primary" style="flex:1" onclick="guardarQuickPopup()">Guardar</button>' +
+    '<button class="btn btn-ghost" onclick="cerrarQuickPopup()">✕</button></div>';
+  pop.style.cssText = 'position:fixed;top:'+y+'px;left:'+x+'px;background:var(--bg2);border:1px solid var(--acc);border-radius:var(--r2);padding:14px;width:300px;box-shadow:var(--shadow);z-index:200;box-sizing:border-box;display:block';
+  setTimeout(function(){ var t=document.getElementById('qp-titulo'); if(t)t.focus(); }, 50);
+  setTimeout(function(){ document.addEventListener('click',_cerrarQPOutside); }, 100);
+  ev.stopPropagation();
+}
+function _cerrarQPOutside(e){
+  var pop = document.getElementById('cal-quick-popup');
+  if(pop && !pop.contains(e.target)) cerrarQuickPopup();
+}
+function cerrarQuickPopup(){
+  var el = document.getElementById('cal-quick-popup');
+  if(el) el.style.display = 'none';
+  document.removeEventListener('click', _cerrarQPOutside);
+}
+async function guardarQuickPopup(){
+  var titulo = (document.getElementById('qp-titulo')?.value||'').trim();
+  if(!titulo){ toast('Escribe un título','error'); return; }
+  var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
+  var hStr = (_qpHora<10?'0':'')+_qpHora;
+  var fechaProg = _qpDStr+'T'+hStr+':00:00';
+  cerrarQuickPopup();
+  try{
+    await sb.from('agenda_personal').insert([{
+      colaborador: cu.nombre, tipo: tipo, titulo: titulo,
+      nota: null, fecha_programada: fechaProg, completada: false
+    }]);
+    try{await sb.from('historial_lead').insert([{
+      lead_id: null, colaborador: cu.nombre, rol_colaborador: cu.rol,
+      etapa: 'agenda', tipo_actividad: tipo, resultado: null, nota: titulo,
+      motivo_perdida: null, fecha_actividad: new Date().toISOString(),
+      fecha_proxima: null, editable: true
+    }]);}catch(e){}
+    toast('Actividad agendada');
+    await cargarAgendaPersonal();
+    renderInicioCal();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 function renderInicio(){
@@ -2356,10 +2422,12 @@ function _botonesCard(l){
   var nom=(l.nombre||'').replace(/'/g,'');
   var bts='';
   if(l.estado==='nuevo'){
-    bts='<button class="btn btn-sm btn-ghost" onclick="abrirIntento('+l.id+')" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>';
+    bts='<button class="btn btn-sm" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red)" onclick="registrarNoContesto('+l.id+')">📵 No contestó</button>';
+    bts+='<button class="btn btn-sm btn-ghost" onclick="abrirIntento('+l.id+')" title="Anotá qué pasó: ¿contestó? ¿no contestó? ¿ocupado?">📞 Registrar intento</button>';
     bts+='<button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento('+l.id+',\''+nom+'\','+n+',\'intento\')" title="Elegí fecha y hora para llamar a este cliente">📅 Programar</button>';
   }else if(l.estado==='en_seguimiento'){
-    bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>';
+    bts='<button class="btn btn-sm" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red)" onclick="registrarNoContesto('+l.id+')">📵 No contestó</button>';
+    bts+='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="Registrá qué conversaron y cuál es el próximo paso">[W] Registrar seg.</button>';
     bts+='<button class="btn btn-sm btn-ghost" onclick="abrirProgramarIntento('+l.id+',\''+nom+'\',1,\'seguimiento\')" title="Programá cuándo llamar o escribir de nuevo">📅 Programar</button>';
   }else if(l.estado==='visita_realizada'){
     bts='<button class="btn btn-sm btn-ghost" onclick="abrirSeguimiento('+l.id+')" title="¿Cómo fue la visita? Registrá el resultado">[O] Resultado visita</button>';
