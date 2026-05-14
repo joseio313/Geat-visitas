@@ -2496,7 +2496,7 @@ async function cargarAgendaPersonal(){
     .order('fecha_actividad',{ascending:true})
     .limit(300);
 
-  const{data:evCal}=await sb.from('eventos_calendario').select('*').eq('colaborador',cu.nombre).limit(200).catch(function(){return {data:[]};});
+  var _rEvCal={data:[]};try{_rEvCal=await sb.from('eventos_calendario').select('*').eq('colaborador',cu.nombre).limit(200);}catch(e){}var evCal=(_rEvCal||{data:[]}).data||[];
   calEventos = [
     ...(activ||[]).map(a=>({
       id:'ap_'+a.id,
@@ -2561,37 +2561,34 @@ function setCalView(view,btn){
 
 function renderCalDia(){
   const grid=document.getElementById('cal-grid');
-  const hdr=document.getElementById('inicio-cal-dias-header');
   if(!grid)return;
-  // Ocultar header de días
   const agHdr=document.querySelector('#pn-agenda .cal-dias-header');
   if(agHdr)agHdr.style.display='none';
   const dStr=calFecha.toISOString().slice(0,10);
   const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
   const diaNom=calFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
   { const _e=document.getElementById('cal-mes-nombre'); if(_e) _e.textContent=diaNom; }
-  grid.innerHTML=`<div style="padding:14px">
-    ${!evsDia.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Sin actividades<br>
-      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar</button></div>`:
-    evsDia.map(ev=>{
-      const hora=ev.fecha.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-      return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd);align-items:flex-start">
-        <div style="font-size:12px;color:var(--txt3);min-width:38px;font-weight:500">${hora}</div>
-        <div style="width:3px;border-radius:2px;background:${ev.color};align-self:stretch;min-height:20px;flex-shrink:0"></div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:500;margin-bottom:2px">${ev.titulo}</div>
-          <div style="font-size:11px;color:var(--txt3)">${ev.sub||''}${ev.nota?' - '+ev.nota.slice(0,50):''}</div>
-        </div>
-        <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
-          ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="completarActividad(${ev.raw_id})">✓</button>`:''}
-          ${ev.lead_id?`<button class="btn btn-sm btn-ghost" style="padding:4px 6px;font-size:10px" onclick="abrirSheetLead(${ev.lead_id})">Ver</button>`:''}
-        </div>
-      </div>`;
-    }).join('')}
-  </div>`;
-  // Resetear header de agenda
+  // Grilla horaria 7am–9pm, cada franja es clickeable para agendar
+  const HORA_INI=7, HORA_FIN=21;
+  const filas=[];
+  for(let h=HORA_INI;h<HORA_FIN;h++){
+    const hStr=(h<10?'0':'')+h;
+    const dtStr=dStr+'T'+hStr+':00';
+    const evsH=evsDia.filter(ev=>ev.fecha.getHours()===h);
+    filas.push(`<div style="display:flex;min-height:48px;border-top:1px solid var(--brd)">
+      <div style="font-size:11px;color:var(--txt3);min-width:42px;padding:6px 6px 0 4px;flex-shrink:0;cursor:pointer;user-select:none"
+        onclick="abrirNuevoEventoCal('${dtStr}')" title="Agendar a las ${h}:00">${h}:00</div>
+      <div style="flex:1;padding:2px 4px;min-height:48px;cursor:pointer" onclick="abrirNuevoEventoCal('${dtStr}')">
+        ${evsH.map(ev=>`<div style="background:${ev.color}22;color:${ev.color};border-left:2px solid ${ev.color};padding:3px 6px;border-radius:3px;font-size:12px;margin-bottom:2px;cursor:pointer"
+          onclick="event.stopPropagation();verEventoCal('${ev.id}')">
+          <span style="font-weight:500">${ev.titulo}</span>${ev.sub?' · <span style=\'font-size:10px\'>'+ev.sub+'</span>':''}
+          ${ev.tipo==='programado'&&!ev.completada?`<button class="btn btn-sm btn-ghost" style="padding:2px 5px;font-size:10px;float:right" onclick="event.stopPropagation();completarActividad(${ev.raw_id})">✓</button>`:''}
+        </div>`).join('')}
+      </div>
+    </div>`);
+  }
+  grid.innerHTML=`<div style="padding:0 0 16px 0">${filas.join('')}</div>`;
   if(agHdr)agHdr.style.display='';
-  // Actualizar detalle
   if(document.getElementById('cal-dia-detalle')){
     calDiaSeleccionado=dStr;
     seleccionarDia(dStr);
@@ -2777,7 +2774,7 @@ function seleccionarDia(dStr){
           `:''}
         </div>
       </div>`;
-    }).join('');
+    }).join('')+`<button class="btn btn-sm btn-ghost" style="margin-top:10px;width:100%" onclick="abrirNuevoEventoCal('${dStr}')">+ Agendar actividad</button>`;
   }
   detalle.style.display='';
 }
@@ -5983,7 +5980,7 @@ var eventoCalFechaDefault = null;
 function abrirNuevoEventoCal(fechaStr){
   eventoCalFechaDefault = fechaStr;
   // Pre-llenar fecha
-  var inicio = fechaStr ? fechaStr+'T09:00' : new Date().toISOString().slice(0,16);
+  var inicio = !fechaStr ? new Date().toISOString().slice(0,16) : fechaStr.includes('T') ? fechaStr : fechaStr+'T09:00';
   document.getElementById('ev-titulo').value='';
   document.getElementById('ev-inicio').value=inicio;
   document.getElementById('ev-fin').value='';
@@ -6026,13 +6023,13 @@ async function guardarEventoCal(){
     await sb.from('eventos_calendario').insert([datos]);
     // Si es visible para el equipo, agregar a agenda_grupal tambien
     if(visible){
-      await sb.from('agenda_grupal').insert([{
+      try{await sb.from('agenda_grupal').insert([{
         titulo: titulo,
         colaborador: cu.nombre,
         rol_colaborador: cu.rol,
         fecha_actividad: datos.fecha_inicio,
         lead_id: datos.lead_id||null
-      }]).catch(function(){});
+      }]);}catch(e){}
     }
     closeSheet('evento-cal');
     toast('Evento creado');
@@ -6786,11 +6783,11 @@ async function guardarReunionYReserva(){
     regAudit('guardar_reunion','reuniones',dataR.lead_id,{tipo:dataR.tipo});
     // Agendar en agenda grupal
     var lR=allLeads.find(function(l){return l.id===dataR.lead_id;});
-    await sb.from('agenda_grupal').insert([{
+    try{await sb.from('agenda_grupal').insert([{
       titulo:'Reunion '+(lR?'con '+lR.nombre:'')+' - '+dataR.tipo,
       colaborador:cu.nombre,rol_colaborador:cu.rol,
       fecha_actividad:dataR.fecha,lead_id:dataR.lead_id
-    }]).catch(function(){});
+    }]);}catch(e){}
     // Crear reserva automática
     await sb.from('reservas').insert([{
       lead_id:parseInt(leadId),
