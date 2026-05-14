@@ -2021,22 +2021,21 @@ async function guardarQuickPopup(){
   var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
   var hStr = (_qpHora<10?'0':'')+_qpHora;
   var fechaProg = _qpDStr+'T'+hStr+':00:00';
-  cerrarQuickPopup();
   try{
     await sb.from('agenda_personal').insert([{
-      colaborador: cu.nombre, tipo: tipo, titulo: titulo,
-      nota: null, fecha_programada: fechaProg, completada: false
+      colaborador: cu.nombre, titulo: titulo, tipo: tipo,
+      fecha_programada: fechaProg, completada: false
     }]);
-    try{await sb.from('historial_lead').insert([{
-      lead_id: null, colaborador: cu.nombre, rol_colaborador: cu.rol,
-      etapa: 'agenda', tipo_actividad: tipo, resultado: null, nota: titulo,
-      motivo_perdida: null, fecha_actividad: new Date().toISOString(),
-      fecha_proxima: null, editable: true
-    }]);}catch(e){}
-    toast('Actividad agendada');
-    await cargarAgendaPersonal();
-    renderInicioCal();
-  }catch(e){ toast('Error: '+e.message,'error'); }
+  }catch(e){ toast('Error: '+e.message,'error'); return; }
+  try{await sb.from('historial_lead').insert([{
+    lead_id: null, colaborador: cu.nombre, rol_colaborador: cu.rol,
+    tipo_actividad: 'programacion', fecha_actividad: new Date().toISOString(),
+    nota: 'Programado: '+titulo+' para '+fechaProg
+  }]);}catch(e){}
+  await cargarAgendaPersonal();
+  renderInicioCal();
+  cerrarQuickPopup();
+  toast('Actividad guardada ✓');
 }
 
 function renderInicio(){
@@ -2939,10 +2938,16 @@ async function guardarNuevaActividad(){
   const nota=document.getElementById('nact-nota').value||null;
   const leadId=document.getElementById('nact-lead-id').value||null;
   if(!titulo||!fecha){toast('Título y fecha obligatorios','error');return;}
+  const fechaProg=fecha+'T'+hora+':00';
   await sb.from('agenda_personal').insert([{
     colaborador:cu.nombre,lead_id:leadId?parseInt(leadId):null,
-    tipo,titulo,nota,fecha_programada:fecha+'T'+hora+':00'
+    tipo,titulo,nota,fecha_programada:fechaProg
   }]);
+  try{await sb.from('historial_lead').insert([{
+    lead_id:leadId?parseInt(leadId):null,colaborador:cu.nombre,rol_colaborador:cu.rol,
+    tipo_actividad:'programacion',fecha_actividad:new Date().toISOString(),
+    nota:'Programado: '+titulo+' para '+fechaProg
+  }]);}catch(e){}
   document.getElementById('mini-modal-flujo')?.remove();
   toast('Actividad guardada ✓');
   await cargarAgendaPersonal();
@@ -3022,9 +3027,21 @@ async function renderCalendario(){
     .lt('fecha_inicio',fin.toISOString())
     .order('fecha_inicio');
 
+  // Eventos del calendario personal marcados como visibles para el equipo
+  var _evGrupal=[];
+  try{
+    const{data:eg}=await sb.from('eventos_calendario')
+      .select('*')
+      .eq('visible_equipo',true)
+      .gte('fecha_inicio',inicio.toISOString())
+      .lt('fecha_inicio',fin.toISOString());
+    _evGrupal=eg||[];
+  }catch(e){}
+
   const todos=[
     ...(visitas||[]).map(v=>({id:v.id,_tipo:'visita',_fecha:v.visita_fecha,_fin:null,nombre:v.nombre,cerrador:v.cerrador,captador:v.captador,sala:v.visita_sala,estado:v.estado})),
-    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo}))
+    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo})),
+    ...(_evGrupal).map(e=>({id:e.id,_tipo:'evento',_fecha:e.fecha_inicio,_fin:e.fecha_fin,nombre:e.titulo,cerrador:e.colaborador,captador:null,sala:null,tipo:e.tipo}))
   ].filter(e=>e._fecha).sort((a,b)=>a._fecha>b._fecha?1:-1);
 
   const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -6089,16 +6106,26 @@ async function guardarEventoCal(){
   };
   try{
     await sb.from('eventos_calendario').insert([datos]);
-    // Si es visible para el equipo, agregar a agenda_grupal tambien
     if(visible){
+      // Guardar en agenda_grupal para que aparezca en el calendario del equipo
       try{await sb.from('agenda_grupal').insert([{
-        titulo: titulo,
-        colaborador: cu.nombre,
-        rol_colaborador: cu.rol,
-        fecha_actividad: datos.fecha_inicio,
-        lead_id: datos.lead_id||null
+        titulo: titulo, colaborador: cu.nombre, rol_colaborador: cu.rol,
+        fecha_inicio: datos.fecha_inicio,
+        lead_id: datos.lead_id||null, tipo: datos.tipo
       }]);}catch(e){}
     }
+    // Guardar en agenda_personal para que el creador lo vea en su calendario
+    try{await sb.from('agenda_personal').insert([{
+      colaborador: cu.nombre, titulo: titulo, tipo: datos.tipo,
+      fecha_programada: datos.fecha_inicio,
+      lead_id: datos.lead_id||null, completada: false
+    }]);}catch(e){}
+    // EXTRA: registro del momento de programación
+    try{await sb.from('historial_lead').insert([{
+      lead_id: datos.lead_id||null, colaborador: cu.nombre, rol_colaborador: cu.rol,
+      tipo_actividad: 'programacion', fecha_actividad: new Date().toISOString(),
+      nota: 'Programado: '+titulo+' para '+datos.fecha_inicio
+    }]);}catch(e){}
     closeSheet('evento-cal');
     toast('Evento creado');
     await cargarAgendaPersonal();
@@ -6379,7 +6406,7 @@ function guardarReunion(){
       sb.from('agenda_grupal').insert([{
         titulo:'Reunion '+(lReu?'con '+lReu.nombre:'')+' - '+data.tipo,
         colaborador:cu.nombre, rol_colaborador:cu.rol,
-        fecha_actividad:data.fecha, lead_id:data.lead_id||null
+        fecha_inicio:data.fecha, lead_id:data.lead_id||null
       }]).then(function(){}).catch(function(){});
     }
     renderCierre();
@@ -6854,7 +6881,7 @@ async function guardarReunionYReserva(){
     try{await sb.from('agenda_grupal').insert([{
       titulo:'Reunion '+(lR?'con '+lR.nombre:'')+' - '+dataR.tipo,
       colaborador:cu.nombre,rol_colaborador:cu.rol,
-      fecha_actividad:dataR.fecha,lead_id:dataR.lead_id
+      fecha_inicio:dataR.fecha,lead_id:dataR.lead_id
     }]);}catch(e){}
     // Crear reserva automática
     await sb.from('reservas').insert([{
