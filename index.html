@@ -4811,26 +4811,25 @@ async function guardarProgramacion(leadId, tipo, numIntento){
   const nota=document.getElementById('prog-nota').value||null;
   const accion=document.getElementById('prog-accion').value;
   if(!fecha){toast('Selecciona una fecha','error');return;}
-  
+
   const l=allLeads.find(x=>x.id===leadId);
   const nombreCliente=l?.nombre||'Cliente';
-  
-  await sb.from('agenda_personal').insert([{
-    colaborador:cu.nombre,
-    lead_id:leadId,
-    tipo:tipo==='seguimiento'?accion:'intento_'+numIntento,
-    titulo:(tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento)+': '+nombreCliente,
-    nota,
-    fecha_programada:fecha+'T'+hora+':00'
-  }]);
-  
-  // Actualizar próximo contacto en el lead
-  await sb.from('leads').update({proximo_contacto:fecha}).eq('id',leadId);
-  
-  document.getElementById('modal-programar')?.remove();
-  toast('Programado para el '+new Date(fecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+'  ✓');
-  
-  if(calEventos!==undefined) cargarAgendaPersonal();
+
+  try{
+    await sb.from('agenda_personal').insert([{
+      colaborador:cu.nombre,
+      lead_id:leadId,
+      tipo:tipo==='seguimiento'?accion:'intento_'+numIntento,
+      titulo:(tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento)+': '+nombreCliente,
+      nota,
+      fecha_programada:fecha+'T'+hora+':00'
+    }]);
+    await sb.from('leads').update({proximo_contacto:fecha}).eq('id',leadId);
+    document.getElementById('modal-programar')?.remove();
+    toast('Programado para el '+new Date(fecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+'  ✓');
+    await cargarAgendaPersonal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // -- TURNO CERRADORES --
