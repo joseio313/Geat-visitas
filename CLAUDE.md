@@ -1,35 +1,46 @@
 # GEAT CRM Development Guardian
 
-## REGLAS OBLIGATORIAS
+## REGLA #1: NUNCA entregar sin verificar
+Cada cambio DEBE pasar por este ciclo: EDITAR → VALIDAR JS → VERIFICAR FUNCIONALIDAD → COMMIT
 
-### ANTES de editar:
+## ANTES de editar:
 1. git pull origin main
-2. Verificar que index.html tiene 6000+ líneas y título "GEAT CRM"
+2. wc -l index.html — debe tener 6000+ líneas
+3. grep "GEAT CRM" index.html | head -1 — confirmar título correcto
 
-### AL editar:
-1. NUNCA reconstruir — solo editar secciones
+## AL editar:
+1. NUNCA reconstruir — solo editar secciones con grep -n para ubicar
 2. NUNCA borrar funciones existentes
-3. Usar grep -n para encontrar líneas exactas
-4. Validar JS después de CADA edición
+3. NUNCA usar .catch() encadenado a sb.from().insert/update/delete
+4. SIEMPRE usar try/catch o .then() para Supabase
+5. CSS: SOLO usar finput, fselect, ftextarea, btn, btn-primary, btn-ghost, btn-red, btn-sm
 
-### Supabase — patrones correctos:
-- CORRECTO: try{ await sb.from('tabla').insert([datos]); }catch(e){}
-- CORRECTO: sb.from('tabla').insert([datos]).then(function(){});
-- INCORRECTO: sb.from('tabla').insert([datos]).catch(function(){})
+## DESPUÉS de CADA edición:
+1. node --check <(sed -n '/<script charset/,/<\/script>/p' index.html | sed '1d;$d')
+2. Si falla: git checkout index.html y reportar error ANTES de seguir
 
-### CSS clases:
-- Inputs: finput, fselect, ftextarea
-- Botones: btn, btn-primary, btn-ghost, btn-red, btn-sm
-- NUNCA usar: fi, fsel, fa
+## ANTES de commit — VERIFICACIÓN OBLIGATORIA:
+Para CADA función nueva o modificada, ejecutar grep para confirmar que:
+1. La función existe: grep -c "function nombreFuncion" index.html
+2. Si inserta en Supabase: NO tiene .catch() directo, SÍ tiene try/catch
+3. Si modifica calendario: tiene "await cargarAgendaPersonal()" Y "renderInicioCal()" después del insert
+4. Si modifica agenda grupal: tiene "renderCalendario()" después del insert
+5. Si modifica leads: tiene "renderLeads()" o "loadLeads()" después del update
+6. Todas las funciones async que guardan datos tienen refreshes al final
 
-### DESPUÉS de editar:
-1. node --check para validar JS
-2. git commit mensaje en español
-3. git push origin main
+## CHECKLIST POST-GUARDADO (verificar para CADA función que guarda datos):
+grep -A 5 "función que guarda" index.html debe contener:
+- [ ] try{ await sb.from(...) }catch(e){toast('Error: '+e.message,'error')}
+- [ ] await cargarAgendaPersonal() (si toca agenda)
+- [ ] renderInicioCal() (si toca calendario)
+- [ ] renderCalendario() (si toca agenda grupal)
+- [ ] toast de confirmación
+- [ ] NO tiene .catch(function(){}) encadenado
 
-### NUNCA:
+## NUNCA:
 - Hardcodear API keys
 - Mostrar montos USD al equipo (solo m²)
-- Dejar console.log
-- Usar .catch() directo en sb.from().insert()
-- Crear archivos nuevos separados
+- Dejar console.log en producción
+- Usar .catch() directo en sb.from()
+- Entregar sin verificar que los refreshes están presentes
+- Decir "listo" sin confirmar que grep muestra las líneas correctas
