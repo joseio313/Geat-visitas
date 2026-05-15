@@ -3,6 +3,9 @@
 ## REGLA #1: NUNCA entregar sin verificar
 Cada cambio DEBE pasar por este ciclo: EDITAR → VALIDAR JS → VERIFICAR FUNCIONALIDAD → COMMIT
 
+## ARCHIVO DE PRODUCCIÓN
+El archivo es **index.html** (SIN tilde/acento). `indice.html` no existe. Confirmado: 95 commits, URL https://joseio313.github.io/Geat-visitas/ da 200 OK.
+
 ## ANTES de editar:
 1. git pull origin main
 2. wc -l index.html — debe tener 6000+ líneas
@@ -37,10 +40,18 @@ grep -A 5 "función que guarda" index.html debe contener:
 - [ ] toast de confirmación
 - [ ] NO tiene .catch(function(){}) encadenado
 
+## TIMEZONE — REGLA CRÍTICA
+Bolivia es UTC-4. Para fechas de DISPLAY o COMPARACIÓN de calendario, SIEMPRE usar:
+  ymdLocal(d) — función definida en index.html cerca de toast()
+  → ymdLocal(new Date())  en lugar de  new Date().toISOString().slice(0,10)
+  → ymdLocal(algFecha)    en lugar de  algFecha.toISOString().slice(0,10)
+Solo dejar toISOString() SIN .slice(0,10) para timestamps completos guardados en Supabase.
+
 ## NUNCA:
 - Hardcodear API keys
 - Mostrar montos USD al equipo (solo m²)
 - Dejar console.log en producción
 - Usar .catch() directo en sb.from()
+- Usar new Date().toISOString().slice(0,10) para comparar/mostrar fechas — usar ymdLocal()
 - Entregar sin verificar que los refreshes están presentes
 - Decir "listo" sin confirmar que grep muestra las líneas correctas

@@ -1428,6 +1428,7 @@ const E={
 function estilo(est){return E[est]||{bg:'#33415520',dot:'#64748B',cls:'',label:est||'-'};}
 
 // -- TOAST --
+function ymdLocal(d){const dt=(d instanceof Date)?d:new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
@@ -1809,7 +1810,7 @@ function checkRecordatoriosVisita(){
 // -- INICIO CALENDARIO --
 let inicioView = 'semana'; // 'dia' | 'semana' | 'mes'
 let inicioFecha = new Date();
-let inicioDiaSeleccionado = new Date().toISOString().slice(0,10);
+let inicioDiaSeleccionado = ymdLocal(new Date());
 
 function setInicioView(view, btn){
   inicioView = view;
@@ -1831,7 +1832,7 @@ function navMesInicio(dir){
 
 function renderInicioCal(){
   const hoy = new Date();
-  const hoyStr = hoy.toISOString().slice(0,10);
+  const hoyStr = ymdLocal(hoy);
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const grid = document.getElementById('inicio-cal-grid');
@@ -1841,10 +1842,10 @@ function renderInicioCal(){
 
   if(inicioView === 'dia'){
     if(header) header.style.display = 'none';
-    const dStr = inicioFecha.toISOString().slice(0,10);
+    const dStr = ymdLocal(inicioFecha);
     const diaNom = inicioFecha.toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
     if(label) label.textContent = diaNom;
-    const evsDia = calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr).sort((a,b)=>a.fecha-b.fecha);
+    const evsDia = calEventos.filter(e=>ymdLocal(e.fecha)===dStr).sort((a,b)=>a.fecha-b.fecha);
     const esHoy = dStr === hoyStr;
     grid.innerHTML = `<div style="padding:14px">
       ${!evsDia.length ? `<div style="text-align:center;padding:20px;font-size:12px;color:var(--txt3)">Aquí verás tus actividades del día.<br>Registrá un lead o agendá una actividad para empezar.<br>
@@ -1884,7 +1885,7 @@ function renderInicioCal(){
     cols+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=d.toISOString().slice(0,10);
+      const ds=ymdLocal(d);
       const esHoy=ds===hoyStr;
       cols+=`<div onclick="selDiaInicio('${ds}')" style="text-align:center;padding:6px 2px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3;cursor:pointer">
         <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase">${diasCortos[i]}</div>
@@ -1898,7 +1899,7 @@ function renderInicioCal(){
     cols+=`</div>`;
     for(let i=0;i<7;i++){
       const d=new Date(lunes); d.setDate(lunes.getDate()+i);
-      const ds=d.toISOString().slice(0,10);
+      const ds=ymdLocal(d);
       const esHoy=ds===hoyStr;
       let col=`<div onclick="abrirQuickPopupCal('${ds}',event,this,${HORA_INI},${ROW_H})" style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''};cursor:pointer">`;
       for(let h=0;h<(HORA_FIN-HORA_INI);h++){
@@ -1912,7 +1913,7 @@ function renderInicioCal(){
           col+=`<div style="position:absolute;top:${top}px;left:0;right:0;height:2px;background:var(--red);z-index:5;pointer-events:none"><div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div></div>`;
         }
       }
-      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===ds);
+      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===ds);
       for(const ev of evs){
         const ini=ev.fecha;
         const startMin=(ini.getHours()-HORA_INI)*60+ini.getMinutes();
@@ -1948,10 +1949,10 @@ function renderInicioCal(){
     while(celdas.length%7!==0) { const l=celdas[celdas.length-1].d; celdas.push({d:new Date(l.getTime()+864e5),otro:true}); }
     
     const cells=celdas.map(c=>{
-      const dStr=c.d.toISOString().slice(0,10);
+      const dStr=ymdLocal(c.d);
       const esHoy=dStr===hoyStr;
       const esSel=inicioDiaSeleccionado===dStr;
-      const evs=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+      const evs=calEventos.filter(e=>ymdLocal(e.fecha)===dStr);
       return `<div style="min-height:60px;padding:3px;background:${c.otro?'var(--bg)':esHoy?'#1E293B':esSel?'#1E3A5F':'var(--bg2)'};border-top:1px solid var(--brd);cursor:pointer;opacity:${c.otro?0.4:1}" onclick="selDiaInicio('${dStr}')">
         <div style="font-size:10px;font-weight:${esHoy?'700':'400'};color:${esHoy?'var(--acc)':'var(--txt2)'};text-align:center;width:18px;height:18px;border-radius:50%;margin:0 auto 2px;display:flex;align-items:center;justify-content:center;${esHoy?'background:var(--acc);color:#000':''}">${c.d.getDate()}</div>
         ${evs.slice(0,2).map(ev=>`<div style="border-radius:2px;padding:1px 3px;font-size:8px;background:${ev.color}22;color:${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px">${ev.titulo.split(' ')[0]}</div>`).join('')}
@@ -2706,7 +2707,7 @@ function navMes(dir){
 
 function renderCalendarioPersonal(){
   const hoy=new Date();
-  const hoyStr=hoy.toISOString().slice(0,10);
+  const hoyStr=ymdLocal(hoy);
   
   if(calView==='mes') renderCalMes(hoy,hoyStr);
   else renderCalSemana(hoy,hoyStr);
@@ -2750,10 +2751,10 @@ function renderCalMes(hoy,hoyStr){
   }
   
   grid.innerHTML=celdas.map(c=>{
-    const dStr=c.fecha.toISOString().slice(0,10);
+    const dStr=ymdLocal(c.fecha);
     const esHoy=dStr===hoyStr;
     const esSel=calDiaSeleccionado===dStr;
-    const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+    const evsDia=calEventos.filter(e=>ymdLocal(e.fecha)===dStr);
     const max=3;
     
     return `<div class="cal-celda ${c.otroMes?'otro-mes':''} ${esHoy?'hoy':''} ${esSel?'seleccionada':''}"
@@ -2786,10 +2787,10 @@ function renderCalSemana(hoy,hoyStr){
   }
   
   grid.innerHTML=celdas.map(d=>{
-    const dStr=d.toISOString().slice(0,10);
+    const dStr=ymdLocal(d);
     const esHoy=dStr===hoyStr;
     const esSel=calDiaSeleccionado===dStr;
-    const evsDia=calEventos.filter(e=>e.fecha.toISOString().slice(0,10)===dStr);
+    const evsDia=calEventos.filter(e=>ymdLocal(e.fecha)===dStr);
     
     return `<div class="cal-celda ${esHoy?'hoy':''} ${esSel?'seleccionada':''}" style="min-height:120px"
       onclick="seleccionarDia('${dStr}')">
@@ -2855,10 +2856,10 @@ function verEventoCal(id){
 }
 
 function renderStatsAgenda(){
-  const hoyStr=new Date().toISOString().slice(0,10);
+  const hoyStr=ymdLocal(new Date());
   const mesStr=new Date().toISOString().slice(0,7);
-  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)===hoyStr).length;
-  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&e.fecha.toISOString().slice(0,10)<hoyStr).length;
+  const pHoy=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&ymdLocal(e.fecha)===hoyStr).length;
+  const pAtr=calEventos.filter(e=>!e.completada&&e.tipo==='programado'&&ymdLocal(e.fecha)<hoyStr).length;
   const realizados=calEventos.filter(e=>e.tipo==='realizado'&&e.fecha.toISOString().slice(0,7)===mesStr).length;
   const el=document.getElementById('inicio-stats');
   if(el){
@@ -3072,7 +3073,7 @@ async function renderCalendario(){
   // ---- VISTA SEMANA: GRID HORARIO ----
   const HORA_INI=7, HORA_FIN=20, ROW_H=44;
   const totalH=(HORA_FIN-HORA_INI)*ROW_H;
-  const todayStr=new Date().toISOString().slice(0,10);
+  const todayStr=ymdLocal(new Date());
 
   const f1=inicio.toLocaleDateString('es-BO',{day:'numeric',month:'short'});
   const ff=new Date(fin);ff.setDate(fin.getDate()-1);
@@ -3093,7 +3094,7 @@ async function renderCalendario(){
   html+=`<div style="background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;left:0;z-index:4"></div>`;
   for(let i=0;i<7;i++){
     const d=new Date(inicio);d.setDate(inicio.getDate()+i);
-    const ds=d.toISOString().slice(0,10);
+    const ds=ymdLocal(d);
     const esHoy=ds===todayStr;
     html+=`<div style="text-align:center;padding:8px 4px;border-bottom:1px solid var(--brd);border-left:1px solid var(--brd);background:var(--bg2);position:sticky;top:0;z-index:3">
       <div style="font-size:9px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.05em">${dias[i]}</div>
@@ -3111,7 +3112,7 @@ async function renderCalendario(){
   // --- 7 columnas de día ---
   for(let i=0;i<7;i++){
     const d=new Date(inicio);d.setDate(inicio.getDate()+i);
-    const ds=d.toISOString().slice(0,10);
+    const ds=ymdLocal(d);
     const esHoy=ds===todayStr;
     let col=`<div style="position:relative;height:${totalH}px;border-left:1px solid var(--brd);${esHoy?'background:rgba(245,158,11,0.04)':''}">`;
     // Líneas de hora
@@ -3616,53 +3617,54 @@ async function guardarIntento(){
   const l=allLeads.find(x=>x.id===intentoLeadId);
   if(!l)return;
   const num=(l.intento1_estado&&l.intento1_estado!=='pendiente'?1:0)+(l.intento2_estado&&l.intento2_estado!=='pendiente'?1:0)+(l.intento3_estado&&l.intento3_estado!=='pendiente'?1:0)+1;
+  const resultNeg=['no_contesto','buzon','apagado','no_respondio'];
+  const esNeg=v=>resultNeg.includes(v);
 
   const upd={[`intento${num}_estado`]:res,[`intento${num}_fecha`]:new Date().toISOString().slice(0,10)};
   if(res==='contesto')upd.estado='en_seguimiento';
   if(prox)upd.proximo_contacto=prox;
 
-  await sb.from('leads').update(upd).eq('id',intentoLeadId);
-  await sb.from('intentos_contacto').insert([{lead_id:intentoLeadId,colaborador:cu.nombre,numero_intento:num,resultado:res,nota,siguiente_fecha:prox}]);
-  await registrarHistorial(intentoLeadId,res==='contesto'?'en_seguimiento':`intento_${num}`,'intento_contacto',res,nota,null,prox);
-
-  // Próxima actividad en agenda
-  if(prox&&res!=='contesto'){
-    await sb.from('agenda_personal').insert([{
-      colaborador:cu.nombre,lead_id:intentoLeadId,
-      tipo:'intento_'+(num+1),
-      titulo:'Intento '+(num+1)+': '+l.nombre,
-      fecha_programada:prox+'T'+proxHora+':00',
-      nota:proxNota||nota
-    }]);
-    await sb.from('leads').update({proximo_contacto:prox}).eq('id',intentoLeadId);
-  }
-  const i=allLeads.findIndex(x=>x.id===intentoLeadId);
-  if(i>-1)allLeads[i]={...allLeads[i],...upd};
-
-  // G3: auto-marcar perdido si 3er intento y todos negativos
-  const resultNeg=['no_contesto','buzon','apagado','no_respondio'];
-  const esNeg=v=>resultNeg.includes(v);
-  if(num===3 && esNeg(res) && esNeg(l.intento1_estado) && esNeg(l.intento2_estado)){
-    const updPerd={estado:'cerrado_perdido',motivo_perdida:'no_respondio_presentacion'};
-    await sb.from('leads').update(updPerd).eq('id',intentoLeadId);
-    await registrarHistorial(intentoLeadId,'cerrado_perdido','perdida',null,'Auto: 3 intentos sin respuesta','no_respondio_presentacion',null);
-    await sb.from('leads_perdidos').insert([{lead_id:intentoLeadId,captador:l.captador,cerrador:l.cerrador||null,motivo:'no_respondio_presentacion',nota:'Automático: 3 intentos sin respuesta',fecha_perdida:new Date().toISOString()}]);
-    if(i>-1)allLeads[i]={...allLeads[i],...updPerd};
+  try{
+    const{error:e1}=await sb.from('leads').update(upd).eq('id',intentoLeadId);
+    if(e1)throw e1;
+    const{error:e2}=await sb.from('intentos_contacto').insert([{lead_id:intentoLeadId,colaborador:cu.nombre,numero_intento:num,resultado:res,nota,siguiente_fecha:prox}]);
+    if(e2)throw e2;
+    await registrarHistorial(intentoLeadId,res==='contesto'?'en_seguimiento':`intento_${num}`,'intento_contacto',res,nota,null,prox);
+    if(prox&&res!=='contesto'){
+      await sb.from('agenda_personal').insert([{
+        colaborador:cu.nombre,lead_id:intentoLeadId,
+        tipo:'intento_'+(num+1),
+        titulo:'Intento '+(num+1)+': '+l.nombre,
+        fecha_programada:prox+'T'+proxHora+':00',
+        nota:proxNota||nota
+      }]);
+      await sb.from('leads').update({proximo_contacto:prox}).eq('id',intentoLeadId);
+    }
+    const i=allLeads.findIndex(x=>x.id===intentoLeadId);
+    if(i>-1)allLeads[i]={...allLeads[i],...upd};
+    // G3: auto-marcar perdido si 3er intento y todos negativos
+    if(num===3 && esNeg(res) && esNeg(l.intento1_estado) && esNeg(l.intento2_estado)){
+      const updPerd={estado:'cerrado_perdido',motivo_perdida:'no_respondio_presentacion'};
+      await sb.from('leads').update(updPerd).eq('id',intentoLeadId);
+      await registrarHistorial(intentoLeadId,'cerrado_perdido','perdida',null,'Auto: 3 intentos sin respuesta','no_respondio_presentacion',null);
+      await sb.from('leads_perdidos').insert([{lead_id:intentoLeadId,captador:l.captador,cerrador:l.cerrador||null,motivo:'no_respondio_presentacion',nota:'Automático: 3 intentos sin respuesta',fecha_perdida:new Date().toISOString()}]);
+      if(i>-1)allLeads[i]={...allLeads[i],...updPerd};
+      closeSheet('intento');
+      toast('3 intentos sin respuesta — marcando como perdido');
+      renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
+      return;
+    }
     closeSheet('intento');
-    toast('3 intentos sin respuesta — marcando como perdido');
-    renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
-    return;
-  }
-
-  closeSheet('intento');
-  toast('Intento registrado ✓');
-  renderLeads(); await cargarAgendaPersonal();
-  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
-  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
-
-  // G2: si resultado negativo y no se programó prox en el sheet, mostrar modal de agendado
-  if(esNeg(res)&&!prox){
-    setTimeout(function(){abrirProgramarIntento(intentoLeadId,l.nombre,num+1,'intento');},400);
+    toast('Intento registrado ✓');
+    renderLeads(); await cargarAgendaPersonal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+    if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+    if(esNeg(res)&&!prox){
+      setTimeout(function(){abrirProgramarIntento(intentoLeadId,l.nombre,num+1,'intento');},400);
+    }
+  }catch(e){
+    console.error('[guardarIntento]',e);
+    toast('Error al guardar intento: '+e.message,'error');
   }
 }
 
@@ -3844,22 +3846,28 @@ function abrirPerder(id){
 async function confirmarPerder(){
   if(!selectedMotivo){toast('Selecciona un motivo','error');return;}
   const nota=document.getElementById('perder-nota').value||null;
-  await sb.from('leads').update({estado:'cerrado_perdido',motivo_perdida:selectedMotivo}).eq('id',perderLeadId);
-  await registrarHistorial(perderLeadId,'cerrado_perdido','perdida',null,nota,selectedMotivo,null);
-  // Papelera
   const l=allLeads.find(x=>x.id===perderLeadId);
-  if(l){
-    sb.from('leads_perdidos').insert([{
-      lead_id:perderLeadId,nombre_cliente:l.nombre,celular:l.celular,
-      captador:l.captador,cerrador:l.cerrador,motivo_perdida:selectedMotivo,
-      notas_perdida:nota,perdido_por:cu.nombre
-    }]);
+  try{
+    if(l){
+      const{error:e1}=await sb.from('leads_perdidos').insert([{
+        lead_id:perderLeadId,nombre_cliente:l.nombre,celular:l.celular,
+        captador:l.captador,cerrador:l.cerrador,motivo_perdida:selectedMotivo,
+        notas_perdida:nota,perdido_por:cu.nombre
+      }]);
+      if(e1)throw e1;
+    }
+    const{error:e2}=await sb.from('leads').update({estado:'cerrado_perdido',motivo_perdida:selectedMotivo}).eq('id',perderLeadId);
+    if(e2)throw e2;
+    await registrarHistorial(perderLeadId,'cerrado_perdido','perdida',null,nota,selectedMotivo,null);
+    const i=allLeads.findIndex(x=>x.id===perderLeadId);
+    if(i>-1)allLeads[i].estado='cerrado_perdido';
+    closeSheet('perder');
+    toast('Lead marcado como perdido');
+    renderLeads();
+  }catch(e){
+    console.error('[confirmarPerder]',e);
+    toast('Error al marcar perdido: '+e.message,'error');
   }
-  const i=allLeads.findIndex(x=>x.id===perderLeadId);
-  if(i>-1)allLeads[i].estado='cerrado_perdido';
-  closeSheet('perder');
-  toast('Lead marcado como perdido');
-  renderLeads();
 }
 
 // -- NOTIFICACIONES --
@@ -5534,7 +5542,7 @@ async function subirPropuestaTecnica(){
         tipo: 'propuesta_lista', titulo: 'Propuesta lista',
         mensaje: 'La propuesta de '+tecSolicitudActual.nombre_cliente+' esta lista.',
         lead_id: tecSolicitudActual.lead_id
-      }]).then(function(){}).catch(function(){});
+      }]).catch(function(e){console.error('[notif-propuesta]',e);});
     }
     setTimeout(function(){
       progress.style.display='none';
@@ -5793,9 +5801,9 @@ async function guardarIndagacion(){
   var camposLlenos=[datos.ind_ciudad,datos.ind_financiamiento,datos.ind_lugar_terreno,
     datos.ind_monto_financiamiento,datos.ind_presupuesto,datos.ind_tipo,
     datos.ind_cuando_construir].filter(function(c){return c;}).length;
-  // + booleanos que siempre tienen valor
-  camposLlenos += 2; // plantas y tope siempre tienen valor
-  var completa = camposLlenos >= 6;
+  if(document.getElementById('ind-tope').value!=='')camposLlenos++; // ind_presupuesto_tope
+  if(datos.ind_plantas)camposLlenos++; // ind_plantas
+  var completa = camposLlenos >= 9;
   datos.indagacion_completa = !!completa;
   try{
     await sb.from('leads').update(datos).eq('id',indagacionLeadId);
@@ -5819,7 +5827,7 @@ async function reactivarLeadDirecto(leadId){
     await sb.from('leads').update({estado:'en_seguimiento',motivo_perdida:null}).eq('id',leadId);
     var i=allLeads.findIndex(function(l){return l.id===leadId;});
     if(i>-1){allLeads[i].estado='en_seguimiento';allLeads[i].motivo_perdida=null;}
-    sb.from('leads_perdidos').update({reactivado:true,fecha_reactivacion:new Date().toISOString()}).eq('lead_id',leadId).then(function(){}).catch(function(){});
+    await sb.from('leads_perdidos').update({reactivado:true,fecha_reactivacion:new Date().toISOString()}).eq('lead_id',leadId);
     toast('Lead reactivado');
     renderLeads();renderTodos();
   }catch(e){toast('Error: '+e.message,'error');}
@@ -5835,7 +5843,7 @@ async function cargarNotifInternas(){
     if(badge) badge.classList.toggle('show',items.length>0);
     if(items.length>0){
       items.slice(0,2).forEach(function(n){ toast(n.titulo+': '+n.mensaje); });
-      sb.from('notificaciones_internas').update({leida:true}).eq('para',cu.nombre).eq('leida',false).then(function(){}).catch(function(){});
+      sb.from('notificaciones_internas').update({leida:true}).eq('para',cu.nombre).eq('leida',false).catch(function(e){console.error('[notif-leida]',e);});
     }
   }catch(e){}
 }
@@ -6416,7 +6424,7 @@ function guardarReunion(){
         titulo:'Reunion '+(lReu?'con '+lReu.nombre:'')+' - '+data.tipo,
         colaborador:cu.nombre, rol_colaborador:cu.rol,
         fecha_inicio:data.fecha, lead_id:data.lead_id||null
-      }]).then(function(){}).catch(function(){});
+      }]).catch(function(e){console.error('[guardarReunion-agenda]',e);});
     }
     renderCierre();
     cargarAgendaPersonal().then(function(){
@@ -6585,7 +6593,7 @@ function regAudit(accion, modulo, entidadId, detalle){
     entidad_id: entidadId||null,
     entidad_tipo: modulo||null,
     detalle: detalle||null
-  }]).then(function(){}).catch(function(){});
+  }]).catch(function(e){console.error('[regAudit]',e);});
 }
 
 
