@@ -2018,13 +2018,14 @@ function cerrarQuickPopup(){
 async function guardarQuickPopup(){
   var titulo = (document.getElementById('qp-titulo')?.value||'').trim();
   if(!titulo){ toast('Escribe un título','error'); return; }
+  if(!_qpDStr){ toast('Error: fecha no definida','error'); return; }
   var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
   var hStr = (_qpHora<10?'0':'')+_qpHora;
   var fechaProg = _qpDStr+'T'+hStr+':00:00';
   try{
     await sb.from('agenda_personal').insert([{
       colaborador: cu.nombre, titulo: titulo, tipo: tipo,
-      fecha_programada: fechaProg, completada: false
+      fecha_programada: fechaProg
     }]);
   }catch(e){ toast('Error: '+e.message,'error'); return; }
   try{await sb.from('historial_lead').insert([{
@@ -2033,7 +2034,8 @@ async function guardarQuickPopup(){
     nota: 'Programado: '+titulo+' para '+fechaProg
   }]);}catch(e){}
   await cargarAgendaPersonal();
-  renderInicioCal();
+  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
   cerrarQuickPopup();
   toast('Actividad guardada ✓');
 }
@@ -2951,7 +2953,8 @@ async function guardarNuevaActividad(){
   document.getElementById('mini-modal-flujo')?.remove();
   toast('Actividad guardada ✓');
   await cargarAgendaPersonal();
-  renderInicioCal();
+  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
   if(fecha) seleccionarDia(fecha);
 }
 
@@ -3480,7 +3483,10 @@ async function guardarLead(){
         nota:primerNota
       }]);
       await sb.from('leads').update({proximo_contacto:primerFecha}).eq('id',newId);
-      toast('Primer intento programado para el '+new Date(primerFecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+' ✓');
+      await cargarAgendaPersonal();
+      if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+      if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+      toast('Seguimiento programado para '+new Date(primerFecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+' ✓');
     }
   }
 }
@@ -3650,7 +3656,9 @@ async function guardarIntento(){
 
   closeSheet('intento');
   toast('Intento registrado ✓');
-  renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
+  renderLeads(); await cargarAgendaPersonal();
+  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
 
   // G2: si resultado negativo y no se programó prox en el sheet, mostrar modal de agendado
   if(esNeg(res)&&!prox){
@@ -3743,7 +3751,9 @@ async function guardarSeguimiento(){
   if(i>-1)allLeads[i]={...allLeads[i],...upd};
   closeSheet('seg');
   toast(vFecha?'Seguimiento y visita guardados ✓':'Seguimiento guardado ✓');
-  renderLeads(); await cargarAgendaPersonal(); renderInicioCal();
+  renderLeads(); await cargarAgendaPersonal();
+  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
   
   // Si no agendó visita, ofrecer programar próximo seguimiento
   if(!vFecha){
@@ -6129,7 +6139,8 @@ async function guardarEventoCal(){
     closeSheet('evento-cal');
     toast('Evento creado');
     await cargarAgendaPersonal();
-    renderInicioCal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+    if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -6410,6 +6421,10 @@ function guardarReunion(){
       }]).then(function(){}).catch(function(){});
     }
     renderCierre();
+    cargarAgendaPersonal().then(function(){
+      if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+      if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+    });
   }).catch(function(e){ toast('Error: '+e.message,'error'); });
 }
 
