@@ -3721,50 +3721,49 @@ async function guardarSeguimiento(){
 
   const infoChecked=['info-cat','info-modelo','info-caract','info-planos','info-precios'].filter(id=>document.getElementById(id)?.checked);
   if(infoChecked.length>0)upd.info_enviada=JSON.stringify(infoChecked);
-  await sb.from('leads').update(upd).eq('id',segLeadId);
-  await sb.from('seguimientos').insert([{lead_id:segLeadId,colaborador:cu.nombre,fecha_seguimiento:new Date().toISOString(),nota_previa:nota,resultado:selPillVal.seg,estado:'realizado',tipo:tipoSeg,medio:medioSeg}]);
-  await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha,tipoSeg,medioSeg);
-
-  if(prox&&!vFecha){
-    const proxHora=document.getElementById('seg-prox-hora')?.value||'09:00';
-    await sb.from('agenda_personal').insert([{
-      colaborador:cu.nombre,lead_id:segLeadId,tipo:'seguimiento',
-      titulo:'Seguimiento: '+l.nombre,fecha_programada:prox+'T'+proxHora+':00',nota
-    }]);
-  }
-  if(vFecha){
-    await sb.from('agenda_grupal').delete().eq('lead_id',segLeadId).in('tipo',['visita_captador','visita_seguimiento']);
-    await sb.from('agenda_grupal').insert([{
-      tipo:'visita_captador',titulo:'Visita: '+l.nombre,lead_id:segLeadId,
-      captador:l.captador,cerrador:l.cerrador,sala:vSala,
-      fecha_inicio:vFecha+'T'+vHora+':00',creado_por:cu.nombre
-    }]);
-    if(l.cerrador){
-      sb.from('notificaciones').insert([{
-        destinatario:l.cerrador,tipo:'visita',
-        titulo:'Visita agendada: '+l.nombre,
-        mensaje:'Visita el '+vFecha+' a las '+vHora,lead_id:segLeadId
+  try{
+    await sb.from('leads').update(upd).eq('id',segLeadId);
+    await sb.from('seguimientos').insert([{lead_id:segLeadId,colaborador:cu.nombre,fecha_seguimiento:new Date().toISOString(),nota_previa:nota,resultado:selPillVal.seg,estado:'realizado',tipo:tipoSeg,medio:medioSeg}]);
+    await registrarHistorial(segLeadId,vFecha?'visita_agendada':'en_seguimiento','nota_seguimiento',selPillVal.seg,nota,null,prox||vFecha,tipoSeg,medioSeg);
+    if(prox&&!vFecha){
+      const proxHora=document.getElementById('seg-prox-hora')?.value||'09:00';
+      await sb.from('agenda_personal').insert([{
+        colaborador:cu.nombre,lead_id:segLeadId,tipo:'seguimiento',
+        titulo:'Seguimiento: '+l.nombre,fecha_programada:prox+'T'+proxHora+':00',nota
       }]);
     }
-  }
-  const i=allLeads.findIndex(x=>x.id===segLeadId);
-  if(i>-1)allLeads[i]={...allLeads[i],...upd};
-  closeSheet('seg');
-  toast(vFecha?'Seguimiento y visita guardados ✓':'Seguimiento guardado ✓');
-  renderLeads(); await cargarAgendaPersonal();
-  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
-  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
-  
-  // Si no agendó visita, ofrecer programar próximo seguimiento
-  if(!vFecha){
-    const l=allLeads.find(x=>x.id===segLeadId);
-    const nombre=l?.nombre||'el cliente';
-    setTimeout(()=>{
-      if(confirm('📅 ¿Programar el próximo contacto con '+nombre+'?')){
-        abrirProgramarIntento(segLeadId,nombre,1,'seguimiento');
+    if(vFecha){
+      await sb.from('agenda_grupal').delete().eq('lead_id',segLeadId).in('tipo',['visita_captador','visita_seguimiento']);
+      await sb.from('agenda_grupal').insert([{
+        tipo:'visita_captador',titulo:'Visita: '+l.nombre,lead_id:segLeadId,
+        captador:l.captador,cerrador:l.cerrador,sala:vSala,
+        fecha_inicio:vFecha+'T'+vHora+':00',creado_por:cu.nombre
+      }]);
+      if(l.cerrador){
+        sb.from('notificaciones').insert([{
+          destinatario:l.cerrador,tipo:'visita',
+          titulo:'Visita agendada: '+l.nombre,
+          mensaje:'Visita el '+vFecha+' a las '+vHora,lead_id:segLeadId
+        }]);
       }
-    },400);
-  }
+    }
+    const i=allLeads.findIndex(x=>x.id===segLeadId);
+    if(i>-1)allLeads[i]={...allLeads[i],...upd};
+    closeSheet('seg');
+    toast(vFecha?'Seguimiento y visita guardados ✓':'Seguimiento guardado ✓');
+    renderLeads(); await cargarAgendaPersonal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+    if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+    // Si no agendó visita, ofrecer programar próximo seguimiento
+    if(!vFecha){
+      const nombre=l?.nombre||'el cliente';
+      setTimeout(()=>{
+        if(confirm('📅 ¿Programar el próximo contacto con '+nombre+'?')){
+          abrirProgramarIntento(segLeadId,nombre,1,'seguimiento');
+        }
+      },400);
+    }
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // -- HISTORIAL --
