@@ -2000,7 +2000,7 @@ function abrirQuickPopupCal(ds, ev, el, horaIni, rowH){
     '<option value="seguimiento">Seguimiento</option><option value="llamada">Llamada</option>' +
     '<option value="visita">Visita</option><option value="reunion">Reunión</option><option value="personal">Personal</option></select>' +
     '<div style="display:flex;gap:8px">' +
-    '<button class="btn btn-primary" style="flex:1" onclick="guardarQuickPopup()">Guardar</button>' +
+    '<button id="qp-btn-guardar" class="btn btn-primary" style="flex:1" onclick="guardarQuickPopup()">Guardar</button>' +
     '<button class="btn btn-ghost" onclick="cerrarQuickPopup()">✕</button></div>';
   pop.style.cssText = 'position:fixed;top:'+y+'px;left:'+x+'px;background:var(--bg2);border:1px solid var(--acc);border-radius:var(--r2);padding:14px;width:300px;box-shadow:var(--shadow);z-index:200;box-sizing:border-box;display:block';
   setTimeout(function(){ var t=document.getElementById('qp-titulo'); if(t)t.focus(); }, 50);
@@ -2016,29 +2016,38 @@ function cerrarQuickPopup(){
   if(el) el.style.display = 'none';
   document.removeEventListener('click', _cerrarQPOutside);
 }
+let guardandoQuickPopup=false;
 async function guardarQuickPopup(){
-  var titulo = (document.getElementById('qp-titulo')?.value||'').trim();
-  if(!titulo){ toast('Escribe un título','error'); return; }
-  if(!_qpDStr){ toast('Error: fecha no definida','error'); return; }
-  var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
-  var hStr = (_qpHora<10?'0':'')+_qpHora;
-  var fechaProg = _qpDStr+'T'+hStr+':00:00';
+  if(guardandoQuickPopup)return;
+  guardandoQuickPopup=true;
+  var btnQP=document.getElementById('qp-btn-guardar');
+  if(btnQP)btnQP.disabled=true;
   try{
-    await sb.from('agenda_personal').insert([{
+    var titulo = (document.getElementById('qp-titulo')?.value||'').trim();
+    if(!titulo){ toast('Escribe un título','error'); return; }
+    if(!_qpDStr){ toast('Error: fecha no definida','error'); return; }
+    var anioQP=parseInt((_qpDStr||'').slice(0,4),10);
+    if(!anioQP||anioQP<2000||anioQP>2100){ toast('La fecha no es válida, revisá el año','error'); return; }
+    var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
+    var hStr = (_qpHora<10?'0':'')+_qpHora;
+    var fechaProg = _qpDStr+'T'+hStr+':00:00';
+    var _rQP=await sb.from('agenda_personal').insert([{
       colaborador: cu.nombre, titulo: titulo, tipo: tipo,
       fecha_programada: fechaProg
-    }]);
-  }catch(e){ toast('Error: '+e.message,'error'); return; }
-  try{await sb.from('historial_lead').insert([{
-    lead_id: null, colaborador: cu.nombre, rol_colaborador: cu.rol,
-    tipo_actividad: 'programacion', fecha_actividad: new Date().toISOString(),
-    nota: 'Programado: '+titulo+' para '+fechaProg
-  }]);}catch(e){}
-  await cargarAgendaPersonal();
-  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
-  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
-  cerrarQuickPopup();
-  toast('Actividad guardada ✓');
+    }]).select();
+    if(_rQP.error)throw _rQP.error;
+    cerrarQuickPopup();
+    toast('Actividad guardada ✓');
+    await cargarAgendaPersonal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+    if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+  }catch(e){
+    console.error('[guardar quick popup]',e);
+    toast('Error al guardar: '+(e.message||'desconocido'),'error');
+  }finally{
+    guardandoQuickPopup=false;
+    if(btnQP)btnQP.disabled=false;
+  }
 }
 
 function renderInicio(){
@@ -2922,7 +2931,7 @@ function abrirNuevaActividad(fechaDefault){
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:20px">
-        <button onclick="guardarNuevaActividad()" class="btn btn-primary" style="flex:1">Guardar actividad</button>
+        <button id="nact-btn-guardar" onclick="guardarNuevaActividad()" class="btn btn-primary" style="flex:1">Guardar actividad</button>
         <button onclick="document.getElementById('mini-modal-flujo').remove()" class="btn btn-ghost">Cancelar</button>
       </div>
     </div>`;
@@ -2948,30 +2957,36 @@ function selLeadNact(id,nombre){
   document.getElementById('nact-resultados').style.display='none';
 }
 
+let guardandoActividad=false;
 async function guardarNuevaActividad(){
-  var titulo=document.getElementById('nact-titulo').value.trim();
-  var fecha=document.getElementById('nact-fecha').value;
-  var hora=document.getElementById('nact-hora').value||'09:00';
-  var tipo=document.getElementById('nact-tipo').value;
-  var nota=document.getElementById('nact-nota').value||null;
-  var leadId=document.getElementById('nact-lead-id').value||null;
-  if(!leadId){toast('Seleccioná un lead','error');return;}
-  if(!fecha){toast('Seleccioná una fecha','error');return;}
-  var fechaSeg=new Date(fecha+'T'+hora+':00').toISOString();
-  var etapaLead=(allLeads.find(function(l){return l.id==leadId;})||{}).estado||'nuevo';
+  if(guardandoActividad)return;
+  guardandoActividad=true;
+  var btn=document.getElementById('nact-btn-guardar');
+  if(btn)btn.disabled=true;
   try{
-    var _rAct=await sb.from('seguimientos').insert([{
-      lead_id:parseInt(leadId),
+    var titulo=document.getElementById('nact-titulo').value.trim();
+    var fecha=document.getElementById('nact-fecha').value;
+    var hora=document.getElementById('nact-hora').value||'09:00';
+    var tipo=document.getElementById('nact-tipo').value;
+    var nota=document.getElementById('nact-nota').value||null;
+    var leadId=document.getElementById('nact-lead-id').value||null;
+    if(!titulo&&!leadId){toast('Escribí un título o seleccioná un lead','error');return;}
+    if(!fecha){toast('Seleccioná una fecha','error');return;}
+    var anio=parseInt((fecha||'').slice(0,4),10);
+    if(!anio||anio<2000||anio>2100){toast('La fecha no es válida, revisá el año','error');return;}
+    var tiposConCliente=['intento_1','intento_2','intento_3','seguimiento','seguimiento_cierre'];
+    if(tiposConCliente.indexOf(tipo)>=0&&!leadId){toast('Seleccioná un lead para este tipo de actividad','error');return;}
+    var tituloFinal=titulo||(allLeads.find(function(l){return l.id==leadId;})||{}).nombre||'Actividad';
+    var fechaProg=fecha+'T'+hora+':00';
+    var _r=await sb.from('agenda_personal').insert([{
       colaborador:cu.nombre,
-      fecha_seguimiento:fechaSeg,
+      lead_id:leadId?parseInt(leadId):null,
       tipo:tipo,
-      etapa:etapaLead,
-      medio:'whatsapp',
-      estado:'pendiente',
-      nota_previa:(titulo||nota||''),
-      numero_seguimiento:1
+      titulo:tituloFinal,
+      nota:nota,
+      fecha_programada:fechaProg
     }]).select();
-    if(_rAct.error)throw _rAct.error;
+    if(_r.error)throw _r.error;
     document.getElementById('mini-modal-flujo')?.remove();
     toast('Actividad guardada ✓');
     await cargarAgendaPersonal();
@@ -2981,6 +2996,9 @@ async function guardarNuevaActividad(){
   }catch(e){
     console.error('[guardar actividad]',e);
     toast('Error al guardar: '+(e.message||'desconocido'),'error');
+  }finally{
+    guardandoActividad=false;
+    if(btn)btn.disabled=false;
   }
 }
 
