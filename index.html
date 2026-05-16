@@ -2567,6 +2567,7 @@ async function cargarAgendaPersonal(){
     .limit(300);
 
   var _rEvCal={data:[]};try{_rEvCal=await sb.from('eventos_calendario').select('*').eq('colaborador',cu.nombre).limit(200);}catch(e){}var evCal=(_rEvCal||{data:[]}).data||[];
+  var _rSeg={data:[]};try{var _qSeg=sb.from('seguimientos').select('*,leads(nombre,celular,estado)');if(cu.rol!=='admin')_qSeg=_qSeg.eq('colaborador',cu.nombre);_rSeg=await _qSeg.limit(500);}catch(e){console.error('[cargar seg cal]',e);}var evSeg=(_rSeg||{data:[]}).data||[];
   calEventos = [
     ...(activ||[]).map(a=>({
       id:'ap_'+a.id,
@@ -2607,6 +2608,20 @@ async function cargarAgendaPersonal(){
       estado:'evento',
       lead_id:e.lead_id,
       color:e.color||'#3B82F6',
+    };}),
+    ...(evSeg||[]).filter(function(s){return s.fecha_seguimiento;}).map(function(s){return {
+      id:'seg_'+s.id,
+      raw_id:s.id,
+      tipo:s.estado==='realizado'?'realizado':'programado',
+      fecha:new Date(s.fecha_seguimiento),
+      titulo:s.leads?.nombre||'Seguimiento',
+      sub:(s.tipo||'').replace(/_/g,' '),
+      nota:s.nota_previa,
+      completada:s.estado==='realizado',
+      estado:s.etapa||'nuevo',
+      lead_id:s.lead_id,
+      celular:s.leads?.celular,
+      color:s.estado==='realizado'?'#334155':getEtapaColor(s.leads?.estado||s.etapa||'nuevo'),
     };}),
   ];
   
@@ -2934,29 +2949,39 @@ function selLeadNact(id,nombre){
 }
 
 async function guardarNuevaActividad(){
-  const titulo=document.getElementById('nact-titulo').value;
-  const fecha=document.getElementById('nact-fecha').value;
-  const hora=document.getElementById('nact-hora').value||'09:00';
-  const tipo=document.getElementById('nact-tipo').value;
-  const nota=document.getElementById('nact-nota').value||null;
-  const leadId=document.getElementById('nact-lead-id').value||null;
-  if(!titulo||!fecha){toast('Título y fecha obligatorios','error');return;}
-  const fechaProg=fecha+'T'+hora+':00';
-  await sb.from('agenda_personal').insert([{
-    colaborador:cu.nombre,lead_id:leadId?parseInt(leadId):null,
-    tipo,titulo,nota,fecha_programada:fechaProg
-  }]);
-  try{await sb.from('historial_lead').insert([{
-    lead_id:leadId?parseInt(leadId):null,colaborador:cu.nombre,rol_colaborador:cu.rol,
-    tipo_actividad:'programacion',fecha_actividad:new Date().toISOString(),
-    nota:'Programado: '+titulo+' para '+fechaProg
-  }]);}catch(e){}
-  document.getElementById('mini-modal-flujo')?.remove();
-  toast('Actividad guardada ✓');
-  await cargarAgendaPersonal();
-  if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
-  if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
-  if(fecha) seleccionarDia(fecha);
+  var titulo=document.getElementById('nact-titulo').value.trim();
+  var fecha=document.getElementById('nact-fecha').value;
+  var hora=document.getElementById('nact-hora').value||'09:00';
+  var tipo=document.getElementById('nact-tipo').value;
+  var nota=document.getElementById('nact-nota').value||null;
+  var leadId=document.getElementById('nact-lead-id').value||null;
+  if(!leadId){toast('Seleccioná un lead','error');return;}
+  if(!fecha){toast('Seleccioná una fecha','error');return;}
+  var fechaSeg=new Date(fecha+'T'+hora+':00').toISOString();
+  var etapaLead=(allLeads.find(function(l){return l.id==leadId;})||{}).estado||'nuevo';
+  try{
+    var _rAct=await sb.from('seguimientos').insert([{
+      lead_id:parseInt(leadId),
+      colaborador:cu.nombre,
+      fecha_seguimiento:fechaSeg,
+      tipo:tipo,
+      etapa:etapaLead,
+      medio:'whatsapp',
+      estado:'pendiente',
+      nota_previa:(titulo||nota||''),
+      numero_seguimiento:1
+    }]).select();
+    if(_rAct.error)throw _rAct.error;
+    document.getElementById('mini-modal-flujo')?.remove();
+    toast('Actividad guardada ✓');
+    await cargarAgendaPersonal();
+    if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+    if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+    if(fecha) seleccionarDia(fecha);
+  }catch(e){
+    console.error('[guardar actividad]',e);
+    toast('Error al guardar: '+(e.message||'desconocido'),'error');
+  }
 }
 
 async function completarActividad(id){
