@@ -2560,10 +2560,14 @@ async function cargarAgendaPersonal(){
   }catch(e){ /* cal error silenciado */; }
   // Agregar a agendaData despues de cargar
 
-  // Cargar actividades de la agenda personal
+  // Cargar actividades de la agenda personal (rango -30/+90 dias para no saturar el limit)
+  var _desdeAP=new Date();_desdeAP.setDate(_desdeAP.getDate()-30);_desdeAP.setHours(0,0,0,0);
+  var _hastaAP=new Date();_hastaAP.setDate(_hastaAP.getDate()+90);_hastaAP.setHours(23,59,59,999);
   const{data:activ}=await sb.from('agenda_personal')
     .select('*,leads(nombre,celular,estado)')
     .eq('colaborador',cu.nombre)
+    .gte('fecha_programada',_desdeAP.toISOString())
+    .lte('fecha_programada',_hastaAP.toISOString())
     .order('fecha_programada',{ascending:true})
     .limit(500);
   
@@ -3520,17 +3524,37 @@ async function guardarLead(){
     const primerHora=document.getElementById('f-primer-hora')?.value||'10:00';
     const primerNota=document.getElementById('f-primer-nota')?.value||'Lead recién registrado - primer contacto';
     if(primerFecha){
-      await sb.from('agenda_personal').insert([{
-        colaborador:data.captador||cu.nombre,lead_id:newId,tipo:'intento_1',
-        titulo:'Primer intento: '+nombre,
-        fecha_programada:primerFecha+'T'+primerHora+':00',
-        nota:primerNota
-      }]);
-      await sb.from('leads').update({proximo_contacto:primerFecha}).eq('id',newId);
-      await cargarAgendaPersonal();
-      if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
-      if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
-      toast('Seguimiento programado para '+new Date(primerFecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+' ✓');
+      const anioP=parseInt(primerFecha.slice(0,4),10);
+      if(!anioP||anioP<2000||anioP>2100){
+        toast('Fecha del primer intento inválida — revisá el año','error');
+      }else{
+        try{
+          const fechaLimpia=primerFecha+'T'+primerHora+':00';
+          // Verificar si el trigger de BD ya creó un intento_1 para este lead
+          const{data:existIntento}=await sb.from('agenda_personal')
+            .select('id').eq('lead_id',newId).eq('tipo','intento_1').limit(1);
+          if(existIntento&&existIntento.length>0){
+            // Actualizar la fecha del registro automático con la del usuario
+            await sb.from('agenda_personal').update({
+              fecha_programada:fechaLimpia,nota:primerNota,
+              colaborador:data.captador||cu.nombre
+            }).eq('id',existIntento[0].id);
+          }else{
+            await sb.from('agenda_personal').insert([{
+              colaborador:data.captador||cu.nombre,lead_id:newId,tipo:'intento_1',
+              titulo:'Primer intento: '+nombre,fecha_programada:fechaLimpia,nota:primerNota
+            }]);
+          }
+          await sb.from('leads').update({proximo_contacto:primerFecha}).eq('id',newId);
+          await cargarAgendaPersonal();
+          if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
+          if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
+          toast('Seguimiento programado para '+new Date(primerFecha+'T12:00:00').toLocaleDateString('es-BO',{weekday:'short',day:'numeric',month:'short'})+' ✓');
+        }catch(e){
+          console.error('[primer intento]',e);
+          toast('Error al programar primer intento: '+(e.message||'desconocido'),'error');
+        }
+      }
     }
   }
 }
