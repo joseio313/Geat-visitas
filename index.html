@@ -1627,7 +1627,7 @@ function llenarSelects(){
 var mostrarArchivados=false;
 async function loadLeads(){
   var q=sb.from('leads')
-    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado,gps_terreno,info_enviada,created_at')
+    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado,gps_terreno,info_enviada,created_at,ind_lugar_terreno,ind_financiamiento,ind_presupuesto,ind_presupuesto_tope,ind_plantas,ind_tipo,ind_cuando_construir')
     .order('created_at',{ascending:false});
   if(!mostrarArchivados) q=q.eq('archivado',false);
   const{data}=await q;
@@ -3014,6 +3014,8 @@ async function completarActividad(id){
 
 // -- CALENDARIO --
 let calWeekOffset=0;
+var _calTodos=[];
+var _agGrupalGuardando=false;
 const TEAM_COLORS={
   'Gustavo':'#3B82F6','Gustavo Vaca':'#3B82F6',
   'David':'#A855F7','David Gambarte':'#A855F7',
@@ -3091,26 +3093,32 @@ async function renderCalendario(){
 
   const todos=[
     ...(visitas||[]).map(v=>({id:v.id,_tipo:'visita',_fecha:v.visita_fecha,_fin:null,nombre:v.nombre,cerrador:v.cerrador,captador:v.captador,sala:v.visita_sala,estado:v.estado})),
-    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo})),
+    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo,descripcion:r.descripcion||null})),
     ...(_evGrupal).map(e=>({id:e.id,_tipo:'evento',_fecha:e.fecha_inicio,_fin:e.fecha_fin,nombre:e.titulo,cerrador:e.colaborador,captador:null,sala:null,tipo:e.tipo}))
   ].filter(e=>e._fecha).sort((a,b)=>a._fecha>b._fecha?1:-1);
+  _calTodos=todos;
 
   const dias=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
   if(calTabActual==='lista'){
     if(!todos.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin eventos esta semana</div><div class="empty-sub">Las visitas aparecen acá al agendarse desde un lead. Tocá un cliente (Señor X / Señora X) en Leads para programar.</div></div>';return;}
+    const _dotTipo={'visita_nueva':'#D4A800','reagendo':'#EA580C','reunion_interna':'#A855F7'};
+    const _labelTipo={'visita_nueva':'Visita nueva','reagendo':'Reagendo','reunion_interna':'Reunión interna'};
     el.innerHTML=todos.map(ev=>{
       const est=estilo(ev.estado);
       const fecha=new Date(ev._fecha).toLocaleString('es-BO',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-      return `<div class="card" onclick="${ev._tipo==='visita'?'abrirSheetLead('+ev.id+')':''}">
+      const dotColor=ev._tipo==='reunion'?(_dotTipo[ev.tipo]||'#6366F1'):est.dot;
+      const clickAct=ev._tipo==='visita'?'abrirSheetLead('+ev.id+')':ev._tipo==='reunion'?'verDetalleGrupal('+ev.id+')':'';
+      const badgeTxt=ev._tipo==='visita'?`<span class="badge ${est.cls}" style="font-size:9px">${est.label}</span>`:`<span class="badge e-scierre" style="font-size:9px">${_labelTipo[ev.tipo]||'Reunión'}</span>`;
+      return `<div class="card" onclick="${clickAct}" style="${clickAct?'cursor:pointer':''}">
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:8px;height:8px;border-radius:50%;background:${ev._tipo==='reunion'?'var(--purple)':est.dot};flex-shrink:0"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></div>
           <div style="flex:1">
             <div style="font-size:13px;font-weight:500">${ev.nombre||'(sin título)'}</div>
             <div style="font-size:11px;color:var(--txt3)">${fecha} ${ev.sala?'· '+String(ev.sala).replace('_',' '):''}</div>
             ${ev.cerrador?`<div style="font-size:11px;color:var(--txt3)">${ev.captador?' Captador: '+ev.captador+' ·':''} Cerrador: ${ev.cerrador}</div>`:''}
           </div>
-          ${ev._tipo==='visita'?`<span class="badge ${est.cls}" style="font-size:9px">${est.label}</span>`:'<span class="badge e-scierre" style="font-size:9px">Reunión</span>'}
+          ${badgeTxt}
         </div>
       </div>`;
     }).join('');
@@ -3187,11 +3195,12 @@ async function renderCalendario(){
       const top=sM/60*ROW_H;
       const altura=Math.max(22,(eM-sM)/60*ROW_H-2);
       const responsable=ev.cerrador||ev.captador||'';
-      const c=colorPersona(responsable);
+      const _colorTipo={'visita_nueva':'#D4A800','reagendo':'#EA580C','reunion_interna':'#A855F7'};
+      const c=ev._tipo==='reunion'?(_colorTipo[ev.tipo]||'#6366F1'):colorPersona(responsable);
       const titulo=String(ev.nombre||'(sin título)').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-      const onclick=ev._tipo==='visita'?`abrirSheetLead(${ev.id})`:'';
+      const onclick=ev._tipo==='visita'?`abrirSheetLead(${ev.id})`:ev._tipo==='reunion'?`verDetalleGrupal(${ev.id})`:'';
       const horaTxt=ini.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-      const tipoIcon=ev._tipo==='reunion'?'👥 ':'📍 ';
+      const tipoIcon=ev.tipo==='visita_nueva'?'📌 ':ev.tipo==='reagendo'?'🔄 ':ev._tipo==='reunion'?'👥 ':'📍 ';
       col+=`<div onclick="${onclick}" title="${titulo} · ${responsable} · ${horaTxt}" style="position:absolute;top:${top}px;left:3px;right:3px;height:${altura}px;background:${c};border-left:3px solid rgba(255,255,255,0.35);color:#fff;border-radius:4px;padding:3px 6px;font-size:10px;overflow:hidden;cursor:${onclick?'pointer':'default'};z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.35);box-sizing:border-box">
         <div style="font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tipoIcon}${titulo}</div>
         ${altura>30?`<div style="font-size:9px;opacity:0.92;line-height:1.15;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${horaTxt}${responsable?' · '+responsable:''}</div>`:''}
@@ -6167,8 +6176,7 @@ function abrirNuevoEventoCal(fechaStr){
 }
 
 function abrirAgendar(){
-  abrirNuevoEventoCal(null);
-  document.getElementById('ev-visible').value='1';
+  abrirAgendarGrupal();
 }
 async function guardarEventoCal(){
   var titulo = document.getElementById('ev-titulo').value.trim();
@@ -6215,6 +6223,140 @@ async function guardarEventoCal(){
     if(document.getElementById('pn-inicio')?.classList.contains('active')) renderInicioCal();
     if(document.getElementById('pn-calendario')?.classList.contains('active')) renderCalendario();
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════
+// AGENDAR GRUPAL — tarjeta estilo WhatsApp
+// ══════════════════════════════════════
+function abrirAgendarGrupal(){
+  _agGrupalGuardando=false;
+  document.getElementById('ag-tipo').value='visita_nueva';
+  document.getElementById('ag-fecha').value=ymdLocal(new Date());
+  document.getElementById('ag-hora').value='09:00';
+  document.getElementById('ag-sala').value='sala_principal';
+  document.getElementById('ag-cerrador').value='';
+  document.getElementById('ag-obs').value='';
+  document.getElementById('ag-titulo-manual').value='';
+  var sel=document.getElementById('ag-lead');
+  sel.innerHTML='<option value="">— Elegir cliente —</option>'+
+    allLeads.map(function(l){return '<option value="'+l.id+'">'+l.nombre+(l.ciudad?' ('+l.ciudad+')':'')+'</option>';}).join('');
+  onTipoGrupalChange();
+  document.getElementById('sheet-agendar-grupal').classList.add('open');
+}
+function onTipoGrupalChange(){
+  var esInterna=document.getElementById('ag-tipo').value==='reunion_interna';
+  document.getElementById('ag-lead-group').style.display=esInterna?'none':'';
+  document.getElementById('ag-titulo-group').style.display=esInterna?'':'none';
+  actualizarPreviewGrupal();
+}
+function onLeadGrupalChange(){
+  var leadId=parseInt(document.getElementById('ag-lead').value)||0;
+  var lead=allLeads.find(function(l){return l.id===leadId;})||null;
+  if(lead&&lead.cerrador) document.getElementById('ag-cerrador').value=lead.cerrador;
+  actualizarPreviewGrupal();
+}
+function _fmtNum(n){var v=parseFloat(n);return isNaN(v)?String(n||''):v.toLocaleString('es-BO');}
+function armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual){
+  var enc=tipo==='visita_nueva'?'📌 NUEVA VISITA':tipo==='reagendo'?'🔄 REAGENDO':'👥 REUNIÓN INTERNA';
+  var dt=new Date((fecha||ymdLocal(new Date()))+'T'+(hora||'09:00')+':00');
+  var dias=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  var diaSem=dias[dt.getDay()];
+  var fechaTxt=diaSem+' '+String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear();
+  var hNum=dt.getHours(),mm=String(dt.getMinutes()).padStart(2,'0');
+  var h12=hNum>12?hNum-12:(hNum===0?12:hNum);
+  var horaTxt=h12+':'+mm+(hNum>=12?' pm':' am');
+  var L=[];
+  L.push(enc);
+  if(lead){if(lead.nombre)L.push('Cliente: '+lead.nombre);if(lead.celular)L.push('Cel: '+lead.celular);}
+  L.push('Fecha: '+fechaTxt+' - '+horaTxt);
+  if(cerrador)L.push('Cerrador: '+cerrador);
+  if(lead){
+    if(lead.captador)L.push('Captador: '+lead.captador);
+    var terreno=[lead.ind_lugar_terreno,lead.ciudad].filter(Boolean).join(', ');
+    if(terreno)L.push('Terreno: '+terreno);
+    var fin=lead.ind_financiamiento||lead.financiamiento;
+    if(fin)L.push('Financiamiento: '+fin);
+    if(lead.ind_presupuesto){
+      var p='$'+_fmtNum(lead.ind_presupuesto);
+      if(lead.ind_presupuesto_tope)p+=' (tope $'+_fmtNum(lead.ind_presupuesto_tope)+')';
+      L.push('Presupuesto: '+p);
+    }
+    if(lead.ind_plantas)L.push('Plantas: '+lead.ind_plantas);
+    if(lead.ind_tipo)L.push('Tipo: '+lead.ind_tipo);
+    if(lead.notas)L.push('Notas del lead: '+lead.notas);
+  }
+  if(tipo==='reunion_interna'&&tituloManual)L.push('Asunto: '+tituloManual);
+  if(obs)L.push('Observaciones: '+obs);
+  return L.join('\n');
+}
+function actualizarPreviewGrupal(){
+  var tipo=document.getElementById('ag-tipo').value;
+  var leadId=parseInt(document.getElementById('ag-lead').value)||0;
+  var lead=allLeads.find(function(l){return l.id===leadId;})||null;
+  var cerrador=document.getElementById('ag-cerrador').value.trim();
+  var fecha=document.getElementById('ag-fecha').value;
+  var hora=document.getElementById('ag-hora').value;
+  var obs=document.getElementById('ag-obs').value.trim();
+  var tituloManual=document.getElementById('ag-titulo-manual').value.trim();
+  var pre=document.getElementById('ag-preview');
+  if(pre)pre.textContent=armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual);
+}
+async function guardarEventoGrupal(){
+  if(_agGrupalGuardando)return;
+  var tipo=document.getElementById('ag-tipo').value;
+  var leadId=parseInt(document.getElementById('ag-lead').value)||0;
+  var lead=allLeads.find(function(l){return l.id===leadId;})||null;
+  var esInterna=tipo==='reunion_interna';
+  if(!esInterna&&!lead){toast('Elegí un cliente','error');return;}
+  var fecha=document.getElementById('ag-fecha').value;
+  var hora=document.getElementById('ag-hora').value||'09:00';
+  if(!fecha){toast('Seleccioná la fecha','error');return;}
+  var cerrador=document.getElementById('ag-cerrador').value.trim();
+  var sala=document.getElementById('ag-sala').value;
+  var obs=document.getElementById('ag-obs').value.trim();
+  var tituloManual=document.getElementById('ag-titulo-manual').value.trim();
+  var tarjeta=armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual);
+  var fechaInicioISO=new Date(fecha+'T'+hora+':00').toISOString();
+  var fechaFinISO=new Date(new Date(fechaInicioISO).getTime()+60*60*1000).toISOString();
+  var nombreCliente=lead?lead.nombre:(tituloManual||'Reunión interna');
+  var tipoLabel=tipo==='visita_nueva'?'Visita nueva':tipo==='reagendo'?'Reagendo':'Reunión interna';
+  _agGrupalGuardando=true;
+  var btn=document.getElementById('ag-btn-guardar');
+  if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+  try{
+    var{error}=await sb.from('agenda_grupal').insert([{
+      tipo:tipo,
+      titulo:tipoLabel+' - '+nombreCliente,
+      descripcion:tarjeta,
+      lead_id:lead?lead.id:null,
+      captador:lead?(lead.captador||null):null,
+      cerrador:cerrador||null,
+      sala:sala||null,
+      fecha_inicio:fechaInicioISO,
+      fecha_fin:fechaFinISO,
+      creado_por:cu.nombre,
+      visible_para:'equipo'
+    }]);
+    if(error)throw error;
+    toast('Visita agendada ✓','success');
+    closeSheet('agendar-grupal');
+    await renderCalendario();
+  }catch(e){
+    console.error('[agendar grupal]',e);
+    toast('Error al agendar: '+e.message,'error');
+  }finally{
+    _agGrupalGuardando=false;
+    if(btn){btn.disabled=false;btn.textContent='Guardar';}
+  }
+}
+function verDetalleGrupal(id){
+  var ev=_calTodos.find(function(e){return e.id===id&&e._tipo==='reunion';});
+  if(!ev)return;
+  var pre=document.getElementById('dg-pre');
+  var title=document.getElementById('dg-title');
+  if(pre)pre.textContent=ev.descripcion||ev.nombre||'(sin detalle)';
+  if(title)title.textContent=ev.nombre||'Evento';
+  document.getElementById('sheet-detalle-grupal').classList.add('open');
 }
 
 // ══════════════════════════════════════
@@ -7452,6 +7594,94 @@ initLogin();
   </div>
 </div>
 
+
+<!-- SHEET: AGENDAR GRUPAL -->
+<div class="sheet-overlay" id="sheet-agendar-grupal" onclick="if(event.target===this)closeSheet('agendar-grupal')">
+  <div class="sheet" style="max-height:92vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('agendar-grupal')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title">Agendar en calendario grupal</div>
+      <button class="sheet-close" onclick="closeSheet('agendar-grupal')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="fg" style="margin-bottom:10px">
+        <label>Tipo de evento *</label>
+        <select class="fsel" id="ag-tipo" onchange="onTipoGrupalChange()">
+          <option value="visita_nueva">📌 Visita nueva</option>
+          <option value="reagendo">🔄 Reagendo</option>
+          <option value="reunion_interna">👥 Reunión interna</option>
+        </select>
+      </div>
+      <div class="fg" id="ag-lead-group" style="margin-bottom:10px">
+        <label>Cliente (lead) *</label>
+        <select class="fsel" id="ag-lead" onchange="onLeadGrupalChange()">
+          <option value="">— Elegir cliente —</option>
+        </select>
+      </div>
+      <div class="fg" id="ag-titulo-group" style="margin-bottom:10px;display:none">
+        <label>Asunto de la reunión</label>
+        <input class="fi" id="ag-titulo-manual" placeholder="Ej: Revisión de propuestas" oninput="actualizarPreviewGrupal()">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="fg">
+          <label>Fecha *</label>
+          <input class="fi" id="ag-fecha" type="date" onchange="actualizarPreviewGrupal()">
+        </div>
+        <div class="fg">
+          <label>Hora *</label>
+          <input class="fi" id="ag-hora" type="time" onchange="actualizarPreviewGrupal()">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="fg">
+          <label>Sala</label>
+          <select class="fsel" id="ag-sala">
+            <option value="sala_principal">Sala Principal</option>
+            <option value="sala_2">Sala 2</option>
+            <option value="terreno">En terreno</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Cerrador</label>
+          <input class="fi" id="ag-cerrador" placeholder="Gustavo / David" oninput="actualizarPreviewGrupal()">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:12px">
+        <label>Observaciones</label>
+        <textarea class="fi" id="ag-obs" rows="2" style="resize:vertical;min-height:52px" placeholder="Ej: No dio datos, quiere hablar personalmente..." oninput="actualizarPreviewGrupal()"></textarea>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);padding:12px">
+        <div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Vista previa de la tarjeta</div>
+        <pre id="ag-preview" style="font-family:var(--font);font-size:12px;line-height:1.6;white-space:pre-wrap;margin:0;color:var(--txt)"></pre>
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" id="ag-btn-guardar" style="flex:1" onclick="guardarEventoGrupal()">Guardar</button>
+      <button class="btn btn-g" onclick="closeSheet('agendar-grupal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: DETALLE EVENTO GRUPAL -->
+<div class="sheet-overlay" id="sheet-detalle-grupal" onclick="if(event.target===this)closeSheet('detalle-grupal')">
+  <div class="sheet" style="max-height:80vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('detalle-grupal')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title" id="dg-title">Detalle del evento</div>
+      <button class="sheet-close" onclick="closeSheet('detalle-grupal')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);padding:14px">
+        <pre id="dg-pre" style="font-family:var(--font);font-size:13px;line-height:1.7;white-space:pre-wrap;margin:0;color:var(--txt)"></pre>
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-g" style="flex:1" onclick="closeSheet('detalle-grupal')">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- SHEET: REGISTRAR LLAMADA -->
 <div class="sheet-overlay" id="sheet-llamada" onclick="if(event.target===this)closeSheet('llamada')">
