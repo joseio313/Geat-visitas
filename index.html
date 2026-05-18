@@ -736,7 +736,6 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div class="ph">
         <div><div class="ph-title">Todos los Leads</div><div class="ph-sub" id="todos-count">—</div></div>
         <div class="ph-actions">
-          <button class="btn btn-sm btn-ghost" onclick="generarReporteSemanal()">📊 Reporte</button>
           <button class="btn btn-sm btn-ghost" onclick="exportarExcel()">↗ Excel</button>
           <button class="btn btn-sm btn-primary" onclick="elegirModoNuevoLead()">+ Nuevo</button>
         </div>
@@ -772,12 +771,12 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
     <div class="panel" id="pn-admin">
       <div class="ph"><div class="ph-title">Admin</div></div>
       <div class="tabs" style="overflow-x:auto;scrollbar-width:none">
-        <button class="tab active" onclick="setAdminTab('equipo',this)">Equipo</button>
-        <button class="tab" onclick="setAdminTab('comisiones',this)">Comisiones</button>
-        <button class="tab" onclick="setAdminTab('campanas',this)">Campañas</button>
+        <button id="tab-equipo" class="tab active" onclick="setAdminTab('equipo',this)">Equipo</button>
+        <button id="tab-comisiones" class="tab" onclick="setAdminTab('comisiones',this)">Comisiones</button>
+        <button id="tab-campanas" class="tab" onclick="setAdminTab('campanas',this)">Campañas</button>
         <button class="tab" onclick="setAdminTab('semaforo',this)">Semáforo</button>
         <button class="tab" onclick="setAdminTab('control_leads',this)">Control Leads</button>
-        <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
+        <button id="tab-papelera" class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
         <button class="tab" onclick="setAdminTab('stats',this)">Métricas</button>
         <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
         <button class="tab admin-only" id="tab-ceo" onclick="setAdminTab('ceo',this)" style="display:none">Panel CEO</button>
@@ -4076,11 +4075,21 @@ function renderTablaMetricas(metricas){
 }
 
 async function renderAdmin(){
-  // Mostrar/ocultar tabs segun rol
-  const tabAuditoria = document.getElementById('tab-auditoria');
-  if(tabAuditoria) tabAuditoria.style.display = cu.rol==='admin' ? '' : 'none';
-  const tabHistorico = document.getElementById('tab-historico');
-  if(tabHistorico) tabHistorico.style.display = cu.rol==='admin' ? '' : 'none';
+  const esAdmin = cu.rol==='admin';
+  // Tabs exclusivos de admin (gestión del sistema)
+  const _tabsSoloAdmin = ['tab-equipo','tab-comisiones','tab-campanas','tab-papelera','tab-auditoria','tab-historico'];
+  _tabsSoloAdmin.forEach(function(id){
+    const t=document.getElementById(id);
+    if(t) t.style.display=esAdmin?'':'none';
+  });
+  // Si commercial_lead está parado en un tab de admin, redirigir a Métricas
+  const _tabsAdminOnly=['equipo','comisiones','campanas','papelera','auditoria','historico','llamadas','ceo'];
+  if(!esAdmin && _tabsAdminOnly.includes(adminTabActual)){
+    adminTabActual='stats';
+    document.querySelectorAll('#pn-admin .tab').forEach(b=>b.classList.remove('active'));
+    const tStats=document.querySelector('#pn-admin .tab[onclick*="stats"]');
+    if(tStats) tStats.classList.add('active');
+  }
 
   // Gustavo (commercial_lead) NO puede ver perfil del CEO
   // Se maneja en el grid de acceso rapido
@@ -4800,35 +4809,6 @@ function exportarExcel(){
   XLSX.writeFile(wb,'leads_geat_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
-function generarReporteSemanal(){
-  var hoy=new Date();var hace7=new Date(hoy.getTime()-7*864e5);
-  var desde=hace7.toISOString().slice(0,10);
-  var leads7=allLeads.filter(function(l){return l.fecha_ingreso&&l.fecha_ingreso>=desde;});
-  var activos=allLeads.filter(function(l){return l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-  var ganados7=leads7.filter(function(l){return l.estado==='cerrado_ganado';});
-  var perdidos7=leads7.filter(function(l){return l.estado==='cerrado_perdido';});
-  var visitas7=leads7.filter(function(l){return l.visita_fecha;});
-  var atrasados=allLeads.filter(function(l){return l.proximo_contacto&&l.proximo_contacto<hoy.toISOString().slice(0,10)&&l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido';});
-  // Por captador
-  var porCap={};
-  leads7.forEach(function(l){var c=l.captador||'Sin asignar';if(!porCap[c])porCap[c]={n:0,g:0,v:0};porCap[c].n++;if(l.estado==='cerrado_ganado')porCap[c].g++;if(l.visita_fecha)porCap[c].v++;});
-  var texto='GEAT REPORTE SEMANAL\n'+
-    hace7.toLocaleDateString('es-BO',{day:'numeric',month:'short'})+' - '+hoy.toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'})+'\n\n'+
-    'Leads nuevos: '+leads7.length+'\n'+
-    'Visitas agendadas: '+visitas7.length+'\n'+
-    'Ganados: '+ganados7.length+'\n'+
-    'Perdidos: '+perdidos7.length+'\n'+
-    'Activos totales: '+activos.length+'\n'+
-    'Atrasados: '+atrasados.length+'\n\n'+
-    'POR CAPTADOR:\n'+
-    Object.entries(porCap).map(function(e){return e[0].split(' ')[0]+': '+e[1].n+' leads, '+e[1].v+' visitas, '+e[1].g+' ganados';}).join('\n');
-  // Copiar al portapapeles
-  navigator.clipboard.writeText(texto).then(function(){
-    toast('Reporte copiado — pegalo en WhatsApp');
-  }).catch(function(){
-    prompt('Copia este reporte:',texto);
-  });
-}
 
 // -- PROGRAMAR INTENTO/SEGUIMIENTO --
 function abrirProgramarIntento(leadId, nombreCliente, numIntento, tipo='intento'){
@@ -6347,6 +6327,21 @@ async function guardarEventoGrupal(){
       visible_para:'equipo'
     }]);
     if(error)throw error;
+    // Actualizar estado del lead a visita_agendada para disparar trigger BD (asignación cerrador)
+    if(lead && tipo!=='reunion_interna'){
+      const _estadosPost=['visita_agendada','visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado','cerrado_perdido'];
+      if(!_estadosPost.includes(lead.estado)){
+        try{
+          const{error:errLead}=await sb.from('leads').update({estado:'visita_agendada'}).eq('id',lead.id);
+          if(errLead)throw errLead;
+          const _i=allLeads.findIndex(function(l){return l.id===lead.id;});
+          if(_i>-1)allLeads[_i].estado='visita_agendada';
+        }catch(e){
+          console.error('[actualizar estado lead a visita]',e);
+          toast('Visita agendada, pero no se pudo actualizar el estado del lead: '+e.message,'error');
+        }
+      }
+    }
     toast('Visita agendada ✓','success');
     closeSheet('agendar-grupal');
     await renderCalendario();
