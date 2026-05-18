@@ -780,6 +780,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
         <button class="tab admin-only" id="tab-ceo" onclick="setAdminTab('ceo',this)" style="display:none">Panel CEO</button>
         <button class="tab admin-only" id="tab-llamadas" onclick="setAdminTab('llamadas',this)" style="display:none">Llamadas</button>
+        <button class="tab admin-only" id="tab-historico" onclick="setAdminTab('historico',this)" style="display:none">📁 Histórica</button>
       </div>
       <div id="admin-content"></div>
     </div>
@@ -990,7 +991,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div style="font-size:10px;color:var(--txt3);margin-top:2px">Solo puedes agregar información nueva. Los datos originales no se modifican.</div>
         </div>
         <div class="fgroup"><label>Nombre <span class="req">*</span></label><input class="finput" id="f-nombre" placeholder="Ej: Señor X, Señora X"></div>
-        <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 70000000"></div>
+        <div class="fgroup"><label>Celular <span class="req">*</span></label><input class="finput" id="f-celular" type="tel" placeholder="Ej: 70000000" onblur="checkCelularDuplicado()"></div>
+        <div id="celular-dup-banner" style="display:none"></div>
         <div class="fgroup"><label>Ciudad</label><input class="finput" id="f-ciudad" placeholder="Santa Cruz" value="Santa Cruz"></div>
         <div class="fgroup"><label>GPS del terreno</label><div style="display:flex;gap:6px;align-items:center"><input class="finput" id="f-gps" placeholder="Ej: -17.783, -63.182" style="flex:1"><button type="button" style="background:var(--acc);color:#000;border:none;border-radius:var(--r);padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0" onclick="(function(){if(!navigator.geolocation){toast('GPS no disponible','error');return;}navigator.geolocation.getCurrentPosition(function(p){document.getElementById('f-gps').value=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);},function(){toast('No se pudo obtener ubicación','error');});})()" title="Obtener ubicación actual">📍</button></div></div>
         <div class="fgroup"><label>Financiamiento</label>
@@ -1022,6 +1024,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <div class="fgroup" id="fgroup-cerrador"><label>Cerrador</label>
           <select class="fselect" id="f-cerrador"></select>
         </div>
+        <div id="cerrador-confirm-banner"></div>
         <div class="fgroup" id="fgroup-estado"><label>Estado</label>
           <select class="fselect" id="f-estado" onchange="toggleEstadoCampos()">
             <option value="nuevo">Nuevo</option>
@@ -1429,6 +1432,7 @@ function estilo(est){return E[est]||{bg:'#33415520',dot:'#64748B',cls:'',label:e
 
 // -- TOAST --
 function ymdLocal(d){const dt=(d instanceof Date)?d:new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+function localISO(fechaStr,horaStr){var p=fechaStr.split('-').map(Number);var t=(horaStr||'00:00').split(':').map(Number);return new Date(p[0],p[1]-1,p[2],t[0],t[1]||0,0).toISOString();}
 function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
@@ -1627,7 +1631,7 @@ function llenarSelects(){
 var mostrarArchivados=false;
 async function loadLeads(){
   var q=sb.from('leads')
-    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado,gps_terreno,info_enviada,created_at,ind_lugar_terreno,ind_financiamiento,ind_presupuesto,ind_presupuesto_tope,ind_plantas,ind_tipo,ind_cuando_construir')
+    .select('id,nombre,celular,ciudad,captador,cerrador,estado,financiamiento,notas,fecha_ingreso,visita_fecha,visita_sala,proximo_contacto,intento1_estado,intento2_estado,intento3_estado,medio_difusion,visito_oficina,monto_contrato,metros_cuadrados,codigo_venta,motivo_perdida,resultado_estado,archivado,gps_terreno,info_enviada,created_at,ind_lugar_terreno,ind_financiamiento,ind_presupuesto,ind_presupuesto_tope,ind_plantas,ind_tipo,ind_cuando_construir,cerrador_confirmacion,cerrador_rechazo_motivo,cerrador_rechazo_detalle')
     .order('created_at',{ascending:false});
   if(!mostrarArchivados) q=q.eq('archivado',false);
   const{data}=await q;
@@ -2030,7 +2034,7 @@ async function guardarQuickPopup(){
     if(!anioQP||anioQP<2000||anioQP>2100){ toast('La fecha no es válida, revisá el año','error'); return; }
     var tipo = document.getElementById('qp-tipo')?.value || 'seguimiento';
     var hStr = (_qpHora<10?'0':'')+_qpHora;
-    var fechaProg = _qpDStr+'T'+hStr+':00:00';
+    var fechaProg = localISO(_qpDStr, hStr+':00');
     var _rQP=await sb.from('agenda_personal').insert([{
       colaborador: cu.nombre, titulo: titulo, tipo: tipo,
       fecha_programada: fechaProg
@@ -3278,11 +3282,12 @@ async function abrirSheetLead(id){
     aviso.innerHTML = '<div style="font-size:11px;color:var(--acc);font-weight:600">Vista del cerrador</div><div style="font-size:10px;color:var(--txt3);margin-top:2px">Los datos originales son de solo lectura. Puedes agregar notas adicionales.</div>';
   }
   // MODO EDICION: restaurar campos que se ocultan en creación
-  document.getElementById('fgroup-cerrador').style.display='';
+  document.getElementById('fgroup-cerrador').style.display=cu.rol==='admin'?'':'none';
   document.getElementById('fgroup-estado').style.display='';
   document.getElementById('fgroup-proximo').style.display='';
   document.getElementById('fgroup-notas').style.display='';
   document.getElementById('fgroup-primer-intento').style.display='none';
+  renderCerradorConfirmBanner(l);
   document.getElementById('sheet-lead').classList.add('open');
 
   // G4: cargar historial inline
@@ -3342,6 +3347,8 @@ function abrirNuevoLead(){
   document.getElementById('fgroup-proximo').style.display='none';
   document.getElementById('fgroup-notas').style.display='none';
   document.getElementById('fgroup-primer-intento').style.display='';
+  var _ccb=document.getElementById('cerrador-confirm-banner');if(_ccb)_ccb.innerHTML='';
+  var _cdb=document.getElementById('celular-dup-banner');if(_cdb)_cdb.style.display='none';
   // Ocultar historial en modo creación
   var hSec=document.getElementById('lead-historial-section');
   if(hSec)hSec.style.display='none';
@@ -3538,7 +3545,7 @@ async function guardarLead(){
         toast('Fecha del primer intento inválida — revisá el año','error');
       }else{
         try{
-          const fechaLimpia=primerFecha+'T'+primerHora+':00';
+          const fechaLimpia=localISO(primerFecha,primerHora);
           // Verificar si el trigger de BD ya creó un intento_1 para este lead
           const{data:existIntento}=await sb.from('agenda_personal')
             .select('id').eq('lead_id',newId).eq('tipo','intento_1').limit(1);
@@ -3711,7 +3718,7 @@ async function guardarIntento(){
         colaborador:cu.nombre,lead_id:intentoLeadId,
         tipo:'intento_'+(num+1),
         titulo:'Intento '+(num+1)+': '+l.nombre,
-        fecha_programada:prox+'T'+proxHora+':00',
+        fecha_programada:localISO(prox,proxHora),
         nota:proxNota||nota
       }]);
       await sb.from('leads').update({proximo_contacto:prox}).eq('id',intentoLeadId);
@@ -3807,7 +3814,7 @@ async function guardarSeguimiento(){
       const proxHora=document.getElementById('seg-prox-hora')?.value||'09:00';
       await sb.from('agenda_personal').insert([{
         colaborador:cu.nombre,lead_id:segLeadId,tipo:'seguimiento',
-        titulo:'Seguimiento: '+l.nombre,fecha_programada:prox+'T'+proxHora+':00',nota
+        titulo:'Seguimiento: '+l.nombre,fecha_programada:localISO(prox,proxHora),nota
       }]);
     }
     if(vFecha){
@@ -3815,7 +3822,7 @@ async function guardarSeguimiento(){
       await sb.from('agenda_grupal').insert([{
         tipo:'visita_captador',titulo:'Visita: '+l.nombre,lead_id:segLeadId,
         captador:l.captador,cerrador:l.cerrador,sala:vSala,
-        fecha_inicio:vFecha+'T'+vHora+':00',creado_por:cu.nombre
+        fecha_inicio:localISO(vFecha,vHora),creado_por:cu.nombre
       }]);
       if(l.cerrador){
         sb.from('notificaciones').insert([{
@@ -4097,6 +4104,8 @@ async function renderAdmin(){
   // Mostrar/ocultar tabs segun rol
   const tabAuditoria = document.getElementById('tab-auditoria');
   if(tabAuditoria) tabAuditoria.style.display = cu.rol==='admin' ? '' : 'none';
+  const tabHistorico = document.getElementById('tab-historico');
+  if(tabHistorico) tabHistorico.style.display = cu.rol==='admin' ? '' : 'none';
 
   // Gustavo (commercial_lead) NO puede ver perfil del CEO
   // Se maneja en el grid de acceso rapido
@@ -4401,6 +4410,8 @@ async function renderAdmin(){
     renderSemaforo(el);
   }else if(adminTabActual==='control_leads'){
     await renderControlLeads(el);
+  }else if(adminTabActual==='historico'){
+    renderBaseHistorica(el);
   }else{
     el.innerHTML='';
   }
@@ -4905,7 +4916,7 @@ async function guardarProgramacion(leadId, tipo, numIntento){
       tipo:tipo==='seguimiento'?accion:'intento_'+numIntento,
       titulo:(tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento)+': '+nombreCliente,
       nota,
-      fecha_programada:fecha+'T'+hora+':00'
+      fecha_programada:localISO(fecha,hora)
     }]);
     await sb.from('leads').update({proximo_contacto:fecha}).eq('id',leadId);
     document.getElementById('modal-programar')?.remove();
@@ -6235,6 +6246,8 @@ function abrirAgendarGrupal(){
   document.getElementById('ag-hora').value='09:00';
   document.getElementById('ag-sala').value='sala_principal';
   document.getElementById('ag-cerrador').value='';
+  document.getElementById('ag-cerrador').readOnly=cu.rol!=='admin';
+  document.getElementById('ag-cerrador').style.opacity=cu.rol!=='admin'?'0.65':'';
   document.getElementById('ag-obs').value='';
   document.getElementById('ag-titulo-manual').value='';
   var sel=document.getElementById('ag-lead');
@@ -6316,7 +6329,7 @@ async function guardarEventoGrupal(){
   var obs=document.getElementById('ag-obs').value.trim();
   var tituloManual=document.getElementById('ag-titulo-manual').value.trim();
   var tarjeta=armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual);
-  var fechaInicioISO=new Date(fecha+'T'+hora+':00').toISOString();
+  var fechaInicioISO=localISO(fecha,hora);
   var fechaFinISO=new Date(new Date(fechaInicioISO).getTime()+60*60*1000).toISOString();
   var nombreCliente=lead?lead.nombre:(tituloManual||'Reunión interna');
   var tipoLabel=tipo==='visita_nueva'?'Visita nueva':tipo==='reagendo'?'Reagendo':'Reunión interna';
@@ -7212,6 +7225,163 @@ if(_origCargarDatos){
 }
 
 initLogin();
+
+// ══════════════════════════════════════
+// TAREA 1 — CONFIRMACIÓN DE VISITA (cerrador)
+// ══════════════════════════════════════
+function renderCerradorConfirmBanner(l){
+  var banner=document.getElementById('cerrador-confirm-banner');
+  if(!banner)return;
+  var conf=l.cerrador_confirmacion;
+  // Botones de acción: solo si soy el cerrador asignado y está en 'asignado'
+  if(conf==='asignado'&&l.cerrador&&cu.nombre===l.cerrador){
+    banner.innerHTML=
+      '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:var(--r);padding:12px;margin-bottom:4px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--acc);margin-bottom:10px">📋 Se te asignó esta visita. ¿Podés atenderla?</div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button onclick="confirmarVisita('+l.id+')" style="flex:1;min-height:44px;background:var(--green);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer">✓ Confirmo</button>'
+      +'<button onclick="abrirRechazoVisita('+l.id+')" style="flex:1;min-height:44px;background:var(--red);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer">✗ No puedo</button>'
+      +'</div></div>';
+    return;
+  }
+  // Línea de estado para captador y admin
+  if(conf){
+    var txt=conf==='asignado'?'⏳ '+(l.cerrador||'')+(l.cerrador?' — ':'')+' pendiente de confirmar'
+      :conf==='confirmado'?'✓ '+(l.cerrador||'')+' — confirmado'
+      :'✗ rechazado — reasignando...';
+    var color=conf==='confirmado'?'var(--green)':conf==='rechazado'?'var(--red)':'var(--acc)';
+    banner.innerHTML='<div style="font-size:12px;color:'+color+';padding:6px 0;font-weight:500">'+txt+'</div>';
+    return;
+  }
+  banner.innerHTML='';
+}
+async function confirmarVisita(leadId){
+  try{
+    var{error}=await sb.from('leads').update({cerrador_confirmacion:'confirmado'}).eq('id',leadId);
+    if(error)throw error;
+    var i=allLeads.findIndex(function(l){return l.id===leadId;});
+    if(i>-1)allLeads[i].cerrador_confirmacion='confirmado';
+    renderCerradorConfirmBanner(allLeads[i]||{cerrador_confirmacion:'confirmado'});
+    toast('Visita confirmada ✓','success');
+  }catch(e){console.error('[confirmar]',e);toast('Error: '+e.message,'error');}
+}
+var _rechazoLeadId=null;
+function abrirRechazoVisita(leadId){
+  _rechazoLeadId=leadId;
+  document.getElementById('rec-motivo').value='';
+  document.getElementById('rec-detalle').value='';
+  document.getElementById('btn-confirmar-rechazo').disabled=true;
+  document.getElementById('sheet-rechazo-visita').classList.add('open');
+}
+function actualizarBtnRechazo(){
+  var motivo=document.getElementById('rec-motivo').value;
+  var detalle=document.getElementById('rec-detalle').value.trim();
+  document.getElementById('btn-confirmar-rechazo').disabled=!(motivo&&detalle.length>=10);
+}
+async function submitRechazoVisita(){
+  var motivo=document.getElementById('rec-motivo').value;
+  var detalle=document.getElementById('rec-detalle').value.trim();
+  if(!motivo||detalle.length<10){toast('Completá motivo y detalle (mín. 10 caracteres)','error');return;}
+  try{
+    var{error}=await sb.from('leads').update({
+      cerrador_confirmacion:'rechazado',
+      cerrador_rechazo_motivo:motivo,
+      cerrador_rechazo_detalle:detalle
+    }).eq('id',_rechazoLeadId);
+    if(error)throw error;
+    var i=allLeads.findIndex(function(l){return l.id===_rechazoLeadId;});
+    if(i>-1){allLeads[i].cerrador_confirmacion='rechazado';allLeads[i].cerrador_rechazo_motivo=motivo;}
+    closeSheet('rechazo-visita');
+    toast('Rechazo registrado. La visita se reasignará.','success');
+    // Actualizar banner en el sheet de lead si sigue abierto
+    if(i>-1)renderCerradorConfirmBanner(allLeads[i]);
+  }catch(e){console.error('[rechazo]',e);toast('Error: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════
+// TAREA 3 — BASE HISTÓRICA (admin)
+// ══════════════════════════════════════
+var _histPage=0;
+function renderBaseHistorica(el){
+  el.innerHTML=
+    '<div style="padding:4px 0">'
+    +'<div style="font-size:14px;font-weight:700;margin-bottom:12px">📁 Base histórica</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +'<input id="hist-q" class="search-inp" style="flex:1" placeholder="Buscar nombre o celular..." oninput="buscarHistorico(0)">'
+    +'</div>'
+    +'<div id="hist-results"><div style="font-size:12px;color:var(--txt3);text-align:center;padding:16px">Escribí un nombre o celular para buscar en los '+String(5366)+' leads archivados.</div></div>'
+    +'</div>';
+}
+async function buscarHistorico(page){
+  var q=(document.getElementById('hist-q')?.value||'').trim();
+  var res=document.getElementById('hist-results');
+  if(!res)return;
+  if(q.length<2){res.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Ingresá al menos 2 caracteres.</div>';return;}
+  if(page===0)res.innerHTML='<div class="loading"><span class="spin"></span>Buscando...</div>';
+  else{var ob=res.querySelector('#hist-mas');if(ob)ob.remove();}
+  try{
+    var digits=q.replace(/\D/g,'');
+    var qb=sb.from('leads').select('id,nombre,celular,captador,ciudad,estado,created_at').eq('archivado',true);
+    if(digits.length>=6)qb=qb.or('nombre.ilike.%'+q+'%,celular.ilike.%'+digits+'%');
+    else qb=qb.ilike('nombre','%'+q+'%');
+    var{data,error}=await qb.order('created_at',{ascending:false}).range(page*50,(page+1)*50-1);
+    if(error)throw error;
+    if(!data||!data.length){
+      if(page===0)res.innerHTML='<div style="font-size:12px;color:var(--txt3);text-align:center;padding:12px">Sin resultados.</div>';
+      return;
+    }
+    var rows=data.map(function(l){
+      var fecha=l.created_at?new Date(l.created_at).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'—';
+      return '<div class="card" style="padding:10px 12px;margin-bottom:6px">'
+        +'<div style="font-size:13px;font-weight:500">'+l.nombre+'</div>'
+        +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+l.celular+(l.ciudad?' · '+l.ciudad:'')+'</div>'
+        +'<div style="font-size:11px;color:var(--txt3)">Captador: '+(l.captador||'—')+' · '+l.estado+' · '+fecha+'</div>'
+        +'</div>';
+    }).join('');
+    var mas=data.length===50?'<button id="hist-mas" class="btn btn-sm btn-ghost" style="width:100%;margin-top:6px" onclick="buscarHistorico('+(page+1)+')">Cargar más</button>':'';
+    if(page===0)res.innerHTML=rows+mas;
+    else res.insertAdjacentHTML('beforeend',rows+mas);
+  }catch(e){res.innerHTML='<div style="font-size:12px;color:var(--red)">Error: '+e.message+'</div>';}
+}
+
+// ══════════════════════════════════════
+// TAREA 4 — DETECCIÓN DUPLICADO CELULAR
+// ══════════════════════════════════════
+async function checkCelularDuplicado(){
+  var raw=(document.getElementById('f-celular')?.value||'').trim();
+  var banner=document.getElementById('celular-dup-banner');
+  if(!banner||!raw||editingLeadId)return; // solo al crear
+  var digits=raw.replace(/\D/g,'');
+  if(digits.length<6)return;
+  // Buscar por últimos 8 dígitos
+  var suf=digits.slice(-8);
+  var{data}=await sb.from('leads')
+    .select('id,nombre,captador,estado,created_at,archivado')
+    .ilike('celular','%'+suf+'%')
+    .limit(5);
+  if(!data||!data.length){banner.style.display='none';return;}
+  var html='<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:var(--r);padding:10px;margin-bottom:4px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ Este celular ya está en la base</div>';
+  html+=data.map(function(l){
+    var fecha=l.created_at?new Date(l.created_at).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'';
+    return '<div style="font-size:11px;color:var(--txt2);margin-bottom:4px">'
+      +l.nombre+' — captado por '+(l.captador||'?')+' — '+l.estado+(fecha?' — '+fecha:'')
+      +(l.archivado?' (archivado)':'')
+      +'<span onclick="abrirSheetLead('+l.id+')" style="color:var(--acc);text-decoration:underline;cursor:pointer;margin-left:8px">Ver</span>'
+      +'</div>';
+  }).join('');
+  html+='<div style="display:flex;gap:8px;margin-top:8px">'
+    +'<button onclick="ignorarDuplicadoCelular()" style="min-height:36px;padding:0 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);font-size:11px;cursor:pointer;color:var(--txt2)">Registrar de todas formas</button>'
+    +'</div></div>';
+  banner.innerHTML=html;
+  banner.style.display='';
+}
+function ignorarDuplicadoCelular(){
+  var b=document.getElementById('celular-dup-banner');
+  if(b)b.style.display='none';
+}
+
+initLogin();
 </script>
 
 <!-- ══ SHEET: NUEVA REUNIÓN CERRADOR ══ -->
@@ -7679,6 +7849,39 @@ initLogin();
     </div>
     <div class="sh-ftr">
       <button class="btn btn-g" style="flex:1" onclick="closeSheet('detalle-grupal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: RECHAZO VISITA (cerrador) -->
+<div class="sheet-overlay" id="sheet-rechazo-visita" onclick="if(event.target===this)closeSheet('rechazo-visita')">
+  <div class="sheet" style="max-height:70vh">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button onclick="closeSheet('rechazo-visita')" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:22px;padding:0 8px 0 0">&#8592;</button>
+      <div class="sheet-title">Motivo de rechazo</div>
+      <button class="sheet-close" onclick="closeSheet('rechazo-visita')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Por favor justificá el motivo. Solo se puede rechazar por disponibilidad de agenda.</div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Motivo *</label>
+        <select class="fsel" id="rec-motivo" onchange="actualizarBtnRechazo()">
+          <option value="">— Seleccionar —</option>
+          <option value="Agenda llena ese día">Agenda llena ese día</option>
+          <option value="Fuera de la ciudad / viaje">Fuera de la ciudad / viaje</option>
+          <option value="Ya tengo otra visita ese horario">Ya tengo otra visita ese horario</option>
+          <option value="Tema de salud / personal">Tema de salud / personal</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Detalle * <span style="font-size:10px;color:var(--txt3)">(mín. 10 caracteres)</span></label>
+        <textarea class="fi" id="rec-detalle" rows="3" style="resize:vertical;min-height:72px" placeholder="Explicá brevemente por qué no podés atender esta visita..." oninput="actualizarBtnRechazo()"></textarea>
+      </div>
+    </div>
+    <div class="sh-ftr">
+      <button class="btn btn-p" id="btn-confirmar-rechazo" style="flex:1;background:var(--red);border-color:var(--red)" disabled onclick="submitRechazoVisita()">Confirmar rechazo</button>
+      <button class="btn btn-g" onclick="closeSheet('rechazo-visita')">Cancelar</button>
     </div>
   </div>
 </div>
