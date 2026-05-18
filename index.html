@@ -383,7 +383,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <div id="widget-kpis-cl"></div>
 
       <!-- MINI STATS -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
+      <div id="inicio-stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-hoy" style="font-size:18px">—</div><div class="stat-l">Hoy</div></div>
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-sem" style="font-size:18px;color:var(--red)">—</div><div class="stat-l">Atrasadas</div></div>
         <div class="stat" style="padding:10px"><div class="stat-n" id="s-mes" style="font-size:18px">—</div><div class="stat-l">Mes</div></div>
@@ -778,7 +778,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <button class="tab" onclick="setAdminTab('semaforo',this)">Semáforo</button>
         <button class="tab" onclick="setAdminTab('control_leads',this)">Control Leads</button>
         <button class="tab" onclick="setAdminTab('papelera',this)">Papelera</button>
-        <button class="tab" onclick="setAdminTab('stats',this)">Stats</button>
+        <button class="tab" onclick="setAdminTab('stats',this)">Métricas</button>
         <button class="tab admin-only" id="tab-auditoria" onclick="setAdminTab('auditoria',this)" style="display:none">Auditoria</button>
         <button class="tab admin-only" id="tab-ceo" onclick="setAdminTab('ceo',this)" style="display:none">Panel CEO</button>
         <button class="tab admin-only" id="tab-llamadas" onclick="setAdminTab('llamadas',this)" style="display:none">Llamadas</button>
@@ -2062,7 +2062,13 @@ function renderInicio(){
   document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
   renderBannerNotifs();
 
-  // Mostrar filtro por persona para admin/jefe comercial
+  const esOperativo=cu.rol==='closer'||cu.rol==='commercial_lead'||cu.rol==='admin';
+
+  // Stats grid: solo roles operativos
+  const statsGrid=document.getElementById('inicio-stats-grid');
+  if(statsGrid) statsGrid.style.display=esOperativo?'':'none';
+
+  // Filtro por persona: solo admin/jefe comercial
   const filtroWrap=document.getElementById('filtro-persona-wrap');
   if(filtroWrap){
     if(cu.rol==='admin'||cu.rol==='commercial_lead'){
@@ -2078,32 +2084,34 @@ function renderInicio(){
       filtroWrap.style.display='none';
     }
   }
-  // Stats
-  const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
-  var _hd=new Date();if(_hd.getDay()===1)_hd.setDate(_hd.getDate()-2);const hoy=new Date().toISOString().slice(0,10);const hoyDesde=_hd.toISOString().slice(0,10);
-  const hoyLeads=misLeads.filter(l=>l.fecha_ingreso>=hoyDesde&&l.fecha_ingreso<=hoy);
-  const semLeads=misLeads.filter(l=>{
-    const d=new Date(l.fecha_ingreso);const ahora=new Date();
-    return(ahora-d)/(864e5)<=7;
-  });
-  document.getElementById('s-hoy').textContent=hoyLeads.length;
-  document.getElementById('s-sem').textContent=semLeads.length;
-  const activos=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido');
-  document.getElementById('s-mes').textContent=activos.length;
-  // Accesos rápidos count
-  const qaLeads=document.getElementById('qa-leads-count');
-  if(qaLeads)qaLeads.textContent=activos.length+' activos';
 
-  // Actividades de hoy + visitas en oficina
+  if(esOperativo){
+    // Stats
+    const misLeads=allLeads.filter(l=>l.captador===cu.nombre||l.cerrador===cu.nombre||cu.rol==='admin'||cu.rol==='commercial_lead');
+    var _hd=new Date();if(_hd.getDay()===1)_hd.setDate(_hd.getDate()-2);const hoy=new Date().toISOString().slice(0,10);const hoyDesde=_hd.toISOString().slice(0,10);
+    const hoyLeads=misLeads.filter(l=>l.fecha_ingreso>=hoyDesde&&l.fecha_ingreso<=hoy);
+    const semLeads=misLeads.filter(l=>{const d=new Date(l.fecha_ingreso);const ahora=new Date();return(ahora-d)/(864e5)<=7;});
+    document.getElementById('s-hoy').textContent=hoyLeads.length;
+    document.getElementById('s-sem').textContent=semLeads.length;
+    const activos=misLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido');
+    document.getElementById('s-mes').textContent=activos.length;
+    const qaLeads=document.getElementById('qa-leads-count');
+    if(qaLeads)qaLeads.textContent=activos.length+' activos';
+    renderNotifsInicio();
+    renderContadorVisitas();
+    renderPotenciales();
+    renderContactosHoy();
+  } else {
+    // field_capturer: solo calendario personal — limpiar todo lo operativo
+    document.getElementById('inicio-notifs').innerHTML='';
+    document.getElementById('widget-visitas-dia').innerHTML='';
+    document.getElementById('widget-potenciales').innerHTML='';
+    document.getElementById('inicio-hoy-contactos').innerHTML='';
+  }
+  // Resumen comercial movido a Admin > Métricas
+  document.getElementById('widget-kpis-cl').innerHTML='';
+  // ATRASADAS de agenda eliminadas (ver renderAgendaInicio)
   renderAgendaInicio();
-  // Notifs en inicio
-  renderNotifsInicio();
-  // P8: Contador visitas diarias
-  renderContadorVisitas();
-  // Módulo 4: Clientes potenciales
-  renderPotenciales();
-  // P10: KPIs commercial_lead
-  if(cu.rol==='commercial_lead')renderKpisCommercialLead();
 }
 function renderKpisCommercialLead(){
   var el=document.getElementById('widget-kpis-cl');
@@ -2215,44 +2223,9 @@ async function renderNotifsInicio(){
 }
 
 async function renderAgendaInicio(){
-  const hoy=new Date().toISOString().slice(0,10);
-  const filtroPersona=(document.getElementById('filtro-persona')?.value)||'';
-  const colFiltro=(cu.rol==='admin'||cu.rol==='commercial_lead')&&filtroPersona?filtroPersona:cu.nombre;
-  let query=sb.from('agenda_personal')
-    .select('*,leads(nombre,celular,estado)')
-    .eq('completada',false)
-    .lt('fecha_programada',hoy+'T00:00:00')
-    .order('fecha_programada',{ascending:true}).limit(15);
-  // Si admin sin filtro, ver todas; si con filtro, solo esa persona; si captador/cerrador, solo las suyas
-  if(cu.rol==='admin'||cu.rol==='commercial_lead'){
-    if(filtroPersona) query=query.eq('colaborador',filtroPersona);
-  } else {
-    query=query.eq('colaborador',cu.nombre);
-  }
-  const{data}=await query;
-  const items=data||[];
-  // Actualizar conteo
-  const countEl=document.getElementById('filtro-persona-count');
-  if(countEl) countEl.textContent=items.length+' actividades';
+  // Bloque ATRASADAS de agenda eliminado — usar renderContactosHoy para leads atrasados (más accionable)
   const el=document.getElementById('inicio-agenda');
-  // Opción C: field_capturer y closer solo ven el badge de atrasadas en los stats (s-sem via renderStatsAgenda), no el panel grande
-  if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
-  if(!items.length){el.innerHTML='';return;}
-  el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--red);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">⚠ Atrasadas '+(filtroPersona?'— '+filtroPersona:'')+'</div>'+
-  items.map(function(a){
-    var est=estilo(a.leads?.estado);
-    var hora=new Date(a.fecha_programada).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    var esAtrasado=a.fecha_programada.slice(0,10)<hoy;
-    return '<div class="agenda-row" style="cursor:pointer'+(esAtrasado?';border-left:3px solid var(--red)':'')+'" onclick="abrirSheetLead('+a.lead_id+')">'+
-      '<div class="agenda-time"'+(esAtrasado?' style="color:var(--red);font-weight:700"':'')+'>'+hora+'</div>'+
-      '<div class="agenda-dot" style="background:'+est.dot+'"></div>'+
-      '<div class="agenda-info">'+
-        '<div class="agenda-name">'+(a.leads?.nombre||a.titulo)+'</div>'+
-        '<div class="agenda-sub">'+a.tipo.replace(/_/g,' ')+' · '+(a.leads?.celular||'-')+(filtroPersona||cu.rol==='admin'?' · '+a.colaborador:'')+'</div>'+
-      '</div>'+
-      '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirIntento('+a.lead_id+')">📞</button>'+
-    '</div>';
-  }).join('');
+  if(el) el.innerHTML='';
 }
 function aplicarFiltroPersona(){
   renderAgendaInicio();
@@ -4303,7 +4276,28 @@ async function renderAdmin(){
     const perdidos2=leadsFiltrados.filter(l=>l.estado==='cerrado_perdido').length;
     const conVisita2=leadsFiltrados.filter(l=>l.estado==='visita_agendada'||l.estado==='visita_realizada').length;
     const potenciales2=leadsFiltrados.filter(l=>esPotencial(l)).length;
+    // Resumen comercial rápido (movido desde Inicio)
+    const _mesStr=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
+    const _semStr=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const _hoyStr=new Date().toISOString().slice(0,10);
+    const _activos=allLeads.filter(l=>l.estado!=='cerrado_ganado'&&l.estado!=='cerrado_perdido'&&!l.archivado).length;
+    const _visitasSem=allLeads.filter(l=>l.visita_fecha&&l.visita_fecha.slice(0,10)>=_semStr).length;
+    const _cierresMes=allLeads.filter(l=>l.estado==='cerrado_ganado'&&l.fecha_ingreso>=_mesStr).length;
+    const _agendados=allLeads.filter(l=>l.visita_fecha).length;
+    const _realizados=allLeads.filter(l=>['visita_realizada','seguimiento_cierre','reservado','en_tramite','cerrado_ganado'].includes(l.estado)).length;
+    const _tasaAsist=_agendados>0?Math.round(_realizados/_agendados*100):0;
+    const _proxVisita=allLeads.filter(l=>l.visita_fecha&&l.visita_fecha.slice(0,10)>=_hoyStr).sort((a,b)=>a.visita_fecha>b.visita_fecha?1:-1)[0];
     el.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r2);padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">📈 Resumen comercial</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">${_activos}</div><div class="stat-l">Leads activos</div></div>
+        <div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">${_visitasSem}</div><div class="stat-l">Visitas esta sem.</div></div>
+        <div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px;color:var(--green)">${_cierresMes}</div><div class="stat-l">Cierres este mes</div></div>
+        <div class="stat" style="padding:8px"><div class="stat-n" style="font-size:16px">${_tasaAsist}%</div><div class="stat-l">Asistencia visitas</div></div>
+      </div>
+      ${_proxVisita?`<div style="font-size:11px;color:var(--txt3)">📅 Próx. visita: <strong style="color:var(--txt)">${_proxVisita.nombre}</strong> · ${new Date(_proxVisita.visita_fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>`:''}
+    </div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       ${['dia','semana','mes','anio'].map(p=>`<button class="tab ${periodoFiltro===p?'active':''}" style="padding:5px 10px;font-size:10px" onclick="window.adminPeriodoFiltro='${p}';setAdminTab('stats',null)">${p==='dia'?'Hoy':p==='semana'?'7 días':p==='mes'?'Mes':' Año'}</button>`).join('')}
     </div>
@@ -6676,7 +6670,7 @@ async function eliminarNota(id){
 function renderContactosHoy(){
   var el = document.getElementById('inicio-hoy-contactos');
   if(!el) return;
-  if(cu.rol==='field_capturer'||cu.rol==='closer'){el.innerHTML='';return;}
+  if(cu.rol==='field_capturer'){el.innerHTML='';return;}
   var _rhd=new Date();if(_rhd.getDay()===1)_rhd.setDate(_rhd.getDate()-2);var hoyDesde=_rhd.toISOString().slice(0,10);
   var hoy = new Date().toISOString().slice(0,10);
   var man = new Date(); man.setDate(man.getDate()+1);
