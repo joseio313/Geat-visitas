@@ -662,12 +662,11 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
               <option value="fan_page_geat">Fan Page GEAT</option>
               <option value="fan_page_steffi">Fan Page Steffi</option>
               <option value="fan_page_genoveva">Fan Page Genoveva</option>
-              <option value="tiktok_steffi">TikTok Steffi</option>
               <option value="tiktok_empresa">TikTok Empresa</option>
+              <option value="tiktok_steffi">TikTok Steffi</option>
               <option value="instagram">Instagram</option>
-              <option value="referido_cliente">Referido cliente</option>
-              <option value="contacto_propio">Contacto propio</option>
-              <option value="barrido_ruteo">Barrido/Ruteo</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="referido">Referido</option>
             </select>
           </div>
           <!-- Ciudad -->
@@ -985,7 +984,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
           <div>② <strong>Ciudad</strong> — ¿dónde vive? Santa Cruz, Warnes, Urubo...</div>
           <div>③ <strong>¿Banco o contado?</strong> — preguntá antes de registrar</div>
           <div>④ <strong>Medio</strong> — ¿por dónde llegó? Facebook, TikTok, referido...</div>
-          <div>⑤ <strong>Programá tu primer intento</strong> — ¿cuándo vas a llamar?</div>
+          <div>⑤ <strong>Programá tu primer contacto</strong> — ¿cuándo vas a llamar?</div>
         </div>
         <div style="margin-top:8px;font-size:10px;color:var(--txt3)">Tip: también podés usar el botón 🎙 para dictar los datos por voz</div>
       </div>
@@ -1011,15 +1010,11 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
             <option value="fan_page_geat">Fan Page GEAT</option>
             <option value="fan_page_steffi">Fan Page Steffi</option>
             <option value="fan_page_genoveva">Fan Page Genoveva</option>
-            <option value="tiktok_steffi">TikTok Steffi</option>
             <option value="tiktok_empresa">TikTok Empresa</option>
+            <option value="tiktok_steffi">TikTok Steffi</option>
             <option value="instagram">Instagram</option>
-            <option value="referido_cliente">Referido de cliente</option>
-            <option value="referido_directorio">Referido de directorio</option>
-            <option value="contacto_propio">Contacto propio</option>
-            <option value="barrido_ruteo">Barrido / Ruteo</option>
-            <option value="viaje_corporativo">Viaje corporativo</option>
-            <option value="otro">Otro</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="referido">Referido</option>
           </select>
         </div>
         <div class="fgroup" id="fgroup-captador"><label>Captador <span style="font-size:9px;color:var(--green)">(automático)</span></label>
@@ -1047,7 +1042,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
         <!-- Programar primer intento (solo en modo creación) -->
         <div id="fgroup-primer-intento" style="display:none;grid-column:1/-1">
           <div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:var(--r2)">
-            <div style="font-size:11px;font-weight:600;color:#3B82F6;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📅 Programar primer intento</div>
+            <div style="font-size:11px;font-weight:600;color:#3B82F6;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📞 Programar primer contacto <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;opacity:0.8">(llamada o mensaje — no es la visita)</span></div>
             <div class="form-grid-2">
               <div class="fgroup"><label>Fecha <span class="req">*</span></label><input class="finput" id="f-primer-fecha" type="date"></div>
               <div class="fgroup"><label>Hora</label>
@@ -4898,7 +4893,7 @@ function abrirProgramarIntento(leadId, nombreCliente, numIntento, tipo='intento'
   const modal=document.createElement('div');
   modal.id='modal-programar';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:600;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
-  const tipoLabel=tipo==='seguimiento'?'Seguimiento':'Intento '+numIntento;
+  const tipoLabel=tipo==='seguimiento'?'próximo contacto':'contacto #'+numIntento;
   const placeholder=tipo==='seguimiento'
     ?'Ej: Llamar para confirmar si revisó la información. Preguntar si tiene disponibilidad para visitar oficina...'
     :'Ej: Llamar y preguntar por su disponibilidad. Mencionar que tenemos modelos desde $38,000 USD...';
