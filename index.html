@@ -370,6 +370,9 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
       <!-- Banner permisos de notificaciones -->
       <div id="banner-notifs"></div>
 
+      <!-- Widget visitas por confirmar (cerrador) -->
+      <div id="widget-cerrador-confirmar"></div>
+
       <!-- Notifs -->
       <div id="inicio-notifs"></div>
 
@@ -1055,6 +1058,33 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
               </div>
             </div>
             <div class="fgroup" style="margin-top:8px"><label>Nota para recordar</label><textarea class="ftextarea" id="f-primer-nota" placeholder="Ej: Llamar y preguntar disponibilidad. Mencionar modelos desde $38,000..." style="min-height:50px"></textarea></div>
+          </div>
+        </div>
+
+        <!-- Agendar visita al crear (opcional) -->
+        <div id="fgroup-agendar-visita" style="display:none;grid-column:1/-1">
+          <div style="padding:12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:var(--r2)">
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+              <input type="checkbox" id="f-agendar-visita-check" onchange="toggleAgendarVisitaNuevo()">
+              <span style="font-size:12px;font-weight:600;color:#6366F1">Agendar visita ahora (opcional)</span>
+            </label>
+            <div id="f-agendar-visita-campos" style="display:none">
+              <div class="form-grid-2">
+                <div class="fgroup"><label>Fecha de visita</label><input class="finput" id="f-nv-dia" type="date"></div>
+                <div class="fgroup"><label>Hora</label>
+                  <select class="fselect" id="f-nv-hora">
+                    <option>08:00</option><option>09:00</option><option selected>10:00</option><option>11:00</option>
+                    <option>14:00</option><option>15:00</option><option>16:00</option><option>17:00</option>
+                  </select>
+                </div>
+                <div class="fgroup" style="grid-column:1/-1"><label>Sala</label>
+                  <select class="fselect" id="f-nv-sala">
+                    <option value="sala_principal">Sala Principal</option>
+                    <option value="gerencia">Gerencia</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2055,11 +2085,30 @@ async function guardarQuickPopup(){
   }
 }
 
+function renderWidgetCerradorConfirmar(){
+  var el=document.getElementById('widget-cerrador-confirmar');
+  if(!el)return;
+  if(cu.rol!=='closer'&&cu.rol!=='commercial_lead'){el.innerHTML='';return;}
+  var pendientes=allLeads.filter(function(l){return l.cerrador===cu.nombre&&l.cerrador_confirmacion==='asignado';});
+  if(!pendientes.length){el.innerHTML='';return;}
+  el.innerHTML='<div style="background:rgba(245,158,11,0.12);border:2px solid rgba(245,158,11,0.4);border-radius:var(--r2);padding:14px;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--acc);margin-bottom:10px">🔔 Tenés '+pendientes.length+' visita'+(pendientes.length>1?'s':'')+' por confirmar</div>'
+    +pendientes.map(function(l){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:rgba(245,158,11,0.06);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="abrirSheetLead('+l.id+')">'
+        +'<div><div style="font-size:12px;font-weight:600;color:var(--txt)">'+l.nombre+'</div>'
+        +(l.visita_fecha?'<div style="font-size:11px;color:var(--txt3)">'+new Date(l.visita_fecha).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>':'')
+        +'</div>'
+        +'<span style="font-size:11px;color:var(--acc);font-weight:600">Confirmar →</span>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+}
 function renderInicio(){
   const hora=new Date().getHours();
   document.getElementById('inicio-saludo').textContent=(hora<12?'Buenos días':hora<18?'Buenas tardes':'Buenas noches')+', '+cu.nombre.split(' ')[0];
   document.getElementById('inicio-fecha').textContent=new Date().toLocaleDateString('es-BO',{weekday:'long',day:'numeric',month:'long'});
   renderBannerNotifs();
+  renderWidgetCerradorConfirmar();
 
   const esOperativo=cu.rol==='closer'||cu.rol==='commercial_lead'||cu.rol==='admin';
 
@@ -2179,9 +2228,12 @@ async function renderNotifsInicio(){
   var html='';
   // Notificaciones normales
   if(items.length){
-    html+=items.map(n=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="sw(\'notif\')">'+
-      '<div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>'+
-      '<div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">'+n.titulo+'</strong>'+(n.mensaje?' - '+n.mensaje:'')+'</div></div>').join('');
+    html+=items.map(n=>{
+      var accionNotif=n.tipo==='visita'&&n.lead_id?'marcarLeida('+n.id+');abrirSheetLead('+n.lead_id+')':"sw('notif')";
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="'+accionNotif+'">'
+        +'<div style="width:6px;height:6px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:5px"></div>'
+        +'<div style="flex:1;font-size:12px;color:var(--txt2);line-height:1.4"><strong style="color:var(--txt)">'+n.titulo+'</strong>'+(n.mensaje?' - '+n.mensaje:'')+'</div></div>';
+    }).join('');
   }
   // ALERTAS INTELIGENTES para admin/jefe
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
@@ -3071,7 +3123,7 @@ async function renderCalendario(){
 
   const todos=[
     ...(visitas||[]).map(v=>({id:v.id,_tipo:'visita',_fecha:v.visita_fecha,_fin:null,nombre:v.nombre,cerrador:v.cerrador,captador:v.captador,sala:v.visita_sala,estado:v.estado})),
-    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo,descripcion:r.descripcion||null})),
+    ...(reuniones||[]).map(r=>({id:r.id,_tipo:'reunion',_fecha:r.fecha_inicio||r.fecha_actividad,_fin:r.fecha_fin,nombre:r.titulo,cerrador:r.cerrador||r.colaborador,captador:r.captador,sala:r.sala,tipo:r.tipo,descripcion:r.descripcion||null,lead_id:r.lead_id||null})),
     ...(_evGrupal).map(e=>({id:e.id,_tipo:'evento',_fecha:e.fecha_inicio,_fin:e.fecha_fin,nombre:e.titulo,cerrador:e.colaborador,captador:null,sala:null,tipo:e.tipo}))
   ].filter(e=>e._fecha).sort((a,b)=>a._fecha>b._fecha?1:-1);
   _calTodos=todos;
@@ -3261,6 +3313,7 @@ async function abrirSheetLead(id){
   document.getElementById('fgroup-proximo').style.display='';
   document.getElementById('fgroup-notas').style.display='';
   document.getElementById('fgroup-primer-intento').style.display='none';
+  var _avbEdit=document.getElementById('fgroup-agendar-visita');if(_avbEdit)_avbEdit.style.display='none';
   renderCerradorConfirmBanner(l);
   document.getElementById('sheet-lead').classList.add('open');
 
@@ -3329,8 +3382,18 @@ function abrirNuevoLead(){
   // Default fecha = hoy
   document.getElementById('f-primer-fecha').value=new Date().toISOString().slice(0,10);
   document.getElementById('f-primer-nota').value='';
+  // Modo creación: mostrar y resetear bloque de agendar visita
+  var _avb=document.getElementById('fgroup-agendar-visita');if(_avb)_avb.style.display='';
+  var _avc=document.getElementById('f-agendar-visita-check');if(_avc)_avc.checked=false;
+  var _avf=document.getElementById('f-agendar-visita-campos');if(_avf)_avf.style.display='none';
+  var _nvd=document.getElementById('f-nv-dia');if(_nvd)_nvd.value='';
   toggleEstadoCampos();
   document.getElementById('sheet-lead').classList.add('open');
+}
+function toggleAgendarVisitaNuevo(){
+  var ch=document.getElementById('f-agendar-visita-check');
+  var campos=document.getElementById('f-agendar-visita-campos');
+  if(campos)campos.style.display=(ch&&ch.checked)?'':'none';
 }
 function toggleEstadoCampos(){
   const est=document.getElementById('f-estado').value;
@@ -3378,8 +3441,7 @@ async function guardarLead(){
   const nombre=document.getElementById('f-nombre').value.trim();
   const celular=document.getElementById('f-celular').value.trim();
   const medio=document.getElementById('f-medio').value;
-  if(!nombre){toast('Nombre obligatorio','error');return;}
-  if(!celular){toast('Celular obligatorio','error');return;}
+  if(!nombre&&!celular){toast('Ingresá al menos nombre o celular','error');return;}
   if(!medio){toast('Selecciona el medio de difusión','error');return;}
 
   const estado=document.getElementById('f-estado').value;
@@ -3465,6 +3527,26 @@ async function guardarLead(){
 
   // Registrar en historial
   await registrarHistorial(editingLeadId||newId,'nuevo','nota_seguimiento',null,data.notas,null,null);
+
+  // Agendar visita al crear lead (si se activó el toggle)
+  if(!editingLeadId&&newId){
+    var _agCh=document.getElementById('f-agendar-visita-check');
+    if(_agCh&&_agCh.checked){
+      var _nvDia=document.getElementById('f-nv-dia').value;
+      var _nvHora=document.getElementById('f-nv-hora').value||'10:00';
+      var _nvSala=document.getElementById('f-nv-sala').value||'sala_principal';
+      if(_nvDia){
+        try{
+          await sb.from('agenda_grupal').insert([{
+            tipo:'visita_nueva',titulo:'Visita: '+nombre,lead_id:newId,
+            captador:data.captador||cu.nombre,sala:_nvSala,
+            fecha_inicio:localISO(_nvDia,_nvHora),creado_por:cu.nombre
+          }]);
+          toast('Visita agendada en el calendario ✓');
+        }catch(e){console.error('[agendar-visita-nuevo]',e);toast('Lead registrado, error al agendar visita: '+e.message,'error');}
+      }
+    }
+  }
 
   // Crear actividad en agenda personal si es nuevo -> movido al bloque de primer intento al final de guardarLead
   // Sincronizar visita en agenda grupal
@@ -3940,7 +4022,8 @@ async function renderNotifs(){
   }
   el.innerHTML=items.map(n=>{
     const fecha=new Date(n.created_at).toLocaleString('es-BO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    return `<div class="notif-item" onclick="marcarLeida(${n.id})">
+    const accion=n.tipo==='visita'&&n.lead_id?`marcarLeida(${n.id});abrirSheetLead(${n.lead_id})`:`marcarLeida(${n.id})`;
+    return `<div class="notif-item" style="cursor:pointer" onclick="${accion}">
       <div class="notif-dot ${n.leida?'read':''}"></div>
       <div class="notif-text"><strong>${n.titulo}</strong>${n.mensaje?' - '+n.mensaje:''}</div>
       <div class="notif-time">${fecha}</div>
@@ -6353,14 +6436,30 @@ async function guardarEventoGrupal(){
     if(btn){btn.disabled=false;btn.textContent='Guardar';}
   }
 }
-function verDetalleGrupal(id){
+async function verDetalleGrupal(id){
   var ev=_calTodos.find(function(e){return e.id===id&&e._tipo==='reunion';});
   if(!ev)return;
   var pre=document.getElementById('dg-pre');
   var title=document.getElementById('dg-title');
+  var cerradorEl=document.getElementById('dg-cerrador');
   if(pre)pre.textContent=ev.descripcion||ev.nombre||'(sin detalle)';
   if(title)title.textContent=ev.nombre||'Evento';
+  if(cerradorEl)cerradorEl.innerHTML='';
   document.getElementById('sheet-detalle-grupal').classList.add('open');
+  if(ev.lead_id&&cerradorEl){
+    try{
+      var{data:ld}=await sb.from('leads').select('cerrador,cerrador_confirmacion').eq('id',ev.lead_id).single();
+      if(ld){
+        var conf=ld.cerrador_confirmacion;
+        var txt=!ld.cerrador?'sin asignar'
+          :conf==='confirmado'?ld.cerrador+' ✓ confirmado'
+          :conf==='asignado'?ld.cerrador+' ⏳ por confirmar'
+          :ld.cerrador;
+        var color=conf==='confirmado'?'var(--green)':conf==='asignado'?'var(--acc)':'var(--txt2)';
+        cerradorEl.innerHTML='<div style="font-size:12px;color:'+color+';padding:8px 0;border-top:1px solid var(--brd);margin-top:8px">Cerrador: <strong>'+txt+'</strong></div>';
+      }
+    }catch(e){}
+  }
 }
 
 // ══════════════════════════════════════
@@ -7836,6 +7935,7 @@ initLogin();
     <div class="sheet-body">
       <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:var(--r);padding:14px">
         <pre id="dg-pre" style="font-family:var(--font);font-size:13px;line-height:1.7;white-space:pre-wrap;margin:0;color:var(--txt)"></pre>
+        <div id="dg-cerrador"></div>
       </div>
     </div>
     <div class="sh-ftr">
