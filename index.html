@@ -6311,7 +6311,7 @@ function abrirAgendarGrupal(){
   document.getElementById('ag-titulo-manual').value='';
   var sel=document.getElementById('ag-lead');
   sel.innerHTML='<option value="">— Elegir cliente —</option>'+
-    allLeads.map(function(l){return '<option value="'+l.id+'">'+l.nombre+(l.ciudad?' ('+l.ciudad+')':'')+'</option>';}).join('');
+    allLeads.map(function(l){return '<option value="'+l.id+'">'+etiquetaLead(l)+'</option>';}).join('');
   onTipoGrupalChange();
   document.getElementById('sheet-agendar-grupal').classList.add('open');
 }
@@ -6328,6 +6328,11 @@ function onLeadGrupalChange(){
   actualizarPreviewGrupal();
 }
 function _fmtNum(n){var v=parseFloat(n);return isNaN(v)?String(n||''):v.toLocaleString('es-BO');}
+function etiquetaLead(l){
+  if(l.nombre&&l.nombre.trim())return l.nombre.trim()+(l.ciudad?' ('+l.ciudad+')':'');
+  if(l.celular&&l.celular.trim())return 'Sin nombre · Cel '+l.celular.trim();
+  return 'Lead #'+l.id;
+}
 function armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual){
   var enc=tipo==='visita_nueva'?'📌 NUEVA VISITA':tipo==='reagendo'?'🔄 REAGENDO':'👥 REUNIÓN INTERNA';
   var dt=new Date((fecha||ymdLocal(new Date()))+'T'+(hora||'09:00')+':00');
@@ -6339,7 +6344,7 @@ function armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual){
   var horaTxt=h12+':'+mm+(hNum>=12?' pm':' am');
   var L=[];
   L.push(enc);
-  if(lead){if(lead.nombre)L.push('Cliente: '+lead.nombre);if(lead.celular)L.push('Cel: '+lead.celular);}
+  if(lead){L.push('Cliente: '+etiquetaLead(lead));if(lead.nombre&&lead.celular)L.push('Cel: '+lead.celular);}
   L.push('Fecha: '+fechaTxt+' - '+horaTxt);
   if(cerrador)L.push('Cerrador: '+cerrador);
   if(lead){
@@ -6390,7 +6395,7 @@ async function guardarEventoGrupal(){
   var tarjeta=armarTarjetaGrupal(tipo,lead,cerrador,fecha,hora,obs,tituloManual);
   var fechaInicioISO=localISO(fecha,hora);
   var fechaFinISO=new Date(new Date(fechaInicioISO).getTime()+60*60*1000).toISOString();
-  var nombreCliente=lead?lead.nombre:(tituloManual||'Reunión interna');
+  var nombreCliente=lead?etiquetaLead(lead):(tituloManual||'Reunión interna');
   var tipoLabel=tipo==='visita_nueva'?'Visita nueva':tipo==='reagendo'?'Reagendo':'Reunión interna';
   _agGrupalGuardando=true;
   var btn=document.getElementById('ag-btn-guardar');
@@ -7446,7 +7451,7 @@ async function checkCelularDuplicado(){
   // Buscar por últimos 8 dígitos
   var suf=digits.slice(-8);
   var{data}=await sb.from('leads')
-    .select('id,nombre,captador,estado,created_at,archivado')
+    .select('id,nombre,celular,ciudad,captador,estado,created_at,archivado,ind_lugar_terreno,ind_financiamiento,financiamiento,notas')
     .ilike('celular','%'+suf+'%')
     .limit(5);
   if(!data||!data.length){banner.style.display='none';return;}
@@ -7454,10 +7459,19 @@ async function checkCelularDuplicado(){
     +'<div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:6px">⚠️ Este celular ya está en la base</div>';
   html+=data.map(function(l){
     var fecha=l.created_at?new Date(l.created_at).toLocaleDateString('es-BO',{day:'numeric',month:'short',year:'numeric'}):'';
-    return '<div style="font-size:11px;color:var(--txt2);margin-bottom:4px">'
-      +l.nombre+' — captado por '+(l.captador||'?')+' — '+l.estado+(fecha?' — '+fecha:'')
-      +(l.archivado?' (archivado)':'')
-      +'<span onclick="abrirSheetLead('+l.id+')" style="color:var(--acc);text-decoration:underline;cursor:pointer;margin-left:8px">Ver</span>'
+    var terreno=l.ind_lugar_terreno||'';
+    var fin=l.ind_financiamiento||l.financiamiento||'';
+    var lineas=[
+      (l.nombre||'Sin nombre')+' — Cel: '+(l.celular||'?'),
+      'Ciudad: '+(l.ciudad||'?')+' · Captador: '+(l.captador||'?'),
+      'Estado: '+l.estado+(fecha?' · Registrado: '+fecha:'')+(l.archivado?' (archivado)':''),
+    ];
+    if(terreno)lineas.push('Terreno/dirección: '+terreno);
+    if(fin)lineas.push('Financiamiento: '+fin);
+    if(l.notas)lineas.push('Notas: '+l.notas.slice(0,80)+(l.notas.length>80?'…':''));
+    return '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;padding:8px;background:rgba(239,68,68,0.05);border-radius:var(--r)">'
+      +lineas.map(function(t){return '<div>'+t+'</div>';}).join('')
+      +'<div style="margin-top:6px"><span onclick="abrirSheetLead('+l.id+')" style="color:var(--acc);font-weight:600;text-decoration:underline;cursor:pointer">Ver detalle completo →</span></div>'
       +'</div>';
   }).join('');
   html+='<div style="display:flex;gap:8px;margin-top:8px">'
