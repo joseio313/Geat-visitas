@@ -755,6 +755,7 @@ const sb=supabase.createClient(SB_URL,SB_KEY);
 ════════════════════════════════════════ */
 let cu=null;
 let colaboradores=[];
+let _loginInit=null; // promise de initLogin — usado por checkPin para esperar si carga lenta
 let itemsSeg=[];
 let motivosPerdida=[];
 let motivosGanado=[];
@@ -848,7 +849,9 @@ function delPin(){
   document.getElementById('d'+(pinVal.length-1)).classList.remove('filled');
   pinVal=pinVal.slice(0,-1);
 }
-function checkPin(){
+async function checkPin(){
+  // Si initLogin todavía no terminó de cargar colaboradores, esperamos
+  if(_loginInit) await _loginInit;
   const col=colaboradores.find(c=>c.pin===pinVal);
   if(!col){
     document.getElementById('login-err').textContent='PIN incorrecto';
@@ -1630,7 +1633,7 @@ async function reactivateLead(leadId,nombre){
 /* ════════════════════════════════════════
    INICIO
 ════════════════════════════════════════ */
-initLogin();
+_loginInit=initLogin();
 </script>
 </body>
 </html>
