@@ -1043,6 +1043,15 @@ function renderCard(a,now){
   const tagBg=isDone?'rgba(0,0,0,0.25)':isLate?'rgba(0,0,0,0.25)':'rgba(0,0,0,0.22)';
   const lateLabel=isLate?'⚠️ ATRASADO · ':'';
 
+  if(!a.lead_id) return `<div class="activity-card done" style="opacity:0.35;cursor:default;filter:grayscale(1)" title="Actividad huérfana — sin lead asociado (sistema viejo)">
+    <div class="card-tag-inner" style="background:rgba(0,0,0,0.22)">⚠️ HUÉRFANA · ${a.tipo||'—'}</div>
+    <div class="activity-client" style="font-style:italic">${a.titulo||'(sin lead)'}</div>
+    <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
+    <div class="activity-times">
+      <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
+    </div>
+  </div>`;
+
   return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}</div>
@@ -1265,6 +1274,10 @@ function renderFunnel(leads){
    LEAD DETAIL
 ════════════════════════════════════════ */
 async function openLeadDetail(leadId,agendaId){
+  if(!leadId||leadId==='null'||leadId===null||isNaN(Number(leadId))){
+    toast('Esta actividad no tiene lead asociado. Es una actividad huérfana del sistema viejo.','warning');
+    return;
+  }
   currentLeadId=leadId;
   currentAgendaId=agendaId;
   openModal('modalLead');
