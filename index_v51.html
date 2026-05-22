@@ -355,6 +355,48 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
   .header-actions{width:100%}
   .hdr-btn{flex:1;justify-content:center}
 }
+
+/* ── PICKER DE FECHA/HORA: ICONO DORADO VISIBLE EN TEMA OSCURO ── */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: auto;
+  appearance: auto;
+  color-scheme: dark;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  /* Convierte el icono estándar a dorado (#F2C500) para la paleta GEAT */
+  filter: invert(85%) sepia(60%) saturate(1800%) hue-rotate(350deg) brightness(108%);
+  padding: 2px;
+  margin-right: 2px;
+}
+
+/* ── MODAL BODY: altura reducida + scroll interno para mobile ── */
+.modal-body {
+  padding: 18px;
+  max-height: 75vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 768px) {
+  .modal-body { max-height: 68vh; }
+}
+
+/* ── ACTION ROW dentro de modal: sticky al fondo del scroll ── */
+.modal-body .action-row {
+  position: sticky;
+  bottom: 0;
+  background: var(--gray-800);
+  padding: 12px 0 4px 0;
+  border-top: 1px solid var(--gray-600);
+  margin-top: 13px;
+  z-index: 2;
+}
 </style>
 </head>
 <body>
@@ -910,6 +952,16 @@ async function initApp(){
   await Promise.all([loadCatalogs(),loadColaboradores()]);
   await renderWeek();
   buildPersonaFilters();
+  attachPickerListeners();
+}
+
+function attachPickerListeners(){
+  // showPicker() abre el picker nativo en PC Chrome al hacer click en cualquier parte del campo
+  document.querySelectorAll('input[type="date"],input[type="time"],input[type="datetime-local"]').forEach(function(el){
+    el.addEventListener('click',function(){
+      if(this.showPicker){try{this.showPicker();}catch(e){}}
+    });
+  });
 }
 
 async function loadCatalogs(){
