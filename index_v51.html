@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --black: #000000;
@@ -492,13 +493,42 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
   <section id="screen-reports" class="screen">
     <div class="screen-title">
       <h1>Reportes <span class="gold">comerciales</span></h1>
-      <select class="form-control" id="report-period" style="max-width:180px;font-size:12px;padding:7px 10px" onchange="renderReports()">
-        <option value="mes">Este mes</option>
-        <option value="anterior">Mes anterior</option>
-        <option value="anio">Año actual</option>
+    </div>
+    <div class="filter-bar" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Mes:</label>
+      <select class="form-control" id="report-month" onchange="onReportFilterChange()" style="width:auto;padding:6px 10px;font-size:12px">
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+        <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+        <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
       </select>
+      <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Año:</label>
+      <select class="form-control" id="report-year" onchange="onReportFilterChange()" style="width:auto;padding:6px 10px;font-size:12px">
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+        <option value="2027">2027</option>
+      </select>
+      <span style="color:var(--gray-600);font-size:11px;padding:0 4px">· o por rango:</span>
+      <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Desde:</label>
+      <input type="date" class="form-control" id="report-from" style="width:auto;padding:6px 10px;font-size:12px" onchange="onReportRangeChange()">
+      <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Hasta:</label>
+      <input type="date" class="form-control" id="report-to" style="width:auto;padding:6px 10px;font-size:12px" onchange="onReportRangeChange()">
     </div>
     <div id="reports-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+
+    <!-- CAMBIO 7: Buscador de leads por rango de fechas -->
+    <div class="section" style="margin-top:16px">
+      <div class="section-title">📋 Reporte de leads por rango de fechas</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Desde:</label>
+        <input type="date" class="form-control" id="leadFrom" style="width:auto;padding:6px 10px;font-size:12px">
+        <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Hasta:</label>
+        <input type="date" class="form-control" id="leadTo" style="width:auto;padding:6px 10px;font-size:12px">
+        <button class="btn-ghost" onclick="generarReporteLeads()">🔎 Buscar</button>
+        <button class="btn-primary" onclick="exportarReporteLeads()">📊 Exportar Excel</button>
+      </div>
+      <div id="leads-rango-body"></div>
+    </div>
   </section>
 
 </div><!-- /app -->
@@ -927,6 +957,19 @@ function populateCatalogSelects(){
   // Fecha hoy default para crear lead
   document.getElementById('nl-fecha').value=ymdLocal(new Date());
   document.getElementById('won-fecha-firma').value=ymdLocal(new Date());
+  // Inicializar selectores de reportes al mes/año actual
+  const _now=new Date();
+  const mEl=document.getElementById('report-month');
+  const yEl=document.getElementById('report-year');
+  if(mEl) mEl.value=String(_now.getMonth()+1);
+  if(yEl) yEl.value=String(_now.getFullYear());
+  // Inicializar rango de leads
+  const _firstDay=ymdLocal(new Date(_now.getFullYear(),_now.getMonth(),1));
+  const _lastDay=ymdLocal(new Date(_now.getFullYear(),_now.getMonth()+1,0));
+  const lFrom=document.getElementById('leadFrom');
+  const lTo=document.getElementById('leadTo');
+  if(lFrom) lFrom.value=_firstDay;
+  if(lTo) lTo.value=_lastDay;
 }
 
 async function loadColaboradores(){
@@ -1000,6 +1043,8 @@ async function renderWeek(){
 
   let query=sb.from('agenda_personal')
     .select('id,colaborador,lead_id,tipo,titulo,nota,fecha_programada,completada,completada_en,nota_resultado')
+    .not('lead_id','is',null)
+    .eq('activo',true)
     .gte('fecha_programada',currentWeekStart.toISOString())
     .lt('fecha_programada',weekEnd.toISOString())
     .order('fecha_programada');
@@ -1046,14 +1091,7 @@ function renderCard(a,now){
   const tagBg=isDone?'rgba(0,0,0,0.25)':isLate?'rgba(0,0,0,0.25)':'rgba(0,0,0,0.22)';
   const lateLabel=isLate?'⚠️ ATRASADO · ':'';
 
-  if(!a.lead_id) return `<div class="activity-card done" style="opacity:0.35;cursor:default;filter:grayscale(1)" title="Actividad huérfana — sin lead asociado (sistema viejo)">
-    <div class="card-tag-inner" style="background:rgba(0,0,0,0.22)">⚠️ HUÉRFANA · ${a.tipo||'—'}</div>
-    <div class="activity-client" style="font-style:italic">${a.titulo||'(sin lead)'}</div>
-    <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
-    <div class="activity-times">
-      <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
-    </div>
-  </div>`;
+  if(!a.lead_id) return '';
 
   return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
@@ -1208,24 +1246,51 @@ async function asignarCaptador(leadId){
 /* ════════════════════════════════════════
    REPORTES
 ════════════════════════════════════════ */
+let _reportRange=null; // {desde,hasta,label} — null = usar mes/año selectors
+
+function getReportRange(){
+  if(_reportRange) return _reportRange;
+  const m=parseInt(document.getElementById('report-month')?.value||new Date().getMonth()+1);
+  const y=parseInt(document.getElementById('report-year')?.value||new Date().getFullYear());
+  const start=new Date(y,m-1,1);
+  const end=new Date(y,m,1);
+  const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return {desde:start.toISOString(),hasta:end.toISOString(),label:`${meses[m-1]}_${y}`};
+}
+
+function onReportFilterChange(){
+  _reportRange=null;
+  const el1=document.getElementById('report-from');
+  const el2=document.getElementById('report-to');
+  if(el1) el1.value='';
+  if(el2) el2.value='';
+  renderReports();
+}
+
+function onReportRangeChange(){
+  const desde=document.getElementById('report-from').value;
+  const hasta=document.getElementById('report-to').value;
+  if(!desde||!hasta) return;
+  _reportRange={
+    desde:new Date(desde+'T00:00:00').toISOString(),
+    hasta:new Date(hasta+'T23:59:59').toISOString(),
+    label:`${desde}_a_${hasta}`
+  };
+  renderReports();
+}
+
 async function renderReports(){
   const body=document.getElementById('reports-body');
   body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
-  const period=document.getElementById('report-period').value;
-  const now=new Date();
-  let start,end;
-  if(period==='mes'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,1);}
-  else if(period==='anterior'){start=new Date(now.getFullYear(),now.getMonth()-1,1);end=new Date(now.getFullYear(),now.getMonth(),1);}
-  else{start=new Date(now.getFullYear(),0,1);end=new Date(now.getFullYear()+1,0,1);}
+  const rng=getReportRange();
 
   const[rLeads,rActs]=await Promise.all([
-    sb.from('leads').select('id,captador,estado,etapa,monto_contrato,metros_cuadrados').gte('created_at',start.toISOString()).lt('created_at',end.toISOString()),
-    sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',start.toISOString()).lt('fecha_programada',end.toISOString())
+    sb.from('leads').select('id,captador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
+    sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta)
   ]);
   const leads=rLeads.data||[];
   const acts=rActs.data||[];
 
-  // Stats por vendedor
   const byPerson={};
   leads.forEach(l=>{
     const p=l.captador||'Sin asignar';
@@ -1240,23 +1305,70 @@ async function renderReports(){
     if(a.completada)actsByPerson[a.colaborador].completadas++;
   });
 
-  body.innerHTML=`<div class="reports-grid">
-    <div class="section">
-      <div class="section-title">Resumen por vendedor</div>
-      <table class="team-table">
-        <thead><tr><th>Vendedor</th><th>Leads</th><th>Actividades</th><th>Ganados</th><th>m²</th></tr></thead>
-        <tbody>${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer').map(c=>{
-          const p=byPerson[c.nombre]||{leads:0,ganados:0,m2:0};
-          const a=actsByPerson[c.nombre]||{total:0,completadas:0};
-          return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
-        }).join('')}</tbody>
-      </table>
+  // Motivos de pérdida
+  const perdidosConMotivo={};
+  leads.filter(l=>l.estado==='cerrado_perdido'&&l.motivo_perdida).forEach(l=>{
+    perdidosConMotivo[l.motivo_perdida]=(perdidosConMotivo[l.motivo_perdida]||0)+1;
+  });
+  const topMotivos=Object.entries(perdidosConMotivo).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Medios de difusión
+  const byMedio={};
+  leads.forEach(l=>{
+    const m=l.medio_difusion||'Sin medio';
+    byMedio[m]=(byMedio[m]||0)+1;
+  });
+  const topMedios=Object.entries(byMedio).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  body.innerHTML=`
+    <div class="reports-grid">
+      <div class="section">
+        <div class="section-title">Resumen por vendedor</div>
+        <table class="team-table">
+          <thead><tr><th>Vendedor</th><th>Leads</th><th>Actividades</th><th>Ganados</th><th>m²</th></tr></thead>
+          <tbody>${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer').map(c=>{
+            const p=byPerson[c.nombre]||{leads:0,ganados:0,m2:0};
+            const a=actsByPerson[c.nombre]||{total:0,completadas:0};
+            return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+        <div style="margin-top:10px">
+          <button class="btn-ghost" style="font-size:11px" onclick="exportarPorVendedor()">📊 Exportar Excel</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Funnel de conversión</div>
+        ${renderFunnel(leads)}
+      </div>
+      <div class="section">
+        <div class="section-title">Motivos de pérdida (Top 5)</div>
+        ${topMotivos.length===0?'<div style="color:var(--gray-400);font-size:12px">Sin datos en este período</div>':
+          topMotivos.map(([m,n])=>`<div class="funnel-bar">
+            <div class="funnel-label" style="font-size:10px">${m}</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:${Math.max(8,Math.round(n/(topMotivos[0][1]||1)*100))}%">${n}</div></div>
+          </div>`).join('')}
+        <div style="margin-top:10px">
+          <button class="btn-ghost" style="font-size:11px" onclick="exportarPerdidos()">📊 Exportar Perdidos Excel</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Medios de difusión</div>
+        ${topMedios.map(([m,n])=>`<div class="funnel-bar">
+          <div class="funnel-label" style="font-size:10px;width:130px">${m}</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${Math.max(8,Math.round(n/(topMedios[0][1]||1)*100))}%">${n}</div></div>
+        </div>`).join('')}
+        <div style="margin-top:10px">
+          <button class="btn-ghost" style="font-size:11px" onclick="exportarPorMedio()">📊 Exportar por Medio Excel</button>
+        </div>
+      </div>
     </div>
-    <div class="section">
-      <div class="section-title">Funnel de conversión</div>
-      ${renderFunnel(leads)}
-    </div>
-  </div>`;
+    <div class="section" style="margin-top:14px">
+      <div class="section-title">Exportar detalle completo</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn-primary" onclick="exportarTodo()">📊 Exportar TODO (leads + seguimientos)</button>
+        <div style="font-size:11px;color:var(--gray-400)">Genera Excel con resumen de leads y hoja de seguimientos del período seleccionado</div>
+      </div>
+    </div>`;
 }
 
 function renderFunnel(leads){
@@ -1274,11 +1386,95 @@ function renderFunnel(leads){
 }
 
 /* ════════════════════════════════════════
+   EXPORTAR EXCEL (SheetJS)
+════════════════════════════════════════ */
+async function exportarPorVendedor(){
+  const rng=getReportRange();
+  toast('Generando Excel...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const rows=(leads||[]).map(l=>({
+      'Captador':l.captador||'—','Nombre':l.nombre,'Celular':l.celular,
+      'Ciudad':l.ciudad||'—','Medio':l.medio_difusion||'—',
+      'Estado':l.estado,'Etapa':l.etapa||'—',
+      'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
+    }));
+    xlsxExport([{name:'Leads por vendedor',rows}],`GEAT_Vendedores_${rng.label}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function exportarPerdidos(){
+  const rng=getReportRange();
+  toast('Generando Excel perdidos...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,motivo_perdida,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const rows=(leads||[]).map(l=>({
+      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'Captador':l.captador||'—','Medio':l.medio_difusion||'—',
+      'Motivo pérdida':l.motivo_perdida||'—','Detalle':l.motivo_perdida_detalle||'—',
+      'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
+    }));
+    xlsxExport([{name:'Perdidos',rows}],`GEAT_Perdidos_${rng.label}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function exportarPorMedio(){
+  const rng=getReportRange();
+  toast('Generando Excel por medio...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta).order('medio_difusion');
+    const rows=(leads||[]).map(l=>({
+      'Medio difusión':l.medio_difusion||'—','Nombre':l.nombre,
+      'Celular':l.celular,'Ciudad':l.ciudad||'—','Captador':l.captador||'—',
+      'Estado':l.estado,'Etapa':l.etapa||'—',
+      'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
+    }));
+    xlsxExport([{name:'Por medio',rows}],`GEAT_PorMedio_${rng.label}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function exportarTodo(){
+  const rng=getReportRange();
+  toast('Generando Excel completo...','ok');
+  try{
+    const[rLeads,rSegs]=await Promise.all([
+      sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
+      sb.from('seguimientos').select('lead_id,colaborador,etapa,nota_previa,nota_resultado,fecha_seguimiento,completado_en,estado').gte('fecha_seguimiento',rng.desde).lt('fecha_seguimiento',rng.hasta).order('lead_id').order('fecha_seguimiento')
+    ]);
+    const leadRows=(rLeads.data||[]).map(l=>({
+      'ID':l.id,'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'Medio':l.medio_difusion||'—','Captador':l.captador||'—',
+      'Estado':l.estado,'Etapa':l.etapa||'—',
+      'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
+    }));
+    const segRows=(rSegs.data||[]).map(s=>({
+      'Lead ID':s.lead_id,'Responsable':s.colaborador,'Etapa':s.etapa||'—',
+      'Nota programación':s.nota_previa||'—','Nota resultado':s.nota_resultado||'—',
+      'Fecha programada':s.fecha_seguimiento?new Date(s.fecha_seguimiento).toLocaleDateString('es-BO'):'—',
+      'Fecha realizada':s.completado_en?new Date(s.completado_en).toLocaleDateString('es-BO'):'Pendiente',
+      'Estado':s.estado||'—'
+    }));
+    xlsxExport([{name:'Leads',rows:leadRows},{name:'Seguimientos',rows:segRows}],`GEAT_Completo_${rng.label}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function xlsxExport(sheets,filename){
+  if(typeof XLSX==='undefined'){toast('SheetJS no disponible','error');return;}
+  const wb=XLSX.utils.book_new();
+  sheets.forEach(s=>{
+    const ws=XLSX.utils.json_to_sheet(s.rows.length?s.rows:[{'Sin datos':'—'}]);
+    XLSX.utils.book_append_sheet(wb,ws,s.name);
+  });
+  XLSX.writeFile(wb,filename);
+  toast('✅ Excel descargado: '+filename);
+}
+
+/* ════════════════════════════════════════
    LEAD DETAIL
 ════════════════════════════════════════ */
 async function openLeadDetail(leadId,agendaId){
   if(!leadId||leadId==='null'||leadId===null||isNaN(Number(leadId))){
-    toast('Esta actividad no tiene lead asociado. Es una actividad huérfana del sistema viejo.','warning');
+    toast('Esta actividad no tiene lead asociado.','warning');
     return;
   }
   currentLeadId=leadId;
@@ -1287,76 +1483,172 @@ async function openLeadDetail(leadId,agendaId){
   document.getElementById('modal-lead-nombre').textContent='Cargando...';
   document.getElementById('modal-lead-body').innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
 
-  const[rLead,rHistory]=await Promise.all([
+  const[rLead,rHistory,rSegs]=await Promise.all([
     sb.from('leads').select('*').eq('id',leadId).single(),
-    sb.from('agenda_personal').select('*').eq('lead_id',leadId).order('fecha_programada')
+    sb.from('agenda_personal').select('*').eq('lead_id',leadId).order('fecha_programada'),
+    sb.from('seguimientos').select('*').eq('lead_id',leadId).order('fecha_seguimiento')
   ]);
   if(rLead.error){toast('Error: '+rLead.error.message,'error');return;}
   const lead=rLead.data;
   const history=rHistory.data||[];
+  const segs=rSegs.data||[];
   document.getElementById('modal-lead-nombre').textContent=lead.nombre||'—';
 
-  // Último seguimiento (el del agendaId actual)
-  const current=history.find(h=>h.id===agendaId)||history[history.length-1];
+  const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
 
   document.getElementById('modal-lead-body').innerHTML=`
-    <div class="section">
-      <div class="section-title">Oportunidad</div>
-      <dl class="data-grid">
-        <dt>Fase actual</dt><dd><span class="badge-fase">${lead.etapa||'1er intento'}</span></dd>
-        <dt>Estado</dt><dd><span class="badge-abierto">● ${lead.estado||'abierto'}</span></dd>
-        <dt>Captador</dt><dd>${lead.captador||'—'}</dd>
-        <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
-        <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
-        <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
-        <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
-      </dl>
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
+      <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
     </div>
-    ${current?`<div class="section">
-      <div class="section-title">Seguimiento activo</div>
-      <div class="last-followup">
-        <div class="lf-head">${current.tipo||'—'}</div>
-        <div class="lf-row"><span>Asignado a:</span><strong>${current.colaborador}</strong></div>
-        <div class="lf-row"><span>Programado:</span>${fmtDT(current.fecha_programada)}</div>
-        ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
-        ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
+    <div id="lead-tab-detalle">
+      <div class="section">
+        <div class="section-title">Oportunidad</div>
+        <dl class="data-grid">
+          <dt>Fase actual</dt><dd><span class="badge-fase">${lead.etapa||'1er intento'}</span></dd>
+          <dt>Estado</dt><dd><span class="badge-abierto">● ${lead.estado||'abierto'}</span></dd>
+          <dt>Captador</dt><dd>${lead.captador||'—'}</dd>
+          <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
+          <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
+          <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
+          <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
+        </dl>
       </div>
-      ${!current.completada?`<div class="action-row">
-        <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
-        <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
-      </div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'}
-    </div>`:''}
-    <div class="section">
-      <div class="section-title">Línea de tiempo completa</div>
-      <div class="timeline">
-        <div class="timeline-item creation">
-          <div class="timeline-date">${fmtDT(lead.created_at)}</div>
-          <div class="timeline-text">🆕 Lead creado</div>
-          <div class="timeline-note">Medio: ${lead.medio_difusion||lead.canal||'—'}</div>
+      ${current?`<div class="section">
+        <div class="section-title">Seguimiento activo</div>
+        <div class="last-followup">
+          <div class="lf-head">${current.tipo||'—'}</div>
+          <div class="lf-row"><span>Asignado a:</span><strong>${current.colaborador}</strong></div>
+          <div class="lf-row"><span>Programado:</span>${fmtDT(current.fecha_programada)}</div>
+          ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
+          ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
         </div>
-        ${history.map(h=>{
-          const isNext=h.id===agendaId&&!h.completada;
-          const isLate=!h.completada&&new Date(h.fecha_programada)<new Date();
-          const cls=h.completada?'done':isLate?'late':isNext?'next':'pending';
-          return `<div class="timeline-item ${cls}">
-            <div class="timeline-date">${fmtDT(h.fecha_programada)}${isNext?' · PRÓXIMO':''}</div>
-            <div class="timeline-text">${h.tipo||'—'} — ${h.colaborador}</div>
-            ${h.nota?`<div class="timeline-note">${h.nota}</div>`:''}
-            <div class="timeline-times">
-              Prog: ${fmtTime(h.fecha_programada)} ·
-              ${h.completada?`<span class="ok">Realizado: ${fmtTime(h.completada_en)} ✓</span>`:`<span class="${isLate?'bad':''}">Pendiente${isLate?' (ATRASADO)':''}</span>`}
-            </div>
-          </div>`;
-        }).join('')}
+        ${!current.completada?`<div class="action-row">
+          <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
+          <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
+        </div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'}
+      </div>`:''}
+      <div class="section">
+        <div class="section-title">Línea de tiempo completa</div>
+        <div class="timeline">
+          <div class="timeline-item creation">
+            <div class="timeline-date">${fmtDT(lead.created_at)}</div>
+            <div class="timeline-text">🆕 Lead creado</div>
+            <div class="timeline-note">Medio: ${lead.medio_difusion||lead.canal||'—'}</div>
+          </div>
+          ${history.map(h=>{
+            const isNext=h.id===agendaId&&!h.completada;
+            const isLate=!h.completada&&new Date(h.fecha_programada)<new Date();
+            const cls=h.completada?'done':isLate?'late':isNext?'next':'pending';
+            return `<div class="timeline-item ${cls}">
+              <div class="timeline-date">${fmtDT(h.fecha_programada)}${isNext?' · PRÓXIMO':''}</div>
+              <div class="timeline-text">${h.tipo||'—'} — ${h.colaborador}</div>
+              ${h.nota?`<div class="timeline-note">📝 Prog: "${h.nota}"</div>`:''}
+              ${h.completada&&h.nota_resultado?`<div class="timeline-note" style="color:var(--st-completo)">✅ Resultado: "${h.nota_resultado}"</div>`:''}
+              <div class="timeline-times">
+                Prog: ${fmtTime(h.fecha_programada)} ·
+                ${h.completada?`<span class="ok">Realizado: ${fmtTime(h.completada_en)} ✓</span>`:`<span class="${isLate?'bad':''}">Pendiente${isLate?' (ATRASADO)':''}</span>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Indagación</div>
+        <div class="indagacion-grid">${renderIndagacion(lead)}</div>
       </div>
     </div>
-    <div class="section">
-      <div class="section-title">Indagación</div>
-      <div class="indagacion-grid">
-        ${renderIndagacion(lead)}
-      </div>
-    </div>
+    <div id="lead-tab-viaje" style="display:none">${renderViajeCliente(lead,segs,history)}</div>
   `;
+}
+
+function switchLeadTab(tab){
+  document.getElementById('lead-tab-detalle').style.display=tab==='detalle'?'':'none';
+  document.getElementById('lead-tab-viaje').style.display=tab==='viaje'?'':'none';
+  document.getElementById('tab-detalle').className=tab==='detalle'?'btn-primary':'btn-ghost';
+  document.getElementById('tab-viaje').className=tab==='viaje'?'btn-primary':'btn-ghost';
+  ['tab-detalle','tab-viaje'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.cssText='font-size:11px;padding:6px 12px';
+  });
+}
+
+function renderViajeCliente(lead,segs,history){
+  const diasEnPipeline=Math.round((Date.now()-new Date(lead.created_at))/86400000);
+  const indCampos=[
+    {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
+    {label:'Financiamiento',val:lead.financiamiento||lead.ind_financiamiento},
+    {label:'Lugar terreno',val:lead.ind_lugar_terreno},
+    {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
+    {label:'Presupuesto',val:lead.ind_presupuesto?'$'+lead.ind_presupuesto:null},
+    {label:'Presupuesto tope',val:lead.ind_presupuesto_tope?'$'+lead.ind_presupuesto_tope:null},
+    {label:'Plantas',val:lead.ind_plantas},
+    {label:'¿Cuándo construir?',val:lead.ind_cuando_construir},
+    {label:'Tipo (vivienda/inv.)',val:lead.ind_tipo}
+  ];
+  const completos=indCampos.filter(c=>c.val).length;
+
+  // Combinar seguimientos completados + agenda_personal en timeline unificado
+  const segItems=segs.map(s=>({
+    fecha:new Date(s.fecha_seguimiento),
+    etapa:s.etapa||s.tipo||'—',
+    responsable:s.colaborador,
+    notaProg:s.nota_previa,
+    notaFin:s.nota_resultado,
+    realizado:!!s.completado_en,
+    fechaReal:s.completado_en
+  }));
+  const agdone=history.filter(h=>h.completada).map(h=>({
+    fecha:new Date(h.fecha_programada),
+    etapa:h.tipo||'—',
+    responsable:h.colaborador,
+    notaProg:h.nota,
+    notaFin:h.nota_resultado,
+    realizado:true,
+    fechaReal:h.completada_en
+  }));
+  const agpend=history.filter(h=>!h.completada).map(h=>({
+    fecha:new Date(h.fecha_programada),
+    etapa:h.tipo||'—',
+    responsable:h.colaborador,
+    notaProg:h.nota,
+    notaFin:null,
+    realizado:false,
+    fechaReal:null
+  }));
+  const allItems=[...segItems,...agdone,...agpend].sort((a,b)=>a.fecha-b.fecha);
+
+  return `<div class="section">
+    <div class="section-title">📊 PERFIL DEL CLIENTE</div>
+    <dl class="data-grid">
+      <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
+      <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
+      <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
+      <dt>Registrado</dt><dd>${fmt(lead.created_at)} por ${lead.captador||'—'}</dd>
+      <dt>Etapa actual</dt><dd><span class="badge-fase">${lead.etapa||'—'}</span></dd>
+      <dt>Días en pipeline</dt><dd>${diasEnPipeline} día${diasEnPipeline!==1?'s':''}</dd>
+    </dl>
+  </div>
+  <div class="section">
+    <div class="section-title">🔍 INDAGACIÓN (${completos} de ${indCampos.length} completados)</div>
+    <div class="indagacion-grid">${renderIndagacion(lead)}</div>
+  </div>
+  <div class="section">
+    <div class="section-title">📅 HISTORIAL DE INTERACCIONES</div>
+    ${allItems.length===0?'<div style="color:var(--gray-400);font-size:12px;padding:10px 0">Sin interacciones registradas aún.</div>':''}
+    <div class="timeline">
+      ${allItems.map(item=>{
+        const cls=item.realizado?'done':new Date(item.fecha)<new Date()?'late':'next';
+        return `<div class="timeline-item ${cls}">
+          <div class="timeline-date">${fmtDT(item.fecha)}</div>
+          <div class="timeline-text"><strong>${(item.etapa||'—').toUpperCase()}</strong> — 👤 ${item.responsable||'—'}</div>
+          ${item.notaProg?`<div class="timeline-note">📝 Programado: "${item.notaProg}"</div>`:''}
+          ${item.realizado&&item.notaFin?`<div class="timeline-note" style="color:var(--st-completo)">✅ Realizado (${fmtDT(item.fechaReal)}): "${item.notaFin}"</div>`:''}
+          ${!item.realizado?`<div class="timeline-note" style="color:var(--gold)">⏳ Pendiente</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 function renderIndagacion(lead){
@@ -1628,6 +1920,60 @@ async function reactivateLead(leadId,nombre){
       renderWeek();
     }catch(e2){toast('Error reactivando: '+e2.message,'error');}
   }
+}
+
+/* ════════════════════════════════════════
+   REPORTE LEADS POR RANGO
+════════════════════════════════════════ */
+async function generarReporteLeads(){
+  const desde=document.getElementById('leadFrom').value;
+  const hasta=document.getElementById('leadTo').value;
+  if(!desde||!hasta){toast('Ingresá las fechas de rango','error');return;}
+  const body=document.getElementById('leads-rango-body');
+  body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  const{data,error}=await sb.from('leads')
+    .select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at,notas')
+    .gte('created_at',new Date(desde+'T00:00:00').toISOString())
+    .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
+    .order('created_at',{ascending:false});
+  if(error){body.innerHTML='<div style="color:var(--st-atrasado);font-size:12px">Error: '+error.message+'</div>';return;}
+  const leads=data||[];
+  if(!leads.length){body.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:12px 0">Sin leads en ese rango</div>';return;}
+  body.innerHTML=`<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${leads.length} leads encontrados</div>
+  <table class="team-table">
+    <thead><tr><th>Fecha</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Captador</th><th>Estado</th></tr></thead>
+    <tbody>${leads.map(l=>`<tr>
+      <td>${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''}</td>
+      <td><strong>${l.nombre||'—'}</strong></td>
+      <td>${l.celular||'—'}</td>
+      <td>${l.ciudad||'—'}</td>
+      <td>${l.medio_difusion||'—'}</td>
+      <td>${l.captador||'—'}</td>
+      <td><span style="font-size:10px;font-weight:700">${l.estado||'—'}</span></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function exportarReporteLeads(){
+  const desde=document.getElementById('leadFrom').value;
+  const hasta=document.getElementById('leadTo').value;
+  if(!desde||!hasta){toast('Ingresá las fechas de rango','error');return;}
+  toast('Generando Excel...','ok');
+  try{
+    const{data,error}=await sb.from('leads')
+      .select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at,notas')
+      .gte('created_at',new Date(desde+'T00:00:00').toISOString())
+      .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
+      .order('created_at',{ascending:false});
+    if(error)throw error;
+    const rows=(data||[]).map(l=>({
+      'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'',
+      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'Medio difusión':l.medio_difusion||'—','Captador':l.captador||'—',
+      'Estado actual':l.estado,'Etapa':l.etapa||'—','Nota inicial':l.notas||'—'
+    }));
+    xlsxExport([{name:'Leads',rows}],`GEAT_Leads_${desde}_a_${hasta}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
