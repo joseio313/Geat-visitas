@@ -397,6 +397,65 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   margin-top: 13px;
   z-index: 2;
 }
+
+/* ── CAMBIO 7: MARCADORES DEL DÍA ── */
+.marcadores-dia {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.marcador {
+  padding: 14px;
+  border-radius: 10px;
+  text-align: center;
+  border: 2px solid;
+}
+.marcador.realizado { background: rgba(16,185,129,0.10); border-color: var(--st-completo); }
+.marcador.pendiente { background: rgba(255,224,130,0.10); border-color: var(--st-vis-of); }
+.marcador.atrasado  { background: rgba(239,68,68,0.10);  border-color: var(--st-atrasado); }
+.marcador .num {
+  display: block;
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.marcador.realizado .num { color: var(--st-completo); }
+.marcador.pendiente .num { color: var(--st-vis-of); }
+.marcador.atrasado  .num { color: var(--st-atrasado); }
+.marcador .lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-400);
+}
+@media (max-width: 768px) {
+  .marcador { padding: 10px; }
+  .marcador .num { font-size: 22px; }
+  .marcador .lbl { font-size: 9px; }
+}
+/* ── CAMBIO 5/6: BUSCAR LEAD TABLE + FILTRO EXPORT ── */
+.filtro-export {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.filtro-export label {
+  font-size: 11px;
+  color: var(--gray-400);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.search-leads-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.search-leads-tbl th,
+.search-leads-tbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--gray-600); }
+.search-leads-tbl th { color: var(--gold); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.search-leads-tbl td { color: var(--white); }
+.match-tag { font-size: 9px; color: var(--gold); background: rgba(242,197,0,0.1); padding: 1px 5px; border-radius: 9px; border: 1px solid rgba(242,197,0,0.3); margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -450,7 +509,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="header-actions">
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
-      <button class="hdr-btn" onclick="openModal('modalSearch')">🔍 Buscar Lead</button>
+      <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
@@ -493,6 +552,21 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <button class="btn-ghost" onclick="navWeek(-1)">‹</button>
         <button class="btn-ghost" onclick="navWeek(0)">Hoy</button>
         <button class="btn-ghost" onclick="navWeek(1)">›</button>
+      </div>
+    </div>
+    <!-- CAMBIO 7: Marcadores del día -->
+    <div class="marcadores-dia">
+      <div class="marcador realizado">
+        <span class="num" id="m-realizado">—</span>
+        <span class="lbl">✅ Realizadas hoy</span>
+      </div>
+      <div class="marcador pendiente">
+        <span class="num" id="m-pendiente">—</span>
+        <span class="lbl">⏳ Pendientes hoy</span>
+      </div>
+      <div class="marcador atrasado">
+        <span class="num" id="m-atrasado">—</span>
+        <span class="lbl">⚠️ Atrasadas</span>
       </div>
     </div>
     <div class="week-grid" id="week-grid"></div>
@@ -714,7 +788,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       </div>
 
       <div class="action-row">
-        <button class="btn-primary" onclick="saveSeguimiento()">💾 Guardar seguimiento</button>
+        <button class="btn-primary" id="btn-guardar-seg" onclick="saveSeguimiento()">💾 Guardar seguimiento</button>
         <button class="btn-ghost" onclick="closeModal('modalFinalize')">Cancelar</button>
       </div>
     </div>
@@ -801,14 +875,65 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="modal-body">
       <div class="mobile-note" id="search-hint" style="display:none">
-        <strong>♻️ Nueva Oportunidad:</strong> buscá un lead <strong>perdido</strong> para reactivarlo.
+        <strong>♻️ Nueva Oportunidad:</strong> buscá un lead <strong>perdido</strong> para ver su perfil y reactivarlo.
       </div>
       <div class="section">
-        <div class="section-title">Buscar por nombre o celular</div>
+        <div class="section-title" id="search-section-title">Buscar por nombre, celular, ciudad...</div>
         <div class="form-group">
-          <input class="form-control" type="text" id="search-q" placeholder="Ej: Quispe · 78912345..." oninput="doSearch(this.value)">
+          <input class="form-control" type="text" id="search-q" placeholder="Nombre, celular, ciudad, medio difusión..." oninput="doSearch(this.value)">
         </div>
-        <div id="search-results-body"><div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí para buscar</div></div>
+        <div id="search-results-body"><div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres para buscar</div></div>
+      </div>
+      <!-- CAMBIO 6: Exportar Excel (solo modo buscar) -->
+      <div id="search-export-section" class="section" style="display:none">
+        <div class="section-title">📊 Exportar leads por rango de fechas</div>
+        <div class="filtro-export">
+          <label>📅 Desde</label>
+          <input type="date" class="form-control" id="exportFrom" style="width:auto;padding:6px 10px;font-size:12px">
+          <label>📅 Hasta</label>
+          <input type="date" class="form-control" id="exportTo" style="width:auto;padding:6px 10px;font-size:12px">
+          <button class="btn-primary" style="font-size:11px;padding:7px 14px" onclick="exportarBusqueda()">📊 Exportar Excel</button>
+        </div>
+      </div>
+      <!-- CAMBIO 5: Lista cronológica (solo modo buscar) -->
+      <div id="search-table-section" class="section" style="display:none">
+        <div class="section-title">📋 Leads recientes (orden cronológico)</div>
+        <div id="search-leads-table"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: EDITAR LEAD ══ -->
+<div id="modalEditLead" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalEditLead')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2>✏️ Editar perfil del lead</h2>
+      <button class="modal-close" onclick="closeModal('modalEditLead')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-lead-id">
+      <div class="form-group">
+        <label class="form-label">Nombre / Familia <span style="color:var(--st-atrasado)">*</span></label>
+        <input class="form-control" type="text" id="edit-nombre" placeholder="Ej: Flía Quispe Mamani">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Celular <span style="color:var(--st-atrasado)">*</span></label>
+          <input class="form-control" type="tel" id="edit-celular" placeholder="78912345">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ciudad / Departamento</label>
+          <input class="form-control" type="text" id="edit-ciudad" placeholder="Santa Cruz">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Medio de difusión</label>
+        <input class="form-control" type="text" id="edit-medio" placeholder="Facebook, TikTok...">
+      </div>
+      <div class="action-row">
+        <button class="btn-primary" id="btn-guardar-edit" onclick="guardarEdicionLead()">💾 Guardar cambios</button>
+        <button class="btn-ghost" onclick="closeModal('modalEditLead')">Cancelar</button>
       </div>
     </div>
   </div>
@@ -841,6 +966,8 @@ let currentLeadId=null;
 let outcomeMode='continue';
 let searchMode='search';
 let dupBlocked=false;
+let currentLeadMode='normal'; // 'normal' | 'readonly' | 'reactivar'
+const _antiDupLock=new Map();
 
 /* ════════════════════════════════════════
    HELPERS
@@ -865,6 +992,50 @@ function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
   clearTimeout(el._t);el._t=setTimeout(()=>el.className='',2800);
+}
+
+/* CAMBIO 1.B — Anti-duplicado en memoria */
+function checkDupLock(key){
+  const now=Date.now();
+  const last=_antiDupLock.get(key);
+  if(last&&(now-last)<5000){
+    return false;
+  }
+  _antiDupLock.set(key,now);
+  for(const[k,v]of _antiDupLock){if(now-v>10000)_antiDupLock.delete(k);}
+  return true;
+}
+
+/* CAMBIO 7 — Marcadores del día */
+async function cargarMarcadoresDia(){
+  const hoy=ymdLocal(new Date());
+  const hoyInicio=hoy+'T00:00:00';
+  const hoyFin=hoy+'T23:59:59';
+  const ahora=new Date().toISOString();
+  const isJefe=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  try{
+    let qR=sb.from('agenda_personal').select('id',{count:'exact',head:true})
+      .eq('completada',true).eq('activo',true)
+      .gte('fecha_programada',hoyInicio).lte('fecha_programada',hoyFin);
+    let qP=sb.from('agenda_personal').select('id',{count:'exact',head:true})
+      .eq('completada',false).eq('activo',true)
+      .gte('fecha_programada',ahora).lte('fecha_programada',hoyFin);
+    let qA=sb.from('agenda_personal').select('id',{count:'exact',head:true})
+      .eq('completada',false).eq('activo',true)
+      .lt('fecha_programada',ahora);
+    if(!isJefe){
+      qR=qR.eq('colaborador',cu.nombre);
+      qP=qP.eq('colaborador',cu.nombre);
+      qA=qA.eq('colaborador',cu.nombre);
+    }
+    const[r1,r2,r3]=await Promise.all([qR,qP,qA]);
+    const mR=document.getElementById('m-realizado');
+    const mP=document.getElementById('m-pendiente');
+    const mA=document.getElementById('m-atrasado');
+    if(mR)mR.textContent=r1.count??0;
+    if(mP)mP.textContent=r2.count??0;
+    if(mA)mA.textContent=r3.count??0;
+  }catch(e){}
 }
 
 /* Mapeo nombre→clase CSS */
@@ -953,6 +1124,7 @@ async function initApp(){
   await renderWeek();
   buildPersonaFilters();
   attachPickerListeners();
+  cargarMarcadoresDia();
 }
 
 function attachPickerListeners(){
@@ -1524,11 +1696,12 @@ function xlsxExport(sheets,filename){
 /* ════════════════════════════════════════
    LEAD DETAIL
 ════════════════════════════════════════ */
-async function openLeadDetail(leadId,agendaId){
+async function openLeadDetail(leadId,agendaId,mode){
   if(!leadId||leadId==='null'||leadId===null||isNaN(Number(leadId))){
     toast('Esta actividad no tiene lead asociado.','warning');
     return;
   }
+  currentLeadMode=mode||'normal';
   currentLeadId=leadId;
   currentAgendaId=agendaId;
   openModal('modalLead');
@@ -1549,6 +1722,8 @@ async function openLeadDetail(leadId,agendaId){
   const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
 
   document.getElementById('modal-lead-body').innerHTML=`
+    ${currentLeadMode==='readonly'?'<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.</div>':''}
+    ${currentLeadMode==='reactivar'?'<div class="mobile-note" style="border-color:var(--gold)">♻️ <strong>Reactivar cliente perdido</strong> — revisá el perfil y completá el formulario al pie para agendar.</div>':''}
     <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
@@ -1575,10 +1750,10 @@ async function openLeadDetail(leadId,agendaId){
           ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
           ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
         </div>
-        ${!current.completada?`<div class="action-row">
+        ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
-        </div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'}
+        </div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
       </div>`:''}
       <div class="section">
         <div class="section-title">Línea de tiempo completa</div>
@@ -1609,6 +1784,7 @@ async function openLeadDetail(leadId,agendaId){
         <div class="section-title">Indagación</div>
         <div class="indagacion-grid">${renderIndagacion(lead)}</div>
       </div>
+      ${currentLeadMode==='reactivar'?renderReactivarForm(lead):''}
     </div>
     <div id="lead-tab-viaje" style="display:none">${renderViajeCliente(lead,segs,history)}</div>
   `;
@@ -1750,12 +1926,26 @@ function setOutcome(el,mode){
 
 async function saveSeguimiento(){
   if(!currentAgendaId||!currentLeadId){toast('Sin seguimiento activo','error');return;}
+
+  // CAMBIO 1.A — Deshabilitar botón durante guardado
+  const btn=document.getElementById('btn-guardar-seg');
+  if(btn&&btn.disabled)return;
+  const originalText=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.style.cursor='not-allowed';btn.innerHTML='⏳ Guardando...';}
+
+  // CAMBIO 1.B — Anti-dup lock
+  const lockKey=`seg-${currentLeadId}-${currentAgendaId}`;
+  if(!checkDupLock(lockKey)){
+    toast('Ya se está guardando. Esperá un momento.','error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    return;
+  }
+
   const estado=document.getElementById('fin-estado').value;
   const nota=document.getElementById('fin-nota').value;
   const now=new Date().toISOString();
 
   try{
-    // 1. Marcar agenda_personal como completada
     const{error:e1}=await sb.from('agenda_personal').update({
       completada:true,completada_en:now,nota_resultado:nota,tipo:estado
     }).eq('id',currentAgendaId);
@@ -1767,27 +1957,24 @@ async function saveSeguimiento(){
       const nextFecha=document.getElementById('next-fecha').value;
       const nextHora=document.getElementById('next-hora').value;
       const nextNota=document.getElementById('next-nota').value;
-      if(!nextFecha){toast('Ingresá la fecha del próximo seguimiento','error');return;}
-
+      if(!nextFecha){
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        toast('Ingresá la fecha del próximo seguimiento','error');return;
+      }
       const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
-
-      // Obtener nombre del lead
       const{data:lead}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
       const nombreLead=lead?.nombre||'—';
-
-      // Crear nueva entrada en agenda_personal del ASIGNADO (no del usuario actual)
       const{error:e2}=await sb.from('agenda_personal').insert({
-        colaborador:nextAsignado,
-        lead_id:currentLeadId,
-        tipo:nextEstado,
-        titulo:nombreLead,
-        nota:nextNota,
-        fecha_programada:fp,
-        completada:false
+        colaborador:nextAsignado,lead_id:currentLeadId,tipo:nextEstado,
+        titulo:nombreLead,nota:nextNota,fecha_programada:fp,completada:false
       });
-      if(e2)throw e2;
-
-      // Actualizar etapa del lead
+      if(e2){
+        // CAMBIO 1.C — manejo error único 23505
+        if(e2.code==='23505'){toast('Esta actividad ya está registrada. No se crearon duplicados.','error');}
+        else throw e2;
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        return;
+      }
       await sb.from('leads').update({etapa:nextEstado,updated_at:now}).eq('id',currentLeadId);
 
     } else if(outcomeMode==='won'){
@@ -1810,10 +1997,15 @@ async function saveSeguimiento(){
       if(e4)throw e4;
     }
 
-    closeModal('modalFinalize');
+    if(btn){btn.innerHTML='✅ Guardado';}
+    setTimeout(()=>{closeModal('modalFinalize');},700);
     toast(outcomeMode==='won'?'🏆 Lead marcado como GANADO':outcomeMode==='lost'?'Lead marcado como perdido':'✅ Seguimiento guardado y agenda actualizada');
     renderWeek();
-  }catch(e){toast('Error: '+e.message,'error');}
+    cargarMarcadoresDia();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    toast('Error: '+e.message,'error');
+  }
 }
 
 /* ════════════════════════════════════════
@@ -1840,7 +2032,20 @@ async function saveLead(){
   const celular=document.getElementById('nl-celular').value.trim();
   if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
 
-  // Determinar captador
+  // CAMBIO 1.A — Deshabilitar botón
+  const btn=document.getElementById('btn-guardar-lead');
+  if(btn&&btn.disabled)return;
+  const originalText=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.style.cursor='not-allowed';btn.innerHTML='⏳ Creando...';}
+
+  // CAMBIO 1.B — Anti-dup lock
+  const lockKey=`lead-${celular}-${nombre.slice(0,10)}`;
+  if(!checkDupLock(lockKey)){
+    toast('Ya se está creando este lead. Esperá.','error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    return;
+  }
+
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:document.getElementById('nl-captador-sel').value;
   const ciudad=document.getElementById('nl-ciudad').value;
@@ -1851,9 +2056,12 @@ async function saveLead(){
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   const now=new Date().toISOString();
 
-  // Re-verificar duplicado
   const{data:dup}=await sb.from('leads').select('id').eq('celular',celular).limit(1);
-  if(dup&&dup.length){toast('Número ya registrado','error');return;}
+  if(dup&&dup.length){
+    toast('Número ya registrado','error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    return;
+  }
 
   try{
     const{data:newLead,error:e1}=await sb.from('leads').insert({
@@ -1863,20 +2071,25 @@ async function saveLead(){
     }).select('id,nombre').single();
     if(e1)throw e1;
 
-    // Crear primera agenda_personal
     const{error:e2}=await sb.from('agenda_personal').insert({
       colaborador:captador,lead_id:newLead.id,tipo:'1er intento',
       titulo:newLead.nombre,nota,fecha_programada:fp,completada:false
     });
-    if(e2)throw e2;
+    if(e2){
+      if(e2.code==='23505'){toast('Actividad duplicada bloqueada. Lead creado sin agenda (añadila manualmente).','error');}
+      else throw e2;
+    }
 
-    closeModal('modalNewLead');
+    if(btn){btn.innerHTML='✅ Creado';}
+    setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
-    // Limpiar form
     ['nl-nombre','nl-celular','nl-nota'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('dupWarning').classList.remove('show');
     renderWeek();
-  }catch(e){toast('Error: '+e.message,'error');}
+  }catch(e){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    toast('Error: '+e.message,'error');
+  }
 }
 
 /* ════════════════════════════════════════
@@ -1885,93 +2098,316 @@ async function saveLead(){
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 
+/* CAMBIO 4 — Buscar Lead: solo lectura, separado de Nueva Oportunidad */
+function openSearchModal(){
+  searchMode='search';
+  document.getElementById('search-modal-title').textContent='🔍 Buscar Lead';
+  document.getElementById('search-hint').style.display='none';
+  document.getElementById('search-section-title').textContent='Buscar por nombre, celular, ciudad...';
+  document.getElementById('search-q').value='';
+  document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres</div>';
+  // Mostrar secciones de exportar + tabla
+  document.getElementById('search-export-section').style.display='';
+  document.getElementById('search-table-section').style.display='';
+  // Inicializar rango de fechas
+  const now=new Date();
+  const firstDay=ymdLocal(new Date(now.getFullYear(),now.getMonth(),1));
+  const lastDay=ymdLocal(new Date(now.getFullYear(),now.getMonth()+1,0));
+  const eF=document.getElementById('exportFrom');
+  const eT=document.getElementById('exportTo');
+  if(eF&&!eF.value)eF.value=firstDay;
+  if(eT&&!eT.value)eT.value=lastDay;
+  openModal('modalSearch');
+  cargarLeadsRecientes();
+}
+
+/* CAMBIO 2 — Nueva Oportunidad: muestra perfil antes de agendar */
 function openNuevaOportunidad(){
   searchMode='reactivar';
   document.getElementById('search-modal-title').textContent='♻️ Nueva Oportunidad';
   document.getElementById('search-hint').style.display='';
+  document.getElementById('search-section-title').textContent='Buscar lead perdido para reactivar';
   document.getElementById('search-q').value='';
-  document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Buscá un lead perdido para reactivar</div>';
+  document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Buscá un lead perdido para ver su perfil y reactivarlo</div>';
+  document.getElementById('search-export-section').style.display='none';
+  document.getElementById('search-table-section').style.display='none';
   openModal('modalSearch');
 }
 
 let searchDebounce=null;
 function doSearch(q){
   clearTimeout(searchDebounce);
-  searchDebounce=setTimeout(()=>execSearch(q),350);
+  searchDebounce=setTimeout(()=>execSearch(q),300);
 }
 
+/* CAMBIO 3 — Búsqueda multi-campo */
 async function execSearch(q){
-  if(!q||q.length<2){
+  const query=q.trim();
+  if(!query||query.length<2){
     document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres</div>';
     return;
   }
-  let query=sb.from('leads').select('id,nombre,celular,captador,estado,etapa').limit(15);
-  if(q.match(/^\d+$/)){query=query.ilike('celular','%'+q+'%');}
-  else{query=query.ilike('nombre','%'+q+'%');}
-  if(searchMode==='reactivar') query=query.eq('estado','cerrado_perdido');
-  const {data}=await query;
+  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  const orParts=[
+    `nombre.ilike.%${query}%`,
+    `celular.ilike.%${query}%`,
+    `ciudad.ilike.%${query}%`,
+    `medio_difusion.ilike.%${query}%`,
+    `notas.ilike.%${query}%`
+  ];
+  if(esAdmin) orParts.push(`captador.ilike.%${query}%`);
+
+  let dbQuery=sb.from('leads')
+    .select('id,nombre,celular,ciudad,captador,estado,etapa,medio_difusion,notas')
+    .or(orParts.join(','))
+    .order('created_at',{ascending:false})
+    .limit(30);
+
+  if(searchMode==='reactivar') dbQuery=dbQuery.eq('estado','cerrado_perdido');
+  if(!esAdmin) dbQuery=dbQuery.eq('captador',cu.nombre);
+
+  const{data}=await dbQuery;
   const leads=data||[];
   if(!leads.length){
-    document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Sin resultados</div>';
+    document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Sin resultados para "'+query+'"</div>';
     return;
   }
+  const q_lc=query.toLowerCase();
   document.getElementById('search-results-body').innerHTML=`<div class="search-results">${leads.map(l=>{
     const isLost=l.estado==='cerrado_perdido';
     const isWon=l.estado==='cerrado_ganado';
     const cls=isLost?'lost':isWon?'won':'open';
     const lbl=isLost?'Perdido':isWon?'Ganado':'Abierto';
-    const action=isLost
-      ?`onclick="reactivateLead(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}')"`
-      :`onclick="openLeadFromSearch(${l.id})"`;
+    // Detectar qué campo coincidió
+    const matches=[];
+    if(l.nombre?.toLowerCase().includes(q_lc))matches.push('nombre');
+    if(l.celular?.includes(query))matches.push('celular');
+    if(l.ciudad?.toLowerCase().includes(q_lc))matches.push('ciudad');
+    if(l.medio_difusion?.toLowerCase().includes(q_lc))matches.push('medio');
+    if(l.captador?.toLowerCase().includes(q_lc))matches.push('captador');
+    if(l.notas?.toLowerCase().includes(q_lc))matches.push('nota');
+    const matchTag=matches.length?`<span class="match-tag">por: ${matches.join(', ')}</span>`:'';
+    // En modo búsqueda: abrir readonly. En modo reactivar: abrir perfil de reactivación
+    const action=searchMode==='reactivar'
+      ?`onclick="openLeadReactivar(${l.id})"`
+      :`onclick="openLeadReadOnly(${l.id})"`;
     return `<div class="search-result-item" ${action}>
       <div>
-        <div class="sr-name">${l.nombre||'—'}</div>
-        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${l.etapa||'—'}</div>
+        <div class="sr-name">${l.nombre||'—'}${matchTag}</div>
+        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${l.ciudad||'—'}</div>
       </div>
       <span class="sr-status ${cls}">${lbl}</span>
     </div>`;
   }).join('')}</div>`;
 }
 
-async function openLeadFromSearch(leadId){
+/* CAMBIO 4 — Abrir lead en modo solo lectura */
+async function openLeadReadOnly(leadId){
   closeModal('modalSearch');
-  // Buscar el último agenda_personal del lead
-  const{data}=await sb.from('agenda_personal').select('id').eq('lead_id',leadId).eq('completada',false).order('fecha_programada').limit(1);
+  const{data}=await sb.from('agenda_personal').select('id').eq('lead_id',leadId).eq('completada',false).eq('activo',true).order('fecha_programada').limit(1);
   const agId=data?.[0]?.id||null;
-  openLeadDetail(leadId,agId);
+  openLeadDetail(leadId,agId,'readonly');
 }
 
-async function reactivateLead(leadId,nombre){
+/* CAMBIO 2 — Abrir lead para reactivar (muestra perfil + formulario reactivar) */
+function openLeadReactivar(leadId){
   closeModal('modalSearch');
+  openLeadDetail(leadId,null,'reactivar');
+}
+
+/* Formulario de reactivación (inyectado en el modal de detalle) */
+function renderReactivarForm(lead){
+  const optsEtapas=itemsSeg.map(s=>`<option>${s.nombre}</option>`).join('');
+  const optsColab=colaboradores.filter(c=>c.activo).map(c=>`<option value="${c.nombre}"${c.nombre===cu.nombre?' selected':''}>${c.nombre}</option>`).join('');
+  return `<div class="section" style="border-color:var(--gold);background:rgba(242,197,0,0.04)">
+    <div class="section-title">♻️ REACTIVAR ESTE CLIENTE</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Etapa</label>
+        <select class="form-control" id="reac-etapa">${optsEtapas}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asignar a</label>
+        <select class="form-control" id="reac-asignado">${optsColab}</select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">📅 Fecha</label>
+        <input class="form-control" type="date" id="reac-fecha" value="${ymdLocal(addDays(new Date(),1))}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">🕐 Hora</label>
+        <input class="form-control" type="time" id="reac-hora" value="10:00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nota · Objetivo del contacto</label>
+      <textarea class="form-control" id="reac-nota" rows="2" placeholder="¿Por qué se reactiva? ¿Qué querés lograr?"></textarea>
+    </div>
+    <div class="action-row">
+      <button class="btn-primary" id="btn-reactivar" onclick="confirmarReactivar(${lead.id},'${(lead.nombre||'').replace(/'/g,"\\'")}')">📅 Reactivar y agendar</button>
+      <button class="btn-ghost" onclick="closeModal('modalLead')">Cancelar</button>
+    </div>
+  </div>`;
+}
+
+async function confirmarReactivar(leadId,nombre){
+  const etapa=document.getElementById('reac-etapa')?.value||'1er intento';
+  const asignado=document.getElementById('reac-asignado')?.value||cu.nombre;
+  const fecha=document.getElementById('reac-fecha')?.value;
+  const hora=document.getElementById('reac-hora')?.value||'10:00';
+  const nota=document.getElementById('reac-nota')?.value||'';
+  if(!fecha){toast('Ingresá la fecha del seguimiento','error');return;}
+
+  const btn=document.getElementById('btn-reactivar');
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Reactivando...';}
+
+  const lockKey=`reac-${leadId}-${fecha}`;
+  if(!checkDupLock(lockKey)){
+    toast('Ya se está procesando. Esperá.','error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='📅 Reactivar y agendar';}
+    return;
+  }
+
   const now=new Date().toISOString();
+  const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   try{
     await sb.from('leads').update({
-      estado:'nuevo',etapa:'1er intento',captador:cu.nombre,
-      reactivaciones:sb.rpc('coalesce_int',{x:null,d:0}),
-      updated_at:now
+      estado:'nuevo',etapa,captador:asignado,updated_at:now
     }).eq('id',leadId);
-    // Crear nueva agenda sin fecha (usuario la pone)
     const{error}=await sb.from('agenda_personal').insert({
-      colaborador:cu.nombre,lead_id:leadId,tipo:'1er intento',
-      titulo:nombre,nota:'Reactivación — Nueva Oportunidad',
-      fecha_programada:addDays(new Date(),1).toISOString(),completada:false
+      colaborador:asignado,lead_id:leadId,tipo:etapa,
+      titulo:nombre,nota:nota||'Reactivación',
+      fecha_programada:fp,completada:false
     });
-    if(error)throw error;
-    toast('♻️ Lead "'+nombre+'" reactivado y asignado a vos');
+    if(error){
+      if(error.code==='23505'){toast('Actividad ya existe. Lead reactivado igualmente.','error');}
+      else throw error;
+    }
+    closeModal('modalLead');
+    toast('♻️ "'+nombre+'" reactivado y asignado a '+asignado);
+    currentLeadMode='normal';
     renderWeek();
+    cargarMarcadoresDia();
   }catch(e){
-    // Fallback simple si falla el rpc
-    try{
-      await sb.from('leads').update({estado:'nuevo',etapa:'1er intento',captador:cu.nombre,updated_at:now}).eq('id',leadId);
-      await sb.from('agenda_personal').insert({
-        colaborador:cu.nombre,lead_id:leadId,tipo:'1er intento',
-        titulo:nombre,nota:'Reactivación — Nueva Oportunidad',
-        fecha_programada:addDays(new Date(),1).toISOString(),completada:false
-      });
-      toast('♻️ Lead "'+nombre+'" reactivado');
-      renderWeek();
-    }catch(e2){toast('Error reactivando: '+e2.message,'error');}
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='📅 Reactivar y agendar';}
+    toast('Error: '+e.message,'error');
   }
+}
+
+/* CAMBIO 5 — Cargar leads recientes (tabla cronológica) */
+async function cargarLeadsRecientes(){
+  const body=document.getElementById('search-leads-table');
+  if(!body)return;
+  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  try{
+    let q=sb.from('leads')
+      .select('id,nombre,celular,ciudad,captador,estado,created_at')
+      .order('created_at',{ascending:false})
+      .limit(50);
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
+    const{data,error}=await q;
+    if(error)throw error;
+    const leads=data||[];
+    if(!leads.length){
+      body.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:12px 0">Sin leads registrados.</div>';
+      return;
+    }
+    body.innerHTML=`<div style="overflow-x:auto"><table class="search-leads-tbl">
+      <thead><tr><th>Fecha/Hora</th><th>Captador</th><th>Cliente</th><th>Celular</th><th>Ciudad</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${leads.map(l=>{
+        const dt=l.created_at?new Date(l.created_at).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+        const isLost=l.estado==='cerrado_perdido';const isWon=l.estado==='cerrado_ganado';
+        const cls=isLost?'lost':isWon?'won':'open';
+        const lbl=isLost?'Perdido':isWon?'Ganado':'Abierto';
+        return `<tr>
+          <td style="white-space:nowrap;font-size:10px">${dt}</td>
+          <td style="font-size:10px">${l.captador||'—'}</td>
+          <td><strong style="font-size:11px">${l.nombre||'—'}</strong></td>
+          <td style="font-size:11px">${l.celular||'—'}</td>
+          <td style="font-size:10px">${l.ciudad||'—'}</td>
+          <td><span class="sr-status ${cls}" style="font-size:9px;padding:2px 6px">${lbl}</span></td>
+          <td style="white-space:nowrap">
+            <button title="Ver perfil" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="openLeadReadOnly(${l.id})">🔍</button>
+            <button title="Editar" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="abrirEditarLead(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}','${l.celular||''}','${l.ciudad||''}','${l.medio_difusion||''}')">✏️</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  }catch(e){
+    body.innerHTML='<div style="color:var(--st-atrasado);font-size:12px">Error cargando: '+e.message+'</div>';
+  }
+}
+
+/* CAMBIO 5 — Editar perfil del lead */
+function abrirEditarLead(leadId,nombre,celular,ciudad,medio){
+  document.getElementById('edit-lead-id').value=leadId;
+  document.getElementById('edit-nombre').value=decodeURIComponent(nombre||'');
+  document.getElementById('edit-celular').value=celular||'';
+  document.getElementById('edit-ciudad').value=ciudad||'';
+  document.getElementById('edit-medio').value=medio||'';
+  openModal('modalEditLead');
+}
+
+async function guardarEdicionLead(){
+  const leadId=document.getElementById('edit-lead-id').value;
+  const nombre=document.getElementById('edit-nombre').value.trim();
+  const celular=document.getElementById('edit-celular').value.trim();
+  if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
+  const btn=document.getElementById('btn-guardar-edit');
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Guardando...';}
+  const cambios={
+    nombre,celular,
+    ciudad:document.getElementById('edit-ciudad').value,
+    medio_difusion:document.getElementById('edit-medio').value,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    const{error}=await sb.from('leads').update(cambios).eq('id',leadId);
+    if(error)throw error;
+    // Auditoría opcional
+    try{
+      await sb.from('auditoria_leads').insert({
+        lead_id:Number(leadId),accion:'edicion_perfil',colaborador:cu.nombre,
+        detalles:JSON.stringify(cambios),fecha:new Date().toISOString()
+      });
+    }catch(ae){}
+    closeModal('modalEditLead');
+    toast('✅ Perfil actualizado');
+    cargarLeadsRecientes();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='💾 Guardar cambios';}
+    toast('Error: '+e.message,'error');
+  }
+}
+
+/* CAMBIO 6 — Exportar Excel desde buscador */
+async function exportarBusqueda(){
+  const desde=document.getElementById('exportFrom')?.value;
+  const hasta=document.getElementById('exportTo')?.value;
+  if(!desde||!hasta){toast('Ingresá las fechas desde y hasta','error');return;}
+  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  toast('Generando Excel...','ok');
+  try{
+    let q=sb.from('leads')
+      .select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at')
+      .gte('created_at',new Date(desde+'T00:00:00').toISOString())
+      .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
+      .order('created_at',{ascending:false});
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
+    const{data,error}=await q;
+    if(error)throw error;
+    const rows=(data||[]).map(l=>({
+      'Fecha creación':l.created_at?new Date(l.created_at).toLocaleString('es-BO'):'',
+      'Captador':l.captador||'—','Cliente':l.nombre,'Celular':l.celular,
+      'Ciudad':l.ciudad||'—','Medio difusión':l.medio_difusion||'—',
+      'Estado':l.estado,'Etapa':l.etapa||'—'
+    }));
+    xlsxExport([{name:'Leads',rows}],`GEAT_Leads_${desde}_a_${hasta}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
