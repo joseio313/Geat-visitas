@@ -398,43 +398,86 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   z-index: 2;
 }
 
-/* ── CAMBIO 7: MARCADORES DEL DÍA ── */
+/* ── CAMBIO 7: MARCADORES DEL DÍA — compactos ── */
 .marcadores-dia {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 16px;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
 }
 .marcador {
-  padding: 14px;
-  border-radius: 10px;
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
   text-align: center;
-  border: 2px solid;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .marcador.realizado { background: rgba(16,185,129,0.10); border-color: var(--st-completo); }
 .marcador.pendiente { background: rgba(255,224,130,0.10); border-color: var(--st-vis-of); }
 .marcador.atrasado  { background: rgba(239,68,68,0.10);  border-color: var(--st-atrasado); }
 .marcador .num {
-  display: block;
   font-family: 'Playfair Display', serif;
-  font-size: 32px;
+  font-size: 18px;
   font-weight: 800;
-  margin-bottom: 4px;
+  line-height: 1;
 }
 .marcador.realizado .num { color: var(--st-completo); }
 .marcador.pendiente .num { color: var(--st-vis-of); }
 .marcador.atrasado  .num { color: var(--st-atrasado); }
 .marcador .lbl {
-  font-size: 11px;
+  font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--gray-400);
+  line-height: 1.2;
 }
 @media (max-width: 768px) {
-  .marcador { padding: 10px; }
-  .marcador .num { font-size: 22px; }
-  .marcador .lbl { font-size: 9px; }
+  .marcador { padding: 4px 6px; }
+  .marcador .num { font-size: 14px; }
+  .marcador .lbl { font-size: 8px; }
 }
+/* ── MODAL REPORTE SEGURO ── */
+#modalReporteSeguro{position:fixed;inset:0;background:#000;z-index:500;display:none;flex-direction:column;overflow:hidden}
+#modalReporteSeguro.show{display:flex}
+#modalReporteSeguro::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:repeating-linear-gradient(-45deg,
+    transparent 0,transparent 80px,
+    rgba(242,197,0,0.08) 80px,rgba(242,197,0,0.08) 82px);
+  font-size:0}
+.rep-seg-header{background:#000;border-bottom:2px solid var(--gold);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:2;flex-shrink:0}
+.rep-seg-header h2{font-family:'Playfair Display',serif;font-size:20px;color:var(--gold);font-weight:900}
+.rep-seg-header-actions{display:flex;gap:8px;align-items:center}
+.rep-seg-body{flex:1;overflow-y:auto;padding:20px;position:relative;z-index:1;-webkit-user-select:none;user-select:none}
+.rep-seg-footer{background:#000;border-top:1px solid var(--gray-600);padding:8px 18px;font-size:10px;color:var(--gray-400);text-align:center;position:relative;z-index:2;flex-shrink:0;letter-spacing:0.05em}
+.rep-seg-watermark-text{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;transform:rotate(-30deg);font-family:'Playfair Display',serif;font-size:48px;font-weight:900;color:rgba(242,197,0,0.04);white-space:nowrap;letter-spacing:0.2em}
+/* ── ADMIN PANEL ── */
+.admin-section{background:var(--gray-900);border-radius:10px;padding:16px;margin-bottom:16px;border:1px solid var(--gray-600)}
+.admin-section-title{color:var(--gold);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.admin-section-title::before{content:'';width:3px;height:14px;background:var(--gold);border-radius:2px}
+.alert-card{background:rgba(211,47,47,0.1);border:1px solid var(--st-atrasado);border-radius:8px;padding:10px 13px;margin-bottom:8px;font-size:12px;color:var(--white)}
+.alert-card .al-title{color:var(--st-atrasado);font-weight:700;font-size:11px;margin-bottom:3px}
+.audit-row{padding:7px 0;border-bottom:1px solid var(--gray-600);font-size:11px;display:grid;grid-template-columns:140px 120px 1fr;gap:8px;align-items:start}
+.audit-row:last-child{border-bottom:none}
+.audit-fecha{color:var(--gray-400);font-size:10px}
+.audit-quien{color:var(--gold);font-weight:700}
+.audit-accion{color:var(--white)}
+.alt-row{padding:7px 0;border-bottom:1px solid var(--gray-600);font-size:11px;display:flex;gap:10px;align-items:center}
+.badge-regla{font-size:9px;font-weight:700;padding:2px 7px;border-radius:9px;text-transform:uppercase;letter-spacing:0.05em}
+.badge-regla.normal{background:rgba(242,197,0,0.15);color:var(--gold)}
+.badge-regla.mujer{background:rgba(0,200,83,0.15);color:var(--st-completo)}
+.badge-regla.solape{background:rgba(211,47,47,0.15);color:var(--st-atrasado)}
+.badge-regla.manual{background:rgba(155,89,182,0.15);color:#bb86fc}
+.prod-table{width:100%;border-collapse:collapse;font-size:11px}
+.prod-table th,.prod-table td{text-align:left;padding:8px 7px;border-bottom:1px solid var(--gray-600)}
+.prod-table th{color:var(--gold);font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+.prod-table td{color:var(--white)}
+.prod-table .num{font-family:'Playfair Display',serif;font-weight:700;color:var(--gold);text-align:right}
+.pct-bar{height:6px;background:var(--gray-800);border-radius:3px;overflow:hidden;margin-top:3px}
+.pct-fill{height:100%;background:linear-gradient(90deg,var(--gold-dark),var(--gold));border-radius:3px}
 /* ── CAMBIO 5/6: BUSCAR LEAD TABLE + FILTRO EXPORT ── */
 .filtro-export {
   display: flex;
@@ -528,6 +571,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" onclick="switchTab(this,'screen-month')">🗓️ Vista mensual</div>
     <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
     <div class="nav-tab" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
+    <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
   </nav>
 
   <!-- ══ SCREEN: SEMANA ══ -->
@@ -641,13 +685,36 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Hasta:</label>
         <input type="date" class="form-control" id="leadTo" style="width:auto;padding:6px 10px;font-size:12px">
         <button class="btn-ghost" onclick="generarReporteLeads()">🔎 Buscar</button>
-        <button class="btn-primary" onclick="exportarReporteLeads()">📊 Exportar Excel</button>
+        <button class="btn-ghost" onclick="verReporteLeadsRango()">🔍 Ver Reporte</button>
       </div>
       <div id="leads-rango-body"></div>
     </div>
   </section>
 
+  <!-- ══ SCREEN: ADMIN ══ -->
+  <section id="screen-admin" class="screen">
+    <div class="screen-title">
+      <h1>Panel <span class="gold">Admin</span></h1>
+    </div>
+    <div id="admin-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
 </div><!-- /app -->
+
+<!-- ══ MODAL: REPORTE SEGURO ══ -->
+<div id="modalReporteSeguro">
+  <div class="rep-seg-watermark-text">GEAT · CONFIDENCIAL · GEAT · CONFIDENCIAL · GEAT · CONFIDENCIAL</div>
+  <div class="rep-seg-header">
+    <h2 id="rep-seg-titulo">Reporte</h2>
+    <div class="rep-seg-header-actions">
+      <button class="btn-ghost" style="font-size:11px;padding:6px 12px" onclick="cerrarReporteSeguro()">✕ Cerrar</button>
+    </div>
+  </div>
+  <div class="rep-seg-body" id="rep-seg-body">Cargando...</div>
+  <div class="rep-seg-footer" id="rep-seg-footer">
+    GEAT Construcción y Consultoría · Material confidencial
+  </div>
+</div>
 
 <!-- ══ MODAL: LEAD DETAIL ══ -->
 <div id="modalLead" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalLead')">
@@ -844,6 +911,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <textarea class="form-control" id="nl-nota" rows="2" placeholder="Lo que sepas del cliente..."></textarea>
         </div>
         <div class="form-help system">🔒 Fecha y hora: se registran automáticamente al guardar</div>
+        <div id="section-cliente-mujer" style="display:none;margin-top:10px">
+          <label style="display:flex;align-items:center;gap:10px;background:var(--gray-900);padding:9px 13px;border-radius:8px;border:1px solid var(--gray-600);cursor:pointer;font-size:12px">
+            <input type="checkbox" id="nl-cliente-mujer" style="accent-color:var(--gold);width:16px;height:16px">
+            <span>👩 Cliente es mujer <span style="font-size:10px;color:var(--gray-400)">(afecta asignación interna)</span></span>
+          </label>
+        </div>
       </div>
       <div class="section" id="section-programar-1er" style="border-color:var(--gold)">
         <div class="section-title">Programar 1er intento</div>
@@ -884,15 +957,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         </div>
         <div id="search-results-body"><div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres para buscar</div></div>
       </div>
-      <!-- CAMBIO 6: Exportar Excel (solo modo buscar) -->
+      <!-- Ver reporte por rango (solo modo buscar) -->
       <div id="search-export-section" class="section" style="display:none">
-        <div class="section-title">📊 Exportar leads por rango de fechas</div>
+        <div class="section-title">🔍 Ver leads por rango de fechas</div>
         <div class="filtro-export">
           <label>📅 Desde</label>
           <input type="date" class="form-control" id="exportFrom" style="width:auto;padding:6px 10px;font-size:12px">
           <label>📅 Hasta</label>
           <input type="date" class="form-control" id="exportTo" style="width:auto;padding:6px 10px;font-size:12px">
-          <button class="btn-primary" style="font-size:11px;padding:7px 14px" onclick="exportarBusqueda()">📊 Exportar Excel</button>
+          <button class="btn-ghost" style="font-size:11px;padding:7px 14px" onclick="verReporteBusqueda()">🔍 Ver Reporte</button>
         </div>
       </div>
       <!-- CAMBIO 5: Lista cronológica (solo modo buscar) -->
@@ -968,6 +1041,49 @@ let searchMode='search';
 let dupBlocked=false;
 let currentLeadMode='normal'; // 'normal' | 'readonly' | 'reactivar'
 const _antiDupLock=new Map();
+
+/* ── AUDITORÍA / SESIÓN ── */
+let _userIp='';
+let _sessionStart=null;
+let _idleTimer=null;
+const IDLE_TIMEOUT=30*60*1000;
+
+async function obtenerIP(){
+  try{const r=await fetch('https://api.ipify.org?format=json');const j=await r.json();_userIp=j.ip||'';}catch(e){_userIp='';}
+}
+function detectarDispositivo(){
+  return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?'mobile':'desktop';
+}
+function detectarNavegador(){
+  const ua=navigator.userAgent;
+  if(/Edg\//i.test(ua))return'Edge';
+  if(/Chrome\//i.test(ua)&&!/Chromium/i.test(ua))return'Chrome';
+  if(/Firefox\//i.test(ua))return'Firefox';
+  if(/Safari\//i.test(ua)&&!/Chrome/i.test(ua))return'Safari';
+  return'Otro';
+}
+async function registrarAuditoria(accion,tabla,registroId,detalles){
+  if(!cu)return;
+  try{
+    await sb.from('auditoria_acciones').insert({
+      colaborador_id:cu.id||null,colaborador_nombre:cu.nombre,
+      accion,tabla_afectada:tabla||null,registro_id:registroId||null,
+      detalles:detalles||null,ip:_userIp,fecha:new Date().toISOString()
+    });
+  }catch(e){}
+}
+async function registrarLoginAuditoria(col,pinUsado,exitoso){
+  try{
+    await sb.from('auditoria_logins').insert({
+      colaborador_id:exitoso&&col?col.id:null,
+      colaborador_nombre:exitoso&&col?col.nombre:'desconocido',
+      pin_usado:pinUsado,exitoso,
+      ip:_userIp,user_agent:navigator.userAgent,
+      dispositivo:detectarDispositivo(),navegador:detectarNavegador(),
+      fecha_login:new Date().toISOString()
+    });
+  }catch(e){}
+}
 
 /* ════════════════════════════════════════
    HELPERS
@@ -1063,6 +1179,7 @@ function estadoClass(nombre){
 ════════════════════════════════════════ */
 let pinVal='';
 async function initLogin(){
+  obtenerIP();
   try{
     const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
     colaboradores=data||[];
@@ -1093,15 +1210,16 @@ function delPin(){
   pinVal=pinVal.slice(0,-1);
 }
 async function checkPin(){
-  // Si initLogin todavía no terminó de cargar colaboradores, esperamos
   if(_loginInit) await _loginInit;
   const col=colaboradores.find(c=>c.pin===pinVal);
   if(!col){
     document.getElementById('login-err').textContent='PIN incorrecto';
+    registrarLoginAuditoria(null,pinVal,false);
     setTimeout(resetPin,800);
     return;
   }
   cu=col;
+  registrarLoginAuditoria(col,pinVal,true);
   localStorage.setItem('geat_v51_session',JSON.stringify({pin:pinVal,timestamp:Date.now()}));
   startApp();
 }
@@ -1109,10 +1227,36 @@ function cerrarSesion(){
   localStorage.removeItem('geat_v51_session');
   location.reload();
 }
+
+function iniciarIdleTimer(){
+  const resetear=()=>{
+    clearTimeout(_idleTimer);
+    _idleTimer=setTimeout(async()=>{
+      const duracion=Math.round((Date.now()-(_sessionStart||Date.now()))/60000);
+      await registrarAuditoria('logout_automatico_inactividad','sesion',null,{duracion_minutos:duracion});
+      localStorage.removeItem('geat_v51_session');
+      alert('Tu sesión expiró por inactividad ('+duracion+' min).');
+      cu=null;
+      location.reload();
+    },IDLE_TIMEOUT);
+  };
+  ['click','mousemove','keypress','scroll','touchstart'].forEach(ev=>{
+    document.addEventListener(ev,resetear,{passive:true});
+  });
+  resetear();
+}
 function startApp(){
+  _sessionStart=Date.now();
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('user-name').textContent=cu.nombre;
+  // Admin tab
+  if(cu.rol==='admin'){
+    const tabAdmin=document.getElementById('tab-admin');
+    if(tabAdmin)tabAdmin.style.display='';
+  }
+  // Idle logout
+  iniciarIdleTimer();
   initApp();
 }
 
@@ -1222,6 +1366,9 @@ function buildPersonaFilters(){
     nlCap.value=cu.nombre;
     nlCap.style.display='';
     nlCapSel.style.display='none';
+    // Mostrar checkbox cliente_mujer solo para captadoras
+    const secMujer=document.getElementById('section-cliente-mujer');
+    if(secMujer)secMujer.style.display='';
   } else {
     nlCap.style.display='none';
     nlCapSel.style.display='';
@@ -1462,6 +1609,7 @@ async function asignarCaptador(leadId){
   try{
     const{error}=await sb.from('leads').update({captador:nombre,updated_at:new Date().toISOString()}).eq('id',leadId);
     if(error)throw error;
+    registrarAuditoria('cambio_captador','leads',leadId,{nuevo_captador:nombre});
     toast('Captador asignado: '+nombre);
     renderOrphans();
   }catch(e){toast('Error: '+e.message,'error');}
@@ -1557,7 +1705,7 @@ async function renderReports(){
           }).join('')}</tbody>
         </table>
         <div style="margin-top:10px">
-          <button class="btn-ghost" style="font-size:11px" onclick="exportarPorVendedor()">📊 Exportar Excel</button>
+          <button class="btn-ghost" style="font-size:11px" onclick="verReporteVendedor()">🔍 Ver Reporte</button>
         </div>
       </div>
       <div class="section">
@@ -1572,7 +1720,7 @@ async function renderReports(){
             <div class="funnel-track"><div class="funnel-fill" style="width:${Math.max(8,Math.round(n/(topMotivos[0][1]||1)*100))}%">${n}</div></div>
           </div>`).join('')}
         <div style="margin-top:10px">
-          <button class="btn-ghost" style="font-size:11px" onclick="exportarPerdidos()">📊 Exportar Perdidos Excel</button>
+          <button class="btn-ghost" style="font-size:11px" onclick="verReportePerdidos()">🔍 Ver Reporte Perdidos</button>
         </div>
       </div>
       <div class="section">
@@ -1582,15 +1730,15 @@ async function renderReports(){
           <div class="funnel-track"><div class="funnel-fill" style="width:${Math.max(8,Math.round(n/(topMedios[0][1]||1)*100))}%">${n}</div></div>
         </div>`).join('')}
         <div style="margin-top:10px">
-          <button class="btn-ghost" style="font-size:11px" onclick="exportarPorMedio()">📊 Exportar por Medio Excel</button>
+          <button class="btn-ghost" style="font-size:11px" onclick="verReporteMedio()">🔍 Ver Reporte por Medio</button>
         </div>
       </div>
     </div>
     <div class="section" style="margin-top:14px">
-      <div class="section-title">Exportar detalle completo</div>
+      <div class="section-title">Reporte completo</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn-primary" onclick="exportarTodo()">📊 Exportar TODO (leads + seguimientos)</button>
-        <div style="font-size:11px;color:var(--gray-400)">Genera Excel con resumen de leads y hoja de seguimientos del período seleccionado</div>
+        <button class="btn-primary" onclick="verReporteCompleto()">🔍 Ver Reporte Completo</button>
+        <div style="font-size:11px;color:var(--gray-400)">Resumen de leads y seguimientos del período seleccionado</div>
       </div>
     </div>`;
 }
@@ -1691,6 +1839,145 @@ function xlsxExport(sheets,filename){
   });
   XLSX.writeFile(wb,filename);
   toast('✅ Excel descargado: '+filename);
+}
+
+/* ════════════════════════════════════════
+   MODAL REPORTE SEGURO
+════════════════════════════════════════ */
+function abrirReporteSeguro(titulo,htmlContent,tipo){
+  const modal=document.getElementById('modalReporteSeguro');
+  document.getElementById('rep-seg-titulo').textContent=titulo;
+  document.getElementById('rep-seg-body').innerHTML=htmlContent;
+  const now=new Date().toLocaleString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('rep-seg-footer').textContent=
+    'GEAT Construcción y Consultoría · Material confidencial · Generado el '+now+' por '+(cu?cu.nombre:'—');
+  modal.classList.add('show');
+  registrarAuditoria('abrir_reporte','reportes',null,{tipo,rango:getReportRange().label});
+}
+
+function cerrarReporteSeguro(){
+  document.getElementById('modalReporteSeguro').classList.remove('show');
+}
+
+// Bloquear teclas peligrosas en el modal seguro
+document.addEventListener('keydown',function(e){
+  const modal=document.getElementById('modalReporteSeguro');
+  if(!modal||!modal.classList.contains('show'))return;
+  const blocked=(e.ctrlKey||e.metaKey)&&['c','a','s','p','u'].includes(e.key.toLowerCase());
+  const isF12=e.key==='F12';
+  const isDevTools=(e.ctrlKey||e.metaKey)&&e.shiftKey&&['i','j','c'].includes(e.key.toLowerCase());
+  if(blocked||isF12||isDevTools){e.preventDefault();e.stopPropagation();}
+},{passive:false});
+document.addEventListener('contextmenu',function(e){
+  if(document.getElementById('modalReporteSeguro')?.classList.contains('show'))e.preventDefault();
+});
+
+async function verReporteVendedor(){
+  const rng=getReportRange();
+  toast('Cargando reporte...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,metros_cuadrados,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const{data:acts}=await sb.from('agenda_personal').select('colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta);
+    const byP={};const aByP={};
+    (leads||[]).forEach(l=>{const p=l.captador||'Sin asignar';if(!byP[p])byP[p]={leads:0,ganados:0,m2:0};byP[p].leads++;if(l.estado==='cerrado_ganado'){byP[p].ganados++;byP[p].m2+=(l.metros_cuadrados||0);}});
+    (acts||[]).forEach(a=>{if(!aByP[a.colaborador])aByP[a.colaborador]={t:0,c:0};aByP[a.colaborador].t++;if(a.completada)aByP[a.colaborador].c++;});
+    const html=`<table class="team-table" style="width:100%">
+      <thead><tr><th>Colaborador</th><th>Leads</th><th>Actividades (comp/total)</th><th>Ganados</th><th>m² cerrados</th><th>Tasa cierre</th></tr></thead>
+      <tbody>${colaboradores.filter(c=>c.activo).map(c=>{
+        const p=byP[c.nombre]||{leads:0,ganados:0,m2:0};
+        const a=aByP[c.nombre]||{t:0,c:0};
+        const tasa=p.leads?Math.round(p.ganados/p.leads*100):0;
+        return`<tr><td><strong>${c.nombre}</strong><br><span style="font-size:9px;color:var(--gray-400)">${c.rol}</span></td><td class="num">${p.leads}</td><td class="num">${a.c}/${a.t}</td><td class="num">${p.ganados}</td><td class="num">${p.m2} m²</td><td class="num">${tasa}%</td></tr>`;
+      }).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Reporte por Vendedor · '+rng.label,html,'por_vendedor');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function verReportePerdidos(){
+  const rng=getReportRange();
+  toast('Cargando reporte...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,captador,motivo_perdida,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(leads||[]).length} leads perdidos en el período</div>
+    <table class="team-table" style="width:100%">
+      <thead><tr><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Captador</th><th>Motivo pérdida</th><th>Detalle</th><th>Fecha</th></tr></thead>
+      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.captador||'—'}</td><td style="color:var(--st-atrasado)">${l.motivo_perdida||'—'}</td><td style="font-size:10px;color:var(--gray-400)">${l.motivo_perdida_detalle||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Reporte Perdidos · '+rng.label,html,'perdidos');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function verReporteMedio(){
+  const rng=getReportRange();
+  toast('Cargando reporte...','ok');
+  try{
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta).order('medio_difusion');
+    const html=`<table class="team-table" style="width:100%">
+      <thead><tr><th>Medio</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Captador</th><th>Estado</th><th>Fecha</th></tr></thead>
+      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.medio_difusion||'—'}</strong></td><td>${l.nombre||'—'}</td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Reporte por Medio · '+rng.label,html,'por_medio');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function verReporteCompleto(){
+  const rng=getReportRange();
+  toast('Cargando reporte completo...','ok');
+  try{
+    const[rLeads,rSegs]=await Promise.all([
+      sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,metros_cuadrados,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
+      sb.from('seguimientos').select('lead_id,colaborador,etapa,nota_resultado,fecha_seguimiento,estado').gte('fecha_seguimiento',rng.desde).lt('fecha_seguimiento',rng.hasta).order('lead_id').order('fecha_seguimiento')
+    ]);
+    const html=`<div class="section-title" style="margin-bottom:12px">Leads (${(rLeads.data||[]).length})</div>
+    <table class="team-table" style="width:100%;margin-bottom:20px">
+      <thead><tr><th>ID</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Captador</th><th>Estado</th><th>Fecha</th></tr></thead>
+      <tbody>${(rLeads.data||[]).map(l=>`<tr><td style="font-size:10px">${l.id}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+    </table>
+    <div class="section-title" style="margin-bottom:12px">Seguimientos (${(rSegs.data||[]).length})</div>
+    <table class="team-table" style="width:100%">
+      <thead><tr><th>Lead ID</th><th>Responsable</th><th>Etapa</th><th>Nota resultado</th><th>Fecha</th><th>Estado</th></tr></thead>
+      <tbody>${(rSegs.data||[]).map(s=>`<tr><td>${s.lead_id}</td><td>${s.colaborador||'—'}</td><td>${s.etapa||'—'}</td><td style="font-size:10px;color:var(--gray-400)">${s.nota_resultado||'—'}</td><td style="font-size:10px">${s.fecha_seguimiento?new Date(s.fecha_seguimiento).toLocaleDateString('es-BO'):'—'}</td><td style="font-size:10px">${s.estado||'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Reporte Completo · '+rng.label,html,'completo');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function verReporteLeadsRango(){
+  const desde=document.getElementById('leadFrom').value;
+  const hasta=document.getElementById('leadTo').value;
+  if(!desde||!hasta){toast('Ingresá las fechas de rango','error');return;}
+  toast('Cargando...','ok');
+  try{
+    const{data,error}=await sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',new Date(desde+'T00:00:00').toISOString()).lte('created_at',new Date(hasta+'T23:59:59').toISOString()).order('created_at',{ascending:false});
+    if(error)throw error;
+    const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads en el período ${desde} → ${hasta}</div>
+    <table class="team-table" style="width:100%">
+      <thead><tr><th>Fecha</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Captador</th><th>Estado</th></tr></thead>
+      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Leads por Rango · '+desde+' → '+hasta,html,'leads_rango');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function verReporteBusqueda(){
+  const desde=document.getElementById('exportFrom')?.value;
+  const hasta=document.getElementById('exportTo')?.value;
+  if(!desde||!hasta){toast('Ingresá las fechas desde y hasta','error');return;}
+  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  toast('Cargando...','ok');
+  try{
+    let q=sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',new Date(desde+'T00:00:00').toISOString()).lte('created_at',new Date(hasta+'T23:59:59').toISOString()).order('created_at',{ascending:false});
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
+    const{data,error}=await q;
+    if(error)throw error;
+    const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads — ${desde} → ${hasta}</div>
+    <table class="team-table" style="width:100%">
+      <thead><tr><th>Fecha/Hora</th><th>Captador</th><th>Cliente</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Estado</th></tr></thead>
+      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px;white-space:nowrap">${l.created_at?new Date(l.created_at).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td><td>${l.captador||'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+    abrirReporteSeguro('Leads Buscados · '+desde+' → '+hasta,html,'busqueda');
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
@@ -1987,6 +2274,7 @@ async function saveSeguimiento(){
         fecha_contrato:fechaFirma,motivo_ganado:motivo,updated_at:now
       }).eq('id',currentLeadId);
       if(e3)throw e3;
+      registrarAuditoria('marcar_ganado','leads',currentLeadId,{m2,fecha_firma:fechaFirma,motivo});
 
     } else if(outcomeMode==='lost'){
       const motivo=document.getElementById('lost-motivo').value;
@@ -1995,6 +2283,18 @@ async function saveSeguimiento(){
         estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:notaLost,updated_at:now
       }).eq('id',currentLeadId);
       if(e4)throw e4;
+      registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo,nota:notaLost});
+    }
+
+    // Alternancia David/Gustavo si tipo=visita_oficina
+    if(outcomeMode==='continue'){
+      const nextEstado2=document.getElementById('next-estado')?.value||'';
+      if(nextEstado2.toLowerCase()==='visita oficina'){
+        const nextFecha2=document.getElementById('next-fecha')?.value;
+        if(nextFecha2){
+          try{await asignarCerrador(currentLeadId,nextFecha2,false);}catch(eAlt){}
+        }
+      }
     }
 
     if(btn){btn.innerHTML='✅ Guardado';}
@@ -2055,6 +2355,7 @@ async function saveLead(){
   const hora=document.getElementById('nl-hora').value||'10:00';
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   const now=new Date().toISOString();
+  const clienteMujer=esCaptadora&&document.getElementById('nl-cliente-mujer')?.checked||false;
 
   const{data:dup}=await sb.from('leads').select('id').eq('celular',celular).limit(1);
   if(dup&&dup.length){
@@ -2066,7 +2367,7 @@ async function saveLead(){
   try{
     const{data:newLead,error:e1}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
-      notas:nota,estado:'nuevo',etapa:'1er intento',
+      notas:nota,estado:'nuevo',etapa:'1er intento',cliente_mujer:clienteMujer,
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -2286,6 +2587,7 @@ async function confirmarReactivar(leadId,nombre){
       if(error.code==='23505'){toast('Actividad ya existe. Lead reactivado igualmente.','error');}
       else throw error;
     }
+    registrarAuditoria('reactivar_lead','leads',leadId,{etapa,asignado,fecha_prog:fecha});
     closeModal('modalLead');
     toast('♻️ "'+nombre+'" reactivado y asignado a '+asignado);
     currentLeadMode='normal';
@@ -2368,13 +2670,7 @@ async function guardarEdicionLead(){
   try{
     const{error}=await sb.from('leads').update(cambios).eq('id',leadId);
     if(error)throw error;
-    // Auditoría opcional
-    try{
-      await sb.from('auditoria_leads').insert({
-        lead_id:Number(leadId),accion:'edicion_perfil',colaborador:cu.nombre,
-        detalles:JSON.stringify(cambios),fecha:new Date().toISOString()
-      });
-    }catch(ae){}
+    registrarAuditoria('edicion_perfil','leads',Number(leadId),cambios);
     closeModal('modalEditLead');
     toast('✅ Perfil actualizado');
     cargarLeadsRecientes();
@@ -2461,6 +2757,219 @@ async function exportarReporteLeads(){
       'Estado actual':l.estado,'Etapa':l.etapa||'—','Nota inicial':l.notas||'—'
     }));
     xlsxExport([{name:'Leads',rows}],`GEAT_Leads_${desde}_a_${hasta}.xlsx`);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ════════════════════════════════════════
+   ALTERNANCIA DAVID / GUSTAVO
+════════════════════════════════════════ */
+const CERRADOR_DAVID='David';
+const CERRADOR_GUSTAVO='Gustavo Vaca';
+
+async function asignarCerrador(leadId,fechaVisita,clienteMujer){
+  // 1. Última asignación NO manual
+  const{data:ultimaRows}=await sb.from('cerrador_alternancia')
+    .select('cerrador_asignado,regla_aplicada')
+    .not('regla_aplicada','eq','manual_admin')
+    .order('fecha_asignacion',{ascending:false})
+    .limit(1);
+  const ultimo=ultimaRows&&ultimaRows.length?ultimaRows[0].cerrador_asignado:CERRADOR_GUSTAVO;
+  // 2. Próximo = opuesto al último
+  let proximo=ultimo===CERRADOR_DAVID?CERRADOR_GUSTAVO:CERRADOR_DAVID;
+  let regla='alternancia_normal';
+
+  // 3. Regla mujer
+  if(clienteMujer&&proximo===CERRADOR_GUSTAVO){
+    // Verificar solape ±2h
+    const fv=new Date(fechaVisita+'T00:00:00');
+    const desde=new Date(fv.getTime()-2*3600000).toISOString();
+    const hasta=new Date(fv.getTime()+2*3600000).toISOString();
+    const{data:solape}=await sb.from('agenda_personal')
+      .select('id',{count:'exact',head:true})
+      .eq('colaborador',CERRADOR_DAVID)
+      .eq('completada',false)
+      .gte('fecha_programada',desde)
+      .lte('fecha_programada',hasta);
+    if((solape?.count||0)===0){
+      proximo=CERRADOR_DAVID;
+      regla='mujer_a_david';
+    } else {
+      regla='mujer_pero_solape';
+    }
+  }
+
+  // 4. Registrar en cerrador_alternancia
+  try{
+    await sb.from('cerrador_alternancia').insert({
+      lead_id:leadId,cerrador_asignado:proximo,cliente_mujer:clienteMujer||false,
+      regla_aplicada:regla,fecha_asignacion:new Date().toISOString(),
+      asignado_por:cu?cu.nombre:'sistema'
+    });
+  }catch(e){}
+
+  // 5. Crear actividad en agenda del cerrador (si hay fecha de visita)
+  if(fechaVisita){
+    const{data:leadRow}=await sb.from('leads').select('nombre').eq('id',leadId).single();
+    const nombreLead=leadRow?.nombre||'Lead';
+    try{
+      await sb.from('agenda_personal').insert({
+        colaborador:proximo,lead_id:leadId,tipo:'visita_oficina',
+        titulo:'Visita oficina · '+nombreLead,
+        fecha_programada:new Date(fechaVisita+'T10:00:00').toISOString(),
+        completada:false
+      });
+    }catch(e){}
+  }
+}
+
+/* ════════════════════════════════════════
+   PANEL ADMIN
+════════════════════════════════════════ */
+async function renderAdmin(){
+  if(!cu||cu.rol!=='admin'){return;}
+  const body=document.getElementById('admin-body');
+  body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando panel admin...</div>';
+
+  const ahora=new Date();
+  const mesInicio=new Date(ahora.getFullYear(),ahora.getMonth(),1).toISOString();
+  const mesFin=new Date(ahora.getFullYear(),ahora.getMonth()+1,1).toISOString();
+
+  try{
+    const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas]=await Promise.all([
+      sb.from('auditoria_logins').select('*').order('fecha_login',{ascending:false}).limit(50),
+      sb.from('auditoria_acciones').select('*').order('fecha',{ascending:false}).limit(100),
+      sb.from('leads').select('captador,estado,metros_cuadrados,created_at').gte('created_at',mesInicio).lt('created_at',mesFin),
+      sb.from('agenda_personal').select('colaborador,completada,fecha_programada').gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
+      sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10)
+    ]);
+
+    const logins=rLogins.data||[];
+    const acciones=rAcciones.data||[];
+    const leadsMes=rLeadsMes.data||[];
+    const actsMes=rActsMes.data||[];
+    const alternas=rAlternas.data||[];
+
+    // A. Productividad
+    const prodRows=colaboradores.filter(c=>c.activo).map(c=>{
+      const aCol=actsMes.filter(a=>a.colaborador===c.nombre);
+      const total=aCol.length;
+      const comp=aCol.filter(a=>a.completada).length;
+      const atras=aCol.filter(a=>!a.completada&&new Date(a.fecha_programada)<ahora).length;
+      const tasa=total?Math.round(comp/total*100):0;
+      const lMes=leadsMes.filter(l=>l.captador===c.nombre).length;
+      const m2=leadsMes.filter(l=>l.captador===c.nombre&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(l.metros_cuadrados||0),0);
+      const ultimoLogin=logins.find(l=>l.colaborador_nombre===c.nombre&&l.exitoso);
+      const ultimoFmt=ultimoLogin?new Date(ultimoLogin.fecha_login).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'Nunca';
+      return{nombre:c.nombre,rol:c.rol,total,comp,atras,tasa,lMes,m2,ultimoFmt};
+    });
+
+    // D. Alertas
+    const alertas=[];
+    const ahora48=Date.now()-48*3600000;
+    prodRows.forEach(r=>{
+      const ul=logins.find(l=>l.colaborador_nombre===r.nombre&&l.exitoso);
+      if(!ul||new Date(ul.fecha_login).getTime()<ahora48){
+        alertas.push({title:'Sin login >48h',msg:r.nombre+' — último acceso: '+r.ultimoFmt});
+      }
+      if(r.total>=5&&r.tasa<70){
+        alertas.push({title:'Tasa cumplimiento baja',msg:r.nombre+' — '+r.tasa+'% ('+r.comp+'/'+r.total+')'});
+      }
+      if((r.rol==='closer'||r.rol==='commercial_lead')&&r.lMes>0){
+        const ratio=Math.round(r.m2/(r.lMes||1)*100);
+        if(ratio<15)alertas.push({title:'Tasa cierre <15%',msg:r.nombre+' — '+ratio+'% en m²/leads'});
+      }
+      if((r.rol==='field_capturer')&&r.atras>10){
+        alertas.push({title:'>10 actividades atrasadas',msg:r.nombre+' — '+r.atras+' atrasadas'});
+      }
+    });
+
+    body.innerHTML=`
+    <!-- A. Productividad -->
+    <div class="admin-section">
+      <div class="admin-section-title">📊 Productividad del equipo — ${new Date().toLocaleDateString('es-BO',{month:'long',year:'numeric'})}</div>
+      <div style="overflow-x:auto">
+        <table class="prod-table">
+          <thead><tr><th>Colaborador</th><th>Rol</th><th>Leads creados</th><th>Actividades (comp/total)</th><th>Tasa cumplim.</th><th>Atrasadas</th><th>m² cerrados</th><th>Último login</th></tr></thead>
+          <tbody>${prodRows.map(r=>`<tr>
+            <td><strong>${r.nombre}</strong></td>
+            <td style="font-size:9px;color:var(--gray-400)">${r.rol}</td>
+            <td class="num">${r.lMes}</td>
+            <td class="num">${r.comp}/${r.total}</td>
+            <td><div style="font-weight:700;font-size:12px;color:${r.tasa>=70?'var(--st-completo)':'var(--st-atrasado)'}">${r.tasa}%</div><div class="pct-bar"><div class="pct-fill" style="width:${r.tasa}%"></div></div></td>
+            <td class="num" style="color:${r.atras>0?'var(--st-atrasado)':'var(--gray-400)'}">${r.atras}</td>
+            <td class="num">${r.m2} m²</td>
+            <td style="font-size:10px;color:var(--gray-400)">${r.ultimoFmt}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- D. Alertas -->
+    <div class="admin-section">
+      <div class="admin-section-title">🚨 Alertas (${alertas.length})</div>
+      ${alertas.length===0?'<div style="color:var(--st-completo);font-size:12px">✅ Sin alertas activas</div>':
+        alertas.map(a=>`<div class="alert-card"><div class="al-title">⚠️ ${a.title}</div>${a.msg}</div>`).join('')}
+    </div>
+
+    <!-- E. Alternancia -->
+    <div class="admin-section">
+      <div class="admin-section-title">🔄 Alternancia de cerradores — últimas 10 asignaciones</div>
+      <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-ghost" style="font-size:11px" onclick="overrideAlternancia()">👑 Reasignar manualmente</button>
+        <div style="font-size:11px;color:var(--gray-400);padding-top:6px">Próximo según alternancia: <strong style="color:var(--gold)">${alternas.length?
+          (alternas[0].cerrador_asignado===CERRADOR_DAVID?CERRADOR_GUSTAVO:CERRADOR_DAVID)
+          :CERRADOR_DAVID}</strong></div>
+      </div>
+      ${alternas.map(a=>`<div class="alt-row">
+        <span style="font-size:10px;color:var(--gray-400);min-width:110px">${new Date(a.fecha_asignacion).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+        <span style="font-weight:700;color:var(--gold);min-width:80px">${a.cerrador_asignado||'—'}</span>
+        <span class="badge-regla ${a.regla_aplicada==='alternancia_normal'?'normal':a.regla_aplicada==='mujer_a_david'?'mujer':a.regla_aplicada==='mujer_pero_solape'?'solape':'manual'}">${a.regla_aplicada||'—'}</span>
+        <span style="font-size:10px;color:var(--gray-400);margin-left:8px">Lead #${a.lead_id||'—'}${a.cliente_mujer?' 👩':''}</span>
+      </div>`).join('')}
+    </div>
+
+    <!-- B. Últimos logins -->
+    <div class="admin-section">
+      <div class="admin-section-title">🔑 Últimos 50 logins</div>
+      <div style="overflow-x:auto">
+        ${logins.map(l=>`<div class="audit-row">
+          <span class="audit-fecha">${new Date(l.fecha_login).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+          <span class="audit-quien" style="color:${l.exitoso?'var(--gold)':'var(--st-atrasado)'}">${l.colaborador_nombre||'—'}</span>
+          <span class="audit-accion">${l.exitoso?'✅ Login exitoso — '+l.dispositivo+' · '+l.navegador:'❌ PIN incorrecto ('+l.pin_usado+')'} ${l.ip?'· '+l.ip:''}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- C. Acciones sensibles -->
+    <div class="admin-section">
+      <div class="admin-section-title">📋 Últimas 100 acciones sensibles</div>
+      <div style="overflow-x:auto">
+        ${acciones.map(a=>`<div class="audit-row">
+          <span class="audit-fecha">${new Date(a.fecha).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+          <span class="audit-quien">${a.colaborador_nombre||'—'}</span>
+          <span class="audit-accion"><strong>${a.accion}</strong>${a.tabla_afectada?' → '+a.tabla_afectada:''} ${a.registro_id?'#'+a.registro_id:''} ${a.detalles?'<span style="color:var(--gray-400);font-size:10px">'+JSON.stringify(a.detalles).slice(0,80)+'</span>':''}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+
+  }catch(e){
+    body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
+  }
+}
+
+async function overrideAlternancia(){
+  const cerrador=prompt('¿A quién asignar la próxima visita?\n1: '+CERRADOR_DAVID+'\n2: '+CERRADOR_GUSTAVO+'\n\nEscribí el nombre exacto:');
+  if(!cerrador)return;
+  if(cerrador!==CERRADOR_DAVID&&cerrador!==CERRADOR_GUSTAVO){toast('Nombre inválido. Usá exactamente: '+CERRADOR_DAVID+' o '+CERRADOR_GUSTAVO,'error');return;}
+  try{
+    await sb.from('cerrador_alternancia').insert({
+      lead_id:null,cerrador_asignado:cerrador,cliente_mujer:false,
+      regla_aplicada:'manual_admin',fecha_asignacion:new Date().toISOString(),
+      asignado_por:cu.nombre
+    });
+    registrarAuditoria('override_alternancia','cerrador_alternancia',null,{cerrador_asignado:cerrador});
+    toast('✅ Override registrado: próxima visita → '+cerrador);
+    renderAdmin();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
