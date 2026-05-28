@@ -950,6 +950,45 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           </div>
         </div>
       </div>
+      <div class="section" style="border-color:var(--gray-600)">
+        <div class="section-title" style="cursor:pointer;user-select:none" onclick="toggleDatosExtraCrear()">➕ Datos adicionales del cliente (opcional) <span id="datos-extra-icon" style="float:right">▶</span></div>
+        <div id="nl-datos-extra-body" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">💳 Método de pago</label>
+              <select class="form-control" id="nl-metodo-pago">
+                <option value="">— No definido —</option>
+                <option value="contado">Contado</option>
+                <option value="financiamiento_bancario">Financiamiento bancario</option>
+                <option value="credito_directo">Crédito directo GEAT</option>
+                <option value="mixto">Mixto (contado + financiamiento)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">🏦 Banco preferido <span style="font-size:10px;color:var(--gray-400)">(si aplica)</span></label>
+              <select class="form-control" id="nl-banco-pref">
+                <option value="">— No definido —</option>
+                <option value="mercantil">Mercantil Santa Cruz</option>
+                <option value="bnb">BNB</option>
+                <option value="bcp">BCP</option>
+                <option value="bancosol">BancoSol</option>
+                <option value="union">Banco Unión</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">💼 Ocupación / Profesión</label>
+              <input class="form-control" type="text" id="nl-ocupacion-extra" placeholder="Médico, Ingeniero, Empresario...">
+            </div>
+            <div class="form-group">
+              <label class="form-label">📅 Fecha de nacimiento</label>
+              <input class="form-control" type="date" id="nl-fnac-extra">
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="action-row">
         <button class="btn-primary" id="btn-guardar-lead" onclick="saveLead()">💾 Guardar y programar 1er intento</button>
         <button class="btn-ghost" onclick="closeModal('modalNewLead')">Cancelar</button>
@@ -1500,7 +1539,8 @@ function renderCard(a,now){
 
   if(!a.lead_id) return '';
 
-  return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id})">
+  const _xMode=cu&&cu.rol==='commercial_lead'&&a.colaborador!==cu.nombre?'\'readonly\'':'';
+  return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}</div>
     <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
@@ -2046,7 +2086,9 @@ async function openLeadDetail(leadId,agendaId,mode){
   const history=rHistory.data||[];
   const segs=rSegs.data||[];
   _refsLeadActual=rRefs.data||[];
-  document.getElementById('modal-lead-nombre').textContent=lead.nombre||'—';
+  const _fp=calcularFichaCompleta(lead,_refsLeadActual).porcentaje;
+  const _fichaBadge=_fp===100?'<span style="font-size:10px;color:var(--st-completo);font-weight:normal;margin-left:6px">✅ Ficha completa</span>':_fp>=70?`<span style="font-size:10px;color:var(--gold);font-weight:normal;margin-left:6px">⚠️ Ficha ${_fp}% — faltan datos</span>`:_fp>=30?`<span style="font-size:10px;color:#F9E04B;font-weight:normal;margin-left:6px">🟡 Ficha ${_fp}% — completar datos</span>`:_fp>0?`<span style="font-size:10px;color:var(--st-atrasado);font-weight:normal;margin-left:6px">🔴 Ficha ${_fp}% — completar urgente</span>`:'';
+  document.getElementById('modal-lead-nombre').innerHTML=(lead.nombre||'—')+_fichaBadge;
 
   const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
 
@@ -2073,6 +2115,7 @@ async function openLeadDetail(leadId,agendaId,mode){
         </dl>
       </div>
       ${renderFichaCompleta(lead,_refsLeadActual)}
+      ${renderPerfilCliente(lead)}
       ${current?`<div class="section">
         <div class="section-title">Seguimiento activo</div>
         <div class="last-followup">
@@ -2116,8 +2159,6 @@ async function openLeadDetail(leadId,agendaId,mode){
         <div class="section-title">Indagación</div>
         <div class="indagacion-grid">${renderIndagacion(lead)}</div>
       </div>
-      ${renderDatosAdicionales(lead)}
-      ${renderCalificacionBancaria(lead)}
       ${currentLeadMode==='reactivar'?renderReactivarForm(lead):''}
     </div>
     <div id="lead-tab-viaje" style="display:none">${renderViajeCliente(lead,segs,history)}</div>
@@ -2139,7 +2180,7 @@ function renderViajeCliente(lead,segs,history){
   const diasEnPipeline=Math.round((Date.now()-new Date(lead.created_at))/86400000);
   const indCampos=[
     {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
-    {label:'Financiamiento',val:lead.financiamiento||lead.ind_financiamiento},
+    {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
     {label:'Presupuesto',val:lead.ind_presupuesto?'$'+lead.ind_presupuesto:null},
@@ -2216,7 +2257,7 @@ function renderViajeCliente(lead,segs,history){
 function renderIndagacion(lead){
   const campos=[
     {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
-    {label:'Financiamiento',val:lead.financiamiento||lead.ind_financiamiento},
+    {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
     {label:'Presupuesto',val:lead.ind_presupuesto?'$'+lead.ind_presupuesto:null},
@@ -2253,7 +2294,7 @@ function calcularFichaCompleta(lead,refs){
     !!(lead.financiamiento||lead.ind_financiamiento),!!lead.ind_lugar_terreno,!!lead.ind_monto_financiamiento,
     !!lead.ind_plantas,!!lead.ind_cuando_construir,!!lead.ind_presupuesto,
     !!lead.ind_presupuesto_tope,!!lead.ind_tipo,
-    !!lead.ocupacion,!!lead.banco_preferido,
+    !!lead.ocupacion,!!lead.banco_preferido,!!lead.metodo_pago,
     !!lead.fecha_nacimiento,!!lead.estado_civil,!!lead.ingresos_mensuales_bs,
     !!lead.antiguedad_trabajo_anios,!!lead.correo,
     !!lead.ci_anverso_url,!!lead.ci_reverso_url,
@@ -2280,6 +2321,148 @@ function renderFichaCompleta(lead,refs){
     <div class="ficha-bar"><div class="ficha-fill" style="width:${porcentaje}%"></div></div>
     <span style="font-size:11px;color:var(--gray-400)">📊 Ficha completa: <strong style="color:var(--white)">${porcentaje}%</strong>${faltantes.length?' — Falta: '+faltantes.join(', '):' ✅ completa'}</span>
   </div>`;
+}
+
+/* ── RONDA 6: perfil consolidado del cliente ── */
+const _METODO_PAGO_OPTS=[['contado','Contado'],['financiamiento_bancario','Financiamiento bancario'],['credito_directo','Crédito directo GEAT'],['mixto','Mixto (contado + financiamiento)']];
+const _BANCOS=[['mercantil','Banco Mercantil Santa Cruz'],['bnb','Banco Nacional de Bolivia (BNB)'],['bcp','Banco BCP'],['bancosol','Banco Sol'],['union','Banco Unión'],['otro','Otro']];
+const _ECIVIL=[['soltero','Soltero/a'],['casado','Casado/a'],['conviviente','Conviviente'],['divorciado','Divorciado/a'],['viudo','Viudo/a']];
+
+function renderPerfilCliente(lead){
+  const bancoLbl=lead.banco_preferido?(_BANCOS.find(b=>b[0]===lead.banco_preferido)?.[1]||lead.banco_preferido):'—';
+  const metodoPagoLbl=lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):'—';
+  if(currentLeadMode==='readonly'){
+    return `<div class="section" id="perfil-cliente-section" style="border-color:var(--gold)">
+      <div class="section-title" style="cursor:pointer;user-select:none" onclick="togglePerfilCliente()">📋 PERFIL DEL CLIENTE <span id="perfil-toggle-icon" style="float:right">▶</span></div>
+      <div id="perfil-cliente-body" style="display:none">
+        <dl class="data-grid">
+          <dt>Ocupación</dt><dd>${lead.ocupacion||'—'}</dd>
+          ${lead.ocupacion_detalle?`<dt>Detalle</dt><dd>${lead.ocupacion_detalle}</dd>`:''}
+          <dt>Método de pago</dt><dd>${metodoPagoLbl}</dd>
+          <dt>Banco preferido</dt><dd>${bancoLbl}</dd>
+          <dt>Fecha nacimiento</dt><dd>${lead.fecha_nacimiento||'—'}</dd>
+          <dt>Estado civil</dt><dd>${lead.estado_civil||'—'}</dd>
+          <dt>Ingresos (Bs)</dt><dd>${lead.ingresos_mensuales_bs||'—'}</dd>
+          <dt>Antigüedad (años)</dt><dd>${lead.antiguedad_trabajo_anios||'—'}</dd>
+          <dt>CI anverso</dt><dd>${lead.ci_anverso_url?'✅ Cargado':'—'}</dd>
+          <dt>CI reverso</dt><dd>${lead.ci_reverso_url?'✅ Cargado':'—'}</dd>
+          <dt>Referencias</dt><dd>${_refsLeadActual.length||0}</dd>
+        </dl>
+      </div>
+    </div>`;
+  }
+  return `<div class="section" id="perfil-cliente-section" style="border-color:var(--gold)">
+    <div class="section-title" style="cursor:pointer;user-select:none" onclick="togglePerfilCliente()">📋 PERFIL DEL CLIENTE <span class="badge-auto">no bloquea avance</span> <span id="perfil-toggle-icon" style="float:right">▶</span></div>
+    <div id="perfil-cliente-body" style="display:none">
+      <div class="form-group">
+        <label class="form-label">💼 Ocupación / Profesión</label>
+        <input class="form-control" type="text" id="pf-ocupacion" placeholder="Médico, Ingeniero, Empresario..." value="${(lead.ocupacion||'').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Detalle ocupación</label>
+        <textarea class="form-control" id="pf-ocupacion-detalle" rows="2" placeholder="Empresa, antigüedad, otros datos relevantes...">${lead.ocupacion_detalle||''}</textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">💳 Método de pago</label>
+          <select class="form-control" id="pf-metodo-pago">
+            <option value="">— No definido —</option>
+            ${_METODO_PAGO_OPTS.map(o=>`<option value="${o[0]}"${lead.metodo_pago===o[0]?' selected':''}>${o[1]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🏦 Banco preferido <span style="font-size:10px;color:var(--gray-400)">(si aplica)</span></label>
+          <select class="form-control" id="pf-banco">
+            <option value="">— No definido —</option>
+            ${_BANCOS.map(b=>`<option value="${b[0]}"${lead.banco_preferido===b[0]?' selected':''}>${b[1]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">📅 Fecha de nacimiento</label>
+          <input class="form-control" type="date" id="pf-fnac" value="${lead.fecha_nacimiento||''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">💍 Estado civil</label>
+          <select class="form-control" id="pf-ecivil">
+            <option value="">— Seleccionar —</option>
+            ${_ECIVIL.map(o=>`<option value="${o[0]}"${lead.estado_civil===o[0]?' selected':''}>${o[1]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">💵 Ingresos mensuales (Bs)</label>
+          <input class="form-control" type="number" id="pf-ingresos" placeholder="Ej: 12000" value="${lead.ingresos_mensuales_bs||''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">⏱️ Antigüedad trabajo (años)</label>
+          <input class="form-control" type="number" id="pf-antig" placeholder="Ej: 5" value="${lead.antiguedad_trabajo_anios||''}">
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:8px;font-size:11px">📸 Carnet de Identidad</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Anverso (frente) ${lead.ci_anverso_url?'✅':''}</label><input class="form-control" type="file" accept="image/*" onchange="subirFotoCI('anverso',this)"></div>
+        <div class="form-group"><label class="form-label">Reverso (atrás) ${lead.ci_reverso_url?'✅':''}</label><input class="form-control" type="file" accept="image/*" onchange="subirFotoCI('reverso',this)"></div>
+      </div>
+      <div class="section-title" style="margin-top:8px;font-size:11px">📞 Referencias (mínimo 2)</div>
+      <div id="referencias-container">${renderReferenciasRows()}</div>
+      <div class="action-row" style="margin-top:8px">
+        <button class="btn-ghost" style="font-size:11px" onclick="agregarReferencia()">+ Agregar referencia</button>
+        <button class="btn-primary" onclick="guardarPerfilCliente()">💾 Guardar perfil</button>
+      </div>
+    </div>
+  </div>`;
+}
+function togglePerfilCliente(){
+  const body=document.getElementById('perfil-cliente-body');
+  const icon=document.getElementById('perfil-toggle-icon');
+  if(!body)return;
+  const vis=body.style.display!=='none';
+  body.style.display=vis?'none':'';
+  if(icon)icon.textContent=vis?'▶':'▼';
+}
+function toggleDatosExtraCrear(){
+  const body=document.getElementById('nl-datos-extra-body');
+  const icon=document.getElementById('datos-extra-icon');
+  if(!body)return;
+  const vis=body.style.display!=='none';
+  body.style.display=vis?'none':'';
+  if(icon)icon.textContent=vis?'▶':'▼';
+}
+async function guardarPerfilCliente(){
+  const cambios={
+    ocupacion:document.getElementById('pf-ocupacion')?.value.trim()||null,
+    ocupacion_detalle:document.getElementById('pf-ocupacion-detalle')?.value.trim()||null,
+    metodo_pago:document.getElementById('pf-metodo-pago')?.value||null,
+    banco_preferido:document.getElementById('pf-banco')?.value||null,
+    fecha_nacimiento:document.getElementById('pf-fnac')?.value||null,
+    estado_civil:document.getElementById('pf-ecivil')?.value||null,
+    ingresos_mensuales_bs:parseFloat(document.getElementById('pf-ingresos')?.value)||null,
+    antiguedad_trabajo_anios:parseInt(document.getElementById('pf-antig')?.value)||null,
+    updated_at:new Date().toISOString()
+  };
+  const rows=[...document.querySelectorAll('#referencias-container .ref-row')];
+  const refs=rows.map((row,i)=>({
+    lead_id:Number(currentLeadId),
+    nombre:row.querySelector('.ref-nombre')?.value.trim()||'',
+    parentesco:row.querySelector('.ref-parentesco')?.value.trim()||'',
+    celular:row.querySelector('.ref-celular')?.value.trim()||null,
+    orden:i+1
+  })).filter(r=>r.nombre&&r.parentesco);
+  try{
+    const{error}=await sb.from('leads').update(cambios).eq('id',currentLeadId);
+    if(error)throw error;
+    await sb.from('referencias_lead').delete().eq('lead_id',currentLeadId);
+    if(refs.length){
+      const{error:eRef}=await sb.from('referencias_lead').insert(refs);
+      if(eRef)throw eRef;
+    }
+    _refsLeadActual=refs;
+    registrarAuditoria('guardar_perfil_cliente','leads',Number(currentLeadId),{...cambios,referencias:refs.length});
+    toast('✅ Perfil del cliente guardado');
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ── RONDA 5: datos adicionales de indagación (ocupación + banco) ── */
@@ -2608,6 +2791,10 @@ async function saveLead(){
   const nota=document.getElementById('nl-nota').value;
   const gradoInteres=document.getElementById('nl-grado-interes')?.value||null;
   const correoRaw=(document.getElementById('nl-correo')?.value||'').trim();
+  const metodoPagoExtra=document.getElementById('nl-metodo-pago')?.value||null;
+  const bancoExtra=document.getElementById('nl-banco-pref')?.value||null;
+  const ocupacionExtra=(document.getElementById('nl-ocupacion-extra')?.value||'').trim()||null;
+  const fnacExtra=document.getElementById('nl-fnac-extra')?.value||null;
   const fecha=document.getElementById('nl-fecha').value;
   const hora=document.getElementById('nl-hora').value||'10:00';
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
@@ -2632,6 +2819,8 @@ async function saveLead(){
       nombre,celular,ciudad,medio_difusion:medio,captador,
       notas:nota,estado:'nuevo',etapa:'1er intento',cliente_mujer:clienteMujer,
       grado_interes:gradoInteres,correo:correoRaw||null,
+      metodo_pago:metodoPagoExtra,banco_preferido:bancoExtra,
+      ocupacion:ocupacionExtra,fecha_nacimiento:fnacExtra,
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -2648,7 +2837,7 @@ async function saveLead(){
     if(btn){btn.innerHTML='✅ Creado';}
     setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
-    ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('dupWarning').classList.remove('show');
     renderWeek();
   }catch(e){
