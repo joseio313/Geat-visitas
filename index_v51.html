@@ -1539,7 +1539,7 @@ function renderCard(a,now){
 
   if(!a.lead_id) return '';
 
-  const _xMode=cu&&cu.rol==='commercial_lead'&&a.colaborador!==cu.nombre?'\'readonly\'':'';
+  const _xMode='';
   return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}</div>
