@@ -1401,8 +1401,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--fo
 <script charset="utf-8">
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
-const AUDIO_URL=''; // No se usa - usamos Anthropic directamente
-let ANTHROPIC_KEY = ''; // Se carga desde Supabase al iniciar
+const CLAUDE_PROXY_URL = SB_URL + '/functions/v1/geat-claude'; // proxy server-side; la API key nunca viaja al navegador
 let WA_ARQUITECTURA = 'https://chat.whatsapp.com/HDEt3nrTttaLqscNms2Xnt';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 
@@ -1471,11 +1470,10 @@ async function initLogin(){
   const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
   colaboradores=data||[];
   // Login es solo por PIN - sin selector de nombres
-  // Cargar API key de Anthropic y link de WhatsApp
+  // Cargar link de WhatsApp (la API key de Anthropic ya NO se expone al navegador)
   try{
-    const {data:cfg} = await sb.from('app_config').select('anthropic_key,whatsapp_arquitectura').eq('key','html_0').limit(1).single();
+    const {data:cfg} = await sb.from('app_config').select('whatsapp_arquitectura').eq('key','html_0').limit(1).single();
     if(cfg){
-      ANTHROPIC_KEY = cfg.anthropic_key || '';
       WA_ARQUITECTURA = cfg.whatsapp_arquitectura || WA_ARQUITECTURA;
     }
   }catch(e){ /* config error silenciado */; }
@@ -5176,14 +5174,11 @@ async function procesarFallbackTexto(){
 }
 async function procesarAudioTexto(texto){
   try{
-    if(!ANTHROPIC_KEY) throw new Error('API key no configurada — pedile a Josemiguel que verifique app_config en Supabase');
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+    const resp = await fetch(CLAUDE_PROXY_URL,{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key':ANTHROPIC_KEY,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Authorization':'Bearer '+SB_KEY
       },
       body: JSON.stringify({
         model:'claude-sonnet-4-6',
