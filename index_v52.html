@@ -557,7 +557,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
-      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
+      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='57';
+  var CURRENT_VERSION='58';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1384,6 +1384,8 @@ function startApp(){
   if(cu.rol==='admin'){
     const tabAdmin=document.getElementById('tab-admin');
     if(tabAdmin)tabAdmin.style.display='';
+    const rbh=document.getElementById('recBtnHeader');
+    if(rbh)rbh.style.display='inline-flex';
   }
   // Idle logout
   iniciarIdleTimer();
@@ -2283,7 +2285,7 @@ async function openLeadDetail(leadId,agendaId,mode){
         ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row" style="align-items:center">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
-          <button id="recBtn" type="button" onclick="toggleGrabacion()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
+          ${cu.rol==='admin'?`<button id="recBtn" type="button" onclick="toggleGrabacion()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>`:''}
         </div>
         <div id="recResultCard"></div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
       </div>`:''}
