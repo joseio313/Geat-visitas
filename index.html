@@ -557,6 +557,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
+      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -729,6 +730,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="modal-body" id="modal-lead-body">
       <div class="loading-state"><span class="spin"></span> Cargando...</div>
     </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: GRABACIÓN DESDE HEADER ══ -->
+<div id="modalGrabH" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalGrabH')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🎙️ Resumen de reunión</h2>
+      <button class="modal-close" onclick="descartarGrabacionH()">×</button>
+    </div>
+    <div class="modal-body" id="grabHBody"></div>
   </div>
 </div>
 
@@ -1112,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='56';
+  var CURRENT_VERSION='57';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -2899,6 +2911,165 @@ async function guardarGrabacion(){
     const card=document.getElementById('recResultCard'); if(card)card.innerHTML='';
     _recReset();setRecState('idle');
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+/* ════════════════════════════════════════
+   GRABACIÓN DESDE HEADER — voz → IA → asociar a lead
+════════════════════════════════════════ */
+let _recHState='idle', _recHRec=null, _recHTimer=null, _recHTranscript='', _recHSeconds=0, _recHResult=null, _recHLeadId=null;
+
+async function _resumirReunionIA(transcript){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+  const userMsg='Resumí esta transcripción de reunión comercial. Devolvé SOLO JSON:\n'+
+    '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"..."}\n\n'+transcript;
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+  txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+  return JSON.parse(txt);
+}
+
+function _recHReset(){
+  try{if(_recHRec){_recHRec.onend=null;_recHRec.stop();}}catch(e){}
+  if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
+  _recHRec=null;_recHTranscript='';_recHSeconds=0;_recHResult=null;_recHLeadId=null;_recHState='idle';
+}
+function setRecHState(state){
+  _recHState=state;
+  const b=document.getElementById('recBtnHeader'); if(!b)return;
+  if(state==='idle'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.textContent='0:00';}
+  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.textContent=_recFmt(_recHSeconds);}
+  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.textContent='···';}
+  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.textContent='✓';}
+}
+function toggleGrabacionH(){
+  if(_recHState==='grabando'){stopGrabacionH();return;}
+  if(_recHState==='procesando')return;
+  startGrabacionH();
+}
+function startGrabacionH(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Usá Chrome para esta función','error');return;}
+  _recHReset();
+  const rec=new SR();
+  rec.continuous=true;rec.interimResults=true;rec.lang='es-BO';
+  let finalT='';
+  rec.onresult=function(ev){
+    let interim='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const tr=ev.results[i][0].transcript;
+      if(ev.results[i].isFinal)finalT+=tr+' ';else interim+=tr;
+    }
+    _recHTranscript=(finalT+interim).trim();
+  };
+  rec.onerror=function(e){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){toast('Permiso de micrófono denegado','error');_recHReset();setRecHState('idle');}
+  };
+  rec.onend=function(){ if(_recHState==='grabando')stopGrabacionH(); };
+  _recHRec=rec;
+  try{rec.start();}catch(e){toast('No se pudo iniciar la grabación','error');return;}
+  _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
+  _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');if(_recHSeconds>=_REC_MAX)stopGrabacionH();},1000);
+}
+function stopGrabacionH(){
+  if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
+  try{if(_recHRec){_recHRec.onend=null;_recHRec.stop();}}catch(e){}
+  const transcript=(_recHTranscript||'').trim();
+  if(!transcript){toast('No se captó audio','error');_recHReset();setRecHState('idle');return;}
+  setRecHState('procesando');
+  procesarGrabacionH(transcript);
+}
+async function procesarGrabacionH(transcript){
+  try{
+    _recHResult=await _resumirReunionIA(transcript);
+    setRecHState('listo');
+    await abrirGrabH();
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');
+    _recHReset();setRecHState('idle');
+  }
+}
+async function abrirGrabH(){
+  const j=_recHResult||{};
+  const niv=(j.nivel_interes||'').toLowerCase();
+  const badge=niv==='alto'?'var(--st-completo)':niv==='medio'?'var(--gold)':'var(--st-atrasado)';
+  const puntos=(j.puntos_clave||[]).map(p=>`<li style="margin-bottom:3px">${p}</li>`).join('');
+  const objec=(j.objeciones||[]).map(o=>`<li style="margin-bottom:3px">${o}</li>`).join('');
+  let sugHtml='';
+  if(currentLeadId){
+    try{
+      const{data:ll}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
+      if(ll)sugHtml=`<button class="btn-ghost" style="font-size:11px;margin-bottom:6px" onclick="seleccionarLeadAsociar(${currentLeadId},'${(ll.nombre||'').replace(/'/g,"\\'")}')">⭐ Último lead abierto: ${ll.nombre||'—'}</button>`;
+    }catch(e){}
+  }
+  document.getElementById('grabHBody').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-title" style="margin:0">🎙️ Resumen de reunión</div>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>
+    </div>
+    ${puntos?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${puntos}</ul>`:''}
+    ${objec?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${objec}</ul>`:''}
+    ${j.proximo_paso?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Próximo paso</div><div style="font-size:12px;margin-bottom:12px">${j.proximo_paso}</div>`:''}
+    <div style="border-top:1px solid var(--gray-600);padding-top:10px;margin-top:6px">
+      <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Asociar al lead:</div>
+      ${sugHtml}
+      <input id="grabAsocInput" class="form-control" type="text" placeholder="Buscar lead por nombre..." oninput="buscarLeadAsociar(this.value)" autocomplete="off">
+      <div id="grabAsocResults" style="margin-top:6px"></div>
+      <div id="grabAsocSel" style="font-size:12px;color:var(--st-completo);margin-top:6px"></div>
+    </div>
+    <div class="action-row" style="margin-top:12px">
+      <button class="btn-primary" onclick="guardarGrabacionH()">💾 Guardar en lead</button>
+      <button class="btn-ghost" onclick="descartarGrabacionH()">Descartar</button>
+    </div>`;
+  _recHLeadId=null;
+  openModal('modalGrabH');
+}
+async function buscarLeadAsociar(q){
+  const box=document.getElementById('grabAsocResults'); if(!box)return;
+  q=(q||'').trim();
+  if(q.length<2){box.innerHTML='';return;}
+  try{
+    let query=sb.from('leads').select('id,nombre,celular').ilike('nombre','%'+q+'%').order('created_at',{ascending:false}).limit(8);
+    const isJefe=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+    if(!isJefe&&cu)query=query.eq('captador',cu.nombre);
+    const{data}=await query;
+    const rows=data||[];
+    box.innerHTML=rows.length?rows.map(l=>`<button class="btn-ghost" style="display:block;width:100%;text-align:left;font-size:12px;margin-bottom:4px" onclick="seleccionarLeadAsociar(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}')">${l.nombre||'—'} · ${l.celular||''}</button>`).join(''):'<div style="font-size:11px;color:var(--gray-400)">Sin resultados</div>';
+  }catch(e){ box.innerHTML=''; }
+}
+function seleccionarLeadAsociar(id,nombre){
+  _recHLeadId=id;
+  const sel=document.getElementById('grabAsocSel'); if(sel)sel.textContent='✓ Asociado a: '+nombre;
+  const inp=document.getElementById('grabAsocInput'); if(inp)inp.value=nombre;
+  const box=document.getElementById('grabAsocResults'); if(box)box.innerHTML='';
+}
+async function guardarGrabacionH(){
+  if(!_recHResult){toast('Sin resumen para guardar','error');return;}
+  if(!_recHLeadId){toast('Elegí un lead para asociar','error');return;}
+  if(!cu){toast('Sin sesión','error');return;}
+  try{
+    const{data:l}=await sb.from('leads').select('etapa').eq('id',_recHLeadId).single();
+    const nowIso=new Date().toISOString();
+    const{error}=await sb.from('historial_lead').insert({
+      lead_id:_recHLeadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
+      etapa:(l&&l.etapa)||'—', tipo_actividad:'grabacion_reunion',
+      nota:JSON.stringify(_recHResult), fecha_actividad:nowIso, created_at:nowIso
+    });
+    if(error)throw error;
+    toast('✅ Resumen guardado en el lead');
+    closeModal('modalGrabH');
+    _recHReset();setRecHState('idle');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+function descartarGrabacionH(){
+  closeModal('modalGrabH');
+  _recHReset();setRecHState('idle');
 }
 
 function prepareFinalize(){
