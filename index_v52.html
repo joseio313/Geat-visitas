@@ -1112,7 +1112,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='54';
+  var CURRENT_VERSION='55';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3219,7 +3219,7 @@ async function execSearch(q){
     .order('created_at',{ascending:false})
     .limit(30);
 
-  if(searchMode==='reactivar') dbQuery=dbQuery.eq('estado','cerrado_perdido');
+  if(searchMode==='reactivar') dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
   if(!esAdmin) dbQuery=dbQuery.eq('captador',cu.nombre);
 
   const{data}=await dbQuery;
