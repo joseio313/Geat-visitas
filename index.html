@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='61';
+  var CURRENT_VERSION='62';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -2852,8 +2852,9 @@ async function procesarGrabacion(transcript){
   try{
     const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
     if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
-    const userMsg='Resumí esta transcripción de reunión comercial. Devolvé SOLO JSON:\n'+
-      '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"..."}\n\n'+transcript;
+    const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+      '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"...","ciudad":null,"metodo_pago":null,"presupuesto_construccion":null,"plantas":null,"cuando_construir":null}\n'+
+      'Campos extra: ciudad=ciudad del cliente; metodo_pago=uno de: contado|financiamiento_bancario|credito_directo|mixto; presupuesto_construccion=monto aprox en USD (solo número); plantas=cantidad de plantas/pisos (número); cuando_construir=cuándo planea construir.\n\n'+transcript;
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
@@ -2898,6 +2899,83 @@ function descartarGrabacion(){
   _recReset();setRecState('idle');
 }
 
+/* ── Post-guardado de grabación: auto-fill indagación + grado interés + próxima actividad ──
+   Devuelve el nombre del cliente (para el draft de WhatsApp). Tolerante a fallos:
+   nunca rompe el guardado del historial si algún paso secundario falla. */
+let _waDraftMsg='';
+/* Normaliza el método de pago que devuelve Claude (texto libre) a un código del
+   catálogo _METODO_PAGO_OPTS. Devuelve null si no hay match confiable. */
+function _normMetodoPago(v){
+  if(!v)return null;
+  const s=(''+v).toLowerCase();
+  if(_METODO_PAGO_OPTS.some(m=>m[0]===s))return s;
+  if(s.includes('mixto')||(s.includes('contado')&&(s.includes('financ')||s.includes('banc'))))return 'mixto';
+  if(s.includes('directo')||s.includes('geat')||s.includes('propio'))return 'credito_directo';
+  if(s.includes('banc')||s.includes('financ')||s.includes('crédit')||s.includes('credit')||s.includes('prestamo')||s.includes('préstamo')||s.includes('hipotec'))return 'financiamiento_bancario';
+  if(s.includes('contado')||s.includes('efectivo')||s.includes('cash'))return 'contado';
+  return null;
+}
+async function _procesarPostGrabacion(leadId,j){
+  let nombreCliente='';
+  try{
+    const{data:L}=await sb.from('leads')
+      .select('nombre,ciudad,metodo_pago,ind_presupuesto,ind_plantas,ind_cuando_construir')
+      .eq('id',leadId).single();
+    if(L){
+      nombreCliente=L.nombre||'';
+      const upd={};
+      // 1) Auto-fill indagación — solo si el campo actual está vacío/null
+      if(j.ciudad&&!L.ciudad)upd.ciudad=j.ciudad;
+      if(!L.metodo_pago){const mp=_normMetodoPago(j.metodo_pago);if(mp)upd.metodo_pago=mp;}
+      if(j.presupuesto_construccion!=null&&L.ind_presupuesto==null)upd.ind_presupuesto=j.presupuesto_construccion;
+      if(j.plantas!=null&&L.ind_plantas==null)upd.ind_plantas=j.plantas;
+      if(j.cuando_construir&&!L.ind_cuando_construir)upd.ind_cuando_construir=j.cuando_construir;
+      // 2) Grado interés — SET siempre desde nivel_interes
+      const niv=(j.nivel_interes||'').toLowerCase();
+      if(niv==='alto'||niv==='medio'||niv==='bajo')upd.grado_interes=niv;
+      if(Object.keys(upd).length){
+        upd.updated_at=new Date().toISOString();
+        try{await sb.from('leads').update(upd).eq('id',leadId);}catch(e){}
+      }
+    }
+  }catch(e){}
+  // 3) Crear siguiente actividad — mañana 09:00 Bolivia (UTC-4)
+  if(j.proximo_paso&&(''+j.proximo_paso).trim()){
+    const fp=new Date(ymdLocal(addDays(new Date(),1))+'T09:00:00-04:00').toISOString();
+    try{
+      const{error:eA}=await sb.from('agenda_personal').insert({
+        colaborador:cu.nombre,lead_id:leadId,tipo:'Seguimiento post-reunión',
+        titulo:(''+j.proximo_paso).slice(0,200),fecha_programada:fp,completada:false
+      });
+      if(eA&&eA.code!=='23505')throw eA;
+      try{await renderWeek();}catch(e){}
+      try{await cargarMarcadoresDia();}catch(e){}
+    }catch(e){}
+  }
+  return nombreCliente;
+}
+/* 4) Draft de WhatsApp */
+function _buildWaDraft(nombreCliente,j){
+  const puntos=(j.puntos_clave||[]).filter(Boolean).join('; ');
+  return 'Hola '+(nombreCliente||'')+', fue un gusto conversar. Resumen: '+puntos+'. Próximo paso: '+(j.proximo_paso||'')+'.';
+}
+async function copiarWaDraft(){
+  if(!_waDraftMsg){toast('Sin mensaje para copiar','error');return;}
+  try{
+    await navigator.clipboard.writeText(_waDraftMsg);
+    toast('✅ Mensaje WA copiado');
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=_waDraftMsg;
+    ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');toast('✅ Mensaje WA copiado');}
+    catch(_){toast('No se pudo copiar','error');}
+    document.body.removeChild(ta);
+  }
+}
+function _waDraftHtml(){
+  return '<button class="btn-primary btn-sm" onclick="copiarWaDraft()">📋 Copiar mensaje WA</button>';
+}
+
 async function guardarGrabacion(){
   if(!_recResultado){toast('Sin resumen para guardar','error');return;}
   if(!currentLeadId||!cu){toast('Sin lead activo','error');return;}
@@ -2910,8 +2988,15 @@ async function guardarGrabacion(){
       nota:JSON.stringify(_recResultado), fecha_actividad:nowIso, created_at:nowIso
     });
     if(error)throw error;
+    // Auto-fill indagación + grado interés + próxima actividad + draft WA
+    const nombreCliente=await _procesarPostGrabacion(currentLeadId,_recResultado);
+    _waDraftMsg=_buildWaDraft(nombreCliente,_recResultado);
     toast('✅ Resumen guardado en el lead');
-    const card=document.getElementById('recResultCard'); if(card)card.innerHTML='';
+    const card=document.getElementById('recResultCard');
+    if(card)card.innerHTML='<div class="section" style="margin-top:10px;border:1px solid var(--st-completo);border-radius:10px;padding:12px">'+
+      '<div style="font-size:12px;font-weight:700;color:var(--st-completo);margin-bottom:8px">✅ Guardado · indagación e historial actualizados</div>'+
+      '<div class="action-row">'+_waDraftHtml()+
+      '<button class="btn-ghost btn-sm" onclick="descartarGrabacion()">Cerrar</button></div></div>';
     _recReset();setRecState('idle');
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
@@ -2925,8 +3010,9 @@ async function _resumirReunionIA(transcript){
   toast('Analizando reunión...','info');
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
-  const userMsg='Resumí esta transcripción de reunión comercial. Devolvé SOLO JSON:\n'+
-    '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"..."}\n\n'+transcript;
+  const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+    '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"...","ciudad":null,"metodo_pago":null,"presupuesto_construccion":null,"plantas":null,"cuando_construir":null}\n'+
+    'Campos extra: ciudad=ciudad del cliente; metodo_pago=uno de: contado|financiamiento_bancario|credito_directo|mixto; presupuesto_construccion=monto aprox en USD (solo número); plantas=cantidad de plantas/pisos (número); cuando_construir=cuándo planea construir.\n\n'+transcript;
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
@@ -3083,9 +3169,18 @@ async function guardarGrabacionH(){
       nota:JSON.stringify(_recHResult), fecha_actividad:nowIso, created_at:nowIso
     });
     if(error)throw error;
+    // Auto-fill indagación + grado interés + próxima actividad + draft WA
+    const leadId=_recHLeadId, resH=_recHResult;
+    const nombreCliente=await _procesarPostGrabacion(leadId,resH);
+    _waDraftMsg=_buildWaDraft(nombreCliente,resH);
     toast('✅ Resumen guardado en el lead');
-    closeModal('modalGrabH');
-    _recHReset();setRecHState('idle');
+    const body=document.getElementById('grabHBody');
+    if(body)body.innerHTML='<div style="text-align:center;padding:8px">'+
+      '<div style="font-size:13px;font-weight:700;color:var(--st-completo);margin-bottom:6px">✅ Guardado en el lead</div>'+
+      '<div style="font-size:11px;color:var(--gray-400);margin-bottom:14px">Indagación, grado de interés y próxima actividad actualizados.</div>'+
+      '<div class="action-row" style="justify-content:center">'+_waDraftHtml()+
+      '<button class="btn-ghost btn-sm" onclick="descartarGrabacionH()">Cerrar</button></div></div>';
+    setRecHState('idle');
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 function descartarGrabacionH(){
