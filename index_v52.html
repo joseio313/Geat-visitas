@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='59';
+  var CURRENT_VERSION='60';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -2922,6 +2922,7 @@ async function guardarGrabacion(){
 let _recHState='idle', _recHRec=null, _recHTimer=null, _recHTranscript='', _recHSeconds=0, _recHResult=null, _recHLeadId=null, _recHStopByUser=false;
 
 async function _resumirReunionIA(transcript){
+  toast('Analizando reunión...','info');
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const userMsg='Resumí esta transcripción de reunión comercial. Devolvé SOLO JSON:\n'+
@@ -2993,8 +2994,12 @@ function stopGrabacionH(){
   _recHStopByUser=true;   // impide que onend reinicie la grabación
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   try{if(_recHRec){_recHRec.onend=null;_recHRec.stop();}}catch(e){}
-  const transcript=(_recHTranscript||'').trim();
-  if(!transcript){toast('No se captó audio','error');_recHReset();setRecHState('idle');return;}
+  if(!_recHTranscript || _recHTranscript.trim().length < 10){
+    toast('No se captó texto. Hablá más cerca del micrófono y probá de nuevo.','warning');
+    _recHReset(); setRecHState('idle');
+    return;
+  }
+  const transcript=_recHTranscript.trim();
   setRecHState('procesando');
   procesarGrabacionH(transcript);
 }
