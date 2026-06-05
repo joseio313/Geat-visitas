@@ -1112,7 +1112,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='55';
+  var CURRENT_VERSION='56';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1520,6 +1520,17 @@ function navWeek(dir){
   renderWeek();
 }
 
+let _estadoLeadMap={};
+function estadoBorderColor(estado){
+  switch(estado){
+    case 'nuevo': return 'var(--st-indagacion)';
+    case 'en_seguimiento': return '#BA7517';
+    case 'visita_agendada': return 'var(--st-completo)';
+    case 'cerrado_ganado': return 'var(--st-completo)';
+    case 'cerrado_perdido': return 'var(--gray-600)';
+    default: return '';
+  }
+}
 async function renderWeek(){
   const weekEnd=addDays(currentWeekStart,7);
   const lbl=document.getElementById('week-label');
@@ -1546,6 +1557,13 @@ async function renderWeek(){
   const {data,error}=await query;
   if(error){toast('Error cargando agenda: '+error.message,'error');return;}
   agendaData=data||[];
+  // estado del lead por tarjeta (para borde izquierdo)
+  const _lidsW=[...new Set(agendaData.map(a=>a.lead_id).filter(Boolean))];
+  _estadoLeadMap={};
+  if(_lidsW.length){
+    const{data:_ldW}=await sb.from('leads').select('id,estado').in('id',_lidsW);
+    (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;});
+  }
 
   const grid=document.getElementById('week-grid');
   const now=new Date();
@@ -1583,7 +1601,9 @@ function renderCard(a,now){
   if(!a.lead_id) return '';
 
   const _xMode='';
-  return `<div class="activity-card ${cls}" onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
+  const _bd=estadoBorderColor(_estadoLeadMap[a.lead_id]);
+  const _bdStyle=_bd?` style="border-left:4px solid ${_bd}"`:'';
+  return `<div class="activity-card ${cls}"${_bdStyle} onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}</div>
     <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
@@ -1626,7 +1646,7 @@ async function renderMonth(){
   const end=new Date(y,m+1,1);
   const filtP=document.getElementById('filtro-mes-persona').value;
 
-  let q=sb.from('agenda_personal').select('id,colaborador,tipo,titulo,fecha_programada,completada')
+  let q=sb.from('agenda_personal').select('id,colaborador,lead_id,tipo,titulo,fecha_programada,completada')
     .gte('fecha_programada',start.toISOString())
     .lt('fecha_programada',end.toISOString());
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
@@ -1635,6 +1655,12 @@ async function renderMonth(){
 
   const {data}=await q;
   const acts=data||[];
+  const _lidsM=[...new Set(acts.map(a=>a.lead_id).filter(Boolean))];
+  _estadoLeadMap={};
+  if(_lidsM.length){
+    const{data:_ldM}=await sb.from('leads').select('id,estado').in('id',_lidsM);
+    (_ldM||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;});
+  }
   document.getElementById('month-total-count').textContent=acts.length;
 
   // Agrupar por día
@@ -1664,7 +1690,9 @@ async function renderMonth(){
       const cls=estadoClass(a.tipo);
       const col=itemsSeg.find(s=>s.nombre===a.tipo);
       const dotColor=col?col.color_bg:'#888';
-      return `<div class="month-event"><span class="month-dot" style="background:${dotColor}"></span>${a.titulo||a.tipo}</div>`;
+      const _bdM=estadoBorderColor(_estadoLeadMap[a.lead_id]);
+      const _bdMStyle=_bdM?`border-left:4px solid ${_bdM};padding-left:5px`:'';
+      return `<div class="month-event" style="${_bdMStyle}"><span class="month-dot" style="background:${dotColor}"></span>${a.titulo||a.tipo}</div>`;
     }).join('');
     html+=`<div class="month-cell${isToday?' today':''}" onclick="navWeekToDay('${dateStr}')">
       <div class="month-cell-num">${d}${countBadge}</div>
