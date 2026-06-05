@@ -1758,19 +1758,53 @@ async function renderReports(){
   body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   const rng=getReportRange();
 
-  const[rLeads,rActs]=await Promise.all([
-    sb.from('leads').select('id,captador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
-    sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta)
+  // Tendencia: primer día del mes, 5 meses atrás (6 incl. actual), hora local
+  const _hoy=new Date();
+  const _trendDesde=new Date(_hoy.getFullYear(),_hoy.getMonth()-5,1).toISOString();
+  const[rLeads,rActs,rTrend,rVentas]=await Promise.all([
+    sb.from('leads').select('id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
+    sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta),
+    sb.from('leads').select('created_at').eq('archivado',false).gte('created_at',_trendDesde),
+    sb.from('ventas').select('metros_cuadrados,fecha_venta').gte('fecha_venta',ymdLocal(new Date(rng.desde))).lt('fecha_venta',ymdLocal(new Date(rng.hasta)))
   ]);
   const leads=rLeads.data||[];
   const acts=rActs.data||[];
 
+  // CAMBIO 1 — Tendencia mensual (6 meses, archivado=false)
+  const _trend=rTrend.data||[];
+  const _meses3=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const trendKeys=[];
+  for(let i=5;i>=0;i--){const d=new Date(_hoy.getFullYear(),_hoy.getMonth()-i,1);trendKeys.push({key:ymdLocal(d).slice(0,7),label:_meses3[d.getMonth()],n:0});}
+  const _trendMap={};trendKeys.forEach(t=>_trendMap[t.key]=t);
+  _trend.forEach(l=>{const k=ymdLocal(new Date(l.created_at)).slice(0,7);if(_trendMap[k])_trendMap[k].n++;});
+  const _trendMax=Math.max(1,...trendKeys.map(t=>t.n));
+  const _mesActualKey=ymdLocal(_hoy).slice(0,7);
+
+  // CAMBIO 4 — KPI ventas (tabla ventas; fallback leads ganados del período)
+  const _ventas=rVentas.data||[];
+  let ventasCount=_ventas.length;
+  let ventasM2=_ventas.reduce((s,v)=>s+(Number(v.metros_cuadrados)||0),0);
+  if(ventasCount===0){
+    const _gan=leads.filter(l=>l.estado==='cerrado_ganado');
+    ventasCount=_gan.length;
+    ventasM2=_gan.reduce((s,l)=>s+(Number(l.metros_cuadrados)||0),0);
+  }
+
   const byPerson={};
+  const byCloser={};
   leads.forEach(l=>{
     const p=l.captador||'Sin asignar';
     if(!byPerson[p])byPerson[p]={leads:0,ganados:0,m2:0};
     byPerson[p].leads++;
-    if(l.estado==='cerrado_ganado'){byPerson[p].ganados++;byPerson[p].m2+=(l.metros_cuadrados||0);}
+    if(l.estado==='cerrado_ganado')byPerson[p].ganados++;
+    byPerson[p].m2+=(Number(l.metros_cuadrados)||0);
+    // CAMBIO 2 — atribución por cerrador
+    if(l.cerrador){
+      if(!byCloser[l.cerrador])byCloser[l.cerrador]={leads:0,ganados:0,m2:0};
+      byCloser[l.cerrador].leads++;
+      if(l.estado==='cerrado_ganado')byCloser[l.cerrador].ganados++;
+      byCloser[l.cerrador].m2+=(Number(l.metros_cuadrados)||0);
+    }
   });
   const actsByPerson={};
   acts.forEach(a=>{
@@ -1789,7 +1823,7 @@ async function renderReports(){
   // Medios de difusión
   const byMedio={};
   leads.forEach(l=>{
-    const m=l.medio_difusion||'Sin medio';
+    const m=(l.medio_difusion||'').trim().toLowerCase()||'sin medio';
     byMedio[m]=(byMedio[m]||0)+1;
   });
   const topMedios=Object.entries(byMedio).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -1797,14 +1831,33 @@ async function renderReports(){
   body.innerHTML=`
     <div class="reports-grid">
       <div class="section">
+        <div class="section-title">🏆 Ventas del período</div>
+        <div style="display:flex;gap:22px;align-items:baseline;padding:6px 0">
+          <div><div style="font-size:34px;font-weight:800;color:var(--st-completo);line-height:1">${ventasCount}</div>
+            <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">ventas</div></div>
+          <div><div style="font-size:34px;font-weight:800;color:var(--gold);line-height:1">${ventasM2}</div>
+            <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">m² vendidos</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--gray-600);margin-top:4px">${_ventas.length>0?'Fuente: tabla ventas':'Fuente: leads ganados (ventas vacío)'}</div>
+      </div>
+      <div class="section">
         <div class="section-title">Resumen por vendedor</div>
         <table class="team-table">
-          <thead><tr><th>Vendedor</th><th>Leads</th><th>Actividades</th><th>Ganados</th><th>m²</th></tr></thead>
-          <tbody>${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer').map(c=>{
-            const p=byPerson[c.nombre]||{leads:0,ganados:0,m2:0};
-            const a=actsByPerson[c.nombre]||{total:0,completadas:0};
-            return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
-          }).join('')}</tbody>
+          <thead><tr><th>Equipo</th><th>Leads</th><th>Actividades</th><th>Ganados</th><th>m²</th></tr></thead>
+          <tbody>
+            <tr><td colspan="5" style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);padding-top:6px">Captadoras</td></tr>
+            ${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer').map(c=>{
+              const p=byPerson[c.nombre]||{leads:0,ganados:0,m2:0};
+              const a=actsByPerson[c.nombre]||{total:0,completadas:0};
+              return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
+            }).join('')}
+            <tr><td colspan="5" style="border-top:1px dashed var(--gray-600);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);padding-top:8px">Cerradores</td></tr>
+            ${colaboradores.filter(c=>c.activo&&c.rol==='commercial_lead').map(c=>{
+              const p=byCloser[c.nombre]||{leads:0,ganados:0,m2:0};
+              const a=actsByPerson[c.nombre]||{total:0,completadas:0};
+              return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
+            }).join('')}
+          </tbody>
         </table>
         <div style="margin-top:10px">
           <button class="btn-ghost" style="font-size:11px" onclick="verReporteVendedor()">🔍 Ver Reporte</button>
@@ -1834,6 +1887,20 @@ async function renderReports(){
         <div style="margin-top:10px">
           <button class="btn-ghost" style="font-size:11px" onclick="verReporteMedio()">🔍 Ver Reporte por Medio</button>
         </div>
+      </div>
+    </div>
+    <div class="section" style="margin-top:14px">
+      <div class="section-title">📈 Tendencia mensual de leads (últimos 6 meses)</div>
+      <div style="display:flex;align-items:flex-end;gap:10px;height:170px;padding:8px 4px 0">
+        ${trendKeys.map(t=>{
+          const h=Math.max(4,Math.round(t.n/_trendMax*130));
+          const act=t.key===_mesActualKey;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+            <div style="font-size:11px;font-weight:700;color:${act?'var(--st-completo)':'var(--gray-400)'};margin-bottom:4px">${t.n}</div>
+            <div style="width:100%;max-width:46px;height:${h}px;border-radius:6px 6px 0 0;background:${act?'var(--st-completo)':'var(--gold)'}"></div>
+            <div style="font-size:10px;color:var(--gray-400);margin-top:6px;text-transform:uppercase;letter-spacing:.05em">${t.label}</div>
+          </div>`;
+        }).join('')}
       </div>
     </div>
     <div class="section" style="margin-top:14px">
