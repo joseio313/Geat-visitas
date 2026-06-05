@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v52</title>
+<title>GEAT CRM v54</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -516,7 +516,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v52</div>
+      <div class="login-sub">Construcción · CRM v54</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -1112,7 +1112,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='53';
+  var CURRENT_VERSION='54';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -2202,7 +2202,8 @@ async function openLeadDetail(leadId,agendaId,mode){
   _refsLeadActual=rRefs.data||[];
   const _fp=calcularFichaCompleta(lead,_refsLeadActual).porcentaje;
   const _fichaBadge=_fp===100?'<span style="font-size:10px;color:var(--st-completo);font-weight:normal;margin-left:6px">✅ Ficha completa</span>':_fp>=70?`<span style="font-size:10px;color:var(--gold);font-weight:normal;margin-left:6px">⚠️ Ficha ${_fp}% — faltan datos</span>`:_fp>=30?`<span style="font-size:10px;color:#F9E04B;font-weight:normal;margin-left:6px">🟡 Ficha ${_fp}% — completar datos</span>`:_fp>0?`<span style="font-size:10px;color:var(--st-atrasado);font-weight:normal;margin-left:6px">🔴 Ficha ${_fp}% — completar urgente</span>`:'';
-  document.getElementById('modal-lead-nombre').innerHTML=(lead.nombre||'—')+_fichaBadge;
+  const _lapizEditar=currentLeadMode==='normal'?` <button title="Editar lead" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 4px;vertical-align:middle" onclick="abrirEditarLead(${lead.id},'${(lead.nombre||'').replace(/'/g,"\\'")}','${lead.celular||''}','${lead.ciudad||''}','${lead.medio_difusion||''}')">✏️</button>`:'';
+  document.getElementById('modal-lead-nombre').innerHTML=(lead.nombre||'—')+_fichaBadge+_lapizEditar;
 
   const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
 
