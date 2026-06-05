@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='60';
+  var CURRENT_VERSION='61';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -2963,7 +2963,10 @@ function startGrabacionH(){
   _recHReset();
   _recHStopByUser=false;
   const rec=new SR();
-  rec.continuous=true;rec.interimResults=true;rec.lang='es-BO';
+  rec.continuous=true;
+  rec.interimResults=false;
+  rec.maxAlternatives=1;
+  rec.lang='es-ES';
   // Solo acumulamos los resultados FINALES en la variable global, que persiste
   // entre todos los reinicios de recognition (no se limpia en cada onend).
   rec.onresult=function(ev){
