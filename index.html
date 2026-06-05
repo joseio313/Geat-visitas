@@ -2184,6 +2184,7 @@ async function openLeadDetail(leadId,agendaId,mode){
   currentLeadMode=mode||'normal';
   currentLeadId=leadId;
   currentAgendaId=agendaId;
+  if(window._recReset)_recReset();
   openModal('modalLead');
   document.getElementById('modal-lead-nombre').textContent='Cargando...';
   document.getElementById('modal-lead-body').innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
@@ -2238,10 +2239,12 @@ async function openLeadDetail(leadId,agendaId,mode){
           ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
           ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
         </div>
-        ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row">
+        ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row" style="align-items:center">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
-        </div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
+          <button id="recBtn" type="button" onclick="toggleGrabacion()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
+        </div>
+        <div id="recResultCard"></div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
       </div>`:''}
       <div class="section">
         <div class="section-title">Línea de tiempo completa</div>
@@ -2738,6 +2741,137 @@ async function guardarCalificacionBancaria(){
 /* ════════════════════════════════════════
    FINALIZAR SEGUIMIENTO
 ════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   GRABACIÓN REUNIÓN — voz → transcripción → resumen IA
+════════════════════════════════════════ */
+let _recState='idle';        // idle|grabando|procesando|listo
+let _recRecognition=null, _recTimer=null, _recTranscript='', _recSeconds=0, _recResultado=null;
+const _REC_MAX=300;          // auto-stop 5 min
+
+function _recReset(){
+  try{if(_recRecognition){_recRecognition.onend=null;_recRecognition.stop();}}catch(e){}
+  if(_recTimer){clearInterval(_recTimer);_recTimer=null;}
+  _recRecognition=null;_recTranscript='';_recSeconds=0;_recResultado=null;_recState='idle';
+}
+function _recFmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
+function setRecState(state){
+  _recState=state;
+  const b=document.getElementById('recBtn'); if(!b)return;
+  if(state==='idle'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.textContent='0:00';}
+  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.textContent=_recFmt(_recSeconds);}
+  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.textContent='···';}
+  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.textContent='✓';}
+}
+
+function toggleGrabacion(){
+  if(_recState==='grabando'){stopGrabacion();return;}
+  if(_recState==='procesando')return;
+  startGrabacion();
+}
+
+function startGrabacion(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Usá Chrome para esta función','error');return;}
+  _recReset();
+  const rec=new SR();
+  rec.continuous=true;rec.interimResults=true;rec.lang='es-BO';
+  let finalT='';
+  rec.onresult=function(ev){
+    let interim='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const tr=ev.results[i][0].transcript;
+      if(ev.results[i].isFinal)finalT+=tr+' ';else interim+=tr;
+    }
+    _recTranscript=(finalT+interim).trim();
+  };
+  rec.onerror=function(e){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){toast('Permiso de micrófono denegado','error');_recReset();setRecState('idle');}
+  };
+  rec.onend=function(){ if(_recState==='grabando')stopGrabacion(); };
+  _recRecognition=rec;
+  try{rec.start();}catch(e){toast('No se pudo iniciar la grabación','error');return;}
+  _recState='grabando';_recSeconds=0;setRecState('grabando');
+  _recTimer=setInterval(function(){_recSeconds++;setRecState('grabando');if(_recSeconds>=_REC_MAX)stopGrabacion();},1000);
+}
+
+function stopGrabacion(){
+  if(_recTimer){clearInterval(_recTimer);_recTimer=null;}
+  try{if(_recRecognition){_recRecognition.onend=null;_recRecognition.stop();}}catch(e){}
+  const transcript=(_recTranscript||'').trim();
+  if(!transcript){toast('No se captó audio','error');_recReset();setRecState('idle');return;}
+  setRecState('procesando');
+  procesarGrabacion(transcript);
+}
+
+async function procesarGrabacion(transcript){
+  try{
+    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+    if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+    const userMsg='Resumí esta transcripción de reunión comercial. Devolvé SOLO JSON:\n'+
+      '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"..."}\n\n'+transcript;
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+    });
+    if(!resp.ok)throw new Error('API '+resp.status);
+    const data=await resp.json();
+    let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+    _recResultado=JSON.parse(txt);
+    setRecState('listo');
+    renderRecResult(_recResultado);
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');
+    _recReset();setRecState('idle');
+  }
+}
+
+function renderRecResult(j){
+  const card=document.getElementById('recResultCard'); if(!card)return;
+  const niv=(j.nivel_interes||'').toLowerCase();
+  const badge=niv==='alto'?'var(--st-completo)':niv==='medio'?'var(--gold)':'var(--st-atrasado)';
+  const puntos=(j.puntos_clave||[]).map(p=>`<li style="margin-bottom:3px">${p}</li>`).join('');
+  const objec=(j.objeciones||[]).map(o=>`<li style="margin-bottom:3px">${o}</li>`).join('');
+  card.innerHTML=`<div class="section" style="margin-top:10px;border:1px solid var(--gray-600);border-radius:10px;padding:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-title" style="margin:0">🎙️ Resumen de reunión</div>
+      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>
+    </div>
+    ${puntos?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${puntos}</ul>`:''}
+    ${objec?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${objec}</ul>`:''}
+    ${j.proximo_paso?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Próximo paso</div><div style="font-size:12px;margin-bottom:12px">${j.proximo_paso}</div>`:''}
+    <div class="action-row">
+      <button class="btn-primary" onclick="guardarGrabacion()">💾 Guardar en lead</button>
+      <button class="btn-ghost" onclick="descartarGrabacion()">Descartar</button>
+    </div>
+  </div>`;
+}
+
+function descartarGrabacion(){
+  const card=document.getElementById('recResultCard'); if(card)card.innerHTML='';
+  _recReset();setRecState('idle');
+}
+
+async function guardarGrabacion(){
+  if(!_recResultado){toast('Sin resumen para guardar','error');return;}
+  if(!currentLeadId||!cu){toast('Sin lead activo','error');return;}
+  try{
+    const{data:l}=await sb.from('leads').select('etapa').eq('id',currentLeadId).single();
+    const nowIso=new Date().toISOString();
+    const{error}=await sb.from('historial_lead').insert({
+      lead_id:currentLeadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
+      etapa:(l&&l.etapa)||'—', tipo_actividad:'grabacion_reunion',
+      nota:JSON.stringify(_recResultado), fecha_actividad:nowIso, created_at:nowIso
+    });
+    if(error)throw error;
+    toast('✅ Resumen guardado en el lead');
+    const card=document.getElementById('recResultCard'); if(card)card.innerHTML='';
+    _recReset();setRecState('idle');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
 function prepareFinalize(){
   closeModal('modalLead');
   outcomeMode='continue';
