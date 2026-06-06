@@ -814,9 +814,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">📅 Fecha</label>
+            <label class="form-label">📅 Próximo contacto</label>
             <input class="form-control" type="date" id="next-fecha">
-            <div class="form-help">Tocá para abrir calendario</div>
+            <div class="form-help">Sugerido según la etapa · editable</div>
           </div>
           <div class="form-group">
             <label class="form-label">🕐 Hora</label>
@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='64';
+  var CURRENT_VERSION='65';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3222,7 +3222,17 @@ function descartarGrabacionH(){
   _recHReset();setRecHState('idle');
 }
 
-function prepareFinalize(){
+/* Días sugeridos para el próximo contacto según la etapa actual del lead */
+function _diasProximoContacto(etapa){
+  const e=(etapa||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const map={
+    'lead':1,'1er intento':1,'2do intento':1,'3er intento':2,
+    'indagacion':1,'envio de informacion':2,'visita oficina':1,'presentando propuesta':3
+  };
+  return map[e]!=null?map[e]:2; // default +2 días
+}
+
+async function prepareFinalize(){
   closeModal('modalLead');
   outcomeMode='continue';
   // Fix 4a — restaurar vista del modal (por si quedó en confirmación de venta)
@@ -3231,7 +3241,13 @@ function prepareFinalize(){
   const _wsr=document.getElementById('won-success'); if(_wsr)_wsr.style.display='none';
   document.getElementById('fin-fecha-auto').value=fmtDT(new Date());
   document.getElementById('fin-nota').value='';
-  document.getElementById('next-fecha').value=ymdLocal(addDays(new Date(),2));
+  // Próximo contacto sugerido según la etapa actual del lead (editable)
+  let diasSug=2;
+  try{
+    const{data:lf}=await sb.from('leads').select('etapa').eq('id',currentLeadId).single();
+    diasSug=_diasProximoContacto(lf&&lf.etapa);
+  }catch(e){}
+  document.getElementById('next-fecha').value=ymdLocal(addDays(new Date(),diasSug));
   // Reset radios
   document.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));
   document.querySelectorAll('.radio-option')[0].classList.add('selected');
@@ -3313,18 +3329,31 @@ async function saveSeguimiento(){
       const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
       const{data:lead}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
       const nombreLead=lead?.nombre||'—';
-      const{error:e2}=await sb.from('agenda_personal').insert({
-        colaborador:nextAsignado,lead_id:currentLeadId,tipo:nextEstado,
-        titulo:nombreLead,nota:nextNota,fecha_programada:fp,completada:false
-      });
-      if(e2){
-        // CAMBIO 1.C — manejo error único 23505
-        if(e2.code==='23505'){toast('Esta actividad ya está registrada. No se crearon duplicados.','error');}
-        else throw e2;
-        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
-        return;
+      // Si ya existe una próxima actividad abierta (p.ej. creada por un trigger),
+      // usar la fecha elegida por el colaborador en vez de crear un duplicado.
+      const{data:actAbierta}=await sb.from('agenda_personal')
+        .select('id').eq('lead_id',currentLeadId).eq('completada',false).eq('activo',true)
+        .neq('id',currentAgendaId).order('fecha_programada').limit(1);
+      if(actAbierta&&actAbierta.length){
+        const{error:e2u}=await sb.from('agenda_personal').update({
+          colaborador:nextAsignado,tipo:nextEstado,titulo:nombreLead,nota:nextNota,fecha_programada:fp
+        }).eq('id',actAbierta[0].id);
+        if(e2u)throw e2u;
+      }else{
+        const{error:e2}=await sb.from('agenda_personal').insert({
+          colaborador:nextAsignado,lead_id:currentLeadId,tipo:nextEstado,
+          titulo:nombreLead,nota:nextNota,fecha_programada:fp,completada:false
+        });
+        if(e2){
+          // CAMBIO 1.C — manejo error único 23505
+          if(e2.code==='23505'){toast('Esta actividad ya está registrada. No se crearon duplicados.','error');}
+          else throw e2;
+          if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+          return;
+        }
       }
-      await sb.from('leads').update({etapa:nextEstado,updated_at:now}).eq('id',currentLeadId);
+      // Guardar el próximo contacto elegido en el lead + avanzar etapa.
+      await sb.from('leads').update({etapa:nextEstado,proximo_contacto:nextFecha,updated_at:now}).eq('id',currentLeadId);
 
     } else if(outcomeMode==='won'){
       const monto=parseFloat(document.getElementById('won-monto').value)||null;
