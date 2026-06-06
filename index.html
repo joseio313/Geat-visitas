@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='62';
+  var CURRENT_VERSION='63';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3004,7 +3004,7 @@ async function guardarGrabacion(){
 /* ════════════════════════════════════════
    GRABACIÓN DESDE HEADER — voz → IA → asociar a lead
 ════════════════════════════════════════ */
-let _recHState='idle', _recHRec=null, _recHTimer=null, _recHTranscript='', _recHSeconds=0, _recHResult=null, _recHLeadId=null, _recHStopByUser=false;
+let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null, _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null;
 
 async function _resumirReunionIA(transcript){
   toast('Analizando reunión...','info');
@@ -3026,9 +3026,11 @@ async function _resumirReunionIA(transcript){
 }
 
 function _recHReset(){
-  try{if(_recHRec){_recHRec.onend=null;_recHRec.stop();}}catch(e){}
+  try{if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.onstop=null;_recHMR.stop();}}catch(e){}
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
-  _recHRec=null;_recHTranscript='';_recHSeconds=0;_recHResult=null;_recHLeadId=null;_recHState='idle';_recHStopByUser=false;
+  try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
+  _recHMR=null;_recHChunks=[];_recHStream=null;_recHWakeLock=null;_recHSeconds=0;_recHResult=null;_recHLeadId=null;_recHState='idle';
 }
 function setRecHState(state){
   _recHState=state;
@@ -3043,54 +3045,86 @@ function toggleGrabacionH(){
   if(_recHState==='procesando')return;
   startGrabacionH();
 }
-function startGrabacionH(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){toast('Usá Chrome para esta función','error');return;}
+async function startGrabacionH(){
+  // Captura el audio del sistema (pestaña/ventana) vía getDisplayMedia → MediaRecorder.
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    toast('Usá Chrome Desktop','error');return;
+  }
   _recHReset();
-  _recHStopByUser=false;
-  const rec=new SR();
-  rec.continuous=true;
-  rec.interimResults=false;
-  rec.maxAlternatives=1;
-  rec.lang='es-ES';
-  // Solo acumulamos los resultados FINALES en la variable global, que persiste
-  // entre todos los reinicios de recognition (no se limpia en cada onend).
-  rec.onresult=function(ev){
-    for(let i=ev.resultIndex;i<ev.results.length;i++){
-      if(ev.results[i].isFinal){
-        _recHTranscript=(_recHTranscript+' '+ev.results[i][0].transcript).trim();
-      }
-    }
-  };
-  rec.onerror=function(e){
-    if(e.error==='not-allowed'||e.error==='service-not-allowed'){toast('Permiso de micrófono denegado','error');_recHReset();setRecHState('idle');}
-  };
-  // SpeechRecognition se desconecta sola por inactividad → reiniciar en silencio.
-  // NO llamamos a resumirReunionIA aquí: el resumen solo se dispara cuando el
-  // usuario detiene explícitamente (stopGrabacionH).
-  rec.onend=function(){
-    if(_recHState==='grabando'&&!_recHStopByUser){
-      try{rec.start();}catch(e){}
-    }
-  };
-  _recHRec=rec;
-  try{rec.start();}catch(e){toast('No se pudo iniciar la grabación','error');return;}
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({audio:true,video:false});
+  }catch(e){
+    toast('No se compartió audio','warning');_recHReset();setRecHState('idle');return;
+  }
+  // El usuario debe marcar "Compartir audio" en el diálogo: sin pista de audio, abortar.
+  if(!stream.getAudioTracks||!stream.getAudioTracks().length){
+    toast('No se compartió audio. Activá "Compartir audio del sistema" en el diálogo.','error');
+    try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
+    _recHReset();setRecHState('idle');return;
+  }
+  _recHStream=stream;
+  // Si el usuario corta el compartir desde el navegador → detener y procesar.
+  stream.getAudioTracks()[0].onended=function(){ if(_recHState==='grabando')stopGrabacionH(); };
+  let mr;
+  try{ mr=new MediaRecorder(stream,{mimeType:'audio/webm'}); }
+  catch(e){ try{mr=new MediaRecorder(stream);}catch(e2){toast('No se pudo grabar','error');_recHReset();setRecHState('idle');return;} }
+  _recHChunks=[];
+  mr.ondataavailable=function(ev){ if(ev.data&&ev.data.size>0)_recHChunks.push(ev.data); };
+  mr.onstop=function(){ _onStopGrabacionH(); };
+  _recHMR=mr;
+  try{mr.start();}catch(e){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
+  // wakeLock: evita que la pantalla se suspenda durante reuniones largas.
+  try{ if(navigator.wakeLock)_recHWakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
   // Sin auto-stop por silencio: solo un tope de seguridad de 3 h.
   _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');if(_recHSeconds>=_REC_H_MAX)stopGrabacionH();},1000);
 }
 function stopGrabacionH(){
-  _recHStopByUser=true;   // impide que onend reinicie la grabación
+  if(_recHState!=='grabando')return;
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
-  try{if(_recHRec){_recHRec.onend=null;_recHRec.stop();}}catch(e){}
-  if(!_recHTranscript || _recHTranscript.trim().length < 10){
-    toast('No se captó texto. Hablá más cerca del micrófono y probá de nuevo.','warning');
-    _recHReset(); setRecHState('idle');
-    return;
-  }
-  const transcript=_recHTranscript.trim();
   setRecHState('procesando');
-  procesarGrabacionH(transcript);
+  // Detener el MediaRecorder dispara onstop → _onStopGrabacionH.
+  try{
+    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();}
+    else{_onStopGrabacionH();}
+  }catch(e){ _onStopGrabacionH(); }
+}
+async function _onStopGrabacionH(){
+  // Liberar stream y wakeLock antes de transcribir.
+  try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_recHWakeLock){_recHWakeLock.release();_recHWakeLock=null;}}catch(e){}
+  const blob=new Blob(_recHChunks,{type:'audio/webm'});
+  if(!blob.size||blob.size<1000){
+    toast('No se captó audio. Asegurate de compartir el audio del sistema.','warning');
+    _recHReset();setRecHState('idle');return;
+  }
+  try{
+    const transcript=await _transcribirWhisperH(blob);
+    if(!transcript||transcript.trim().length<10){
+      toast('No se captó texto en el audio.','warning');_recHReset();setRecHState('idle');return;
+    }
+    await procesarGrabacionH(transcript.trim());
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
+  }
+}
+async function _transcribirWhisperH(blob){
+  toast('Transcribiendo audio...','info');
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  const fd=new FormData();
+  fd.append('file',blob,'reunion.webm');
+  fd.append('model','whisper-1');
+  fd.append('language','es');
+  const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+cfg.value},
+    body:fd
+  });
+  if(!resp.ok)throw new Error('Whisper '+resp.status);
+  const data=await resp.json();
+  return data.text||'';
 }
 async function procesarGrabacionH(transcript){
   try{
