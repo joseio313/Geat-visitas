@@ -1124,7 +1124,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='63';
+  var CURRENT_VERSION='64';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3046,25 +3046,25 @@ function toggleGrabacionH(){
   startGrabacionH();
 }
 async function startGrabacionH(){
-  // Captura el audio del sistema (pestaña/ventana) vía getDisplayMedia → MediaRecorder.
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+  // Captura el audio del micrófono vía getUserMedia → MediaRecorder.
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     toast('Usá Chrome Desktop','error');return;
   }
   _recHReset();
   let stream;
   try{
-    stream=await navigator.mediaDevices.getDisplayMedia({audio:true,video:false});
+    stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
   }catch(e){
-    toast('No se compartió audio','warning');_recHReset();setRecHState('idle');return;
+    toast('Permiso de micrófono denegado','warning');_recHReset();setRecHState('idle');return;
   }
-  // El usuario debe marcar "Compartir audio" en el diálogo: sin pista de audio, abortar.
+  // Sin pista de audio, abortar.
   if(!stream.getAudioTracks||!stream.getAudioTracks().length){
-    toast('No se compartió audio. Activá "Compartir audio del sistema" en el diálogo.','error');
+    toast('No se detectó micrófono.','error');
     try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
     _recHReset();setRecHState('idle');return;
   }
   _recHStream=stream;
-  // Si el usuario corta el compartir desde el navegador → detener y procesar.
+  // Si la pista de audio termina (micrófono desconectado) → detener y procesar.
   stream.getAudioTracks()[0].onended=function(){ if(_recHState==='grabando')stopGrabacionH(); };
   let mr;
   try{ mr=new MediaRecorder(stream,{mimeType:'audio/webm'}); }
