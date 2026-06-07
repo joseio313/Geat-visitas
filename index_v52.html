@@ -1119,12 +1119,27 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ ASISTENTE IA FLOTANTE ══ -->
+<button id="asistFab" type="button" onclick="toggleAsistente()" title="Asistente GEAT"
+  style="display:none;position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;border:2px solid var(--gold);background:var(--black);color:var(--gold);font-size:24px;line-height:1;cursor:pointer;z-index:850;box-shadow:0 4px 14px rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:0">💬</button>
+<div id="asistPanel" style="display:none;position:fixed;bottom:88px;right:20px;width:360px;max-width:calc(100vw - 32px);height:520px;max-height:calc(100vh - 130px);background:var(--gray-900);border:1px solid var(--gold);border-radius:14px;z-index:851;flex-direction:column;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.55)">
+  <div style="background:var(--black);border-bottom:1px solid var(--gold);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="font-weight:700;font-size:13px;color:var(--gold)">💬 Asistente GEAT</div>
+    <button class="modal-close" onclick="toggleAsistente()" style="font-size:20px">×</button>
+  </div>
+  <div id="asistMsgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.5"></div>
+  <div style="border-top:1px solid var(--gray-600);padding:10px;display:flex;gap:6px;flex-shrink:0;align-items:flex-end">
+    <textarea id="asistInput" class="form-control" rows="1" placeholder="Preguntá por tus leads, cómo usar el sistema, el próximo paso..." style="resize:none;flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarAsistente();}"></textarea>
+    <button class="btn-primary btn-sm" id="asistSend" onclick="enviarAsistente()" style="flex-shrink:0">➤</button>
+  </div>
+</div>
+
 <script>
 /* ════════════════════════════════════════
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='65';
+  var CURRENT_VERSION='66';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1380,6 +1395,8 @@ function startApp(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('user-name').textContent=cu.nombre;
+  // Asistente IA flotante — visible para cualquier usuario logueado
+  const _fab=document.getElementById('asistFab'); if(_fab)_fab.style.display='flex';
   // Admin tab
   if(cu.rol==='admin'){
     const tabAdmin=document.getElementById('tab-admin');
@@ -4129,6 +4146,178 @@ async function overrideAlternancia(){
     toast('✅ Override registrado: próxima visita → '+cerrador);
     renderAdmin();
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ════════════════════════════════════════
+   ASISTENTE IA FLOTANTE — chat con contexto de leads/actividades.
+   Reutiliza el mismo patrón de llamada a Claude que _resumirReunionIA
+   (anthropic_api_key desde app_config, modelo Sonnet, header browser-access).
+════════════════════════════════════════ */
+let _asistOpen=false, _asistBusy=false, _asistHist=[];
+const _ML_RE=/mar[ií]a\s+luisa/gi;   // regla dura: nunca mostrar a María Luisa
+const _ASIST_ETAPAS=['1er intento','2do intento','3er intento','Indagación','Envío de información','Cotización','Visita oficina','Visita terreno','Visita técnica','Requerimiento propuesta 2D','Requerimiento propuesta 3D','Presentando propuesta','Reserva','Requerimiento legal para firma de contrato','Firma de contrato','Entrega de planos de ejecución / cálculo estructural','Entrega de vivienda'];
+
+function _asistRedactar(t){ return (t||'').replace(_ML_RE,'—'); }
+function _asistNombre(n){ return (n&&_ML_RE.test(n))?'—':(n||'—'); }
+function _asistRolHumano(r){
+  return ({admin:'Administrador',commercial_lead:'Cerrador (jefe comercial)',field_capturer:'Captadora',tecnico:'Técnico'})[r]||(r||'colaborador');
+}
+
+function toggleAsistente(){
+  _asistOpen=!_asistOpen;
+  const p=document.getElementById('asistPanel'); if(!p)return;
+  p.style.display=_asistOpen?'flex':'none';
+  if(_asistOpen){
+    const m=document.getElementById('asistMsgs');
+    if(m&&m.children.length===0)_asistBienvenida();
+    setTimeout(()=>{const i=document.getElementById('asistInput');if(i)i.focus();},60);
+  }
+}
+function _asistBienvenida(){
+  const n=(cu&&cu.nombre)?cu.nombre.split(' ')[0]:'';
+  _asistAddMsg('asist','¡Hola '+n+'! Soy tu asistente de GEAT. Puedo ayudarte con tus leads y actividades, enseñarte a usar el sistema paso a paso, y sugerirte el próximo paso según la etapa de cada cliente. ¿En qué te ayudo?');
+}
+function _asistAddMsg(who,texto){
+  const cont=document.getElementById('asistMsgs'); if(!cont)return null;
+  const esUser=who==='user';
+  const wrap=document.createElement('div');
+  wrap.style.cssText='max-width:85%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-break:break-word;'+
+    (esUser
+      ?'align-self:flex-end;background:var(--gold);color:#000;border-bottom-right-radius:3px'
+      :'align-self:flex-start;background:var(--gray-800);color:var(--gray-100);border:1px solid var(--gray-600);border-bottom-left-radius:3px');
+  wrap.textContent=texto;
+  cont.appendChild(wrap);
+  cont.scrollTop=cont.scrollHeight;
+  return wrap;
+}
+
+/* Construye el contexto real (leads + actividades de hoy) según el rol */
+async function _asistContexto(){
+  const rol=cu&&cu.rol;
+  const hoy=ymdLocal(new Date());
+  const ini=new Date(hoy+'T00:00:00-04:00').toISOString();
+  const fin=new Date(hoy+'T23:59:59-04:00').toISOString();
+  let ctx='';
+  // Leads: cerradores/admin ven todos; captadoras solo los suyos.
+  if(rol==='field_capturer'||rol==='commercial_lead'||rol==='admin'){
+    try{
+      let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador')
+        .not('estado','in','(cerrado_ganado,cerrado_perdido)')
+        .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(60);
+      if(rol==='field_capturer')q=q.eq('captador',cu.nombre);
+      const{data:leads}=await q;
+      const rows=leads||[];
+      if(rows.length){
+        ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 60):\n';
+        ctx+=rows.map(l=>'#'+l.id+' '+_asistNombre(l.nombre)+' | etapa: '+(l.etapa||'—')+' | próx. contacto: '+(l.proximo_contacto||'—')+' | captador: '+_asistNombre(l.captador)+' | cerrador: '+_asistNombre(l.cerrador)).join('\n');
+      }else{ ctx+='(No hay leads activos en tu cartera.)'; }
+    }catch(e){ ctx+='(No se pudieron cargar los leads.)'; }
+  }
+  // Actividades pendientes de hoy: captadora/técnico solo las suyas.
+  try{
+    let qa=sb.from('agenda_personal').select('lead_id,colaborador,tipo,titulo,fecha_programada')
+      .eq('completada',false).eq('activo',true)
+      .gte('fecha_programada',ini).lte('fecha_programada',fin)
+      .order('fecha_programada').limit(60);
+    if(rol!=='admin'&&rol!=='commercial_lead')qa=qa.eq('colaborador',cu.nombre);
+    const{data:acts}=await qa;
+    const ar=acts||[];
+    if(ar.length){
+      ctx+='\n\nACTIVIDADES PENDIENTES DE HOY ('+ar.length+'):\n';
+      ctx+=ar.map(a=>'• '+_asistNombre(a.titulo||a.tipo||'Actividad')+' | tipo: '+(a.tipo||'—')+' | colaborador: '+_asistNombre(a.colaborador)+' | '+fmtTime(a.fecha_programada)).join('\n');
+    }else{ ctx+='\n\n(No hay actividades pendientes para hoy.)'; }
+  }catch(e){ ctx+='\n\n(No se pudieron cargar las actividades.)'; }
+  return ctx;
+}
+
+function _asistSystemPrompt(contexto){
+  const rol=cu&&cu.rol;
+  const esAdmin=rol==='admin';
+  return [
+    'Sos el asistente interno del CRM de GEAT (empresa boliviana de construcción de viviendas). Ayudás a los colaboradores a gestionar sus leads, aprender a usar el sistema paso a paso y avanzar sus ventas.',
+    '',
+    'USUARIO ACTUAL: '+(cu?cu.nombre:'—')+' — rol: '+_asistRolHumano(rol)+'.',
+    esAdmin?'Es administrador: puede preguntar por cualquier colaborador y ver el panorama completo.':'',
+    '',
+    'REGLAS DURAS (no negociables):',
+    '1. NUNCA muestres montos monetarios (USD, Bs, dólares, precios, monto de contrato o de venta) a quien no sea administrador. '+(esAdmin?'El usuario actual ES administrador.':'El usuario actual NO es administrador: si pregunta por dinero, respondé en metros cuadrados (m²) o aclarale que los montos son solo para administración.'),
+    '2. NUNCA menciones ni muestres a "María Luisa" (ni "Maria Luisa") en ninguna respuesta, bajo ningún concepto.',
+    '3. Respondé en español, claro y conciso. No inventes datos que no estén en el contexto.',
+    '',
+    'PROTOCOLO DE 5 FASES (Sistema Operativo GEAT) — NUNCA sugieras saltear fases:',
+    '  Fase 1 PRESENTACIÓN: 1er intento → 2do intento → 3er intento',
+    '  Fase 2 INDAGACIÓN: Indagación (relevar los datos obligatorios del cliente)',
+    '  Fase 3 ENVÍO DE INFORMACIÓN: Envío de información, Cotización',
+    '  Fase 4 VISITA: Visita oficina, Visita terreno, Visita técnica',
+    '  Fase 5 CIERRE: Requerimiento propuesta 2D/3D, Presentando propuesta, Reserva, Requerimiento legal para firma de contrato, Firma de contrato, entregas',
+    'Orden completo de etapas: '+_ASIST_ETAPAS.join(' → ')+'.',
+    'El próximo paso de un lead es SIEMPRE la etapa inmediatamente siguiente a su etapa actual. Nunca recomiendes adelantar ni saltear etapas.',
+    '',
+    'Cuando te pregunten cómo usar el sistema, explicá con pasos numerados y concretos.',
+    '',
+    'CONTEXTO ACTUAL (datos reales):',
+    contexto||'(sin datos)'
+  ].join('\n');
+}
+
+async function _asistLlamarClaude(systemPrompt,pregunta){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+  const msgs=_asistHist.slice(-6).concat([{role:'user',content:pregunta}]);
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:systemPrompt,messages:msgs})
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  return (data.content&&data.content[0]&&data.content[0].text)||'';
+}
+
+function _asistCategoria(q){
+  const s=(q||'').toLowerCase();
+  if(/c[oó]mo|paso a paso|ense|tutorial|d[oó]nde|registr|usar|funciona|crear/.test(s))return'uso_sistema';
+  if(/pr[oó]ximo paso|siguiente|qu[eé] hago|protocolo|fase|avanz/.test(s))return'proximo_paso';
+  if(/lead|cliente|actividad|pendiente|agenda|contacto|cartera/.test(s))return'leads';
+  return'general';
+}
+function _asistLeadId(q){
+  const m=(q||'').match(/#\s*(\d+)/)||(q||'').match(/lead\s+(\d+)/i);
+  return m?parseInt(m[1],10):null;
+}
+
+async function enviarAsistente(){
+  if(_asistBusy)return;
+  const input=document.getElementById('asistInput');
+  const pregunta=(input&&input.value||'').trim();
+  if(!pregunta)return;
+  if(!cu){toast('Iniciá sesión','error');return;}
+  input.value='';
+  _asistAddMsg('user',pregunta);
+  _asistBusy=true;
+  const sendBtn=document.getElementById('asistSend'); if(sendBtn)sendBtn.disabled=true;
+  const pensando=_asistAddMsg('asist','···');
+  try{
+    const contexto=await _asistContexto();
+    const sys=_asistSystemPrompt(contexto);
+    let respuesta=_asistRedactar(await _asistLlamarClaude(sys,pregunta));
+    if(pensando)pensando.textContent=respuesta;
+    _asistHist.push({role:'user',content:pregunta},{role:'assistant',content:respuesta});
+    if(_asistHist.length>12)_asistHist=_asistHist.slice(-12);
+    // Guardar el intercambio (no romper el chat si el log falla)
+    try{
+      await sb.from('asistente_conversaciones').insert({
+        colaborador:cu.nombre, rol:cu.rol||'—', pregunta:pregunta, respuesta:respuesta,
+        categoria:_asistCategoria(pregunta), lead_id:_asistLeadId(pregunta), created_at:new Date().toISOString()
+      });
+    }catch(eIns){ /* el log es secundario: no interrumpir el chat */ }
+  }catch(e){
+    if(pensando)pensando.textContent='Ups, no pude responder ahora: '+e.message;
+  }finally{
+    _asistBusy=false;
+    if(sendBtn)sendBtn.disabled=false;
+    const i=document.getElementById('asistInput'); if(i)i.focus();
+  }
 }
 
 /* ════════════════════════════════════════
