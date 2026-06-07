@@ -1130,7 +1130,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
   <div id="asistMsgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.5"></div>
   <div style="padding:8px 10px 0;flex-shrink:0">
-    <button class="btn-ghost btn-sm" id="asistCapBtn" onclick="explicarPantalla()" style="width:100%">📷 Explicá mi pantalla</button>
+    <button class="btn-ghost btn-sm" id="asistCapBtn" onclick="verMiPantalla()" style="width:100%">📷 Ve mi pantalla</button>
   </div>
   <div style="border-top:1px solid var(--gray-600);padding:10px;display:flex;gap:6px;flex-shrink:0;align-items:flex-end">
     <textarea id="asistInput" class="form-control" rows="1" placeholder="Preguntá por tus leads, cómo usar el sistema, el próximo paso..." style="resize:none;flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarAsistente();}"></textarea>
@@ -1143,7 +1143,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='70';
+  var CURRENT_VERSION='71';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -4340,7 +4340,7 @@ async function overrideAlternancia(){
    Reutiliza el mismo patrón de llamada a Claude que _resumirReunionIA
    (anthropic_api_key desde app_config, modelo Sonnet, header browser-access).
 ════════════════════════════════════════ */
-let _asistOpen=false, _asistBusy=false, _asistHist=[];
+let _asistOpen=false, _asistBusy=false, _asistHist=[], _asistImgB64=null;
 const _ML_RE=/mar[ií]a\s+luisa/gi;   // regla dura: nunca mostrar a María Luisa
 const _ASIST_ETAPAS=['1er intento','2do intento','3er intento','Indagación','Envío de información','Cotización','Visita oficina','Visita terreno','Visita técnica','Requerimiento propuesta 2D','Requerimiento propuesta 3D','Presentando propuesta','Reserva','Requerimiento legal para firma de contrato','Firma de contrato','Entrega de planos de ejecución / cálculo estructural','Entrega de vivienda'];
 
@@ -4511,11 +4511,15 @@ async function enviarAsistente(){
   try{
     const contexto=await _asistContexto();
     const sys=_asistSystemPrompt(contexto);
-    const raw=await _asistLlamarClaude(sys,pregunta);
+    // Si hay una pantalla adjunta (botón "Ve mi pantalla"), responder con visión y consumirla.
+    const imgAdjunta=_asistImgB64; _asistImgB64=null;
+    const raw=imgAdjunta
+      ? await _asistLlamarClaudeImg(sys,pregunta,imgAdjunta)
+      : await _asistLlamarClaude(sys,pregunta);
     const{texto,pendiente}=_asistExtraerPendiente(raw);
     let respuesta=_asistRedactar(texto);
     // Si Claude cerró el flujo de queja/mejora, registrar el pendiente.
-    let catLog=_asistCategoria(pregunta);
+    let catLog=imgAdjunta?'ensenanza':_asistCategoria(pregunta);
     if(pendiente&&pendiente.descripcion){
       const tipo=['queja','mejora','gap'].includes((pendiente.tipo||'').toLowerCase())?(pendiente.tipo||'').toLowerCase():'mejora';
       catLog=tipo;
@@ -4550,21 +4554,19 @@ async function enviarAsistente(){
   }
 }
 
-/* Captura la pantalla visible y se la manda a Claude (visión) para explicarla.
-   Reutiliza system prompt + reglas duras + contexto del asistente (v66). */
-async function explicarPantalla(){
+/* Captura la pantalla visible (downscaleada) y la deja ADJUNTA como contexto.
+   NO genera explicación: el asistente solo confirma y espera la pregunta. */
+async function verMiPantalla(){
   if(_asistBusy)return;
   if(!cu){toast('Iniciá sesión','error');return;}
   if(typeof html2canvas==='undefined'){toast('No se pudo cargar la captura','error');return;}
   _asistBusy=true;
   const capBtn=document.getElementById('asistCapBtn'); if(capBtn)capBtn.disabled=true;
   const sendBtn=document.getElementById('asistSend'); if(sendBtn)sendBtn.disabled=true;
-  _asistAddMsg('user','📷 Explicá mi pantalla');
+  _asistAddMsg('user','📷 Ve mi pantalla');
   const pensando=_asistAddMsg('asist','Mirando tu pantalla···');
   const panel=document.getElementById('asistPanel');
   const fab=document.getElementById('asistFab');
-  const modalLead=document.getElementById('modalLead');
-  const leadAbierto=!!(currentLeadId&&modalLead&&modalLead.classList.contains('show'));
   try{
     // Ocultar el propio asistente para capturar la app que está detrás.
     if(panel)panel.style.visibility='hidden';
@@ -4579,61 +4581,39 @@ async function explicarPantalla(){
     if(fab)fab.style.visibility='';
     const b64=(canvas.toDataURL('image/png').split(',')[1])||'';
     if(!b64)throw new Error('captura vacía');
-    // Datos estructurados del lead abierto (si hay)
-    let leadCtx='';
-    if(leadAbierto){
-      try{
-        const{data:l}=await sb.from('leads')
-          .select('id,nombre,etapa,proximo_contacto,intento1_estado,intento1_fecha,intento2_estado,intento2_fecha,intento3_estado,intento3_fecha')
-          .eq('id',currentLeadId).single();
-        if(l){
-          leadCtx='\n\nLEAD ABIERTO EN PANTALLA:\n'+
-            '#'+l.id+' '+_asistNombre(l.nombre)+'\n'+
-            'Etapa actual: '+(l.etapa||'—')+'\n'+
-            'Próximo contacto: '+(l.proximo_contacto||'—')+'\n'+
-            'Intento 1: '+(l.intento1_estado||'—')+(l.intento1_fecha?(' ('+l.intento1_fecha+')'):'')+'\n'+
-            'Intento 2: '+(l.intento2_estado||'—')+(l.intento2_fecha?(' ('+l.intento2_fecha+')'):'')+'\n'+
-            'Intento 3: '+(l.intento3_estado||'—')+(l.intento3_fecha?(' ('+l.intento3_fecha+')'):'');
-        }
-      }catch(e){}
-    }
-    const sys=_asistSystemPrompt(await _asistContexto());
-    const promptTxt='Esta es una captura de la pantalla actual del CRM de GEAT que está viendo el usuario. '+
-      'Explicá en lenguaje claro qué se ve en pantalla y para qué sirve, y luego recomendá el próximo paso concreto según el protocolo de 5 fases (nunca saltees fases). '+
-      'Respetá las reglas duras (montos solo para admin; nunca menciones a María Luisa).'+leadCtx;
-    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-    if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:sys,messages:[
-        {role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/png',data:b64}},
-          {type:'text',text:promptTxt}
-        ]}
-      ]})
-    });
-    if(!resp.ok)throw new Error('API '+resp.status);
-    const data=await resp.json();
-    const respuesta=_asistRedactar((data.content&&data.content[0]&&data.content[0].text)||'');
-    if(pensando)pensando.textContent=respuesta;
-    _asistHist.push({role:'user',content:'📷 Explicá mi pantalla'},{role:'assistant',content:respuesta});
-    if(_asistHist.length>12)_asistHist=_asistHist.slice(-12);
-    try{
-      await sb.from('asistente_conversaciones').insert({
-        colaborador:cu.nombre, rol:cu.rol||'—', pregunta:'📷 Explicá mi pantalla', respuesta:respuesta,
-        categoria:'ensenanza', lead_id:leadAbierto?currentLeadId:null, created_at:new Date().toISOString()
-      });
-    }catch(eIns){ /* el log es secundario: no interrumpir el chat */ }
+    // Dejar la imagen adjunta para la próxima pregunta. Sin llamada a Claude.
+    _asistImgB64=b64;
+    if(pensando)pensando.textContent='👀 Listo, veo tu pantalla. ¿Qué necesitás?';
   }catch(e){
     if(panel)panel.style.visibility='';
     if(fab)fab.style.visibility='';
+    _asistImgB64=null;
     if(pensando)pensando.textContent='No pude leer la pantalla: '+e.message;
   }finally{
     _asistBusy=false;
     if(capBtn)capBtn.disabled=false;
     if(sendBtn)sendBtn.disabled=false;
+    const i=document.getElementById('asistInput'); if(i)i.focus();
   }
+}
+
+/* Llamada a Claude con imagen adjunta (visión). Respuesta CORTA. */
+async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+  const instr='El usuario está viendo ESTA pantalla del CRM. Respondé SOLO lo que pregunta, CORTO (1 a 3 frases), sin describir toda la pantalla ni hacer listas largas (el usuario ya ve su pantalla). Si corresponde, indicá el próximo paso según las 5 fases (sin saltear). Pregunta: '+pregunta;
+  const msgs=_asistHist.slice(-6).concat([{role:'user',content:[
+    {type:'image',source:{type:'base64',media_type:'image/png',data:imgB64}},
+    {type:'text',text:instr}
+  ]}]);
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:systemPrompt,messages:msgs})
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  return (data.content&&data.content[0]&&data.content[0].text)||'';
 }
 
 /* ════════════════════════════════════════
