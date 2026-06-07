@@ -1143,7 +1143,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='67';
+  var CURRENT_VERSION='70';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -4014,12 +4014,14 @@ async function renderAdmin(){
   const mesFin=new Date(ahora.getFullYear(),ahora.getMonth()+1,1).toISOString();
 
   try{
-    const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas]=await Promise.all([
+    const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas,rPend,rUsuarios]=await Promise.all([
       sb.from('auditoria_logins').select('*').order('fecha_login',{ascending:false}).limit(50),
       sb.from('auditoria_acciones').select('*').order('fecha',{ascending:false}).limit(100),
       sb.from('leads').select('captador,estado,metros_cuadrados,created_at').gte('created_at',mesInicio).lt('created_at',mesFin),
       sb.from('agenda_personal').select('colaborador,completada,fecha_programada').gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
-      sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10)
+      sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10),
+      sb.from('asistente_pendientes').select('*').eq('activo',true).order('created_at',{ascending:false}),
+      sb.from('colaboradores').select('id,nombre,rol,pin,activo').order('nombre')
     ]);
 
     const logins=rLogins.data||[];
@@ -4027,6 +4029,15 @@ async function renderAdmin(){
     const leadsMes=rLeadsMes.data||[];
     const actsMes=rActsMes.data||[];
     const alternas=rAlternas.data||[];
+    const pendientes=rPend.data||[];
+    const pendQueja=pendientes.filter(p=>p.tipo==='queja');
+    const pendGap=pendientes.filter(p=>p.tipo==='gap');
+    const pendMejora=pendientes.filter(p=>p.tipo==='mejora');
+    const _paneHtml=(arr)=>arr.length?arr.map(_pendItemHtml).join(''):'<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin ítems.</div>';
+    // Gestión de usuarios — excluir SIEMPRE a María Luisa / Maria Luisa
+    const _esML=(n)=>/mar[ií]a\s+luisa/i.test(n||'');
+    const usuarios=(rUsuarios.data||[]).filter(u=>!_esML(u.nombre));
+    _usrCache=usuarios;
 
     // A. Productividad
     const prodRows=colaboradores.filter(c=>c.activo).map(c=>{
@@ -4063,6 +4074,53 @@ async function renderAdmin(){
     });
 
     body.innerHTML=`
+    <!-- 🧠 Inteligencia del Asistente -->
+    <div class="admin-section">
+      <div class="admin-section-title">🧠 Inteligencia del Asistente (${pendientes.length})</div>
+      <div style="display:flex;gap:4px;border-bottom:1px solid var(--gray-600);margin-bottom:12px;flex-wrap:wrap">
+        <div id="pend-tab-queja" onclick="_pendTab('queja')" style="cursor:pointer;padding:7px 12px;font-size:12px">😠 Quejas (${pendQueja.length})</div>
+        <div id="pend-tab-gap" onclick="_pendTab('gap')" style="cursor:pointer;padding:7px 12px;font-size:12px">🕳️ Lo que falta (${pendGap.length})</div>
+        <div id="pend-tab-mejora" onclick="_pendTab('mejora')" style="cursor:pointer;padding:7px 12px;font-size:12px">💡 Mejoras (${pendMejora.length})</div>
+      </div>
+      <div id="pend-pane-queja">${_paneHtml(pendQueja)}</div>
+      <div id="pend-pane-gap">${_paneHtml(pendGap)}</div>
+      <div id="pend-pane-mejora">${_paneHtml(pendMejora)}</div>
+    </div>
+
+    <!-- 👥 Gestión de Usuarios -->
+    <div class="admin-section">
+      <div class="admin-section-title">👥 Gestión de Usuarios (${usuarios.length})</div>
+      <div style="background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div id="usr-form-title" style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">➕ Nuevo usuario</div>
+        <input type="hidden" id="usr-edit-id" value="">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+          <div style="flex:1;min-width:140px">
+            <label class="form-label" style="font-size:10px">Nombre</label>
+            <input id="usr-nombre" class="form-control" type="text" placeholder="Nombre y apellido" autocomplete="off">
+          </div>
+          <div style="width:120px">
+            <label class="form-label" style="font-size:10px">PIN (4 dígitos)</label>
+            <input id="usr-pin" class="form-control" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+          </div>
+          <div style="width:170px">
+            <label class="form-label" style="font-size:10px">Rol</label>
+            <select id="usr-rol" class="form-control">${_ROLES_USR.map(r=>`<option value="${r}">${_asistRolHumano(r)}</option>`).join('')}</select>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-primary btn-sm" onclick="guardarUsuario()">💾 Guardar</button>
+            <button class="btn-ghost btn-sm" onclick="limpiarUsuarioForm()">Limpiar</button>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:6px">El PIN debe tener 4 dígitos. Se guarda en texto plano (igual que el login actual).</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="prod-table">
+          <thead><tr><th>Nombre</th><th>Rol</th><th>PIN</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>${usuarios.map(_usrRowHtml).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- A. Productividad -->
     <div class="admin-section">
       <div class="admin-section-title">📊 Productividad del equipo — ${new Date().toLocaleDateString('es-BO',{month:'long',year:'numeric'})}</div>
@@ -4131,9 +4189,134 @@ async function renderAdmin(){
       </div>
     </div>`;
 
+    _pendTab(_pendTabActiva);
+
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
   }
+}
+
+/* ── Inteligencia del Asistente (panel admin) ── */
+let _pendTabActiva='queja';
+function _escPend(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _pendItemHtml(p){
+  const fecha=p.created_at?new Date(p.created_at).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
+  const estados=['nuevo','revisado','aprobado','construido','descartado'];
+  const estCol={nuevo:'var(--gray-400)',revisado:'#4FC3F7',aprobado:'var(--gold)',construido:'var(--st-completo)',descartado:'var(--st-atrasado)'};
+  const botones=estados.map(function(e){
+    const activo=(p.estado===e), rojo=(e==='descartado');
+    return '<button class="btn-sm '+(rojo?'btn-red':'btn-ghost')+'" '+(activo?'disabled':'')+' style="font-size:10px;padding:3px 8px;'+(activo?'opacity:0.55;cursor:default':'')+'" onclick="_cambiarEstadoPendiente('+p.id+",'"+e+"')\">"+(activo?'● ':'')+e+'</button>';
+  }).join('');
+  return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:11px;margin-bottom:9px;background:var(--gray-900)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">'+
+      '<strong style="font-size:13px">'+_escPend(p.titulo||'—')+'</strong>'+
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:#000;background:'+(estCol[p.estado]||'var(--gray-400)')+';padding:2px 8px;border-radius:10px;white-space:nowrap">'+_escPend(p.estado||'—')+'</span>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--gray-200);margin-bottom:7px;white-space:pre-wrap">'+_escPend(p.descripcion||'—')+'</div>'+
+    '<div style="font-size:10px;color:var(--gray-400);display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">'+
+      '<span>👤 '+_escPend(p.origen_colaborador||'—')+'</span>'+
+      '<span>🔁 '+(p.veces_mencionado||0)+' menciones</span>'+
+      '<span>'+(p.compartido_grupo?'📲 Compartido al grupo':'— No compartido')+'</span>'+
+      '<span>✔️ Validó: '+_escPend(p.validado_por||'—')+'</span>'+
+      '<span>📅 '+fecha+'</span>'+
+    '</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">'+botones+'</div>'+
+  '</div>';
+}
+function _pendTab(tipo){
+  _pendTabActiva=tipo;
+  ['queja','gap','mejora'].forEach(function(t){
+    const pane=document.getElementById('pend-pane-'+t);
+    const tab=document.getElementById('pend-tab-'+t);
+    if(pane)pane.style.display=(t===tipo)?'block':'none';
+    if(tab){
+      tab.style.fontWeight=(t===tipo)?'700':'400';
+      tab.style.color=(t===tipo)?'var(--gold)':'var(--gray-400)';
+      tab.style.borderBottom=(t===tipo)?'2px solid var(--gold)':'2px solid transparent';
+    }
+  });
+}
+async function _cambiarEstadoPendiente(id,estado){
+  try{
+    const{error}=await sb.from('asistente_pendientes').update({estado:estado,updated_at:new Date().toISOString()}).eq('id',id);
+    if(error)throw error;
+    toast('Estado actualizado: '+estado);
+    renderAdmin();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+/* ── Gestión de Usuarios (panel admin, tabla colaboradores · pin plano) ── */
+let _usrCache=[];
+const _ROLES_USR=['admin','commercial_lead','field_capturer','tecnico'];
+function _usrRowHtml(u){
+  const activo=u.activo!==false;
+  const pinMask=u.pin?('••'+String(u.pin).slice(-2)):'—';
+  return '<tr style="'+(activo?'':'opacity:0.5')+'">'+
+    '<td><strong>'+_escPend(u.nombre||'—')+'</strong></td>'+
+    '<td style="font-size:10px;color:var(--gray-400)">'+_escPend(_asistRolHumano(u.rol))+'</td>'+
+    '<td style="font-family:monospace">'+pinMask+'</td>'+
+    '<td>'+(activo?'<span style="color:var(--st-completo)">● Activo</span>':'<span style="color:var(--st-atrasado)">○ Inactivo</span>')+'</td>'+
+    '<td><div style="display:flex;gap:5px;flex-wrap:wrap">'+
+      '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarUsuarioForm('+u.id+')">✏️ Editar</button>'+
+      (activo
+        ? '<button class="btn-red btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',false)">🚫 Desactivar</button>'
+        : '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',true)">♻️ Reactivar</button>')+
+    '</div></td>'+
+  '</tr>';
+}
+function editarUsuarioForm(id){
+  const u=_usrCache.find(x=>String(x.id)===String(id)); if(!u)return;
+  const set=(i,v)=>{const el=document.getElementById(i);if(el)el.value=v;};
+  set('usr-edit-id',u.id);
+  set('usr-nombre',u.nombre||'');
+  set('usr-pin',u.pin||'');
+  set('usr-rol',u.rol||'tecnico');
+  const t=document.getElementById('usr-form-title'); if(t)t.textContent='✏️ Editando: '+(u.nombre||'');
+  const f=document.getElementById('usr-nombre'); if(f){f.focus();f.scrollIntoView({behavior:'smooth',block:'center'});}
+}
+function limpiarUsuarioForm(){
+  const set=(i,v)=>{const el=document.getElementById(i);if(el)el.value=v;};
+  set('usr-edit-id','');
+  set('usr-nombre','');
+  set('usr-pin','');
+  const rolSel=document.getElementById('usr-rol'); if(rolSel)rolSel.selectedIndex=0;
+  const t=document.getElementById('usr-form-title'); if(t)t.textContent='➕ Nuevo usuario';
+}
+async function guardarUsuario(){
+  if(!cu||cu.rol!=='admin'){toast('Solo admin','error');return;}
+  const id=(document.getElementById('usr-edit-id').value||'').trim();
+  const nombre=(document.getElementById('usr-nombre').value||'').trim();
+  const pin=(document.getElementById('usr-pin').value||'').trim();
+  const rol=document.getElementById('usr-rol').value;
+  if(!nombre){toast('Ingresá el nombre','error');return;}
+  if(!/^\d{4}$/.test(pin)){toast('El PIN debe tener 4 dígitos','error');return;}
+  if(!_ROLES_USR.includes(rol)){toast('Rol inválido','error');return;}
+  // PIN único entre usuarios activos (evita colisión en el login)
+  const dupe=_usrCache.find(u=>u.pin===pin && u.activo!==false && String(u.id)!==String(id));
+  if(dupe){toast('Ese PIN ya lo usa '+dupe.nombre,'error');return;}
+  try{
+    if(id){
+      const{error}=await sb.from('colaboradores').update({nombre:nombre,pin:pin,rol:rol}).eq('id',id);
+      if(error)throw error;
+      toast('✅ Usuario actualizado');
+    }else{
+      const{error}=await sb.from('colaboradores').insert({nombre:nombre,pin:pin,rol:rol,activo:true,created_at:new Date().toISOString()});
+      if(error)throw error;
+      toast('✅ Usuario creado');
+    }
+    renderAdmin();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+async function toggleUsuarioActivo(id,activar){
+  if(!cu||cu.rol!=='admin'){toast('Solo admin','error');return;}
+  if(!activar && String(id)===String(cu.id)){toast('No podés desactivarte a vos mismo','error');return;}
+  try{
+    // SOFT DELETE: solo activo=false. NUNCA borrado físico.
+    const{error}=await sb.from('colaboradores').update({activo:!!activar}).eq('id',id);
+    if(error)throw error;
+    toast(activar?'♻️ Usuario reactivado':'🚫 Usuario desactivado');
+    renderAdmin();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 async function overrideAlternancia(){
@@ -4243,6 +4426,10 @@ function _asistSystemPrompt(contexto){
     'USUARIO ACTUAL: '+(cu?cu.nombre:'—')+' — rol: '+_asistRolHumano(rol)+'.',
     esAdmin?'Es administrador: puede preguntar por cualquier colaborador y ver el panorama completo.':'',
     '',
+    'ESTILO DE RESPUESTA:',
+    '- Tu PRIMER mensaje de la conversación puede incluir un saludo breve.',
+    '- De ahí en adelante respondé PUNTUAL, OBJETIVO y EFICIENTE: directo al grano, sin relleno, sin introducciones ni cierres innecesarios.',
+    '',
     'REGLAS DURAS (no negociables):',
     '1. NUNCA muestres montos monetarios (USD, Bs, dólares, precios, monto de contrato o de venta) a quien no sea administrador. '+(esAdmin?'El usuario actual ES administrador.':'El usuario actual NO es administrador: si pregunta por dinero, respondé en metros cuadrados (m²) o aclarale que los montos son solo para administración.'),
     '2. NUNCA menciones ni muestres a "María Luisa" (ni "Maria Luisa") en ninguna respuesta, bajo ningún concepto.',
@@ -4258,6 +4445,16 @@ function _asistSystemPrompt(contexto){
     'El próximo paso de un lead es SIEMPRE la etapa inmediatamente siguiente a su etapa actual. Nunca recomiendes adelantar ni saltear etapas.',
     '',
     'Cuando te pregunten cómo usar el sistema, explicá con pasos numerados y concretos.',
+    '',
+    'GESTIÓN DE QUEJAS Y MEJORAS:',
+    'Si el usuario expresa una queja (algo que no funciona o le molesta) o una mejora/pedido ("sería bueno que...", "deberían...", "falta..."), seguí EXACTAMENTE este flujo:',
+    'a. Redactá una versión CLARA, breve y entendible de la queja/mejora (1 a 3 frases). Mostrásela y preguntale si está de acuerdo con ese texto o quiere ajustarlo.',
+    'b. Si pide cambios, ajustá y volvé a confirmar.',
+    'c. Cuando confirme que el texto está bien, pedile que COPIE ese texto y lo PEGUE en el grupo comercial de WhatsApp, y que te avise cuando lo haya enviado.',
+    'd. SOLO cuando el usuario confirme que YA lo envió al grupo, agradecé en una frase breve y agregá AL FINAL de tu mensaje, en una línea aparte, EXACTAMENTE este bloque (el sistema lo usa para registrar; no lo expliques):',
+    '   [[PENDIENTE]]{"tipo":"queja|mejora|gap","titulo":"<titulo corto>","descripcion":"<texto final consensuado>"}[[/PENDIENTE]]',
+    '   Elegí tipo: "queja" si algo no funciona o molesta; "mejora" si es una mejora o pedido nuevo; "gap" si es una carencia o falta del sistema.',
+    '   NUNCA muestres ese bloque antes de que el usuario confirme el envío, ni lo incluyas en ningún otro mensaje.',
     '',
     'CONTEXTO ACTUAL (datos reales):',
     contexto||'(sin datos)'
@@ -4289,6 +4486,16 @@ function _asistLeadId(q){
   const m=(q||'').match(/#\s*(\d+)/)||(q||'').match(/lead\s+(\d+)/i);
   return m?parseInt(m[1],10):null;
 }
+/* Extrae el bloque [[PENDIENTE]]{...}[[/PENDIENTE]] que emite Claude al cerrar
+   el flujo de queja/mejora. Devuelve el texto limpio + el objeto parseado. */
+function _asistExtraerPendiente(t){
+  t=t||'';
+  const m=t.match(/\[\[PENDIENTE\]\]([\s\S]*?)\[\[\/PENDIENTE\]\]/);
+  if(!m)return{texto:t,pendiente:null};
+  let p=null;
+  try{ p=JSON.parse(m[1].trim()); }catch(e){ p=null; }
+  return{texto:t.replace(m[0],'').trim(),pendiente:p};
+}
 
 async function enviarAsistente(){
   if(_asistBusy)return;
@@ -4304,7 +4511,26 @@ async function enviarAsistente(){
   try{
     const contexto=await _asistContexto();
     const sys=_asistSystemPrompt(contexto);
-    let respuesta=_asistRedactar(await _asistLlamarClaude(sys,pregunta));
+    const raw=await _asistLlamarClaude(sys,pregunta);
+    const{texto,pendiente}=_asistExtraerPendiente(raw);
+    let respuesta=_asistRedactar(texto);
+    // Si Claude cerró el flujo de queja/mejora, registrar el pendiente.
+    let catLog=_asistCategoria(pregunta);
+    if(pendiente&&pendiente.descripcion){
+      const tipo=['queja','mejora','gap'].includes((pendiente.tipo||'').toLowerCase())?(pendiente.tipo||'').toLowerCase():'mejora';
+      catLog=tipo;
+      try{
+        await sb.from('asistente_pendientes').insert({
+          tipo:tipo,
+          titulo:_asistRedactar((pendiente.titulo||'').slice(0,200)),
+          descripcion:_asistRedactar(pendiente.descripcion||''),
+          origen_colaborador:cu.nombre, compartido_grupo:true, validado_por:cu.nombre,
+          estado:'nuevo', created_at:new Date().toISOString()
+        });
+        if(!respuesta)respuesta='✅ Listo, lo registré. ¡Gracias!';
+      }catch(ePend){ /* no romper el chat si falla el registro */ }
+    }
+    if(!respuesta)respuesta='—';
     if(pensando)pensando.textContent=respuesta;
     _asistHist.push({role:'user',content:pregunta},{role:'assistant',content:respuesta});
     if(_asistHist.length>12)_asistHist=_asistHist.slice(-12);
@@ -4312,7 +4538,7 @@ async function enviarAsistente(){
     try{
       await sb.from('asistente_conversaciones').insert({
         colaborador:cu.nombre, rol:cu.rol||'—', pregunta:pregunta, respuesta:respuesta,
-        categoria:_asistCategoria(pregunta), lead_id:_asistLeadId(pregunta), created_at:new Date().toISOString()
+        categoria:catLog, lead_id:_asistLeadId(pregunta), created_at:new Date().toISOString()
       });
     }catch(eIns){ /* el log es secundario: no interrumpir el chat */ }
   }catch(e){
