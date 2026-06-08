@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v72</title>
+<title>GEAT CRM v54</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -517,7 +517,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v72</div>
+      <div class="login-sub">Construcción · CRM v54</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -1143,7 +1143,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='72';
+  var CURRENT_VERSION='71';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3023,22 +3023,9 @@ async function guardarGrabacion(){
 }
 
 /* ════════════════════════════════════════
-   GRABACIÓN DESDE HEADER — MediaRecorder → chunks → Whisper → Claude
-   Resiliencia: fila en "grabaciones" creada al inicio; cada chunk se
-   sube al bucket "grabaciones/{id}/chunk_NNN.webm" conforme llega.
-   La grabación siempre queda archivada, tenga o no lead asociado.
+   GRABACIÓN DESDE HEADER — voz → IA → asociar a lead
 ════════════════════════════════════════ */
-let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null,
-    _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
-    _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='';
-
-/* Aviso antes de cerrar si hay grabación en curso */
-window.addEventListener('beforeunload',function(e){
-  if(_recHState==='grabando'){
-    const msg='Tenés una grabación en curso. ¿Seguro que querés cerrar?';
-    e.preventDefault();e.returnValue=msg;return msg;
-  }
-});
+let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null, _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null;
 
 async function _resumirReunionIA(transcript){
   toast('Analizando reunión...','info');
@@ -3059,55 +3046,12 @@ async function _resumirReunionIA(transcript){
   return JSON.parse(txt);
 }
 
-/* Transcribe un único blob con Whisper. Requiere la API key como parámetro. */
-async function _whisperSingleBlob(blob,apiKey){
-  const fd=new FormData();
-  fd.append('file',blob,'reunion.webm');
-  fd.append('model','whisper-1');
-  fd.append('language','es');
-  const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+apiKey},
-    body:fd
-  });
-  if(!resp.ok)throw new Error('Whisper '+resp.status);
-  const data=await resp.json();
-  return data.text||'';
-}
-
-/* Transcribe usando la API Whisper, segmentando si el audio supera 24 MB. */
-async function _transcribirWhisperSegmentado(blob){
-  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
-  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
-  const MAX=24*1024*1024;
-  if(blob.size<=MAX){
-    toast('Transcribiendo audio...','info');
-    return await _whisperSingleBlob(blob,cfg.value);
-  }
-  /* Audio largo: agrupar chunks en segmentos < 24 MB */
-  toast('Audio largo — transcribiendo por segmentos...','info');
-  const segs=[];
-  let sc=[],ss=0;
-  for(const ch of _recHChunks){
-    if(ss+ch.size>MAX&&sc.length){segs.push(new Blob(sc,{type:'audio/webm'}));sc=[ch];ss=ch.size;}
-    else{sc.push(ch);ss+=ch.size;}
-  }
-  if(sc.length)segs.push(new Blob(sc,{type:'audio/webm'}));
-  const textos=[];
-  for(let i=0;i<segs.length;i++){
-    toast('Transcribiendo segmento '+(i+1)+'/'+segs.length+'...','info');
-    textos.push(await _whisperSingleBlob(segs[i],cfg.value));
-  }
-  return textos.join(' ');
-}
-
 function _recHReset(){
   try{if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.onstop=null;_recHMR.stop();}}catch(e){}
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
-  _recHMR=null;_recHChunks=[];_recHStream=null;_recHWakeLock=null;_recHSeconds=0;
-  _recHResult=null;_recHLeadId=null;_recHGrabId=null;_recHChunkIdx=0;_recHTranscript='';_recHState='idle';
+  _recHMR=null;_recHChunks=[];_recHStream=null;_recHWakeLock=null;_recHSeconds=0;_recHResult=null;_recHLeadId=null;_recHState='idle';
 }
 function setRecHState(state){
   _recHState=state;
@@ -3123,6 +3067,7 @@ function toggleGrabacionH(){
   startGrabacionH();
 }
 async function startGrabacionH(){
+  // Captura el audio del micrófono vía getUserMedia → MediaRecorder.
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     toast('Usá Chrome Desktop','error');return;
   }
@@ -3133,101 +3078,83 @@ async function startGrabacionH(){
   }catch(e){
     toast('Permiso de micrófono denegado','warning');_recHReset();setRecHState('idle');return;
   }
+  // Sin pista de audio, abortar.
   if(!stream.getAudioTracks||!stream.getAudioTracks().length){
     toast('No se detectó micrófono.','error');
     try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
     _recHReset();setRecHState('idle');return;
   }
   _recHStream=stream;
+  // Si la pista de audio termina (micrófono desconectado) → detener y procesar.
   stream.getAudioTracks()[0].onended=function(){ if(_recHState==='grabando')stopGrabacionH(); };
-
-  /* Crear fila en la tabla "grabaciones" con estado='grabando' */
-  try{
-    const d=new Date();
-    const titulo='Reunión '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
-      ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
-      colaborador:cu?cu.nombre:'—',
-      titulo:titulo,
-      lead_id:currentLeadId||null,
-      estado:'grabando',
-      created_at:d.toISOString()
-    }).select('id').single();
-    if(!ger&&gr)_recHGrabId=gr.id;
-  }catch(e){ _recHGrabId=null; }
-
   let mr;
   try{ mr=new MediaRecorder(stream,{mimeType:'audio/webm'}); }
   catch(e){ try{mr=new MediaRecorder(stream);}catch(e2){toast('No se pudo grabar','error');_recHReset();setRecHState('idle');return;} }
   _recHChunks=[];
-  _recHChunkIdx=0;
-  mr.ondataavailable=function(ev){
-    if(!ev.data||ev.data.size<100)return;
-    _recHChunks.push(ev.data);
-    /* Subir chunk al bucket "grabaciones" en background, sin bloquear */
-    if(_recHGrabId){
-      const idx=++_recHChunkIdx;
-      const path=_recHGrabId+'/chunk_'+String(idx).padStart(3,'0')+'.webm';
-      const cb=new Blob([ev.data],{type:'audio/webm'});
-      sb.storage.from('grabaciones').upload(path,cb,{upsert:true}).catch(function(){});
-    }
-  };
+  mr.ondataavailable=function(ev){ if(ev.data&&ev.data.size>0)_recHChunks.push(ev.data); };
   mr.onstop=function(){ _onStopGrabacionH(); };
   _recHMR=mr;
-  try{mr.start(10000);}catch(e){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
+  try{mr.start();}catch(e){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
+  // wakeLock: evita que la pantalla se suspenda durante reuniones largas.
   try{ if(navigator.wakeLock)_recHWakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
+  // Sin auto-stop por silencio: solo un tope de seguridad de 3 h.
   _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');if(_recHSeconds>=_REC_H_MAX)stopGrabacionH();},1000);
 }
 function stopGrabacionH(){
   if(_recHState!=='grabando')return;
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   setRecHState('procesando');
+  // Detener el MediaRecorder dispara onstop → _onStopGrabacionH.
   try{
     if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();}
     else{_onStopGrabacionH();}
   }catch(e){ _onStopGrabacionH(); }
 }
 async function _onStopGrabacionH(){
+  // Liberar stream y wakeLock antes de transcribir.
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHWakeLock){_recHWakeLock.release();_recHWakeLock=null;}}catch(e){}
   const blob=new Blob(_recHChunks,{type:'audio/webm'});
   if(!blob.size||blob.size<1000){
-    toast('No se captó audio.','warning');
-    if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+    toast('No se captó audio. Asegurate de compartir el audio del sistema.','warning');
     _recHReset();setRecHState('idle');return;
   }
-  const durSeg=_recHSeconds;
   try{
-    const transcript=await _transcribirWhisperSegmentado(blob);
+    const transcript=await _transcribirWhisperH(blob);
     if(!transcript||transcript.trim().length<10){
-      toast('No se captó texto en el audio.','warning');
-      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
-      _recHReset();setRecHState('idle');return;
+      toast('No se captó texto en el audio.','warning');_recHReset();setRecHState('idle');return;
     }
-    _recHTranscript=transcript.trim();
-    const resumen=await _resumirReunionIA(_recHTranscript);
-    _recHResult=resumen;
-    /* Actualizar fila en "grabaciones" con resultado completo — siempre, con o sin lead */
-    if(_recHGrabId){
-      try{
-        /* Subir audio completo al bucket (best-effort, no bloquea) */
-        const fullPath=String(_recHGrabId)+'/completo.webm';
-        sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true}).catch(function(){});
-        await sb.from('grabaciones').update({
-          audio_path:String(_recHGrabId)+'/',
-          transcripcion:_recHTranscript,
-          resumen:JSON.stringify(resumen),
-          duracion_seg:durSeg,
-          lead_id:_recHLeadId||currentLeadId||null,
-          estado:'completa'
-        }).eq('id',_recHGrabId);
-      }catch(e){}
-    }
+    await procesarGrabacionH(transcript.trim());
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
+  }
+}
+async function _transcribirWhisperH(blob){
+  toast('Transcribiendo audio...','info');
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  const fd=new FormData();
+  fd.append('file',blob,'reunion.webm');
+  fd.append('model','whisper-1');
+  fd.append('language','es');
+  const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+cfg.value},
+    body:fd
+  });
+  if(!resp.ok)throw new Error('Whisper '+resp.status);
+  const data=await resp.json();
+  return data.text||'';
+}
+async function procesarGrabacionH(transcript){
+  try{
+    _recHResult=await _resumirReunionIA(transcript);
     setRecHState('listo');
     await abrirGrabH();
   }catch(e){
-    toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
+    toast('Error procesando: '+e.message,'error');
+    _recHReset();setRecHState('idle');
   }
 }
 async function abrirGrabH(){
@@ -3244,9 +3171,6 @@ async function abrirGrabH(){
     }catch(e){}
   }
   document.getElementById('grabHBody').innerHTML=`
-    <div style="background:rgba(0,200,83,0.08);border:1px solid var(--st-completo);border-radius:6px;padding:7px 11px;margin-bottom:10px;font-size:11px;color:var(--st-completo)">
-      ✅ <strong>Grabación archivada</strong> · Podés cerrar sin asociar, la reunión ya quedó guardada.
-    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div class="section-title" style="margin:0">🎙️ Resumen de reunión</div>
       <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>
@@ -3255,15 +3179,15 @@ async function abrirGrabH(){
     ${objec?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${objec}</ul>`:''}
     ${j.proximo_paso?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Próximo paso</div><div style="font-size:12px;margin-bottom:12px">${j.proximo_paso}</div>`:''}
     <div style="border-top:1px solid var(--gray-600);padding-top:10px;margin-top:6px">
-      <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Asociar a lead (opcional):</div>
+      <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Asociar al lead:</div>
       ${sugHtml}
       <input id="grabAsocInput" class="form-control" type="text" placeholder="Buscar lead por nombre..." oninput="buscarLeadAsociar(this.value)" autocomplete="off">
       <div id="grabAsocResults" style="margin-top:6px"></div>
       <div id="grabAsocSel" style="font-size:12px;color:var(--st-completo);margin-top:6px"></div>
     </div>
     <div class="action-row" style="margin-top:12px">
-      <button class="btn-primary" onclick="guardarGrabacionH()">🔗 Asociar a lead</button>
-      <button class="btn-ghost" onclick="descartarGrabacionH()">Cerrar (ya guardado)</button>
+      <button class="btn-primary" onclick="guardarGrabacionH()">💾 Guardar en lead</button>
+      <button class="btn-ghost" onclick="descartarGrabacionH()">Descartar</button>
     </div>`;
   _recHLeadId=null;
   openModal('modalGrabH');
@@ -3289,9 +3213,8 @@ function seleccionarLeadAsociar(id,nombre){
 }
 async function guardarGrabacionH(){
   if(!_recHResult){toast('Sin resumen para guardar','error');return;}
+  if(!_recHLeadId){toast('Elegí un lead para asociar','error');return;}
   if(!cu){toast('Sin sesión','error');return;}
-  /* Si no hay lead seleccionado, cerrar — la grabación ya está archivada */
-  if(!_recHLeadId){descartarGrabacionH();return;}
   try{
     const{data:l}=await sb.from('leads').select('etapa').eq('id',_recHLeadId).single();
     const nowIso=new Date().toISOString();
@@ -3301,8 +3224,7 @@ async function guardarGrabacionH(){
       nota:JSON.stringify(_recHResult), fecha_actividad:nowIso, created_at:nowIso
     });
     if(error)throw error;
-    /* Actualizar lead_id en grabaciones si no estaba */
-    if(_recHGrabId){try{await sb.from('grabaciones').update({lead_id:_recHLeadId}).eq('id',_recHGrabId);}catch(e){}}
+    // Auto-fill indagación + grado interés + próxima actividad + draft WA
     const leadId=_recHLeadId, resH=_recHResult;
     const nombreCliente=await _procesarPostGrabacion(leadId,resH);
     _waDraftMsg=_buildWaDraft(nombreCliente,resH);
