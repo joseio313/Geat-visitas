@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v73</title>
+<title>GEAT CRM v72</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -517,7 +517,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v73</div>
+      <div class="login-sub">Construcción · CRM v72</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -1143,7 +1143,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    CACHE-BUSTING — auto-reload nueva versión
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='73';
+  var CURRENT_VERSION='72';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1270,16 +1270,6 @@ function checkDupLock(key){
   return true;
 }
 
-/* ── Helpers asistente_de: aplican filtro OR si el usuario es asistente de alguien ── */
-function _filtrarPorCaptador(q){
-  if(cu&&cu.asistente_de)return q.in('captador',[cu.nombre,cu.asistente_de]);
-  return q.eq('captador',cu.nombre);
-}
-function _filtrarPorColaborador(q){
-  if(cu&&cu.asistente_de)return q.in('colaborador',[cu.nombre,cu.asistente_de]);
-  return q.eq('colaborador',cu.nombre);
-}
-
 /* CAMBIO 7 — Marcadores del día */
 async function cargarMarcadoresDia(){
   const hoy=ymdLocal(new Date());
@@ -1299,9 +1289,9 @@ async function cargarMarcadoresDia(){
       .eq('completada',false).eq('activo',true)
       .lt('fecha_programada',ahora);
     if(!esAdminPuro){
-      qR=_filtrarPorColaborador(qR);
-      qP=_filtrarPorColaborador(qP);
-      qA=_filtrarPorColaborador(qA);
+      qR=qR.eq('colaborador',cu.nombre);
+      qP=qP.eq('colaborador',cu.nombre);
+      qA=qA.eq('colaborador',cu.nombre);
     }
     const[r1,r2,r3]=await Promise.all([qR,qP,qA]);
     const mR=document.getElementById('m-realizado');
@@ -1595,7 +1585,7 @@ async function renderWeek(){
     .order('fecha_programada');
 
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
-  if(!isJefe) query=_filtrarPorColaborador(query);
+  if(!isJefe) query=query.eq('colaborador',cu.nombre);
   else if(filtP) query=query.eq('colaborador',filtP);
   if(filtE) query=query.eq('tipo',filtE);
 
@@ -1695,7 +1685,7 @@ async function renderMonth(){
     .gte('fecha_programada',start.toISOString())
     .lt('fecha_programada',end.toISOString());
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
-  if(!isJefe) q=_filtrarPorColaborador(q);
+  if(!isJefe) q=q.eq('colaborador',cu.nombre);
   else if(filtP) q=q.eq('colaborador',filtP);
 
   const {data}=await q;
@@ -2234,7 +2224,7 @@ async function verReporteBusqueda(){
   toast('Cargando...','ok');
   try{
     let q=sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',new Date(desde+'T00:00:00').toISOString()).lte('created_at',new Date(hasta+'T23:59:59').toISOString()).order('created_at',{ascending:false});
-    if(!esAdmin) q=_filtrarPorCaptador(q);
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads — ${desde} → ${hasta}</div>
@@ -3285,7 +3275,7 @@ async function buscarLeadAsociar(q){
   try{
     let query=sb.from('leads').select('id,nombre,celular').ilike('nombre','%'+q+'%').order('created_at',{ascending:false}).limit(8);
     const isJefe=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
-    if(!isJefe&&cu)query=_filtrarPorCaptador(query);
+    if(!isJefe&&cu)query=query.eq('captador',cu.nombre);
     const{data}=await query;
     const rows=data||[];
     box.innerHTML=rows.length?rows.map(l=>`<button class="btn-ghost" style="display:block;width:100%;text-align:left;font-size:12px;margin-bottom:4px" onclick="seleccionarLeadAsociar(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}')">${l.nombre||'—'} · ${l.celular||''}</button>`).join(''):'<div style="font-size:11px;color:var(--gray-400)">Sin resultados</div>';
@@ -3707,7 +3697,7 @@ async function execSearch(q){
     .limit(30);
 
   if(searchMode==='reactivar') dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
-  if(!esAdmin) dbQuery=_filtrarPorCaptador(dbQuery);
+  if(!esAdmin) dbQuery=dbQuery.eq('captador',cu.nombre);
 
   const{data}=await dbQuery;
   const leads=data||[];
@@ -3855,7 +3845,7 @@ async function cargarLeadsRecientes(){
       .select('id,nombre,celular,ciudad,captador,estado,created_at')
       .order('created_at',{ascending:false})
       .limit(50);
-    if(!esAdmin) q=_filtrarPorCaptador(q);
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
     const leads=data||[];
@@ -3960,7 +3950,7 @@ async function exportarBusqueda(){
       .gte('created_at',new Date(desde+'T00:00:00').toISOString())
       .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
       .order('created_at',{ascending:false});
-    if(!esAdmin) q=_filtrarPorCaptador(q);
+    if(!esAdmin) q=q.eq('captador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
     const rows=(data||[]).map(l=>({
@@ -4479,7 +4469,7 @@ async function _asistContexto(){
       let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador')
         .not('estado','in','(cerrado_ganado,cerrado_perdido)')
         .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(60);
-      if(rol==='field_capturer')q=_filtrarPorCaptador(q);
+      if(rol==='field_capturer')q=q.eq('captador',cu.nombre);
       const{data:leads}=await q;
       const rows=leads||[];
       if(rows.length){
