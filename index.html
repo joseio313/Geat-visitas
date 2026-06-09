@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v78</title>
+<title>GEAT CRM v79</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -517,7 +517,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v78</div>
+      <div class="login-sub">Construcción · CRM v79</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -575,7 +575,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab active" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
     <div class="nav-tab" onclick="switchTab(this,'screen-month')">🗓️ Vista mensual</div>
     <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
-    <div class="nav-tab" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
+    <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
   </nav>
 
@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='78';
+  var CURRENT_VERSION='79';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1476,6 +1476,11 @@ function startApp(){
     if(tabAdmin)tabAdmin.style.display='';
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
+  }
+  // Reportes tab: oculto para field_capturer
+  if(cu.rol==='field_capturer'){
+    const tabRep=document.getElementById('tab-reports');
+    if(tabRep)tabRep.style.display='none';
   }
   // Idle logout
   iniciarIdleTimer();
@@ -1910,14 +1915,25 @@ function onReportRangeChange(){
 
 async function renderReports(){
   const body=document.getElementById('reports-body');
+  // field_capturer no tiene acceso a reportes
+  if(cu&&cu.rol==='field_capturer'){
+    body.innerHTML='<div style="padding:24px;color:var(--gray-400);font-size:13px">Sin acceso a esta sección.</div>';
+    return;
+  }
   body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   const rng=getReportRange();
+  // commercial_lead nunca ve montos monetarios — solo m² y conteos
+  const esAdmin=cu&&cu.rol==='admin';
 
   // Tendencia: primer día del mes, 5 meses atrás (6 incl. actual), hora local
   const _hoy=new Date();
   const _trendDesde=new Date(_hoy.getFullYear(),_hoy.getMonth()-5,1).toISOString();
+  // monto_contrato solo lo fetcha admin (campo no se usa en UI de commercial_lead)
+  const _leadsSelect=esAdmin
+    ?'id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at'
+    :'id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at';
   const[rLeads,rActs,rTrend,rVentas]=await Promise.all([
-    sb.from('leads').select('id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta),
+    sb.from('leads').select(_leadsSelect).gte('created_at',rng.desde).lt('created_at',rng.hasta),
     sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta),
     sb.from('leads').select('created_at').eq('archivado',false).gte('created_at',_trendDesde),
     sb.from('ventas').select('metros_cuadrados,fecha_venta').gte('fecha_venta',ymdLocal(new Date(rng.desde))).lt('fecha_venta',ymdLocal(new Date(rng.hasta)))
