@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v74</title>
+<title>GEAT CRM v75</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -517,7 +517,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v74</div>
+      <div class="login-sub">Construcción · CRM v75</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -558,7 +558,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
-      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>
+      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Audio" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -1147,7 +1147,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='74';
+  var CURRENT_VERSION='75';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -1443,6 +1443,8 @@ function startApp(){
    INIT APP
 ════════════════════════════════════════ */
 async function initApp(){
+  /* Marcar como 'interrumpida' cualquier grabación que quedó en estado 'grabando' */
+  try{await sb.from('grabaciones').update({estado:'interrumpida'}).eq('estado','grabando').eq('colaborador',cu.nombre);}catch(e){}
   await Promise.all([loadCatalogs(),loadColaboradores()]);
   await renderWeek();
   buildPersonaFilters();
@@ -2332,7 +2334,7 @@ async function openLeadDetail(leadId,agendaId,mode){
         ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row" style="align-items:center">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
-          ${cu.rol==='admin'?`<button id="recBtn" type="button" onclick="toggleGrabacion()" title="Grabar reunión" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-family:monospace;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">0:00</button>`:''}
+          ${cu.rol==='admin'?`<button id="recBtn" type="button" onclick="toggleGrabacion()" title="Audio" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>`:''}
         </div>
         <div id="recResultCard"></div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
       </div>`:''}
@@ -2849,10 +2851,10 @@ function _recFmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 function setRecState(state){
   _recState=state;
   const b=document.getElementById('recBtn'); if(!b)return;
-  if(state==='idle'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.textContent='0:00';}
-  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.textContent=_recFmt(_recSeconds);}
-  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.textContent='···';}
-  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.textContent='✓';}
+  if(state==='idle'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🎙';}
+  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#cc3300;margin-right:2px;vertical-align:middle;flex-shrink:0"></span>'+_recFmt(_recSeconds);}
+  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.innerHTML='···';}
+  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.innerHTML='✓';}
 }
 
 function toggleGrabacion(){
@@ -3058,11 +3060,20 @@ let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStrea
     _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
     _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='';
 
-/* Aviso antes de cerrar si hay grabación en curso */
+/* Aviso antes de cerrar si hay sesión de audio activa */
 window.addEventListener('beforeunload',function(e){
-  if(_recHState==='grabando'){
-    const msg='Tenés una grabación en curso. ¿Seguro que querés cerrar?';
-    e.preventDefault();e.returnValue=msg;return msg;
+  if(_recHState==='grabando'||_recHState==='iniciando'){
+    const msg='Tenés una sesión activa, ¿seguro que querés salir?';
+    e.preventDefault();e.returnValue=msg;
+    if(_recHGrabId){
+      fetch(SB_URL+'/rest/v1/grabaciones?id=eq.'+_recHGrabId,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+        body:JSON.stringify({estado:'interrumpida'}),
+        keepalive:true
+      }).catch(function(){});
+    }
+    return msg;
   }
 });
 
@@ -3137,21 +3148,24 @@ function _recHReset(){
 function setRecHState(state){
   _recHState=state;
   const b=document.getElementById('recBtnHeader'); if(!b)return;
-  if(state==='idle'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.textContent='0:00';}
-  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.textContent=_recFmt(_recHSeconds);}
-  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.textContent='···';}
-  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.textContent='✓';}
+  if(state==='idle'||state==='iniciando'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🎙';}
+  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#cc3300;margin-right:2px;vertical-align:middle;flex-shrink:0"></span>'+_recFmt(_recHSeconds);}
+  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.innerHTML='···';}
+  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.innerHTML='✓';}
 }
 function toggleGrabacionH(){
   if(_recHState==='grabando'){stopGrabacionH();return;}
-  if(_recHState==='procesando')return;
+  if(_recHState==='procesando'||_recHState==='iniciando')return;
   startGrabacionH();
 }
 async function startGrabacionH(){
+  if(_recHState!=='idle')return; // guard: evita doble inicio si se presiona rápido
+  _recHState='iniciando';        // lock antes de cualquier await
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    toast('Usá Chrome Desktop','error');return;
+    toast('Usá Chrome Desktop','error');_recHState='idle';return;
   }
   _recHReset();
+  _recHState='iniciando'; // _recHReset() lo vuelve a 'idle' — re-bloquear
   let stream;
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
@@ -4485,12 +4499,12 @@ async function _asistContexto(){
     try{
       let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador')
         .not('estado','in','(cerrado_ganado,cerrado_perdido)')
-        .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(60);
+        .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(150);
       if(rol==='field_capturer')q=_filtrarPorCaptador(q);
       const{data:leads}=await q;
       const rows=leads||[];
       if(rows.length){
-        ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 60):\n';
+        ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 150):\n';
         ctx+=rows.map(l=>'#'+l.id+' '+_asistNombre(l.nombre)+' | etapa: '+(l.etapa||'—')+' | próx. contacto: '+(l.proximo_contacto||'—')+' | captador: '+_asistNombre(l.captador)+' | cerrador: '+_asistNombre(l.cerrador)).join('\n');
       }else{ ctx+='(No hay leads activos en tu cartera.)'; }
     }catch(e){ ctx+='(No se pudieron cargar los leads.)'; }
