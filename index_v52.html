@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='80';
+  var CURRENT_VERSION='81';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3137,7 +3137,7 @@ window.addEventListener('beforeunload',function(e){
 });
 
 async function _resumirReunionIA(transcript){
-  toast('Analizando reunión...','info');
+  /* Sin toast: el procesamiento del botón reloj corre en silencio de fondo */
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
@@ -3153,6 +3153,35 @@ async function _resumirReunionIA(transcript){
   let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
   txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
   return JSON.parse(txt);
+}
+
+/* Extracción IA de datos de prospecto desde la transcripción.
+   Mismo patrón que _resumirReunionIA (anthropic_api_key, Sonnet). */
+async function _extraerProspectoIA(transcript){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+  const userMsg='Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+    '{"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null}]}\n'+
+    'es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha.\n\n'+transcript;
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+  txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+  return JSON.parse(txt);
+}
+/* Corre la extracción y la guarda en grabaciones.extraccion.
+   Nunca lanza: si falla la API o el parseo guarda null y no rompe el flujo. */
+async function _grabExtraerYGuardar(grabId,transcript){
+  if(!grabId||!transcript)return null;
+  let ext=null;
+  try{ext=await _extraerProspectoIA(transcript);}catch(e){ext=null;}
+  try{await sb.from('grabaciones').update({extraccion:ext}).eq('id',grabId);}catch(e){}
+  return ext;
 }
 
 /* Transcribe un único blob con Whisper. */
@@ -3176,11 +3205,10 @@ async function _transcribirWhisperSegmentado(blob){
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
   const MAX=24*1024*1024;
+  /* Sin toasts de progreso: el procesamiento del botón reloj corre en silencio de fondo */
   if(blob.size<=MAX){
-    toast('Transcribiendo audio...','info');
     return await _whisperSingleBlob(blob,cfg.value);
   }
-  toast('Audio largo — transcribiendo por segmentos...','info');
   const segs=[];
   let sc=[],ss=0;
   for(const ch of _recHChunks){
@@ -3190,7 +3218,6 @@ async function _transcribirWhisperSegmentado(blob){
   if(sc.length)segs.push(new Blob(sc,{type:'audio/webm'}));
   const textos=[];
   for(let i=0;i<segs.length;i++){
-    toast('Transcribiendo segmento '+(i+1)+'/'+segs.length+'...','info');
     textos.push(await _whisperSingleBlob(segs[i],cfg.value));
   }
   return textos.join(' ');
@@ -3315,6 +3342,8 @@ async function _onStopGrabacionH(){
           lead_id:_recHLeadId||currentLeadId||null,
           estado:'completa'
         }).eq('id',_recHGrabId);
+        /* Extracción IA en silencio de fondo — sin await ni indicadores */
+        _grabExtraerYGuardar(_recHGrabId,_recHTranscript);
       }catch(e){}
     }
     setRecHState('listo');
@@ -3705,6 +3734,17 @@ async function saveLead(){
       else throw e2;
     }
 
+    /* Lead creado desde un registro de grabación: vincular y refrescar el panel */
+    if(_grabOrigenRegId){
+      const regId=_grabOrigenRegId; _grabOrigenRegId=null;
+      try{
+        await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',regId);
+        if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
+        toast('Lead #'+newLead.id+' creado desde este registro');
+        _grabRefrescarDetalle(regId);
+      }catch(e){}
+    }
+
     if(btn){btn.innerHTML='✅ Creado';}
     setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
@@ -3721,7 +3761,11 @@ async function saveLead(){
    BUSCAR LEAD
 ════════════════════════════════════════ */
 function openModal(id){document.getElementById(id).classList.add('show');}
-function closeModal(id){document.getElementById(id).classList.remove('show');}
+function closeModal(id){
+  document.getElementById(id).classList.remove('show');
+  /* Si se cancela crear lead, soltar el vínculo con el registro de grabación */
+  if(id==='modalNewLead')_grabOrigenRegId=null;
+}
 
 /* CAMBIO 4 — Buscar Lead: solo lectura, separado de Nueva Oportunidad */
 function openSearchModal(){
@@ -4394,7 +4438,7 @@ async function renderRegistroGrabaciones(verTodas){
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
     let q=sb.from('grabaciones')
-      .select('id,titulo,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path')
+      .select('id,titulo,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
     if(!verTodas) q=q.eq('estado','completa');
     const{data,error}=await q;
@@ -4446,10 +4490,107 @@ function _grabToggle(id){
   det.innerHTML='<div style="border-top:1px solid var(--gray-600);padding-top:10px">'+
     '<div id="grab-audio-'+id+'" style="margin-bottom:10px"><div style="font-size:11px;color:var(--gray-400)"><span class="spin" style="width:14px;height:14px;margin-right:6px"></span>Cargando audio...</div></div>'+
     (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
+    _grabExtraccionHtml(g)+
     (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción.</div>')+
     '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
   '</div>';
   _grabCargarAudio(id,g.audio_path);
+}
+/* Bloque de extracción IA en el detalle de una grabación (panel admin) */
+function _grabExtraccionHtml(g){
+  let x=g.extraccion;
+  if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x=null;}}
+  /* Sin extracción: botón retroactivo solo si está completa y con transcripción */
+  if(!x||typeof x!=='object'){
+    if(g.estado==='completa'&&g.transcripcion){
+      return '<div style="margin-bottom:10px"><button class="btn-ghost btn-sm" style="font-size:11px" id="grab-analizar-'+g.id+'" onclick="_grabAnalizarIA('+g.id+')">🤖 Analizar con IA</button></div>';
+    }
+    return '';
+  }
+  const dato=(lbl,val)=>val?'<div style="font-size:11px;margin-bottom:2px"><span style="color:var(--gray-400)">'+lbl+':</span> '+_escPend(val)+'</div>':'';
+  let datosHtml='';
+  if(x.es_prospecto===true){
+    datosHtml='<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:3px">Prospecto detectado</div>'+
+      dato('Nombre',x.nombre)+dato('Celular',x.celular)+dato('Ciudad',x.ciudad)+
+      dato('Terreno',x.lugar_terreno)+dato('Pago',x.financiamiento)+dato('Plantas',x.plantas)+
+      dato('Cuándo construir',x.cuando_construir)+dato('Presupuesto',x.presupuesto)+
+      dato('Vivienda/Inversión',x.vivienda_o_inversion);
+  }else{
+    datosHtml='<div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">No se detectó un prospecto en esta reunión.</div>';
+  }
+  const temas=(x.temas_clave||[]).map(t=>'<li>'+_escPend(t)+'</li>').join('');
+  const comps=(x.compromisos||[]).map(c=>'<li>'+_escPend(c&&c.texto||'—')+(c&&c.fecha_sugerida?' <span style="color:var(--gold)">('+_escPend(c.fecha_sugerida)+')</span>':'')+'</li>').join('');
+  let accionHtml='';
+  if(g.lead_creado_id){
+    accionHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">✅ Lead #'+g.lead_creado_id+' creado desde este registro</div>';
+  }else if(x.es_prospecto===true){
+    accionHtml='<button class="btn-primary btn-sm" style="font-size:11px;margin-top:6px" onclick="_grabCrearLead('+g.id+')">➕ Crear lead desde registro</button>';
+  }
+  return '<div style="margin-bottom:10px;border:1px solid var(--gray-600);border-radius:6px;padding:8px;background:var(--gray-800)">'+
+    '<div class="section-title" style="font-size:12px;margin-bottom:6px">🤖 Extracción IA</div>'+
+    datosHtml+
+    (temas?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Temas clave</div><ul style="font-size:12px;padding-left:18px;margin:0">'+temas+'</ul>':'')+
+    (comps?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Compromisos</div><ul style="font-size:12px;padding-left:18px;margin:0">'+comps+'</ul>':'')+
+    accionHtml+
+  '</div>';
+}
+/* Refresca el detalle abierto de una grabación tras cambiar su cache */
+function _grabRefrescarDetalle(id){
+  const det=document.getElementById('grab-det-'+id);
+  if(!det)return;
+  det.dataset.loaded='';
+  det.style.display='none';
+  _grabToggle(id);
+}
+/* Botón retroactivo: corre la extracción IA sobre una grabación completa sin extraccion */
+async function _grabAnalizarIA(id){
+  const g=_grabCache[id];
+  if(!g||!g.transcripcion){toast('Sin transcripción para analizar','error');return;}
+  const btn=document.getElementById('grab-analizar-'+id);
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ Analizando...';}
+  try{
+    const ext=await _grabExtraerYGuardar(id,g.transcripcion);
+    if(ext===null){toast('No se pudo extraer datos de esta grabación','warning');if(btn){btn.disabled=false;btn.innerHTML='🤖 Analizar con IA';}return;}
+    g.extraccion=ext;
+    toast('✅ Análisis IA completado');
+    _grabRefrescarDetalle(id);
+  }catch(e){
+    toast('Error: '+e.message,'error');
+    if(btn){btn.disabled=false;btn.innerHTML='🤖 Analizar con IA';}
+  }
+}
+/* Abre el formulario existente de crear lead pre-llenado desde la extracción */
+let _grabOrigenRegId=null;
+function _grabCrearLead(id){
+  const g=_grabCache[id];
+  let x=g&&g.extraccion;
+  if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x=null;}}
+  if(!x||x.es_prospecto!==true){toast('Esta grabación no tiene un prospecto detectado','error');return;}
+  if(g.lead_creado_id){toast('Ya se creó el lead #'+g.lead_creado_id+' desde este registro','warning');return;}
+  _grabOrigenRegId=id;
+  const set=(i,v)=>{const el=document.getElementById(i);if(el)el.value=v||'';};
+  set('nl-nombre',x.nombre);
+  set('nl-celular',x.celular);
+  if(x.celular)checkDuplicate(x.celular);
+  /* Ciudad: solo si coincide con una opción del select de departamentos */
+  const selC=document.getElementById('nl-ciudad');
+  if(selC&&x.ciudad){
+    const opt=Array.from(selC.options).find(o=>o.value&&o.value.toLowerCase()===String(x.ciudad).toLowerCase());
+    selC.value=opt?opt.value:'';
+  }
+  /* Método de pago desde financiamiento */
+  const mp=x.financiamiento==='contado'?'contado':(x.financiamiento==='financiamiento'?'financiamiento_bancario':'');
+  set('nl-metodo-pago',mp);
+  /* Nota inicial con el contexto de la extracción */
+  const notas=['Creado desde registro de grabación #'+id+'.'];
+  if(x.lugar_terreno)notas.push('Terreno: '+x.lugar_terreno);
+  if(x.plantas)notas.push('Plantas: '+x.plantas);
+  if(x.cuando_construir)notas.push('Construir: '+x.cuando_construir);
+  if(x.presupuesto)notas.push('Presupuesto: '+x.presupuesto);
+  if(x.vivienda_o_inversion)notas.push('Destino: '+x.vivienda_o_inversion);
+  if(x.temas_clave&&x.temas_clave.length)notas.push('Temas: '+x.temas_clave.join(', '));
+  set('nl-nota',notas.join(' · '));
+  openModal('modalNewLead');
 }
 async function _grabCargarAudio(id,audioPath){
   const cont=document.getElementById('grab-audio-'+id); if(!cont)return;
