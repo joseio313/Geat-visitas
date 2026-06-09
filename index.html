@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v79</title>
+<title>GEAT CRM v80</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -517,7 +517,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v79</div>
+      <div class="login-sub">Construcción · CRM v80</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -558,7 +558,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
-      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Audio" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>
+      <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='79';
+  var CURRENT_VERSION='80';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3207,10 +3207,11 @@ function _recHReset(){
 function setRecHState(state){
   _recHState=state;
   const b=document.getElementById('recBtnHeader'); if(!b)return;
-  if(state==='idle'||state==='iniciando'){b.style.border='0.5px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🎙';}
-  else if(state==='grabando'){b.style.border='1px solid #BA7517';b.style.color='#BA7517';b.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#cc3300;margin-right:2px;vertical-align:middle;flex-shrink:0"></span>'+_recFmt(_recHSeconds);}
-  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.innerHTML='···';}
-  else if(state==='listo'){b.style.border='1px solid var(--st-completo)';b.style.color='var(--st-completo)';b.innerHTML='✓';}
+  // Ícono de reloj siempre; solo cambia el color del aro. Sin rojo, sin timer, sin micrófono.
+  if(state==='idle'||state==='iniciando'){b.style.border='1px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🕐';}
+  else if(state==='grabando'){b.style.border='2px solid #FFC107';b.style.color='#FFC107';b.innerHTML='🕐';}
+  else if(state==='procesando'){b.style.border='1px dashed var(--gray-400)';b.style.color='var(--gray-400)';b.innerHTML='🕐';}
+  else if(state==='listo'){b.style.border='2px solid var(--st-completo)';b.style.color='var(--st-completo)';b.innerHTML='🕐';}
 }
 function toggleGrabacionH(){
   if(_recHState==='grabando'){stopGrabacionH();return;}
@@ -3274,6 +3275,7 @@ async function startGrabacionH(){
 function stopGrabacionH(){
   if(_recHState!=='grabando')return;
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
+  toast('Finish ✓','ok');
   setRecHState('procesando');
   try{
     if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();}
@@ -4255,6 +4257,17 @@ async function renderAdmin(){
       <div id="pend-pane-mejora">${_paneHtml(pendMejora)}</div>
     </div>
 
+    <!-- 📼 Registro -->
+    <div class="admin-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div class="admin-section-title" style="margin:0">📼 Registro</div>
+        <label style="font-size:11px;color:var(--gray-400);cursor:pointer;display:flex;align-items:center;gap:5px">
+          <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
+        </label>
+      </div>
+      <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+    </div>
+
     <!-- 👥 Gestión de Usuarios -->
     <div class="admin-section">
       <div class="admin-section-title">👥 Gestión de Usuarios (${usuarios.length})</div>
@@ -4358,10 +4371,128 @@ async function renderAdmin(){
     </div>`;
 
     _pendTab(_pendTabActiva);
+    renderRegistroGrabaciones(false);
 
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
   }
+}
+
+/* ════════════════════════════════════════
+   REGISTRO DE GRABACIONES (panel admin)
+   Lee tabla "grabaciones"; audio en bucket privado "grabaciones".
+   Archivar = soft-delete (activo=false), NUNCA DELETE.
+════════════════════════════════════════ */
+let _grabCache={};
+function _grabFmtFecha(iso){
+  if(!iso)return'—';
+  try{return new Date(iso).toLocaleString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  catch(e){return new Date(iso).toLocaleString('es-BO');}
+}
+async function renderRegistroGrabaciones(verTodas){
+  const cont=document.getElementById('registro-grab-body'); if(!cont)return;
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    let q=sb.from('grabaciones')
+      .select('id,titulo,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path')
+      .eq('activo',true).order('created_at',{ascending:false});
+    if(!verTodas) q=q.eq('estado','completa');
+    const{data,error}=await q;
+    if(error)throw error;
+    const rows=data||[];
+    if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin grabaciones'+(verTodas?'':' completas')+'.</div>';return;}
+    _grabCache={};
+    cont.innerHTML='<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">'+rows.length+' grabación(es)</div>'+
+      rows.map(g=>{_grabCache[g.id]=g;return _grabRowHtml(g);}).join('');
+  }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+function _grabRowHtml(g){
+  const estCol={completa:'var(--st-completo)',interrumpida:'var(--gold)',descartada:'var(--st-atrasado)',grabando:'#FFC107'};
+  const col=estCol[g.estado]||'var(--gray-400)';
+  const titulo=_escPend(g.titulo||('Grabación #'+g.id));
+  return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-900)">'+
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="_grabToggle('+g.id+')">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+titulo+'</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+_grabFmtFecha(g.created_at)+' · '+_escPend(g.colaborador||'—')+' · '+_recFmt(g.duracion_seg||0)+'</div>'+
+      '</div>'+
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#000;background:'+col+';padding:2px 9px;border-radius:10px">'+_escPend(g.estado||'—')+'</span>'+
+      '<span style="color:var(--gray-400);font-size:12px">▾</span>'+
+    '</div>'+
+    '<div id="grab-det-'+g.id+'" style="display:none;padding:0 12px 12px"></div>'+
+  '</div>';
+}
+function _grabToggle(id){
+  const det=document.getElementById('grab-det-'+id); if(!det)return;
+  if(det.style.display!=='none'){det.style.display='none';return;}
+  det.style.display='block';
+  if(det.dataset.loaded==='1')return;
+  det.dataset.loaded='1';
+  const g=_grabCache[id]||{};
+  let resumenHtml='';
+  if(g.resumen){
+    let r=null; try{r=JSON.parse(g.resumen);}catch(e){}
+    if(r&&typeof r==='object'){
+      const puntos=(r.puntos_clave||[]).map(p=>'<li>'+_escPend(p)+'</li>').join('');
+      const objec=(r.objeciones||[]).map(o=>'<li>'+_escPend(o)+'</li>').join('');
+      resumenHtml=(r.nivel_interes?'<div style="font-size:11px;margin-bottom:4px"><strong>Interés:</strong> '+_escPend(r.nivel_interes)+'</div>':'')+
+        (puntos?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:2px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin:0 0 8px">'+puntos+'</ul>':'')+
+        (objec?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:2px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin:0 0 8px">'+objec+'</ul>':'')+
+        (r.proximo_paso?'<div style="font-size:11px"><strong>Próximo paso:</strong> '+_escPend(r.proximo_paso)+'</div>':'');
+    }else{
+      resumenHtml='<div style="font-size:12px;white-space:pre-wrap">'+_escPend(g.resumen)+'</div>';
+    }
+  }
+  det.innerHTML='<div style="border-top:1px solid var(--gray-600);padding-top:10px">'+
+    '<div id="grab-audio-'+id+'" style="margin-bottom:10px"><div style="font-size:11px;color:var(--gray-400)"><span class="spin" style="width:14px;height:14px;margin-right:6px"></span>Cargando audio...</div></div>'+
+    (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
+    (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción.</div>')+
+    '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
+  '</div>';
+  _grabCargarAudio(id,g.audio_path);
+}
+async function _grabCargarAudio(id,audioPath){
+  const cont=document.getElementById('grab-audio-'+id); if(!cont)return;
+  try{
+    const folder=(audioPath||(String(id)+'/')).replace(/\/+$/,'');
+    const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
+    if(error)throw error;
+    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
+    if(!files.length){cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)">Sin audio disponible.</div>';return;}
+    // Preferir el archivo completo si existe
+    const completo=files.find(f=>/completo\.webm$/i.test(f.name));
+    if(completo){
+      const{data:su,error:e2}=await sb.storage.from('grabaciones').createSignedUrl(folder+'/'+completo.name,3600);
+      if(e2||!su)throw(e2||new Error('signed url'));
+      cont.innerHTML='<audio controls preload="none" style="width:100%" src="'+su.signedUrl+'"></audio>';
+      return;
+    }
+    // Sin completo: ensamblar chunks en orden y reproducir como uno solo
+    const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const lista=chunks.length?chunks:files;
+    cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)"><span class="spin" style="width:14px;height:14px;margin-right:6px"></span>Ensamblando '+lista.length+' segmento(s)...</div>';
+    const paths=lista.map(f=>folder+'/'+f.name);
+    const{data:signed,error:e3}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
+    if(e3||!signed)throw(e3||new Error('signed urls'));
+    const blobs=[];
+    for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){} }
+    if(!blobs.length){cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)">Sin audio disponible.</div>';return;}
+    const full=new Blob(blobs,{type:'audio/webm'});
+    cont.innerHTML='<audio controls preload="none" style="width:100%" src="'+URL.createObjectURL(full)+'"></audio>';
+  }catch(e){
+    cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)">No se pudo cargar el audio: '+_escPend(e.message||'error')+'</div>';
+  }
+}
+async function _grabArchivar(id){
+  if(!confirm('¿Archivar esta grabación? Dejará de aparecer en el registro.'))return;
+  try{
+    const{error}=await sb.from('grabaciones').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    try{await registrarAuditoria('archivar_grabacion','grabaciones',id,{});}catch(e){}
+    toast('Grabación archivada','ok');
+    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
+    renderRegistroGrabaciones(verTodas);
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ── Inteligencia del Asistente (panel admin) ── */
