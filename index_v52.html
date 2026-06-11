@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='84';
+  var CURRENT_VERSION='85';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1325,60 +1325,66 @@ function _filtrarPorColaborador(q){
   return q.eq('colaborador',cu.nombre);
 }
 
-/* CAMBIO 7 — Marcadores del día (v78: reactivos al filtro de vendedor + mini-tabla por vendedor) */
+/* CAMBIO 7 — Marcadores del día (v85: auditoría — UNA sola definición para contadores y mini-tabla)
+   Realizada = con resultado registrado (completada), fecha_programada hoy (día Bolivia)
+   Pendiente = sin resultado, fecha_programada hoy y en hora futura
+   Atrasada  = sin resultado, fecha_programada < ahora (ya venció, cualquier día)
+   Siempre: activo=true, colaborador≠'Sistema'. Atribución normalizada contra colaboradores.nombre. */
+function _normColab(n){
+  n=(n||'').trim();
+  if((colaboradores||[]).some(c=>c.nombre===n))return n;
+  // Alias por prefijo único: resuelve p.ej. "David" → "David Gambarte"
+  const cand=(colaboradores||[]).filter(c=>n.length>=4&&c.nombre.toLowerCase().startsWith(n.toLowerCase()));
+  return cand.length===1?cand[0].nombre:n;
+}
 async function cargarMarcadoresDia(){
   const hoy=ymdLocal(new Date());
-  const hoyInicio=hoy+'T00:00:00';
-  const hoyFin=hoy+'T23:59:59';
+  // Bolivia es UTC-4 fijo: límites del día como instantes UTC correctos
+  const hoyInicio=new Date(hoy+'T00:00:00-04:00').toISOString();
+  const hoyFin=new Date(hoy+'T23:59:59-04:00').toISOString();
   const ahora=new Date().toISOString();
   const esJefe=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
   const filtP=(document.getElementById('filtro-persona')?.value)||'';
   const _esML=(n)=>/mar[ií]a\s+luisa/i.test(n||'');
   const tbl=document.getElementById('marcadores-por-vendedor');
   try{
-    let qR=sb.from('agenda_personal').select('id',{count:'exact',head:true})
-      .eq('completada',true).eq('activo',true)
+    let qR=sb.from('agenda_personal').select('colaborador')
+      .eq('completada',true).eq('activo',true).neq('colaborador','Sistema')
       .gte('fecha_programada',hoyInicio).lte('fecha_programada',hoyFin);
-    let qP=sb.from('agenda_personal').select('id',{count:'exact',head:true})
-      .eq('completada',false).eq('activo',true)
+    let qP=sb.from('agenda_personal').select('colaborador')
+      .eq('completada',false).eq('activo',true).neq('colaborador','Sistema')
       .gte('fecha_programada',ahora).lte('fecha_programada',hoyFin);
-    let qA=sb.from('agenda_personal').select('id',{count:'exact',head:true})
-      .eq('completada',false).eq('activo',true)
+    let qA=sb.from('agenda_personal').select('colaborador')
+      .eq('completada',false).eq('activo',true).neq('colaborador','Sistema')
       .lt('fecha_programada',ahora);
-    if(esJefe&&filtP){
-      // Persona específica seleccionada: filtrar contadores por esa persona
-      qR=qR.eq('colaborador',filtP);
-      qP=qP.eq('colaborador',filtP);
-      qA=qA.eq('colaborador',filtP);
-    }else if(!esJefe){
+    if(!esJefe){
       qR=_filtrarPorColaborador(qR);
       qP=_filtrarPorColaborador(qP);
       qA=_filtrarPorColaborador(qA);
     }
     const[r1,r2,r3]=await Promise.all([qR,qP,qA]);
+    // Listas de nombres normalizados — fuente única para contadores y mini-tabla
+    const dR=(r1.data||[]).map(x=>_normColab(x.colaborador));
+    const dP=(r2.data||[]).map(x=>_normColab(x.colaborador));
+    const dA=(r3.data||[]).map(x=>_normColab(x.colaborador));
+    const pick=(arr)=>(esJefe&&filtP)?arr.filter(n=>n===filtP).length:arr.length;
     const mR=document.getElementById('m-realizado');
     const mP=document.getElementById('m-pendiente');
     const mA=document.getElementById('m-atrasado');
-    if(mR)mR.textContent=r1.count??0;
-    if(mP)mP.textContent=r2.count??0;
-    if(mA)mA.textContent=r3.count??0;
+    if(mR)mR.textContent=pick(dR);
+    if(mP)mP.textContent=pick(dP);
+    if(mA)mA.textContent=pick(dA);
 
     // Mini-tabla por vendedor — solo jefes y solo cuando no hay filtro persona
     if(tbl){
       if(esJefe&&!filtP){
-        // 3 queries globales con columna colaborador para agrupar client-side
-        const[dR,dP,dA]=await Promise.all([
-          sb.from('agenda_personal').select('colaborador').eq('completada',true).eq('activo',true).gte('fecha_programada',hoyInicio).lte('fecha_programada',hoyFin),
-          sb.from('agenda_personal').select('colaborador').eq('completada',false).eq('activo',true).gte('fecha_programada',ahora).lte('fecha_programada',hoyFin),
-          sb.from('agenda_personal').select('colaborador').eq('completada',false).eq('activo',true).lt('fecha_programada',ahora)
-        ]);
-        const cnt=(arr,name)=>(arr||[]).filter(x=>x.colaborador===name).length;
-        const colab=(colaboradores||[]).filter(c=>c.activo&&!_esML(c.nombre));
+        const cnt=(arr,name)=>arr.filter(n=>n===name).length;
+        const colab=(colaboradores||[]).filter(c=>c.activo&&!_esML(c.nombre)&&c.nombre!=='Sistema');
         const filas=colab.map(c=>({
           nombre:c.nombre,
-          r:cnt(dR.data,c.nombre),
-          p:cnt(dP.data,c.nombre),
-          a:cnt(dA.data,c.nombre)
+          r:cnt(dR,c.nombre),
+          p:cnt(dP,c.nombre),
+          a:cnt(dA,c.nombre)
         })).filter(f=>f.r+f.p+f.a>0).sort((a,b)=>b.a-a.a||b.p-a.p);
         if(filas.length){
           tbl.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:7px">Por vendedor</div>`+
@@ -5109,6 +5115,7 @@ function _asistSystemPrompt(contexto){
     '1. NUNCA muestres montos monetarios (USD, Bs, dólares, precios, monto de contrato o de venta) a quien no sea administrador. '+(esAdmin?'El usuario actual ES administrador.':'El usuario actual NO es administrador: si pregunta por dinero, respondé en metros cuadrados (m²) o aclarale que los montos son solo para administración.'),
     '2. NUNCA menciones ni muestres a "María Luisa" (ni "Maria Luisa") en ninguna respuesta, bajo ningún concepto.',
     '3. Respondé en español, claro y conciso. No inventes datos que no estén en el contexto.',
+    '4. NUNCA afirmes límites, capacidades o restricciones del sistema sin haberlos verificado contra los datos reales. Si no tenés el dato, decí que no lo sabés. No inventes métricas ni conteos.',
     '',
     'PROTOCOLO DE 5 FASES (Sistema Operativo GEAT) — NUNCA sugieras saltear fases:',
     '  Fase 1 PRESENTACIÓN: 1er intento → 2do intento → 3er intento',
