@@ -1148,33 +1148,61 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='82';
-  fetch('./version.json?t='+Date.now(),{cache:'no-store'})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(!d.v)return;
-      var sv=parseInt(d.v,10), cv=parseInt(CURRENT_VERSION,10);
-      if(isNaN(sv)||isNaN(cv)||sv<=cv)return; // solo si server > cliente
-      var alreadyTriedKey='_vReload_'+d.v;
-      if(sessionStorage.getItem(alreadyTriedKey)){
-        // Ya recargamos para esta versión y el skew persiste — aviso manual, sin loop
-        var w=document.createElement('div');
-        w.style='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1E1E1E;border:1px solid #F2C500;color:#F2C500;padding:10px 22px;border-radius:8px;z-index:99999;font-size:13px;font-weight:500;cursor:pointer;';
-        w.textContent='Hay una actualización disponible — tocá aquí para recargar manualmente';
-        w.onclick=function(){sessionStorage.removeItem(alreadyTriedKey);window.location.reload(true);};
-        document.body.appendChild(w);
-        return;
-      }
-      sessionStorage.setItem(alreadyTriedKey,'1');
-      var t=document.createElement('div');
-      t.style='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#BA7517;color:#fff;padding:10px 22px;border-radius:8px;z-index:99999;font-size:13px;font-weight:500;';
-      t.textContent='Nueva versión disponible — actualizando...';
-      document.body.appendChild(t);
-      setTimeout(function(){
-        window.location.replace(window.location.pathname+'?v='+d.v);
-      },1500);
-    })
-    .catch(function(){});
+  var CURRENT_VERSION='83';
+  /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
+  function hayGrabacionActiva(){
+    try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
+  }
+  function mostrarBannerManual(v,texto){
+    if(document.getElementById('verBannerManual'))return;
+    var w=document.createElement('div');
+    w.id='verBannerManual';
+    w.style='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1E1E1E;border:1px solid #F2C500;color:#F2C500;padding:10px 22px;border-radius:8px;z-index:99999;font-size:13px;font-weight:500;cursor:pointer;';
+    w.textContent=texto;
+    w.onclick=function(){
+      if(hayGrabacionActiva()){toast('Hay una grabación activa — terminala antes de recargar','error');return;}
+      sessionStorage.removeItem('_vReload_'+v);
+      window.location.replace(window.location.pathname+'?v='+v);
+    };
+    document.body.appendChild(w);
+  }
+  function checkVersion(){
+    fetch('./version.json?t='+Date.now(),{cache:'no-store'})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(!d.v)return;
+        var sv=parseInt(d.v,10), cv=parseInt(CURRENT_VERSION,10);
+        if(isNaN(sv)||isNaN(cv)||sv<=cv)return; // solo si server > cliente
+        if(hayGrabacionActiva()){
+          // Posponer: aviso manual, sin recargar solo. El próximo check sin grabación recarga.
+          mostrarBannerManual(d.v,'Nueva versión disponible — recargá cuando termines');
+          return;
+        }
+        var alreadyTriedKey='_vReload_'+d.v;
+        if(sessionStorage.getItem(alreadyTriedKey)){
+          // Ya recargamos para esta versión y el skew persiste — aviso manual, sin loop
+          mostrarBannerManual(d.v,'Hay una actualización disponible — tocá aquí para recargar manualmente');
+          return;
+        }
+        sessionStorage.setItem(alreadyTriedKey,'1');
+        var t=document.createElement('div');
+        t.style='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#BA7517;color:#fff;padding:10px 22px;border-radius:8px;z-index:99999;font-size:13px;font-weight:500;';
+        t.textContent='Nueva versión disponible — actualizando...';
+        document.body.appendChild(t);
+        setTimeout(function(){
+          if(hayGrabacionActiva()){
+            try{t.remove();}catch(e){}
+            sessionStorage.removeItem(alreadyTriedKey);
+            mostrarBannerManual(d.v,'Nueva versión disponible — recargá cuando termines');
+            return;
+          }
+          window.location.replace(window.location.pathname+'?v='+d.v);
+        },1500);
+      })
+      .catch(function(){});
+  }
+  checkVersion();
+  setInterval(checkVersion,10*60*1000); // re-chequeo cada 10 min (necesario para detectar versión nueva en sesión larga)
 })();
 
 /* ════════════════════════════════════════
@@ -1493,6 +1521,8 @@ function startApp(){
 async function initApp(){
   /* Marcar como 'interrumpida' cualquier grabación que quedó en estado 'grabando' */
   try{await sb.from('grabaciones').update({estado:'interrumpida'}).eq('estado','grabando').eq('colaborador',cu.nombre);}catch(e){}
+  /* Aviso discreto al admin si hay interrumpidas de las últimas 24h con audio sin procesar */
+  if(cu&&cu.rol==='admin')_avisarInterrumpidasPendientes();
   await Promise.all([loadCatalogs(),loadColaboradores()]);
   await renderWeek();
   buildPersonaFilters();
@@ -3200,8 +3230,9 @@ async function _whisperSingleBlob(blob,apiKey){
   return data.text||'';
 }
 
-/* Transcribe con Whisper, segmentando si el audio supera 24 MB. */
-async function _transcribirWhisperSegmentado(blob){
+/* Transcribe con Whisper, segmentando si el audio supera 24 MB.
+   chunksArr (opcional): chunks a usar para segmentar; por defecto los de la grabación en curso. */
+async function _transcribirWhisperSegmentado(blob,chunksArr){
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
   const MAX=24*1024*1024;
@@ -3211,7 +3242,7 @@ async function _transcribirWhisperSegmentado(blob){
   }
   const segs=[];
   let sc=[],ss=0;
-  for(const ch of _recHChunks){
+  for(const ch of (chunksArr||_recHChunks)){
     if(ss+ch.size>MAX&&sc.length){segs.push(new Blob(sc,{type:'audio/webm'}));sc=[ch];ss=ch.size;}
     else{sc.push(ch);ss+=ch.size;}
   }
@@ -4450,7 +4481,11 @@ async function renderAdmin(){
 /* ════════════════════════════════════════
    REGISTRO DE GRABACIONES (panel admin)
    Lee tabla "grabaciones"; audio en bucket privado "grabaciones".
-   Archivar = soft-delete (activo=false), NUNCA DELETE.
+   Archivar = soft-delete (activo=false), reversible.
+   Eliminar = DELETE real, ÚNICA excepción al soft-delete: el usuario lo
+   elige explícitamente Y la transcripción ya quedó copiada en
+   registro_exportado (archivo permanente, sin DELETE en RLS).
+   Los chunks del bucket nunca se borran.
 ════════════════════════════════════════ */
 let _grabCache={};
 function _grabFmtFecha(iso){
@@ -4517,9 +4552,14 @@ function _grabToggle(id){
     (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
     _grabExtraccionHtml(g)+
     (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción.</div>')+
-    '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
+    '<div id="grab-reproc-'+id+'" style="margin-bottom:10px"></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_grabEliminar('+id+')">🗑️ Eliminar</button>'+
+    '</div>'+
   '</div>';
   _grabCargarAudio(id,g.audio_path);
+  if(g.estado==='interrumpida')_grabRenderReprocesar(id);
 }
 /* Bloque de extracción IA en el detalle de una grabación (panel admin) */
 function _grabExtraccionHtml(g){
@@ -4659,6 +4699,147 @@ async function _grabArchivar(id){
     const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
     renderRegistroGrabaciones(verTodas);
   }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Eliminar = DELETE real, única excepción al soft-delete: elección explícita del
+   usuario + la transcripción ya quedó en registro_exportado. Chunks del bucket intactos. */
+async function _grabEliminar(id){
+  const g=_grabCache[id];
+  if(!g){toast('Grabación no encontrada','error');return;}
+  if(!confirm('¿Eliminar este registro? La transcripción se conserva en el archivo permanente.'))return;
+  try{
+    let ext=g.extraccion;
+    if(typeof ext==='string'){try{ext=JSON.parse(ext);}catch(e){ext=null;}}
+    /* Exportar PRIMERO; si la tabla no existe o el insert falla, avisar y no borrar nada */
+    const{error:ei}=await sb.from('registro_exportado').insert({
+      grabacion_id_original:g.id,
+      colaborador:g.colaborador||null,
+      fecha_original:g.created_at||null,
+      titulo:g.titulo||null,
+      transcripcion:g.transcripcion||null,
+      resumen:g.resumen||null,
+      extraccion:ext||null,
+      eliminado_por:(cu&&cu.nombre)||'—',
+      deleted_at:new Date().toISOString()
+    });
+    if(ei)throw new Error('No se pudo copiar al archivo permanente ('+ei.message+'). No se eliminó nada.');
+    const{data:del,error:ed}=await sb.from('grabaciones').delete().eq('id',id).select('id');
+    if(ed)throw ed;
+    if(!del||!del.length)throw new Error('La base no permitió el DELETE. La copia ya quedó en registro_exportado.');
+    try{await registrarAuditoria('eliminar_grabacion','grabaciones',id,{exportado_a:'registro_exportado'});}catch(e){}
+    toast('Registro eliminado — transcripción conservada en archivo','ok');
+    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
+    renderRegistroGrabaciones(verTodas);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Muestra el botón 🔁 Procesar en interrumpidas si hay audio en el bucket */
+async function _grabRenderReprocesar(id){
+  const cont=document.getElementById('grab-reproc-'+id); if(!cont)return;
+  const g=_grabCache[id]||{};
+  try{
+    const folder=(g.audio_path||(String(id)+'/')).replace(/\/+$/,'');
+    const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
+    if(error)throw error;
+    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
+    if(!files.length){cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)">Sin audio disponible.</div>';return;}
+    cont.innerHTML='<button class="btn-primary btn-sm" style="font-size:11px" id="grab-reproc-btn-'+id+'" onclick="_grabReprocesar('+id+')">🔁 Procesar</button>';
+  }catch(e){cont.innerHTML='';}
+}
+/* Duración (seg) de un blob de audio. Los webm de MediaRecorder suelen reportar
+   Infinity hasta forzar un seek (workaround estándar). Devuelve 0 si no se puede. */
+function _blobDuracionSeg(blob){
+  return new Promise(function(res){
+    let done=false,url=null;
+    const fin=function(v){if(done)return;done=true;try{if(url)URL.revokeObjectURL(url);}catch(e){}res(v);};
+    try{
+      url=URL.createObjectURL(blob);
+      const a=document.createElement('audio');
+      a.preload='metadata';
+      a.onloadedmetadata=function(){
+        if(a.duration===Infinity){
+          a.currentTime=1e7;
+          a.ondurationchange=function(){if(isFinite(a.duration)&&a.duration>0)fin(Math.round(a.duration));};
+        }else fin(Math.round(a.duration)||0);
+      };
+      a.onerror=function(){fin(0);};
+      a.src=url;
+      setTimeout(function(){fin(0);},8000);
+    }catch(e){fin(0);}
+  });
+}
+/* Recupera una interrumpida: ensambla los chunks del bucket (mismo método que el
+   reproductor) y corre el pipeline completo Whisper → resumen → extracción IA. */
+async function _grabReprocesar(id){
+  const g=_grabCache[id];
+  if(!g){toast('Grabación no encontrada','error');return;}
+  const btn=document.getElementById('grab-reproc-btn-'+id);
+  if(btn){btn.disabled=true;btn.innerHTML='⏳ Procesando...';}
+  try{
+    const folder=(g.audio_path||(String(id)+'/')).replace(/\/+$/,'');
+    const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
+    if(error)throw error;
+    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
+    const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const lista=chunks.length?chunks:files;
+    if(!lista.length)throw new Error('Sin audio disponible');
+    const paths=lista.map(f=>folder+'/'+f.name);
+    const{data:signed,error:e2}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
+    if(e2||!signed)throw(e2||new Error('signed urls'));
+    const blobs=[];
+    for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){} }
+    if(!blobs.length)throw new Error('No se pudo descargar el audio');
+    const full=new Blob(blobs,{type:'audio/webm'});
+    if(!full.size||full.size<1000)throw new Error('Sin audio disponible');
+    const transcript=(await _transcribirWhisperSegmentado(full,blobs)).trim();
+    if(!transcript||transcript.length<10)throw new Error('No se captó texto en el audio');
+    const resumen=await _resumirReunionIA(transcript);
+    let dur=await _blobDuracionSeg(full);
+    if(!dur||!isFinite(dur))dur=(chunks.length?chunks.length*10:0)||g.duracion_seg||0; // chunks de 10s (timeslice del MediaRecorder)
+    const{error:e3}=await sb.from('grabaciones').update({
+      transcripcion:transcript,
+      resumen:JSON.stringify(resumen),
+      duracion_seg:dur,
+      estado:'completa'
+    }).eq('id',id);
+    if(e3)throw e3;
+    await _grabExtraerYGuardar(id,transcript);
+    try{await registrarAuditoria('reprocesar_grabacion','grabaciones',id,{});}catch(e){}
+    toast('✅ Registro procesado','ok');
+    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
+    await renderRegistroGrabaciones(verTodas);
+  }catch(e){
+    toast('Error: '+(e.message||'no se pudo procesar'),'error');
+    if(btn){btn.disabled=false;btn.innerHTML='🔁 Procesar';}
+  }
+}
+/* Aviso discreto al admin al loguearse: interrumpidas de las últimas 24h con audio sin procesar */
+async function _avisarInterrumpidasPendientes(){
+  try{
+    const desde=new Date(Date.now()-24*60*60*1000).toISOString();
+    const{data,error}=await sb.from('grabaciones').select('id,audio_path')
+      .eq('estado','interrumpida').eq('activo',true).is('transcripcion',null)
+      .gte('created_at',desde).limit(20);
+    if(error||!data||!data.length)return;
+    let n=0;
+    for(const g of data){
+      try{
+        const folder=(g.audio_path||(String(g.id)+'/')).replace(/\/+$/,'');
+        const{data:objs}=await sb.storage.from('grabaciones').list(folder,{limit:5});
+        if(objs&&objs.some(o=>o.name&&/\.webm$/i.test(o.name)))n++;
+      }catch(e){}
+    }
+    if(!n)return;
+    if(document.getElementById('avisoInterrumpidas'))return;
+    const w=document.createElement('div');
+    w.id='avisoInterrumpidas';
+    w.style='position:fixed;bottom:20px;right:20px;background:#1E1E1E;border:1px solid var(--gold);color:var(--gold);padding:9px 14px;border-radius:8px;z-index:9999;font-size:12px;cursor:pointer;';
+    w.innerHTML='🔁 Hay '+n+' registro(s) sin procesar — <u>ver panel</u><span style="margin-left:10px;color:var(--gray-400);font-size:13px">×</span>';
+    w.onclick=function(ev){
+      w.remove();
+      if(ev.target&&ev.target.tagName==='SPAN')return; // la × solo cierra
+      const tab=document.getElementById('tab-admin'); if(tab)tab.click();
+    };
+    document.body.appendChild(w);
+  }catch(e){}
 }
 
 /* ── Inteligencia del Asistente (panel admin) ── */
