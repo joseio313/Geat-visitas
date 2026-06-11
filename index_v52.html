@@ -312,7 +312,7 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .sr-meta{font-size:10px;color:var(--gray-400);margin-top:2px}
 .sr-status{font-size:9px;font-weight:700;padding:2px 7px;border-radius:11px;text-transform:uppercase;letter-spacing:0.05em;border:1px solid}
 .sr-status.open{color:var(--gold);border-color:var(--gold)}
-.sr-status.lost{color:var(--st-atrasado);border-color:var(--st-atrasado)}
+.sr-status.lost{color:var(--st-perdido-tx);border-color:var(--st-perdido);background:rgba(66,66,66,0.25)}
 .sr-status.won{color:var(--st-completo);border-color:var(--st-completo)}
 
 /* REPORTS */
@@ -925,8 +925,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
               <strong>⚠️ Este número ya está registrado</strong>
               <div id="dup-detalle" class="who-has">—</div>
               <div style="margin-top:8px;font-size:10px">
-                · Si está <strong style="color:var(--gold)">abierto</strong>: no se puede duplicar.<br>
-                · Si está <strong style="color:var(--st-atrasado)">perdido</strong>: usá "♻️ Nueva Oportunidad".
+                · Si está <strong style="color:var(--gold)">abierto</strong>: no se puede duplicar — usá "📂 Abrir lead".<br>
+                · Si está <strong style="color:var(--st-perdido-tx)">perdido</strong>: reabrilo con "🔄 Nueva Oportunidad".
               </div>
             </div>
           </div>
@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='81';
+  var CURRENT_VERSION='82';
   fetch('./version.json?t='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3657,10 +3657,17 @@ async function checkDuplicate(cel){
   if(data&&data.length){
     const l=data[0];
     dupBlocked=true;
+    const esPerdido=l.estado==='cerrado_perdido';
+    const estadoTxt=esPerdido?'<span style="color:var(--st-perdido-tx);font-weight:700">PERDIDO</span>':(l.estado||'abierto');
     document.getElementById('dupWarning').classList.add('show');
     document.getElementById('dup-detalle').innerHTML=`
+      <div>👤 Cliente: <span class="name">${l.nombre||'—'}</span></div>
       <div>📌 Asignado a: <span class="name">${l.captador||'Sin asignar'}</span></div>
-      <div style="font-size:10px;color:var(--gray-400);margin-top:3px">Estado: <span>${l.estado||'abierto'} · ${l.etapa||'—'}</span></div>`;
+      <div style="font-size:10px;color:var(--gray-400);margin-top:3px">Estado: ${estadoTxt} · ${l.etapa||'—'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="btn-ghost btn-sm" onclick="closeModal('modalNewLead');openLeadReadOnly(${l.id})">📂 Abrir lead</button>
+        ${esPerdido?`<button type="button" class="btn-primary btn-sm" onclick="closeModal('modalNewLead');openLeadReactivar(${l.id})">🔄 Nueva Oportunidad</button>`:''}
+      </div>`;
   }
 }
 
@@ -3832,8 +3839,16 @@ async function execSearch(q){
     .order('created_at',{ascending:false})
     .limit(30);
 
-  if(searchMode==='reactivar') dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
-  if(!esAdmin) dbQuery=_filtrarPorCaptador(dbQuery);
+  if(searchMode==='reactivar'){
+    dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
+  }else if(!esAdmin){
+    /* v82: los leads perdidos/archivados son visibles para todos en la búsqueda,
+       además de los propios — permite detectar y reabrir con Nueva Oportunidad */
+    const vis=[`captador.eq."${cu.nombre}"`];
+    if(cu.asistente_de)vis.push(`captador.eq."${cu.asistente_de}"`);
+    vis.push('estado.eq.cerrado_perdido','archivado.eq.true');
+    dbQuery=dbQuery.or(vis.join(','));
+  }
 
   const{data}=await dbQuery;
   const leads=data||[];
@@ -3867,6 +3882,7 @@ async function execSearch(q){
       </div>
       <div style="display:flex;align-items:center;gap:4px;white-space:nowrap">
         <span class="sr-status ${cls}">${lbl}</span>
+        ${isLost&&searchMode==='search'?`<button class="btn-primary btn-sm" style="font-size:10px;padding:3px 8px;white-space:nowrap" onclick="event.stopPropagation();openLeadReactivar(${l.id})">🔄 Nueva Oportunidad</button>`:''}
         <button title="Ver perfil" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="event.stopPropagation();openLeadReadOnly(${l.id})">🔍</button>
         <button title="Editar" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="event.stopPropagation();abrirEditarLead(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}','${l.celular||''}','${l.ciudad||''}','${l.medio_difusion||''}')">✏️</button>
       </div>
@@ -3959,6 +3975,15 @@ async function confirmarReactivar(leadId,nombre){
       if(error.code==='23505'){toast('Actividad ya existe. Lead reactivado igualmente.','error');}
       else throw error;
     }
+    /* v82: dejar constancia de la reapertura en el historial del lead */
+    try{
+      await sb.from('historial_lead').insert({
+        lead_id:leadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
+        etapa, tipo_actividad:'reactivacion',
+        nota:'♻️ Nueva Oportunidad — lead reabierto por '+cu.nombre+'. Estado: nuevo · Captador: '+asignado,
+        fecha_actividad:now, created_at:now
+      });
+    }catch(eh){}
     registrarAuditoria('reactivar_lead','leads',leadId,{etapa,asignado,fecha_prog:fecha});
     closeModal('modalLead');
     toast('♻️ "'+nombre+'" reactivado y asignado a '+asignado);
