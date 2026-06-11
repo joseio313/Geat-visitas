@@ -1148,7 +1148,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='83';
+  var CURRENT_VERSION='84';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1560,7 +1560,7 @@ async function loadCatalogs(){
 function populateCatalogSelects(){
   // Filtro estado en semana
   const filt=document.getElementById('filtro-estado');
-  filt.innerHTML='<option value="">Todos los estados</option>'+itemsSeg.map(s=>`<option value="${s.nombre}">${s.nombre}</option>`).join('');
+  filt.innerHTML='<option value="">Todos los estados</option>'+itemsSeg.map(s=>`<option value="${s.nombre}">${s.nombre}</option>`).join('')+'<option value="__visito_oficina">🏢 Visitó oficina</option>';
   // Select estado en finalizar (lo que pasó)
   const finEst=document.getElementById('fin-estado');
   finEst.innerHTML=itemsSeg.map(s=>`<option>${s.nombre}</option>`).join('');
@@ -1662,11 +1662,15 @@ function navWeek(dir){
 }
 
 let _estadoLeadMap={};
+/* Borde izquierdo 4px por estado del lead — informativo, no cambia el fondo por urgencia */
 function estadoBorderColor(estado){
   switch(estado){
-    case 'nuevo': return 'var(--st-indagacion)';
-    case 'en_seguimiento': return '#BA7517';
-    case 'visita_agendada': return 'var(--st-completo)';
+    case 'nuevo': return '#3B82F6';
+    case 'en_seguimiento': return '#F59E0B';
+    case 'visita_agendada': return '#8B5CF6';
+    case 'visita_realizada': return '#F97316';
+    case 'cotizacion': return '#06B6D4';
+    case 'negociacion': return '#84CC16';
     case 'cerrado_ganado': return 'var(--st-completo)';
     case 'cerrado_perdido': return 'var(--gray-600)';
     default: return '';
@@ -1693,18 +1697,20 @@ async function renderWeek(){
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
   if(!isJefe) query=_filtrarPorColaborador(query);
   else if(filtP) query=query.eq('colaborador',filtP);
-  if(filtE) query=query.eq('tipo',filtE);
+  if(filtE&&filtE!=='__visito_oficina') query=query.eq('tipo',filtE);
 
   const {data,error}=await query;
   if(error){toast('Error cargando agenda: '+error.message,'error');return;}
   agendaData=data||[];
-  // estado del lead por tarjeta (para borde izquierdo)
+  // estado del lead por tarjeta (para borde izquierdo) + filtro "Visitó oficina"
   const _lidsW=[...new Set(agendaData.map(a=>a.lead_id).filter(Boolean))];
   _estadoLeadMap={};
+  const _voSet=new Set();
   if(_lidsW.length){
-    const{data:_ldW}=await sb.from('leads').select('id,estado').in('id',_lidsW);
-    (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;});
+    const{data:_ldW}=await sb.from('leads').select('id,estado,visito_oficina').in('id',_lidsW);
+    (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.visito_oficina)_voSet.add(l.id);});
   }
+  if(filtE==='__visito_oficina')agendaData=agendaData.filter(a=>_voSet.has(a.lead_id));
 
   const grid=document.getElementById('week-grid');
   const now=new Date();
@@ -2406,6 +2412,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
           <dt>Correo</dt><dd>${lead.correo?`${lead.correo} <a class="btn-ghost" style="text-decoration:none;font-size:10px;padding:2px 8px;margin-left:4px" href="mailto:${lead.correo}">📧 Enviar email</a>`:'—'}</dd>
+          <dt>Visitó oficina</dt><dd><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lead-visito-oficina" ${lead.visito_oficina?'checked':''} ${currentLeadMode==='readonly'?'disabled':''} onchange="toggleVisitoOficina(${lead.id},this)"> <span>✅ Visitó oficina</span></label></dd>
           <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
         </dl>
       </div>
@@ -2460,6 +2467,21 @@ async function openLeadDetail(leadId,agendaId,mode){
     </div>
     <div id="lead-tab-viaje" style="display:none">${renderViajeCliente(lead,segs,history)}</div>
   `;
+}
+
+/* Checkbox "Visitó oficina" — guarda al instante en leads.visito_oficina */
+async function toggleVisitoOficina(leadId,el){
+  const checked=!!(el&&el.checked);
+  try{
+    const{error}=await sb.from('leads').update({visito_oficina:checked}).eq('id',leadId);
+    if(error)throw error;
+    try{await registrarAuditoria('marcar_visito_oficina','leads',leadId,{valor:checked});}catch(e){}
+    toast(checked?'✅ Marcado: visitó oficina':'Desmarcado: visitó oficina','ok');
+    renderWeek(); // refresca la agenda por si el filtro "Visitó oficina" está activo
+  }catch(e){
+    if(el)el.checked=!checked; // revertir visualmente si no se guardó
+    toast('Error: '+e.message,'error');
+  }
 }
 
 function switchLeadTab(tab){
@@ -4488,12 +4510,18 @@ async function renderAdmin(){
    Los chunks del bucket nunca se borran.
 ════════════════════════════════════════ */
 let _grabCache={};
+let _registroVerTodasPendiente=false; // seteado por el aviso de interrumpidas: fuerza "Ver todas" al abrir el panel
 function _grabFmtFecha(iso){
   if(!iso)return'—';
   try{return new Date(iso).toLocaleString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
   catch(e){return new Date(iso).toLocaleString('es-BO');}
 }
 async function renderRegistroGrabaciones(verTodas){
+  if(_registroVerTodasPendiente){
+    _registroVerTodasPendiente=false;
+    verTodas=true;
+    const cb=document.getElementById('rec-ver-todas'); if(cb)cb.checked=true;
+  }
   const cont=document.getElementById('registro-grab-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
@@ -4836,6 +4864,7 @@ async function _avisarInterrumpidasPendientes(){
     w.onclick=function(ev){
       w.remove();
       if(ev.target&&ev.target.tagName==='SPAN')return; // la × solo cierra
+      _registroVerTodasPendiente=true; // que el panel Registro abra con "Ver todas" activo
       const tab=document.getElementById('tab-admin'); if(tab)tab.click();
     };
     document.body.appendChild(w);
