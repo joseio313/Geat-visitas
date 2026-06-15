@@ -559,6 +559,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
       <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
+      <button id="uploadAudioBtn" type="button" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">📎</button>
+      <input id="uploadAudioInput" type="file" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -1172,7 +1174,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='86';
+  var CURRENT_VERSION='88';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1308,6 +1310,12 @@ async function registrarLoginAuditoria(col,pinUsado,exitoso){
 function ymdLocal(d){
   const dt=(d instanceof Date)?d:new Date(d);
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+/* Fecha YMD en zona horaria Bolivia (America/La_Paz, UTC-4 fijo), independiente
+   de la zona del dispositivo. Para agrupar/comparar por día calendario boliviano. */
+function ymdBolivia(d){
+  const dt=(d instanceof Date)?d:new Date(d);
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/La_Paz',year:'numeric',month:'2-digit',day:'2-digit'}).format(dt);
 }
 function getMonday(d){
   const dt=new Date(d);
@@ -1534,6 +1542,8 @@ function startApp(){
     if(tabAdmin)tabAdmin.style.display='';
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
+    const uab=document.getElementById('uploadAudioBtn');
+    if(uab)uab.style.display='inline-flex';
   }
   // Reportes tab: oculto para field_capturer
   if(cu.rol==='field_capturer'){
@@ -3271,9 +3281,9 @@ async function _grabExtraerYGuardar(grabId,transcript){
 }
 
 /* Transcribe un único blob con Whisper. */
-async function _whisperSingleBlob(blob,apiKey){
+async function _whisperSingleBlob(blob,apiKey,fileName){
   const fd=new FormData();
-  fd.append('file',blob,'reunion.webm');
+  fd.append('file',blob,fileName||'reunion.webm');
   fd.append('model','whisper-1');
   fd.append('language','es');
   const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
@@ -3288,24 +3298,26 @@ async function _whisperSingleBlob(blob,apiKey){
 
 /* Transcribe con Whisper, segmentando si el audio supera 24 MB.
    chunksArr (opcional): chunks a usar para segmentar; por defecto los de la grabación en curso. */
-async function _transcribirWhisperSegmentado(blob,chunksArr){
+async function _transcribirWhisperSegmentado(blob,chunksArr,fileName){
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
   const MAX=24*1024*1024;
-  /* Sin toasts de progreso: el procesamiento del botón reloj corre en silencio de fondo */
-  if(blob.size<=MAX){
-    return await _whisperSingleBlob(blob,cfg.value);
+  const chunks=chunksArr||_recHChunks;
+  /* Sin toasts de progreso: el procesamiento corre en silencio de fondo.
+     Si no hay chunks para segmentar (audio subido), se manda el blob completo. */
+  if(blob.size<=MAX||!chunks||!chunks.length){
+    return await _whisperSingleBlob(blob,cfg.value,fileName);
   }
   const segs=[];
   let sc=[],ss=0;
-  for(const ch of (chunksArr||_recHChunks)){
+  for(const ch of chunks){
     if(ss+ch.size>MAX&&sc.length){segs.push(new Blob(sc,{type:'audio/webm'}));sc=[ch];ss=ch.size;}
     else{sc.push(ch);ss+=ch.size;}
   }
   if(sc.length)segs.push(new Blob(sc,{type:'audio/webm'}));
   const textos=[];
   for(let i=0;i<segs.length;i++){
-    textos.push(await _whisperSingleBlob(segs[i],cfg.value));
+    textos.push(await _whisperSingleBlob(segs[i],cfg.value,fileName));
   }
   return textos.join(' ');
 }
@@ -3420,14 +3432,23 @@ async function _onStopGrabacionH(){
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHWakeLock){_recHWakeLock.release();_recHWakeLock=null;}}catch(e){}
   const blob=new Blob(_recHChunks,{type:'audio/webm'});
-  const durSeg=_recHSeconds;
-  if(!blob.size||blob.size<1000){
+  await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'reunion.webm',chunksArr:_recHChunks});
+}
+/* Pipeline compartido: blob de audio → transcripción Whisper → resumen + extracción IA → guardar en registro.
+   Lo usan la grabación del header (_onStopGrabacionH) y la subida de archivos (subirAudioArchivo).
+   opts.fileName se pasa a Whisper para que detecte el formato del archivo subido (.opus, .m4a, etc). */
+async function _procesarAudioBlob(blob,opts){
+  opts=opts||{};
+  const durSeg=opts.durSeg||0;
+  const fileName=opts.fileName||'reunion.webm';
+  const chunksArr=opts.chunksArr; // undefined para audios subidos
+  if(!blob||!blob.size||blob.size<1000){
     toast('No se captó audio.','warning');
     if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
     _recHReset();setRecHState('idle');return;
   }
   try{
-    const transcript=await _transcribirWhisperSegmentado(blob);
+    const transcript=await _transcribirWhisperSegmentado(blob,chunksArr,fileName);
     if(!transcript||transcript.trim().length<10){
       toast('No se captó texto en el audio.','warning');
       if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
@@ -3458,6 +3479,32 @@ async function _onStopGrabacionH(){
   }catch(e){
     toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
   }
+}
+/* Subida de archivo de audio (WhatsApp, grabador del celu): mismo pipeline que la grabación del header.
+   Acepta ≤25MB; pasa el nombre real del archivo a Whisper para que detecte el formato. */
+async function subirAudioArchivo(input){
+  const file=input&&input.files&&input.files[0];
+  if(input)input.value=''; // permitir resubir el mismo archivo
+  if(!file)return;
+  const MAX_UP=25*1024*1024;
+  if(file.size>MAX_UP){toast('Audio muy grande, máx 25MB','error');return;}
+  if(_recHState==='grabando'||_recHState==='procesando'||_recHState==='iniciando'){
+    toast('Esperá a que termine el proceso en curso','warning');return;
+  }
+  _recHReset();
+  setRecHState('procesando');
+  /* Crear fila en "grabaciones" con estado='grabando' — el pipeline la marca 'completa' al terminar */
+  try{
+    const d=new Date();
+    const titulo='Audio: '+(file.name||'archivo')+' · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
+      colaborador:cu?cu.nombre:'—',titulo:titulo,
+      participantes:null,
+      lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
+    }).select('id').single();
+    if(!ger&&gr)_recHGrabId=gr.id;
+  }catch(e){ _recHGrabId=null; }
+  await _procesarAudioBlob(file,{durSeg:0,fileName:file.name||'audio.webm'});
 }
 async function abrirGrabH(){
   const j=_recHResult||{};
@@ -5118,7 +5165,7 @@ async function _asistContexto(){
   // Leads: cerradores/admin ven todos; captadoras solo los suyos.
   if(rol==='field_capturer'||rol==='commercial_lead'||rol==='admin'){
     try{
-      let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador')
+      let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador,created_at')
         .not('estado','in','(cerrado_ganado,cerrado_perdido)')
         .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(500);
       if(rol==='field_capturer')q=_filtrarPorCaptador(q);
@@ -5157,7 +5204,7 @@ async function _asistContexto(){
     // Captaciones por colaborador y día Bolivia (últimos 7 días)
     const cap={};
     (rCap.data||[]).forEach(l=>{
-      const k=ymdLocal(new Date(l.created_at))+' | '+_asistNombre(l.captador);
+      const k=ymdBolivia(l.created_at)+' | '+_asistNombre(l.captador);
       cap[k]=(cap[k]||0)+1;
     });
     const capKeys=Object.keys(cap).sort();
