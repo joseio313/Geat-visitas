@@ -746,6 +746,30 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ MODAL: DATOS PREVIOS A GRABAR (título + participantes) ══ -->
+<div id="modalPreGrab" class="modal-backdrop" onclick="if(event.target===this)cancelarPreGrabH()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🕐 Nueva grabación</h2>
+      <button class="modal-close" onclick="cancelarPreGrabH()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Título *</label>
+        <input type="text" class="form-control" id="pregrab-titulo" placeholder="Ej: Reunión con cliente Juan" autocomplete="off">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Participantes (opcional)</label>
+        <input type="text" class="form-control" id="pregrab-participantes" placeholder="Ej: José Miguel, Gustavo" autocomplete="off">
+      </div>
+      <div class="action-row" style="margin-top:14px">
+        <button class="btn-primary" onclick="confirmarPreGrabH()">Iniciar</button>
+        <button class="btn-ghost" onclick="cancelarPreGrabH()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL: FINALIZAR SEGUIMIENTO ══ -->
 <div id="modalFinalize" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalFinalize')">
   <div class="modal">
@@ -1148,7 +1172,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='86';
+  var CURRENT_VERSION='87';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1284,6 +1308,12 @@ async function registrarLoginAuditoria(col,pinUsado,exitoso){
 function ymdLocal(d){
   const dt=(d instanceof Date)?d:new Date(d);
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+/* Fecha YMD en zona horaria Bolivia (America/La_Paz, UTC-4 fijo), independiente
+   de la zona del dispositivo. Para agrupar/comparar por día calendario boliviano. */
+function ymdBolivia(d){
+  const dt=(d instanceof Date)?d:new Date(d);
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/La_Paz',year:'numeric',month:'2-digit',day:'2-digit'}).format(dt);
 }
 function getMonday(d){
   const dt=new Date(d);
@@ -3176,6 +3206,10 @@ async function guardarGrabacion(){
 let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null,
     _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
     _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='';
+/* Título/participantes del modal previo. NO se limpian en _recHReset():
+   startGrabacionH() resetea internamente y los necesita después. Siempre
+   se sobreescriben en confirmarPreGrabH() antes de cada grabación. */
+let _recHTitulo='', _recHParticipantes='';
 
 /* Aviso antes de cerrar si hay sesión de audio activa */
 window.addEventListener('beforeunload',function(e){
@@ -3302,6 +3336,25 @@ function setRecHState(state){
 function toggleGrabacionH(){
   if(_recHState==='grabando'){stopGrabacionH();return;}
   if(_recHState==='procesando'||_recHState==='iniciando')return;
+  abrirPreGrabH();
+}
+/* Modal previo a grabar: pide título (requerido) y participantes (opcional).
+   Cerrar sin completar = no se graba nada. */
+function abrirPreGrabH(){
+  if(_recHState!=='idle')return;
+  const t=document.getElementById('pregrab-titulo'), p=document.getElementById('pregrab-participantes');
+  if(t)t.value=''; if(p)p.value='';
+  openModal('modalPreGrab');
+  setTimeout(function(){if(t)t.focus();},60);
+}
+function cancelarPreGrabH(){ closeModal('modalPreGrab'); }
+function confirmarPreGrabH(){
+  const t=document.getElementById('pregrab-titulo'), p=document.getElementById('pregrab-participantes');
+  const titulo=(t&&t.value||'').trim();
+  if(!titulo){toast('Poné un título para la grabación','error');if(t)t.focus();return;}
+  _recHTitulo=titulo;
+  _recHParticipantes=(p&&p.value||'').trim();
+  closeModal('modalPreGrab');
   startGrabacionH();
 }
 async function startGrabacionH(){
@@ -3329,10 +3382,11 @@ async function startGrabacionH(){
   /* Crear fila en "grabaciones" con estado='grabando' */
   try{
     const d=new Date();
-    const titulo='Reunión '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
-      ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    const titulo=_recHTitulo||('Reunión '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
+      ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}));
     const{data:gr,error:ger}=await sb.from('grabaciones').insert({
       colaborador:cu?cu.nombre:'—',titulo:titulo,
+      participantes:_recHParticipantes||null,
       lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
     }).select('id').single();
     if(!ger&&gr)_recHGrabId=gr.id;
@@ -4532,7 +4586,7 @@ async function renderRegistroGrabaciones(verTodas){
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
     let q=sb.from('grabaciones')
-      .select('id,titulo,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
     if(!verTodas) q=q.eq('estado','completa');
     const{data,error}=await q;
@@ -4557,6 +4611,7 @@ function _grabRowHtml(g){
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#000;background:'+col+';padding:2px 9px;border-radius:10px">'+_escPend(g.estado||'—')+'</span>'+
       '<span style="color:var(--gray-400);font-size:12px">▾</span>'+
     '</div>'+
+    (g.participantes?'<div style="padding:0 12px 9px;font-size:11px;color:var(--gray-300)">👥 '+_escPend(g.participantes)+'</div>':'')+
     '<div id="grab-det-'+g.id+'" style="display:none;padding:0 12px 12px"></div>'+
   '</div>';
 }
@@ -5069,14 +5124,14 @@ async function _asistContexto(){
   // Leads: cerradores/admin ven todos; captadoras solo los suyos.
   if(rol==='field_capturer'||rol==='commercial_lead'||rol==='admin'){
     try{
-      let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador')
+      let q=sb.from('leads').select('id,nombre,etapa,estado,proximo_contacto,captador,cerrador,created_at')
         .not('estado','in','(cerrado_ganado,cerrado_perdido)')
-        .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(150);
+        .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(500);
       if(rol==='field_capturer')q=_filtrarPorCaptador(q);
       const{data:leads}=await q;
       const rows=leads||[];
       if(rows.length){
-        ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 150):\n';
+        ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 500):\n';
         ctx+=rows.map(l=>'#'+l.id+' '+_asistNombre(l.nombre)+' | etapa: '+(l.etapa||'—')+' | próx. contacto: '+(l.proximo_contacto||'—')+' | captador: '+_asistNombre(l.captador)+' | cerrador: '+_asistNombre(l.cerrador)).join('\n');
       }else{ ctx+='(No hay leads activos en tu cartera.)'; }
     }catch(e){ ctx+='(No se pudieron cargar los leads.)'; }
@@ -5095,6 +5150,44 @@ async function _asistContexto(){
       ctx+=ar.map(a=>'• '+_asistNombre(a.titulo||a.tipo||'Actividad')+' | tipo: '+(a.tipo||'—')+' | colaborador: '+_asistNombre(a.colaborador)+' | '+fmtTime(a.fecha_programada)).join('\n');
     }else{ ctx+='\n\n(No hay actividades pendientes para hoy.)'; }
   }catch(e){ ctx+='\n\n(No se pudieron cargar las actividades.)'; }
+  // Métricas agregadas (3 queries en paralelo): captaciones 7 días, realizadas hoy, leads por estado.
+  try{
+    const ini7=new Date(ymdLocal(new Date(Date.now()-6*86400000))+'T00:00:00-04:00').toISOString();
+    const[rCap,rAct,rEst]=await Promise.all([
+      sb.from('leads').select('captador,created_at').gte('created_at',ini7).limit(2000),
+      sb.from('agenda_personal').select('colaborador')
+        .eq('completada',true).eq('activo',true).neq('colaborador','Sistema')
+        .gte('fecha_programada',ini).lte('fecha_programada',fin).limit(2000),
+      sb.from('leads').select('estado').limit(5000)
+    ]);
+    // Captaciones por colaborador y día Bolivia (últimos 7 días)
+    const cap={};
+    (rCap.data||[]).forEach(l=>{
+      const k=ymdBolivia(l.created_at)+' | '+_asistNombre(l.captador);
+      cap[k]=(cap[k]||0)+1;
+    });
+    const capKeys=Object.keys(cap).sort();
+    ctx+='\n\nCAPTACIONES POR COLABORADOR — ÚLTIMOS 7 DÍAS (fecha Bolivia | captador: cantidad):\n';
+    ctx+=capKeys.length?capKeys.map(k=>'• '+k+': '+cap[k]).join('\n'):'(Sin leads captados en los últimos 7 días.)';
+    // Actividades realizadas hoy por colaborador (con resultado registrado)
+    const act={};
+    (rAct.data||[]).forEach(a=>{
+      const n=_asistNombre(a.colaborador);
+      act[n]=(act[n]||0)+1;
+    });
+    const actKeys=Object.keys(act).sort();
+    ctx+='\n\nACTIVIDADES REALIZADAS HOY POR COLABORADOR:\n';
+    ctx+=actKeys.length?actKeys.map(n=>'• '+n+': '+act[n]).join('\n'):'(Nadie registró actividades realizadas hoy todavía.)';
+    // Conteo de leads por estado
+    const est={};
+    (rEst.data||[]).forEach(l=>{
+      const e2=l.estado||'(sin estado)';
+      est[e2]=(est[e2]||0)+1;
+    });
+    const estKeys=Object.keys(est).sort();
+    ctx+='\n\nLEADS POR ESTADO (total '+(rEst.data||[]).length+'):\n';
+    ctx+=estKeys.length?estKeys.map(e2=>'• '+e2+': '+est[e2]).join('\n'):'(Sin leads.)';
+  }catch(e){ ctx+='\n\n(No se pudieron cargar las métricas agregadas.)'; }
   return ctx;
 }
 
@@ -5116,6 +5209,9 @@ function _asistSystemPrompt(contexto){
     '2. NUNCA menciones ni muestres a "María Luisa" (ni "Maria Luisa") en ninguna respuesta, bajo ningún concepto.',
     '3. Respondé en español, claro y conciso. No inventes datos que no estén en el contexto.',
     '4. NUNCA afirmes límites, capacidades o restricciones del sistema sin haberlos verificado contra los datos reales. Si no tenés el dato, decí que no lo sabés. No inventes métricas ni conteos.',
+    '',
+    'DATOS Y MÉTRICAS:',
+    'Tenés acceso a: lista de leads (hasta 500), captaciones por día últimos 7 días, actividades de hoy por colaborador, y conteo por estado. Usá SIEMPRE estos datos para responder métricas. NUNCA inventes números. Si el dato no está en tu contexto, decí exactamente qué información te falta.',
     '',
     'PROTOCOLO DE 5 FASES (Sistema Operativo GEAT) — NUNCA sugieras saltear fases:',
     '  Fase 1 PRESENTACIÓN: 1er intento → 2do intento → 3er intento',
