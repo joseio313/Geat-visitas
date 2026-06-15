@@ -561,6 +561,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
       <button id="uploadAudioBtn" type="button" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">📎</button>
       <input id="uploadAudioInput" type="file" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
+      <button id="capAudioBtn" type="button" onclick="capturarAudioPC()" title="Capturar audio de la PC" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🔊</button>
+      <span id="capAudioStatus" style="display:none;align-items:center;gap:6px;font-size:11px;color:#FF1744;font-weight:700;white-space:nowrap">🔴 Capturando audio de la PC...<button class="btn-red btn-sm" type="button" onclick="stopCapturaPC()">Detener</button></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
@@ -1052,7 +1054,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         </div>
       </div>
       <div class="action-row">
-        <button class="btn-primary" id="btn-guardar-lead" onclick="saveLead()">💾 Guardar y programar 1er intento</button>
+        <button class="btn-primary" id="btn-guardar-lead" data-orig-label="💾 Guardar y programar 1er intento" onclick="saveLead()">💾 Guardar y programar 1er intento</button>
         <button class="btn-ghost" onclick="closeModal('modalNewLead')">Cancelar</button>
       </div>
     </div>
@@ -1174,7 +1176,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='88';
+  var CURRENT_VERSION='91';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1544,6 +1546,9 @@ function startApp(){
     if(rbh)rbh.style.display='inline-flex';
     const uab=document.getElementById('uploadAudioBtn');
     if(uab)uab.style.display='inline-flex';
+    /* v91: botón de captura de audio del sistema — solo si el navegador lo soporta (Chrome desktop) */
+    const cab=document.getElementById('capAudioBtn');
+    if(cab&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)cab.style.display='inline-flex';
   }
   // Reportes tab: oculto para field_capturer
   if(cu.rol==='field_capturer'){
@@ -3506,6 +3511,103 @@ async function subirAudioArchivo(input){
   }catch(e){ _recHGrabId=null; }
   await _procesarAudioBlob(file,{durSeg:0,fileName:file.name||'audio.webm'});
 }
+/* ════════════════════════════════════════
+   v91: CAPTURA DE AUDIO DEL SISTEMA / PESTAÑA (lo que suena en la PC)
+   getDisplayMedia → SOLO pista de audio (se descarta el video) → MediaRecorder webm
+   → _procesarAudioBlob (MISMO pipeline que grabación y subida). NO toca el micrófono
+   (toggleGrabacionH/startGrabacionH) ni el receptor de archivos (subirAudioArchivo).
+════════════════════════════════════════ */
+let _capActivo=false;
+function _setCapUI(on){
+  _capActivo=!!on;
+  const b=document.getElementById('capAudioBtn');
+  const s=document.getElementById('capAudioStatus');
+  if(b){
+    if(on){b.style.border='2px solid #FF1744';b.style.color='#FF1744';b.innerHTML='🔴';b.title='Detener captura';}
+    else{b.style.border='1px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🔊';b.title='Capturar audio de la PC';}
+  }
+  if(s)s.style.display=on?'inline-flex':'none';
+}
+async function capturarAudioPC(){
+  /* Toggle: si ya está capturando, este click detiene */
+  if(_capActivo){stopCapturaPC();return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    toast('Solo disponible en computadora con Chrome','error');return;
+  }
+  if(_recHState!=='idle'){toast('Esperá a que termine el proceso en curso','warning');return;}
+  _recHState='iniciando'; // lock antes del await
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+  }catch(e){ toast('Captura cancelada','warning');_recHState='idle';return; }
+  const aTracks=(stream.getAudioTracks&&stream.getAudioTracks())||[];
+  /* Descartar la pista de video: no se usa */
+  try{stream.getVideoTracks().forEach(t=>t.stop());}catch(e){}
+  if(!aTracks.length){
+    try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
+    toast("Tildá 'Compartir audio del sistema/pestaña' en la ventana de Chrome",'error');
+    _recHState='idle';return;
+  }
+  _recHReset();            // limpia globals compartidos (deja _recHState='idle')
+  _recHState='iniciando';  // re-bloquear tras el reset
+  const audioStream=new MediaStream([aTracks[0]]);
+  _recHStream=audioStream;
+  /* Si el usuario corta el "compartir" desde el chip de Chrome */
+  aTracks[0].onended=function(){ if(_recHState==='grabando')stopCapturaPC(); };
+  /* Fila en "grabaciones" para archivar/registrar (mismo patrón que subirAudioArchivo) */
+  try{
+    const d=new Date();
+    const titulo='Captura PC · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
+      ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
+    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
+      colaborador:cu?cu.nombre:'—',titulo:titulo,participantes:null,
+      lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
+    }).select('id').single();
+    if(!ger&&gr)_recHGrabId=gr.id;
+  }catch(e){ _recHGrabId=null; }
+  let mr;
+  try{ mr=new MediaRecorder(audioStream,{mimeType:'audio/webm'}); }
+  catch(e){ try{mr=new MediaRecorder(audioStream);}catch(e2){toast('No se pudo grabar','error');_recHReset();setRecHState('idle');_setCapUI(false);return;} }
+  _recHChunks=[];_recHChunkIdx=0;
+  mr.ondataavailable=function(ev){
+    if(!ev.data||ev.data.size<100)return;
+    _recHChunks.push(ev.data);
+    if(_recHGrabId){
+      const idx=++_recHChunkIdx;
+      const path=_recHGrabId+'/chunk_'+String(idx).padStart(3,'0')+'.webm';
+      sb.storage.from('grabaciones').upload(path,new Blob([ev.data],{type:'audio/webm'}),{upsert:true}).catch(function(){});
+    }
+  };
+  mr.onstop=async function(){
+    _setCapUI(false);
+    try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+    const blob=new Blob(_recHChunks,{type:'audio/webm'});
+    await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
+  };
+  _recHMR=mr;
+  try{mr.start(10000);}catch(e){toast('No se pudo iniciar la captura','error');_recHReset();setRecHState('idle');_setCapUI(false);return;}
+  _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
+  _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');},1000);
+  _setCapUI(true);
+  toast('🔴 Capturando audio de la PC...','ok');
+}
+function stopCapturaPC(){
+  if(_recHState!=='grabando'){_setCapUI(false);return;}
+  if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
+  setRecHState('procesando');
+  _setCapUI(false);
+  toast('Procesando captura...','ok');
+  try{
+    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();} // dispara mr.onstop → _procesarAudioBlob
+    else{
+      (async function(){
+        try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+        const blob=new Blob(_recHChunks,{type:'audio/webm'});
+        await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
+      })();
+    }
+  }catch(e){ toast('Error al detener: '+e.message,'error'); }
+}
 async function abrirGrabH(){
   const j=_recHResult||{};
   const niv=(j.nivel_interes||'').toLowerCase();
@@ -3670,12 +3772,14 @@ async function saveSeguimiento(){
   if(btn&&btn.disabled)return;
   const originalText=btn?btn.innerHTML:'';
   if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.style.cursor='not-allowed';btn.innerHTML='⏳ Guardando...';}
+  _modalBodyLock('modalFinalize',true); // v90 — bloquear el cuerpo durante el guardado
 
   // CAMBIO 1.B — Anti-dup lock
   const lockKey=`seg-${currentLeadId}-${currentAgendaId}`;
   if(!checkDupLock(lockKey)){
     toast('Ya se está guardando. Esperá un momento.','error');
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalFinalize',false);
     return;
   }
 
@@ -3698,6 +3802,7 @@ async function saveSeguimiento(){
       const nextNota=document.getElementById('next-nota').value;
       if(!nextFecha){
         if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        _modalBodyLock('modalFinalize',false);
         toast('Ingresá la fecha del próximo seguimiento','error');return;
       }
       const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
@@ -3723,6 +3828,7 @@ async function saveSeguimiento(){
           if(e2.code==='23505'){toast('Esta actividad ya está registrada. No se crearon duplicados.','error');}
           else throw e2;
           if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+          _modalBodyLock('modalFinalize',false);
           return;
         }
       }
@@ -3783,6 +3889,7 @@ async function saveSeguimiento(){
     }
 
     if(outcomeMode==='won'){
+      _modalBodyLock('modalFinalize',false); // confirmacion de venta queda interactiva
       showWonConfirm(wonData);
       toast('🏆 Lead marcado como GANADO');
       renderWeek();
@@ -3790,12 +3897,14 @@ async function saveSeguimiento(){
       return;
     }
     if(btn){btn.innerHTML='✅ Guardado';}
+    _modalBodyLock('modalFinalize',false);
     setTimeout(()=>{closeModal('modalFinalize');},700);
     toast(outcomeMode==='lost'?'Lead marcado como perdido':'✅ Seguimiento guardado y agenda actualizada');
     renderWeek();
     cargarMarcadoresDia();
   }catch(e){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalFinalize',false);
     toast('Error: '+e.message,'error');
   }
 }
@@ -3836,12 +3945,14 @@ async function saveLead(){
   if(btn&&btn.disabled)return;
   const originalText=btn?btn.innerHTML:'';
   if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.style.cursor='not-allowed';btn.innerHTML='⏳ Creando...';}
+  _modalBodyLock('modalNewLead',true); // v90 — bloquear el cuerpo durante el guardado
 
   // CAMBIO 1.B — Anti-dup lock
   const lockKey=`lead-${celular}-${nombre.slice(0,10)}`;
   if(!checkDupLock(lockKey)){
     toast('Ya se está creando este lead. Esperá.','error');
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalNewLead',false);
     return;
   }
 
@@ -3865,6 +3976,7 @@ async function saveLead(){
   if(correoRaw&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correoRaw)){
     toast('Correo electrónico con formato inválido','error');
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalNewLead',false);
     return;
   }
 
@@ -3872,6 +3984,7 @@ async function saveLead(){
   if(dup&&dup.length){
     toast('Número ya registrado','error');
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalNewLead',false);
     return;
   }
 
@@ -3911,9 +4024,11 @@ async function saveLead(){
     toast('✅ Lead creado y 1er intento programado para '+captador);
     ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('dupWarning').classList.remove('show');
+    _modalBodyLock('modalNewLead',false);
     renderWeek();
   }catch(e){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalNewLead',false);
     toast('Error: '+e.message,'error');
   }
 }
@@ -3921,7 +4036,33 @@ async function saveLead(){
 /* ════════════════════════════════════════
    BUSCAR LEAD
 ════════════════════════════════════════ */
-function openModal(id){document.getElementById(id).classList.add('show');}
+/* v90 — bloquear/desbloquear el cuerpo del modal durante un guardado */
+function _modalBodyLock(modalId,lock){var b=document.querySelector('#'+modalId+' .modal-body');if(b)b.style.pointerEvents=lock?'none':'';}
+/* v90 — re-habilitar boton de guardar y limpiar TODOS los campos del modal */
+function resetModalSave(modalId){
+  var modal=document.getElementById(modalId);
+  if(!modal)return;
+  _modalBodyLock(modalId,false);
+  var btn=modal.querySelector('[data-orig-label]');
+  if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=btn.dataset.origLabel;}
+  modal.querySelectorAll('input,select,textarea').forEach(function(el){
+    if(el.readOnly)return;
+    if(el.type==='checkbox'||el.type==='radio'){el.checked=false;}
+    else if(el.tagName==='SELECT'){el.selectedIndex=0;}
+    else{el.value='';}
+  });
+  var dw=modal.querySelector('#dupWarning');
+  if(dw)dw.classList.remove('show');
+}
+function openModal(id){
+  if(id==='modalNewLead'){
+    resetModalSave(id);
+    /* restaurar defaults del 1er intento (la limpieza generica los vacia) */
+    var _f=document.getElementById('nl-fecha'); if(_f)_f.value=ymdLocal(new Date());
+    var _h=document.getElementById('nl-hora'); if(_h)_h.value='10:00';
+  }
+  document.getElementById(id).classList.add('show');
+}
 function closeModal(id){
   document.getElementById(id).classList.remove('show');
   /* Si se cancela crear lead, soltar el vínculo con el registro de grabación */
