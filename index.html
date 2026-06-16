@@ -1149,6 +1149,77 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ AGENDAR VISITA ══ -->
+<div id="modalAgendarVisita" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalAgendarVisita')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2>📅 Agendar visita</h2>
+      <button class="modal-close" onclick="closeModal('modalAgendarVisita')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="av-lead-id">
+      <div id="av-form">
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <input class="form-control" type="text" id="av-cliente" readonly style="opacity:.85">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Fecha <span style="color:var(--st-atrasado)">*</span></label>
+            <input class="form-control" type="date" id="av-fecha">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hora <span style="color:var(--st-atrasado)">*</span></label>
+            <input class="form-control" type="time" id="av-hora" value="10:00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lugar <span style="color:var(--st-atrasado)">*</span></label>
+          <div style="display:flex;gap:8px">
+            <label style="flex:1;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gray-600);border-radius:8px;padding:8px 10px">
+              <input type="radio" name="av-lugar" value="terreno" onchange="toggleLugarVisita()"> <span>📍 En el terreno</span>
+            </label>
+            <label style="flex:1;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gray-600);border-radius:8px;padding:8px 10px">
+              <input type="radio" name="av-lugar" value="oficina" checked onchange="toggleLugarVisita()"> <span>🏢 En oficina</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group" id="av-ubicacion-wrap" style="display:none">
+          <label class="form-label">Ubicación del terreno <span style="color:var(--st-atrasado)">*</span></label>
+          <input class="form-control" type="text" id="av-ubicacion" placeholder="Zona, referencia o coordenadas">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Modo de pago <span style="color:var(--st-atrasado)">*</span></label>
+          <select class="form-control" id="av-modo-pago">
+            <option value="recursos_propios">Recursos propios</option>
+            <option value="con_financiamiento">Con financiamiento</option>
+            <option value="financiamiento_bancario">Financiamiento bancario</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observación <span style="color:var(--gray-400)">(opcional)</span></label>
+          <input class="form-control" type="text" id="av-observacion" maxlength="160" placeholder="Nota corta...">
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" id="av-btn-guardar" onclick="guardarAgendarVisita()">💾 Guardar visita</button>
+          <button class="btn-ghost" onclick="closeModal('modalAgendarVisita')">Cancelar</button>
+        </div>
+      </div>
+      <div id="av-resultado" style="display:none">
+        <div style="background:var(--st-completo);color:#06270f;font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">✅ Visita agendada — el cliente pasó a “visita agendada”.</div>
+        <div class="form-group">
+          <label class="form-label">Mensaje para el grupo</label>
+          <textarea class="form-control" id="av-wa-text" rows="8" readonly style="font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" onclick="copiarAgendarVisitaWa()">📋 Copiar para WhatsApp</button>
+          <button class="btn-ghost" onclick="closeModal('modalAgendarVisita')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ ASISTENTE IA FLOTANTE ══ -->
 <button id="asistFab" type="button" onclick="toggleAsistente()" title="Asistente GEAT"
   style="display:none;position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;border:2px solid var(--gold);background:var(--black);color:var(--gold);font-size:24px;line-height:1;cursor:pointer;z-index:850;box-shadow:0 4px 14px rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:0">💬</button>
@@ -1176,7 +1247,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='92';
+  var CURRENT_VERSION='93';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -2428,6 +2499,7 @@ async function openLeadDetail(leadId,agendaId,mode){
   ]);
   if(rLead.error){toast('Error: '+rLead.error.message,'error');return;}
   const lead=rLead.data;
+  window._leadAgendar={id:lead.id,nombre:lead.nombre||'',celular:lead.celular||'',captador:lead.captador||''};
   const history=rHistory.data||[];
   const segs=rSegs.data||[];
   _refsLeadActual=rRefs.data||[];
@@ -2444,6 +2516,7 @@ async function openLeadDetail(leadId,agendaId,mode){
     <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
+      ${currentLeadMode!=='readonly'?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
     </div>
     <div id="lead-tab-detalle">
       <div class="section">
@@ -3179,6 +3252,117 @@ async function copiarWaDraft(){
 }
 function _waDraftHtml(){
   return '<button class="btn-primary btn-sm" onclick="copiarWaDraft()">📋 Copiar mensaje WA</button>';
+}
+
+/* ════════════════════════════════════════
+   AGENDAR VISITA — form en el lead → agenda_grupal → triggers
+   (asignación de cerrador, notificaciones y paso a visita_agendada
+    los hacen los triggers existentes; el captador NO ve el cerrador
+    como paso, solo dentro del mensaje copiable)
+════════════════════════════════════════ */
+let _avWaMsg='';
+function abrirAgendarVisita(){
+  const l=window._leadAgendar;
+  if(!l||!l.id){toast('Abrí un lead primero','error');return;}
+  if(!cu){toast('Sesión no válida','error');return;}
+  document.getElementById('av-lead-id').value=l.id;
+  document.getElementById('av-cliente').value=l.nombre||'—';
+  document.getElementById('av-fecha').value=ymdLocal(new Date());
+  document.getElementById('av-hora').value='10:00';
+  const radioOf=document.querySelector('input[name="av-lugar"][value="oficina"]');if(radioOf)radioOf.checked=true;
+  document.getElementById('av-ubicacion').value='';
+  document.getElementById('av-modo-pago').value='recursos_propios';
+  document.getElementById('av-observacion').value='';
+  toggleLugarVisita();
+  document.getElementById('av-form').style.display='';
+  document.getElementById('av-resultado').style.display='none';
+  _avWaMsg='';
+  openModal('modalAgendarVisita');
+}
+function toggleLugarVisita(){
+  const r=document.querySelector('input[name="av-lugar"]:checked');
+  const esTerreno=r&&r.value==='terreno';
+  document.getElementById('av-ubicacion-wrap').style.display=esTerreno?'':'none';
+}
+function _avLabelModoPago(v){
+  return v==='recursos_propios'?'Recursos propios':v==='con_financiamiento'?'Con financiamiento':v==='financiamiento_bancario'?'Financiamiento bancario':(v||'—');
+}
+async function guardarAgendarVisita(){
+  const btn=document.getElementById('av-btn-guardar');
+  const leadId=Number(document.getElementById('av-lead-id').value);
+  const cliente=document.getElementById('av-cliente').value||'';
+  const fecha=document.getElementById('av-fecha').value;
+  const hora=document.getElementById('av-hora').value;
+  const r=document.querySelector('input[name="av-lugar"]:checked');
+  const lugar=r?r.value:'oficina';
+  const ubic=(document.getElementById('av-ubicacion').value||'').trim();
+  const modoPago=document.getElementById('av-modo-pago').value;
+  const obs=(document.getElementById('av-observacion').value||'').trim();
+  if(!leadId){toast('Sin lead activo','error');return;}
+  if(!fecha||!hora){toast('Completá fecha y hora','error');return;}
+  if(lugar==='terreno'&&!ubic){toast('Indicá la ubicación del terreno','error');return;}
+  const origTxt=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.style.opacity='.6';btn.innerHTML='⏳ Guardando...';}
+  try{
+    const l=window._leadAgendar||{};
+    const isoInicio=new Date(fecha+'T'+hora+':00-04:00').toISOString();
+    const row={
+      tipo:'visita_nueva',
+      titulo:'Visita · '+(cliente||l.nombre||'Lead'),
+      descripcion:obs||null,
+      lead_id:leadId,
+      captador:l.captador||null,
+      fecha_inicio:isoInicio,
+      creado_por:cu.nombre,
+      visible_para:'todos',
+      lugar:lugar,
+      ubicacion_terreno:lugar==='terreno'?ubic:null,
+      modo_pago:modoPago
+    };
+    const{error}=await sb.from('agenda_grupal').insert(row);
+    if(error)throw error;
+    // Releer el cerrador que asignó el trigger en el lead
+    let cerrador='';
+    try{
+      const{data:lf}=await sb.from('leads').select('cerrador,estado').eq('id',leadId).single();
+      cerrador=(lf&&lf.cerrador)||'';
+    }catch(e){}
+    try{registrarAuditoria('agendar_visita','agenda_grupal',leadId,{lugar:lugar,modo_pago:modoPago,fecha:isoInicio});}catch(e){}
+    // Armar mensaje del grupo (el cerrador aparece SOLO acá)
+    const fechaTxt=fecha.split('-').reverse().join('/');
+    const lugarTxt=lugar==='terreno'?('En el terreno — '+ubic):'En oficina';
+    _avWaMsg=
+      '🏠 *Nueva visita agendada*\n'+
+      '👤 Cliente: '+(cliente||l.nombre||'—')+'\n'+
+      '📅 Fecha/Hora: '+fechaTxt+' '+hora+'\n'+
+      '📍 Lugar: '+lugarTxt+'\n'+
+      '🤝 Cerrador: '+(cerrador||'por asignar')+'\n'+
+      '💳 Modo de pago: '+_avLabelModoPago(modoPago)+'\n'+
+      '📝 Observación: '+(obs||'—');
+    document.getElementById('av-wa-text').value=_avWaMsg;
+    document.getElementById('av-form').style.display='none';
+    document.getElementById('av-resultado').style.display='';
+    toast('✅ Visita agendada');
+    try{renderWeek();}catch(e){}
+    try{cargarMarcadoresDia();}catch(e){}
+  }catch(e){
+    toast('Error: '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
+  }
+}
+async function copiarAgendarVisitaWa(){
+  if(!_avWaMsg){toast('Sin mensaje para copiar','error');return;}
+  try{
+    await navigator.clipboard.writeText(_avWaMsg);
+    toast('✅ Mensaje copiado para WhatsApp');
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=_avWaMsg;
+    ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');toast('✅ Mensaje copiado para WhatsApp');}
+    catch(_){toast('No se pudo copiar','error');}
+    document.body.removeChild(ta);
+  }
 }
 
 async function guardarGrabacion(){
