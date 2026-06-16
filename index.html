@@ -1176,7 +1176,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='91';
+  var CURRENT_VERSION='92';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3214,7 +3214,7 @@ async function guardarGrabacion(){
 ════════════════════════════════════════ */
 let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null,
     _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
-    _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='';
+    _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='', _capDisplayStream=null;
 /* Título/participantes del modal previo. NO se limpian en _recHReset():
    startGrabacionH() resetea internamente y los necesita después. Siempre
    se sobreescriben en confirmarPreGrabH() antes de cada grabación. */
@@ -3331,8 +3331,9 @@ function _recHReset(){
   try{if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.onstop=null;_recHMR.stop();}}catch(e){}
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
-  _recHMR=null;_recHChunks=[];_recHStream=null;_recHWakeLock=null;_recHSeconds=0;
+  _recHMR=null;_recHChunks=[];_recHStream=null;_capDisplayStream=null;_recHWakeLock=null;_recHSeconds=0;
   _recHResult=null;_recHLeadId=null;_recHGrabId=null;_recHChunkIdx=0;_recHTranscript='';_recHState='idle';
 }
 function setRecHState(state){
@@ -3541,8 +3542,9 @@ async function capturarAudioPC(){
     stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
   }catch(e){ toast('Captura cancelada','warning');_recHState='idle';return; }
   const aTracks=(stream.getAudioTracks&&stream.getAudioTracks())||[];
-  /* Descartar la pista de video: no se usa */
-  try{stream.getVideoTracks().forEach(t=>t.stop());}catch(e){}
+  /* NO detener la pista de video: en Chrome eso corta toda la sesión de getDisplayMedia
+     y mata también la pista de audio (se grabaría silencio). La mantenemos viva y
+     guardamos el stream completo para detenerlo recién al final. */
   if(!aTracks.length){
     try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
     toast("Tildá 'Compartir audio del sistema/pestaña' en la ventana de Chrome",'error');
@@ -3552,6 +3554,7 @@ async function capturarAudioPC(){
   _recHState='iniciando';  // re-bloquear tras el reset
   const audioStream=new MediaStream([aTracks[0]]);
   _recHStream=audioStream;
+  _capDisplayStream=stream; // stream completo (audio+video) para detener al final
   /* Si el usuario corta el "compartir" desde el chip de Chrome */
   aTracks[0].onended=function(){ if(_recHState==='grabando')stopCapturaPC(); };
   /* Fila en "grabaciones" para archivar/registrar (mismo patrón que subirAudioArchivo) */
@@ -3580,7 +3583,9 @@ async function capturarAudioPC(){
   };
   mr.onstop=async function(){
     _setCapUI(false);
+    try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
     try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+    _capDisplayStream=null;
     const blob=new Blob(_recHChunks,{type:'audio/webm'});
     await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
   };
@@ -3601,7 +3606,9 @@ function stopCapturaPC(){
     if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();} // dispara mr.onstop → _procesarAudioBlob
     else{
       (async function(){
+        try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
         try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+        _capDisplayStream=null;
         const blob=new Blob(_recHChunks,{type:'audio/webm'});
         await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
       })();

@@ -1,0 +1,21 @@
+=== DEPLOY v87 START ===
+--- copy index_v52.html to index.html --- 
+        1 archivo(s) copiado(s).
+--- fc binary compare --- 
+Comparando archivos index_v52.html y INDEX.HTML
+FC: no se han encontrado diferencias
+
+COPY_OK_IDENTICAL 
+--- version.json --- 
+{"v":"87","deploy":"2026-06-14"} 
+--- git add --- 
+--- git commit --- 
+[main 4bc15c4] v87: fix contexto fechas asistente
+ 2 files changed, 104 insertions(+), 8 deletions(-)
+--- git HEAD hash --- 
+4bc15c4bc48ad39d4ef7c4cb5621e1e6dc433f6f
+--- git push --- 
+To https://github.com/joseio313/Geat-visitas.git
+   940f64a..4bc15c4  main -> main
+PUSH_ERRORLEVEL=0 
+=== DEPLOY v87 END === 
