@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='97';
+  var CURRENT_VERSION='98';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3466,18 +3466,22 @@ async function _grabExtraerYGuardar(grabId,transcript){
   return ext;
 }
 
-/* Transcribe un único blob con Whisper. */
+/* Transcribe un único blob con OpenAI. v98: modelo 'gpt-4o-mini-transcribe' (≈mitad del
+   costo de whisper-1). Mismo endpoint /v1/audio/transcriptions y misma API key.
+   gpt-4o-mini-transcribe NO soporta verbose_json/timestamps → usamos response_format 'json'
+   y leemos data.text (igual que antes); el pipeline recibe el texto sin cambios. */
 async function _whisperSingleBlob(blob,apiKey,fileName){
   const fd=new FormData();
   fd.append('file',blob,fileName||'reunion.webm');
-  fd.append('model','whisper-1');
+  fd.append('model','gpt-4o-mini-transcribe');
   fd.append('language','es');
+  fd.append('response_format','json');
   const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
     method:'POST',
     headers:{'Authorization':'Bearer '+apiKey},
     body:fd
   });
-  if(!resp.ok)throw new Error('Whisper '+resp.status);
+  if(!resp.ok)throw new Error('Transcripción '+resp.status);
   const data=await resp.json();
   return data.text||'';
 }
@@ -3694,6 +3698,24 @@ async function _finalizarConTranscript(transcript,opts){
   setRecHState('listo');
   await abrirGrabH();
 }
+/* v98 — Topes de uso (control de costo). Fáciles de cambiar. */
+const CONST_TOPE_TRANSCRIPCIONES_DIA=30; // máx registros transcritos por colaborador/día (subida)
+const CONST_TOPE_AUDIOS_LOTE=10;         // máx audios por arrastre/subida en un solo lote
+/* Cuenta los registros de grabaciones creados HOY (fecha Bolivia, UTC-4) por el colaborador.
+   Devuelve un número; ante error devuelve 0 para no bloquear de más. */
+async function _contarTranscripcionesHoy(colaborador){
+  try{
+    const hoy=ymdLocal(new Date());
+    const desde=new Date(hoy+'T00:00:00-04:00').toISOString();
+    const hasta=new Date(hoy+'T23:59:59.999-04:00').toISOString();
+    const{count,error}=await sb.from('grabaciones')
+      .select('id',{count:'exact',head:true})
+      .eq('colaborador',colaborador)
+      .gte('created_at',desde).lte('created_at',hasta);
+    if(error)return 0;
+    return count||0;
+  }catch(e){ return 0; }
+}
 /* Fix .opus (WhatsApp): Whisper no reconoce la extensión .opus; el mismo contenedor
    como .ogg sí. Sólo se cambia el NOMBRE que se manda a Whisper, no el binario. */
 function _fixOpusName(n){
@@ -3721,12 +3743,24 @@ function audioDropHandler(e){
   _procesarAudiosSubidos(audios);
 }
 async function _procesarAudiosSubidos(files){
+  /* Límite por lote: máx CONST_TOPE_AUDIOS_LOTE audios por arrastre/subida. */
+  if(files.length>CONST_TOPE_AUDIOS_LOTE){
+    toast('Máx '+CONST_TOPE_AUDIOS_LOTE+' audios por lote; proceso los primeros '+CONST_TOPE_AUDIOS_LOTE+'.','warning');
+    files=files.slice(0,CONST_TOPE_AUDIOS_LOTE);
+  }
   const MAX_UP=25*1024*1024;
   for(const f of files){
     if(f.size>MAX_UP){toast('Audio muy grande, máx 25MB: '+(f.name||'archivo'),'error');return;}
   }
   if(_recHState==='grabando'||_recHState==='procesando'||_recHState==='iniciando'){
     toast('Esperá a que termine el proceso en curso','warning');return;
+  }
+  /* Tope diario por colaborador (control de costo). Antes de transcribir. */
+  const _yo=cu?cu.nombre:'—';
+  const _hechasHoy=await _contarTranscripcionesHoy(_yo);
+  if(_hechasHoy>=CONST_TOPE_TRANSCRIPCIONES_DIA){
+    toast('Llegaste al tope diario de transcripciones ('+CONST_TOPE_TRANSCRIPCIONES_DIA+').','warning');
+    return;
   }
   _recHReset();
   _recHTituloManual=false; // audio subido: sin título manual, lo pone la IA
