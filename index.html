@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='98';
+  var CURRENT_VERSION='99';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3066,6 +3066,7 @@ let _recState='idle';        // idle|grabando|procesando|listo
 let _recRecognition=null, _recTimer=null, _recTranscript='', _recSeconds=0, _recResultado=null;
 const _REC_MAX=300;          // auto-stop 5 min (grabación legacy)
 const _REC_H_MAX=10800;      // header: tope de seguridad 3 h — solo el usuario detiene normalmente
+const _SEG_DURACION_SEG=600; // v99: ~10 min por segmento independiente (webm completo y válido)
 
 function _recReset(){
   try{if(_recRecognition){_recRecognition.onend=null;_recRecognition.stop();}}catch(e){}
@@ -3388,14 +3389,18 @@ async function guardarGrabacion(){
 }
 
 /* ════════════════════════════════════════
-   GRABACIÓN DESDE HEADER — MediaRecorder → chunks → Whisper → Claude
-   Resiliencia: fila en "grabaciones" creada al inicio; cada chunk se
-   sube al bucket "grabaciones/{id}/chunk_NNN.webm" conforme llega.
+   GRABACIÓN DESDE HEADER — v99: grabación por SEGMENTOS independientes (~10 min)
+   Cada ~10 min se cierra el MediaRecorder y se arranca otro → cada segmento es un
+   webm COMPLETO y válido, que se sube apenas cierra al bucket
+   "grabaciones/{id}/seg_NNN.webm". Si la sesión se corta, los segmentos ya
+   terminados quedan a salvo y se pueden transcribir uno por uno (sin byte-split).
    La grabación siempre queda archivada, tenga o no lead asociado.
 ════════════════════════════════════════ */
 let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null,
     _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
     _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='', _capDisplayStream=null;
+/* v99: estado de la grabación por segmentos en curso */
+let _recHSegBlobs=[], _recHSegIdx=0, _recHFileBase='reunion', _recHFinalCb=null, _recHFinalizando=false;
 /* Título/participantes del modal previo. NO se limpian en _recHReset():
    startGrabacionH() resetea internamente y los necesita después. Siempre
    se sobreescriben en confirmarPreGrabH() antes de cada grabación. */
@@ -3520,6 +3525,78 @@ function _recHReset(){
   try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
   _recHMR=null;_recHChunks=[];_recHStream=null;_capDisplayStream=null;_recHWakeLock=null;_recHSeconds=0;
   _recHResult=null;_recHLeadId=null;_recHGrabId=null;_recHChunkIdx=0;_recHTranscript='';_recHState='idle';
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFinalCb=null;_recHFinalizando=false;
+}
+/* ════════════════════════════════════════
+   v99 — MOTOR DE GRABACIÓN POR SEGMENTOS (compartido por 🕐 y 🔊)
+════════════════════════════════════════ */
+/* Arranca un MediaRecorder para UN segmento. Sin timeslice → un único
+   dataavailable al stop = webm COMPLETO y válido. Al cerrar, sube el segmento
+   y, si seguimos grabando, encadena el siguiente; si no, dispara el callback final. */
+function _arrancarSegmento(){
+  if(!_recHStream)return false;
+  let mr;
+  try{ mr=new MediaRecorder(_recHStream,{mimeType:'audio/webm'}); }
+  catch(e){ try{mr=new MediaRecorder(_recHStream);}catch(e2){return false;} }
+  let segData=[];
+  mr.ondataavailable=function(ev){ if(ev.data&&ev.data.size>0)segData.push(ev.data); };
+  mr.onstop=function(){
+    const blob=new Blob(segData,{type:'audio/webm'}); segData=[];
+    if(blob.size>1000){
+      const idx=++_recHSegIdx;
+      _recHSegBlobs.push(blob);
+      if(_recHGrabId){
+        const path=_recHGrabId+'/seg_'+String(idx).padStart(3,'0')+'.webm';
+        sb.storage.from('grabaciones').upload(path,blob,{upsert:true}).catch(function(){});
+      }
+    }
+    if(_recHState==='grabando'){ _arrancarSegmento(); }            // rotación: próximo segmento
+    else if(_recHFinalCb){ const cb=_recHFinalCb;_recHFinalCb=null;cb(); } // stop del usuario: finalizar
+  };
+  _recHMR=mr;
+  try{ mr.start(); }catch(e){ return false; } // sin timeslice
+  return true;
+}
+/* Rotación periódica: cierra el segmento actual (se sube en su onstop) y el
+   propio onstop arranca el siguiente. NO arrancar acá para no duplicar recorders. */
+function _rotarSegmento(){
+  if(_recHState!=='grabando')return;
+  try{ if(_recHMR&&_recHMR.state!=='inactive')_recHMR.stop(); }catch(e){}
+}
+/* Finaliza una grabación segmentada: transcribe CADA segmento (en memoria) por
+   separado con el modelo activo (gpt-4o-mini), concatena en orden → UNA
+   transcripción, UN registro. NO une binarios (los seg_NNN ya están en Storage). */
+async function _finalizarGrabacionSegmentada(durSeg){
+  if(_recHFinalizando)return; _recHFinalizando=true;
+  const blobs=_recHSegBlobs.slice();
+  const totBytes=blobs.reduce(function(a,b){return a+b.size;},0);
+  if(!blobs.length||totBytes<1000){
+    toast('No se captó audio.','warning');
+    if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+    _recHReset();setRecHState('idle');return;
+  }
+  try{
+    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+    if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+    const partes=[];
+    for(let i=0;i<blobs.length;i++){
+      if(blobs.length>1)toast('Transcribiendo segmento '+(i+1)+' de '+blobs.length,'ok');
+      let t='';
+      try{ t=await _whisperSingleBlob(blobs[i],cfg.value,_recHFileBase+'.webm'); }catch(e){ t=''; }
+      if(t&&t.trim())partes.push(t.trim());
+    }
+    const combinado=partes.join('\n\n').trim();
+    if(combinado.length<10){
+      toast('No se captó texto en el audio.','warning');
+      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+      _recHReset();setRecHState('idle');return;
+    }
+    /* Audio archivado como segmentos seg_NNN (no se une binario) → blob null + audioPath a la carpeta. */
+    const ap=_recHGrabId?(String(_recHGrabId)+'/'):null;
+    await _finalizarConTranscript(combinado,{durSeg:durSeg,blob:null,audioPath:ap});
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
+  }
 }
 function setRecHState(state){
   _recHState=state;
@@ -3594,41 +3671,32 @@ async function startGrabacionH(){
     if(!ger&&gr)_recHGrabId=gr.id;
   }catch(e){ _recHGrabId=null; }
 
-  let mr;
-  try{ mr=new MediaRecorder(stream,{mimeType:'audio/webm'}); }
-  catch(e){ try{mr=new MediaRecorder(stream);}catch(e2){toast('No se pudo grabar','error');_recHReset();setRecHState('idle');return;} }
-  _recHChunks=[];_recHChunkIdx=0;
-  mr.ondataavailable=function(ev){
-    if(!ev.data||ev.data.size<100)return;
-    _recHChunks.push(ev.data);
-    if(_recHGrabId){
-      const idx=++_recHChunkIdx;
-      const path=_recHGrabId+'/chunk_'+String(idx).padStart(3,'0')+'.webm';
-      sb.storage.from('grabaciones').upload(path,new Blob([ev.data],{type:'audio/webm'}),{upsert:true}).catch(function(){});
-    }
-  };
-  mr.onstop=function(){ _onStopGrabacionH(); };
-  _recHMR=mr;
-  try{mr.start(10000);}catch(e){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
+  /* v99: grabación por segmentos independientes (~10 min c/u). */
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='reunion';_recHFinalCb=null;_recHFinalizando=false;
   try{ if(navigator.wakeLock)_recHWakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
-  _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');if(_recHSeconds>=_REC_H_MAX)stopGrabacionH();},1000);
+  if(!_arrancarSegmento()){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
+  _recHTimer=setInterval(function(){
+    _recHSeconds++;setRecHState('grabando');
+    if(_recHSeconds>0&&_recHSeconds%_SEG_DURACION_SEG===0)_rotarSegmento(); // cierra y encadena segmento
+    if(_recHSeconds>=_REC_H_MAX)stopGrabacionH();
+  },1000);
 }
 function stopGrabacionH(){
   if(_recHState!=='grabando')return;
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   toast('Finish ✓','ok');
-  setRecHState('procesando');
+  setRecHState('procesando'); // a partir de acá el onstop del segmento NO encadena, finaliza
+  _recHFinalCb=function(){ _onStopGrabacionH(); };
   try{
-    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();}
-    else{_onStopGrabacionH();}
-  }catch(e){ _onStopGrabacionH(); }
+    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();} // sube el último segmento → finaliza
+    else{ _recHFinalCb=null; _onStopGrabacionH(); }
+  }catch(e){ _recHFinalCb=null; _onStopGrabacionH(); }
 }
 async function _onStopGrabacionH(){
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHWakeLock){_recHWakeLock.release();_recHWakeLock=null;}}catch(e){}
-  const blob=new Blob(_recHChunks,{type:'audio/webm'});
-  await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'reunion.webm',chunksArr:_recHChunks});
+  await _finalizarGrabacionSegmentada(_recHSeconds);
 }
 /* Pipeline compartido: blob de audio → transcripción Whisper → resumen + extracción IA → guardar en registro.
    Lo usan la grabación del header (_onStopGrabacionH) y la subida de archivos (subirAudioArchivo).
@@ -3679,6 +3747,9 @@ async function _finalizarConTranscript(transcript,opts){
         const fullPath=String(_recHGrabId)+'/completo.webm';
         sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true}).catch(function(){});
         updates.audio_path=String(_recHGrabId)+'/';
+      }else if(opts.audioPath){
+        /* v99: grabación por segmentos — el audio ya está en seg_NNN, sólo apuntamos la carpeta. */
+        updates.audio_path=opts.audioPath;
       }
       await sb.from('grabaciones').update(updates).eq('id',_recHGrabId);
       /* Extracción IA en silencio de fondo — sin await ni indicadores.
@@ -3862,33 +3933,24 @@ async function capturarAudioPC(){
     }).select('id').single();
     if(!ger&&gr)_recHGrabId=gr.id;
   }catch(e){ _recHGrabId=null; }
-  let mr;
-  try{ mr=new MediaRecorder(audioStream,{mimeType:'audio/webm'}); }
-  catch(e){ try{mr=new MediaRecorder(audioStream);}catch(e2){toast('No se pudo grabar','error');_recHReset();setRecHState('idle');_setCapUI(false);return;} }
-  _recHChunks=[];_recHChunkIdx=0;
-  mr.ondataavailable=function(ev){
-    if(!ev.data||ev.data.size<100)return;
-    _recHChunks.push(ev.data);
-    if(_recHGrabId){
-      const idx=++_recHChunkIdx;
-      const path=_recHGrabId+'/chunk_'+String(idx).padStart(3,'0')+'.webm';
-      sb.storage.from('grabaciones').upload(path,new Blob([ev.data],{type:'audio/webm'}),{upsert:true}).catch(function(){});
-    }
-  };
-  mr.onstop=async function(){
-    _setCapUI(false);
-    try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
-    try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
-    _capDisplayStream=null;
-    const blob=new Blob(_recHChunks,{type:'audio/webm'});
-    await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
-  };
-  _recHMR=mr;
-  try{mr.start(10000);}catch(e){toast('No se pudo iniciar la captura','error');_recHReset();setRecHState('idle');_setCapUI(false);return;}
+  /* v99: captura por segmentos independientes (mismo motor que 🕐).
+     _arrancarSegmento construye el MediaRecorder sobre _recHStream=audioStream. */
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='captura';_recHFinalCb=null;_recHFinalizando=false;
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
-  _recHTimer=setInterval(function(){_recHSeconds++;setRecHState('grabando');},1000);
+  if(!_arrancarSegmento()){toast('No se pudo iniciar la captura','error');_recHReset();setRecHState('idle');_setCapUI(false);return;}
+  _recHTimer=setInterval(function(){
+    _recHSeconds++;setRecHState('grabando');
+    if(_recHSeconds>0&&_recHSeconds%_SEG_DURACION_SEG===0)_rotarSegmento();
+  },1000);
   _setCapUI(true);
   toast('🔴 Capturando audio de la PC...','ok');
+}
+async function _onStopCapturaPC(){
+  _setCapUI(false);
+  try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  _capDisplayStream=null;
+  await _finalizarGrabacionSegmentada(_recHSeconds);
 }
 function stopCapturaPC(){
   if(_recHState!=='grabando'){_setCapUI(false);return;}
@@ -3896,18 +3958,11 @@ function stopCapturaPC(){
   setRecHState('procesando');
   _setCapUI(false);
   toast('Procesando captura...','ok');
+  _recHFinalCb=function(){ _onStopCapturaPC(); };
   try{
-    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();} // dispara mr.onstop → _procesarAudioBlob
-    else{
-      (async function(){
-        try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
-        try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
-        _capDisplayStream=null;
-        const blob=new Blob(_recHChunks,{type:'audio/webm'});
-        await _procesarAudioBlob(blob,{durSeg:_recHSeconds,fileName:'captura.webm',chunksArr:_recHChunks});
-      })();
-    }
-  }catch(e){ toast('Error al detener: '+e.message,'error'); }
+    if(_recHMR&&_recHMR.state!=='inactive'){_recHMR.stop();} // sube el último segmento → finaliza
+    else{ _recHFinalCb=null; _onStopCapturaPC(); }
+  }catch(e){ _recHFinalCb=null; toast('Error al detener: '+e.message,'error'); }
 }
 async function abrirGrabH(){
   const j=_recHResult||{};
@@ -5350,8 +5405,11 @@ function _blobDuracionSeg(blob){
     }catch(e){fin(0);}
   });
 }
-/* Recupera una interrumpida: ensambla los chunks del bucket (mismo método que el
-   reproductor) y corre el pipeline completo Whisper → resumen → extracción IA. */
+/* v99 — Recupera una interrumpida desde los SEGMENTOS guardados (seg_NNN.webm):
+   transcribe CADA segmento por separado con el modelo activo (gpt-4o-mini), con
+   progreso "Transcribiendo segmento N de M", y concatena → una transcripción.
+   NO hace byte-split. Legacy (chunk_NNN por timeslice): ensambla en un webm continuo
+   y transcribe de una sola pasada. */
 async function _grabReprocesar(id){
   const g=_grabCache[id];
   if(!g){toast('Grabación no encontrada','error');return;}
@@ -5362,22 +5420,48 @@ async function _grabReprocesar(id){
     const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
     if(error)throw error;
     const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
-    const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-    const lista=chunks.length?chunks:files;
-    if(!lista.length)throw new Error('Sin audio disponible');
-    const paths=lista.map(f=>folder+'/'+f.name);
-    const{data:signed,error:e2}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
-    if(e2||!signed)throw(e2||new Error('signed urls'));
-    const blobs=[];
-    for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){} }
-    if(!blobs.length)throw new Error('No se pudo descargar el audio');
-    const full=new Blob(blobs,{type:'audio/webm'});
-    if(!full.size||full.size<1000)throw new Error('Sin audio disponible');
-    const transcript=(await _transcribirWhisperSegmentado(full,blobs)).trim();
+    const segs=files.filter(f=>/seg_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+    if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+    let transcript='';
+    if(segs.length){
+      /* v99: segmentos independientes → uno por uno, sin byte-split. */
+      const paths=segs.map(f=>folder+'/'+f.name);
+      const{data:signed,error:e2}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
+      if(e2||!signed)throw(e2||new Error('signed urls'));
+      const partes=[];
+      for(let i=0;i<signed.length;i++){
+        if(btn)btn.innerHTML='⏳ Segmento '+(i+1)+'/'+signed.length;
+        toast('Transcribiendo segmento '+(i+1)+' de '+signed.length,'ok');
+        if(!signed[i].signedUrl)continue;
+        let blob;
+        try{ const r=await fetch(signed[i].signedUrl); blob=await r.blob(); }catch(e){ continue; }
+        if(!blob||blob.size<1000)continue;
+        let t='';
+        try{ t=await _whisperSingleBlob(blob,cfg.value,'segmento.webm'); }catch(e){ t=''; }
+        if(t&&t.trim())partes.push(t.trim());
+      }
+      transcript=partes.join('\n\n').trim();
+    }else{
+      /* Legacy (chunk_ por timeslice): ensamblar en un webm continuo y transcribir de una. */
+      const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+      const lista=chunks.length?chunks:files;
+      if(!lista.length)throw new Error('Sin audio disponible');
+      const paths=lista.map(f=>folder+'/'+f.name);
+      const{data:signed,error:e2}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
+      if(e2||!signed)throw(e2||new Error('signed urls'));
+      const blobs=[];
+      for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){} }
+      if(!blobs.length)throw new Error('No se pudo descargar el audio');
+      const full=new Blob(blobs,{type:'audio/webm'});
+      if(!full.size||full.size<1000)throw new Error('Sin audio disponible');
+      toast('Transcribiendo...','ok');
+      transcript=(await _whisperSingleBlob(full,cfg.value,'reunion.webm')).trim();
+    }
     if(!transcript||transcript.length<10)throw new Error('No se captó texto en el audio');
     const resumen=await _resumirReunionIA(transcript);
-    let dur=await _blobDuracionSeg(full);
-    if(!dur||!isFinite(dur))dur=(chunks.length?chunks.length*10:0)||g.duracion_seg||0; // chunks de 10s (timeslice del MediaRecorder)
+    let dur=g.duracion_seg||0;
+    if(!dur&&segs.length)dur=segs.length*_SEG_DURACION_SEG; // estimado: ~10 min por segmento
     const{error:e3}=await sb.from('grabaciones').update({
       transcripcion:transcript,
       resumen:JSON.stringify(resumen),
