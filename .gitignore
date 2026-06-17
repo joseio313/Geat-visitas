@@ -1,0 +1,8 @@
+# Scripts y temporales de deploy — NO deben entrar al repo
+deploy_*.bat
+deploy_*.vbs
+deploy_oculto.vbs
+deploy_log.txt
+*_log*.txt
+validate_*.js
+verify_*.js

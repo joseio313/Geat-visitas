@@ -759,8 +759,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Título *</label>
-        <input type="text" class="form-control" id="pregrab-titulo" placeholder="Ej: Reunión con cliente Juan" autocomplete="off">
+        <label class="form-label">Título (opcional)</label>
+        <input type="text" class="form-control" id="pregrab-titulo" placeholder="La IA lo completa según el tema" autocomplete="off">
       </div>
       <div class="form-group" style="margin-top:10px">
         <label class="form-label">Participantes (opcional)</label>
@@ -1247,7 +1247,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='93';
+  var CURRENT_VERSION='95';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3136,7 +3136,7 @@ async function procesarGrabacion(transcript){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
     });
     if(!resp.ok)throw new Error('API '+resp.status);
     const data=await resp.json();
@@ -3402,7 +3402,7 @@ let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStrea
 /* Título/participantes del modal previo. NO se limpian en _recHReset():
    startGrabacionH() resetea internamente y los necesita después. Siempre
    se sobreescriben en confirmarPreGrabH() antes de cada grabación. */
-let _recHTitulo='', _recHParticipantes='';
+let _recHTitulo='', _recHParticipantes='', _recHTituloManual=false;
 
 /* Aviso antes de cerrar si hay sesión de audio activa */
 window.addEventListener('beforeunload',function(e){
@@ -3431,7 +3431,7 @@ async function _resumirReunionIA(transcript){
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();
@@ -3446,12 +3446,12 @@ async function _extraerProspectoIA(transcript){
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const userMsg='Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
-    '{"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null}]}\n'+
-    'es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha.\n\n'+transcript;
+    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null}]}\n'+
+    'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha.\n\n'+transcript;
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1500,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();
@@ -3547,8 +3547,9 @@ function cancelarPreGrabH(){ closeModal('modalPreGrab'); }
 function confirmarPreGrabH(){
   const t=document.getElementById('pregrab-titulo'), p=document.getElementById('pregrab-participantes');
   const titulo=(t&&t.value||'').trim();
-  if(!titulo){toast('Poné un título para la grabación','error');if(t)t.focus();return;}
+  /* Título OPCIONAL: si está vacío, la IA lo deduce del tema tras transcribir */
   _recHTitulo=titulo;
+  _recHTituloManual=titulo.length>0;
   _recHParticipantes=(p&&p.value||'').trim();
   closeModal('modalPreGrab');
   startGrabacionH();
@@ -3660,8 +3661,18 @@ async function _procesarAudioBlob(blob,opts){
           lead_id:_recHLeadId||currentLeadId||null,
           estado:'completa'
         }).eq('id',_recHGrabId);
-        /* Extracción IA en silencio de fondo — sin await ni indicadores */
-        _grabExtraerYGuardar(_recHGrabId,_recHTranscript);
+        /* Extracción IA en silencio de fondo — sin await ni indicadores.
+           Si el usuario NO escribió título, la IA lo deduce del tema y lo pone. */
+        const _gid=_recHGrabId, _manualTit=_recHTituloManual, _tr=_recHTranscript;
+        (async function(){
+          try{
+            const ext=await _grabExtraerYGuardar(_gid,_tr);
+            if(!_manualTit&&ext&&ext.titulo){
+              const nt=(''+ext.titulo).trim().slice(0,120);
+              if(nt){ try{await sb.from('grabaciones').update({titulo:nt}).eq('id',_gid);}catch(e){} }
+            }
+          }catch(e){}
+        })();
       }catch(e){}
     }
     setRecHState('listo');
@@ -3682,6 +3693,7 @@ async function subirAudioArchivo(input){
     toast('Esperá a que termine el proceso en curso','warning');return;
   }
   _recHReset();
+  _recHTituloManual=false; // audio subido: sin título manual, lo pone la IA
   setRecHState('procesando');
   /* Crear fila en "grabaciones" con estado='grabando' — el pipeline la marca 'completa' al terminar */
   try{
@@ -3735,6 +3747,7 @@ async function capturarAudioPC(){
     _recHState='idle';return;
   }
   _recHReset();            // limpia globals compartidos (deja _recHState='idle')
+  _recHTituloManual=false; // captura PC: sin título manual, lo pone la IA
   _recHState='iniciando';  // re-bloquear tras el reset
   const audioStream=new MediaStream([aTracks[0]]);
   _recHStream=audioStream;
@@ -5619,7 +5632,7 @@ async function _asistLlamarClaude(systemPrompt,pregunta){
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:systemPrompt,messages:msgs})
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:systemPrompt,messages:msgs})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();
@@ -5760,7 +5773,7 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:systemPrompt,messages:msgs})
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:systemPrompt,messages:msgs})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();

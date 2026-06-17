@@ -1,0 +1,112 @@
+==========================================================
+ESTADO DE DEPLOY - GEAT CRM
+Generado: 2026-06-16 (modo DESATENDIDO, usuario ausente)
+==========================================================
+
+RESUMEN EN 1 LINEA
+------------------
+Todo el codigo de v94 + v95 YA ESTA ESCRITO y es coherente en el
+working tree, pero NO esta commiteado ni pusheado. origin/main sigue
+en v92. Para publicar: doble clic en deploy_oculto.vbs (1 clic).
+
+POR QUE NO SE PUSHEO EN ESTA SESION
+-----------------------------------
+- La terminal interna Linux NO arranco (error EXDEV al bootear la VM),
+  asi que no pude correr git ni node desde mi lado.
+- El modo era DESATENDIDO: prohibido computer-use / abrir navegador /
+  diálogos de escritorio (se vencen porque no hay nadie).
+- Por lo tanto NO pude hacer commit ni push yo mismo. Dejo todo listo
+  para deploy de 1 clic, como indica el plan de contingencia.
+
+QUE ENCONTRE (working tree, carpeta C:\Users\PERSONAL\Geat-visitas)
+------------------------------------------------------------------
+El codigo de v94 y v95 ya estaba escrito (sesion hermana, sin commitear)
+EN ESTA MISMA CARPETA, montado correctamente sobre mi fix v92. Verificado
+leyendo el archivo:
+
+v94 - REVIVIR ASISTENTE (modelo):
+  * index_v52.html: 5 llamadas a la API de Anthropic, TODAS en
+    claude-haiku-4-5-20251001 (lineas 3139, 3434, 3454, 5635, 5776).
+  * Referencias al modelo viejo (claude-sonnet-4-20250514 / sonnet): 0.
+    -> VERIFICACION OK: 0 referencias al modelo viejo, 5 en Haiku 4.5.
+
+v94 - DEPLOY OCULTO:
+  * deploy_oculto.vbs -> corre deploy_v95.bat con WScript.Shell
+    .Run(..., 0, True)  =>  ventana OCULTA (intWindowStyle=0) y espera
+    el retorno (bWaitOnReturn=True). Cumple la consigna.
+  * deploy_v95.bat: valida JS con node (validate_v95.js) ANTES de copiar;
+    si la validacion falla, ABORTA con "exit /b 1" y NO pushea (lo anota
+    en deploy_log.txt). Luego: copy index_v52.html -> index.html,
+    git add -A, git commit, git push origin main. Todo logueado.
+  * validate_v95.js: compila el bloque <script> principal con vm.Script
+    (chequeo de sintaxis), exige 0 refs al modelo viejo y CURRENT_VERSION='95'.
+
+v95 - TITULO AUTOMATICO:
+  * Modal "Nueva grabacion": label "Titulo (opcional)" (SIN asterisco),
+    placeholder "La IA lo completa segun el tema" (linea 763). El boton
+    "Iniciar" NO se bloquea con titulo vacio (confirmarPreGrabH, 3547-3556).
+  * _extraerProspectoIA pide el campo "titulo" (3-6 palabras) en el JSON
+    (linea 3449).
+  * Al transcribir, en el pipeline compartido _procesarAudioBlob
+    (3666-3675): si el usuario NO escribio titulo (_recHTituloManual=false),
+    la grabacion toma ext.titulo; si lo escribio, se respeta.
+  * Funciona en los 3 caminos (todos pasan por _procesarAudioBlob):
+      - microfono:  _recHTituloManual = (titulo.length>0)   [3552]
+      - audio subido: _recHTituloManual=false                [3696]
+      - captura PC:   _recHTituloManual=false                [3750]
+
+VERSIONES:
+  * index_v52.html  CURRENT_VERSION = '95'   (linea 1250)
+  * version.json    = {"v":"95","deploy":"2026-06-16"}
+  * index.html (produccion local) = v93  -> se actualiza a v95 cuando
+    corra el copy del deploy_v95.bat. Aun NO copiado.
+  * origin/main (GitHub) = v92 (commit 6f0a100, pusheado en sesion previa).
+
+QUE HICE YO EN ESTA SESION (solo archivos seguros, NO toque el codigo de produccion)
+-----------------------------------------------------------------------------------
+1. Cree .gitignore con: deploy_*.bat, deploy_*.vbs, deploy_oculto.vbs,
+   deploy_log.txt, *_log*.txt, validate_*.js, verify_*.js
+2. Ajuste el mensaje de commit en deploy_v95.bat para que refleje el
+   alcance combinado: "v94+v95: revivir asistente (haiku 4.5) + deploy
+   oculto + titulo automatico por IA" y el push explicito a "origin main".
+3. NO edite index_v52.html: ya estaba correcto y, sin node, no podia
+   validar JS; preferi no arriesgar produccion (regla CLAUDE.md).
+
+DESVIACION IMPORTANTE vs. el plan (consigna: 2 commits separados)
+-----------------------------------------------------------------
+El plan pedia DOS commits secuenciales (v94 y luego v95). No fue posible:
+el codigo de ambas versiones ya venia FUSIONADO en el working tree (de la
+sesion hermana) y no tengo terminal para separarlo en dos commits. Por eso
+deploy_oculto.vbs hara UN solo commit que cubre v94+v95. Si necesitas el
+historial separado, hay que rehacerlo manualmente con git (no automatizado
+aca para no improvisar sobre produccion).
+
+COMO PUBLICAR (cuando vuelvas) - 1 CLIC
+---------------------------------------
+1. Doble clic en:  C:\Users\PERSONAL\Geat-visitas\deploy_oculto.vbs
+   (corre oculto: valida JS -> copy -> add -> commit -> push origin main)
+2. Abri  C:\Users\PERSONAL\Geat-visitas\deploy_log.txt  y confirma:
+   - "PASS: JS sintaxis OK ... sonnet=0 ... ver95=true"
+   - "main -> main" en la seccion PUSH
+   - "FIN EXITCODE 0"
+   Si dice "VALIDACION FALLIDA", NO se pusheo: revisa validate_log.txt.
+3. Verifica version.json en produccion: debe quedar v=95.
+
+LIMPIEZA OPCIONAL DEL REPO (manual, NO automatizado)
+----------------------------------------------------
+Estos scripts/temporales ya estaban TRACKEADOS en el repo desde v92, asi
+que el .gitignore nuevo NO los saca solo. Si los queres fuera del repo:
+  git rm --cached deploy_v87.bat deploy_v89.bat deploy_v91.bat deploy_v92.bat ^
+                  deploy_log.txt deploy_log_v87.txt verify_js.js
+  (luego commit). Mantiene los archivos locales, solo los des-trackea.
+
+PRUEBA FUNCIONAL EN VIVO - PENDIENTE (requiere persona)
+-------------------------------------------------------
+NO se ejecuto (modo desatendido). Cuando vuelvas, en Chrome:
+(a) Asistente: abri el CRM (Ctrl+Shift+R para cargar v95), preguntale algo
+    y confirma que responde (ya apunta a Haiku 4.5).
+(b) Titulo IA: hace una grabacion/captura SIN escribir titulo; al terminar
+    de transcribir, la grabacion deberia quedar con un titulo puesto por la IA.
+(c) Captura audio PC (fix v92): reproduci un audio, capturar ~15s, Detener,
+    debe salir transcripcion (no vacia).
+==========================================================

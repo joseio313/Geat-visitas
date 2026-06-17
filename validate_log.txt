@@ -1,1 +1,1 @@
-PASS: JS syntax OK | length=250300 | fns=abrirAgendarVisita,toggleLugarVisita,guardarAgendarVisita,copiarAgendarVisitaWa | ver=93
+PASS: JS sintaxis OK | len=251184 | sonnet=0 | haiku=5 | ver95=true
