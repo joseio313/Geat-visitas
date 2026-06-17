@@ -559,8 +559,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
       <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
-      <button id="uploadAudioBtn" type="button" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">📎</button>
-      <input id="uploadAudioInput" type="file" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
       <button id="capAudioBtn" type="button" onclick="capturarAudioPC()" title="Capturar audio de la PC" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🔊</button>
       <span id="capAudioStatus" style="display:none;align-items:center;gap:6px;font-size:11px;color:#FF1744;font-weight:700;white-space:nowrap">🔴 Capturando audio de la PC...<button class="btn-red btn-sm" type="button" onclick="stopCapturaPC()">Detener</button></span>
     </div>
@@ -1247,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='95';
+  var CURRENT_VERSION='96';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1615,8 +1613,7 @@ function startApp(){
     if(tabAdmin)tabAdmin.style.display='';
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
-    const uab=document.getElementById('uploadAudioBtn');
-    if(uab)uab.style.display='inline-flex';
+    /* v96: recibidor de audio (#uploadAudioBtn) movido al panel ADMIN → sección Registro */
     /* v91: botón de captura de audio del sistema — solo si el navegador lo soporta (Chrome desktop) */
     const cab=document.getElementById('capAudioBtn');
     if(cab&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)cab.style.display='inline-flex';
@@ -3532,7 +3529,11 @@ function setRecHState(state){
 function toggleGrabacionH(){
   if(_recHState==='grabando'){stopGrabacionH();return;}
   if(_recHState==='procesando'||_recHState==='iniciando')return;
-  abrirPreGrabH();
+  /* v96: grabar con un solo click — sin modal. La IA pone el título tras transcribir; participantes vacío. */
+  _recHTitulo='';
+  _recHTituloManual=false;
+  _recHParticipantes='';
+  startGrabacionH();
 }
 /* Modal previo a grabar: pide título (requerido) y participantes (opcional).
    Cerrar sin completar = no se graba nada. */
@@ -4829,9 +4830,13 @@ async function renderAdmin(){
     <div class="admin-section">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div class="admin-section-title" style="margin:0">📼 Registro</div>
-        <label style="font-size:11px;color:var(--gray-400);cursor:pointer;display:flex;align-items:center;gap:5px">
-          <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
-        </label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button id="uploadAudioBtn" type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio">📎 Subir audio</button>
+          <input id="uploadAudioInput" type="file" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
+          <label style="font-size:11px;color:var(--gray-400);cursor:pointer;display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
+          </label>
+        </div>
       </div>
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
