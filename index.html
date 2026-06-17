@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='96';
+  var CURRENT_VERSION='97';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3646,60 +3646,96 @@ async function _procesarAudioBlob(blob,opts){
       if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
       _recHReset();setRecHState('idle');return;
     }
-    _recHTranscript=transcript.trim();
-    const resumen=await _resumirReunionIA(_recHTranscript);
-    _recHResult=resumen;
-    /* Archivar siempre — con o sin lead */
-    if(_recHGrabId){
-      try{
-        const fullPath=String(_recHGrabId)+'/completo.webm';
-        sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true}).catch(function(){});
-        await sb.from('grabaciones').update({
-          audio_path:String(_recHGrabId)+'/',
-          transcripcion:_recHTranscript,
-          resumen:JSON.stringify(resumen),
-          duracion_seg:durSeg,
-          lead_id:_recHLeadId||currentLeadId||null,
-          estado:'completa'
-        }).eq('id',_recHGrabId);
-        /* Extracción IA en silencio de fondo — sin await ni indicadores.
-           Si el usuario NO escribió título, la IA lo deduce del tema y lo pone. */
-        const _gid=_recHGrabId, _manualTit=_recHTituloManual, _tr=_recHTranscript;
-        (async function(){
-          try{
-            const ext=await _grabExtraerYGuardar(_gid,_tr);
-            if(!_manualTit&&ext&&ext.titulo){
-              const nt=(''+ext.titulo).trim().slice(0,120);
-              if(nt){ try{await sb.from('grabaciones').update({titulo:nt}).eq('id',_gid);}catch(e){} }
-            }
-          }catch(e){}
-        })();
-      }catch(e){}
-    }
-    setRecHState('listo');
-    await abrirGrabH();
+    await _finalizarConTranscript(transcript,{durSeg:durSeg,blob:blob});
   }catch(e){
     toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
   }
 }
-/* Subida de archivo de audio (WhatsApp, grabador del celu): mismo pipeline que la grabación del header.
-   Acepta ≤25MB; pasa el nombre real del archivo a Whisper para que detecte el formato. */
-async function subirAudioArchivo(input){
-  const file=input&&input.files&&input.files[0];
-  if(input)input.value=''; // permitir resubir el mismo archivo
-  if(!file)return;
+/* Post-transcripción compartido: texto → resumen IA → guardar UN registro + extracción IA en silencio.
+   Lo usan la grabación del header, la captura 🔊 (blob único) y la subida de varios audios (blob:null).
+   opts.blob (opcional): si viene, se archiva como completo.webm. Con varios audios NO se unen binarios → blob null. */
+async function _finalizarConTranscript(transcript,opts){
+  opts=opts||{};
+  const durSeg=opts.durSeg||0;
+  const blob=opts.blob||null;
+  _recHTranscript=(transcript||'').trim();
+  const resumen=await _resumirReunionIA(_recHTranscript);
+  _recHResult=resumen;
+  /* Archivar siempre — con o sin lead */
+  if(_recHGrabId){
+    try{
+      const updates={
+        transcripcion:_recHTranscript,
+        resumen:JSON.stringify(resumen),
+        duracion_seg:durSeg,
+        lead_id:_recHLeadId||currentLeadId||null,
+        estado:'completa'
+      };
+      if(blob){
+        const fullPath=String(_recHGrabId)+'/completo.webm';
+        sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true}).catch(function(){});
+        updates.audio_path=String(_recHGrabId)+'/';
+      }
+      await sb.from('grabaciones').update(updates).eq('id',_recHGrabId);
+      /* Extracción IA en silencio de fondo — sin await ni indicadores.
+         Si el usuario NO escribió título, la IA lo deduce del tema y lo pone. */
+      const _gid=_recHGrabId, _manualTit=_recHTituloManual, _tr=_recHTranscript;
+      (async function(){
+        try{
+          const ext=await _grabExtraerYGuardar(_gid,_tr);
+          if(!_manualTit&&ext&&ext.titulo){
+            const nt=(''+ext.titulo).trim().slice(0,120);
+            if(nt){ try{await sb.from('grabaciones').update({titulo:nt}).eq('id',_gid);}catch(e){} }
+          }
+        }catch(e){}
+      })();
+    }catch(e){}
+  }
+  setRecHState('listo');
+  await abrirGrabH();
+}
+/* Fix .opus (WhatsApp): Whisper no reconoce la extensión .opus; el mismo contenedor
+   como .ogg sí. Sólo se cambia el NOMBRE que se manda a Whisper, no el binario. */
+function _fixOpusName(n){
+  n=n||'audio.webm';
+  return /\.opus$/i.test(n)? n.replace(/\.opus$/i,'.ogg') : n;
+}
+/* v97: subida de UNO o VARIOS audios (WhatsApp, grabador del celu) desde el panel ADMIN.
+   Varios audios → se transcribe CADA UNO por separado con Whisper y se CONCATENAN los
+   textos en orden; sobre el texto combinado corre la extracción IA y se guarda UN SOLO
+   registro. NO se unen binarios. Entrada: input file (multiple) o drag & drop. */
+function subirAudioArchivo(input){
+  const files=(input&&input.files)?Array.prototype.slice.call(input.files):[];
+  if(input)input.value=''; // permitir resubir los mismos archivos
+  if(!files.length)return;
+  _procesarAudiosSubidos(files);
+}
+/* Drop handler de la zona de arrastre (panel ADMIN → Registro). */
+function audioDropHandler(e){
+  e.preventDefault();
+  const dz=document.getElementById('audioDropZone');
+  if(dz){dz.style.borderColor='var(--gray-600)';dz.style.background='none';}
+  const fl=(e.dataTransfer&&e.dataTransfer.files)?Array.prototype.slice.call(e.dataTransfer.files):[];
+  const audios=fl.filter(f=>/^audio\//.test(f.type||'')||/\.(opus|ogg|m4a|mp3|wav|webm|aac|mp4)$/i.test(f.name||''));
+  if(!audios.length){toast('No se detectaron archivos de audio','warning');return;}
+  _procesarAudiosSubidos(audios);
+}
+async function _procesarAudiosSubidos(files){
   const MAX_UP=25*1024*1024;
-  if(file.size>MAX_UP){toast('Audio muy grande, máx 25MB','error');return;}
+  for(const f of files){
+    if(f.size>MAX_UP){toast('Audio muy grande, máx 25MB: '+(f.name||'archivo'),'error');return;}
+  }
   if(_recHState==='grabando'||_recHState==='procesando'||_recHState==='iniciando'){
     toast('Esperá a que termine el proceso en curso','warning');return;
   }
   _recHReset();
   _recHTituloManual=false; // audio subido: sin título manual, lo pone la IA
   setRecHState('procesando');
-  /* Crear fila en "grabaciones" con estado='grabando' — el pipeline la marca 'completa' al terminar */
+  /* Crear UNA fila en "grabaciones" con estado='grabando' — el pipeline la marca 'completa' al terminar */
   try{
     const d=new Date();
-    const titulo='Audio: '+(file.name||'archivo')+' · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const nombres=(files.length===1)?(files[0].name||'archivo'):(files.length+' audios');
+    const titulo='Audio: '+nombres+' · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
     const{data:gr,error:ger}=await sb.from('grabaciones').insert({
       colaborador:cu?cu.nombre:'—',titulo:titulo,
       participantes:null,
@@ -3707,7 +3743,33 @@ async function subirAudioArchivo(input){
     }).select('id').single();
     if(!ger&&gr)_recHGrabId=gr.id;
   }catch(e){ _recHGrabId=null; }
-  await _procesarAudioBlob(file,{durSeg:0,fileName:file.name||'audio.webm'});
+  /* Transcribir CADA audio por separado y concatenar los textos en orden. */
+  try{
+    const partes=[];
+    for(let i=0;i<files.length;i++){
+      if(files.length>1)toast('Procesando '+(i+1)+' de '+files.length+'...','ok');
+      const fn=_fixOpusName(files[i].name||'audio.webm');
+      let t='';
+      try{
+        t=await _transcribirWhisperSegmentado(files[i],undefined,fn);
+      }catch(e){
+        toast('Error transcribiendo '+(files[i].name||'audio')+': '+e.message,'error');
+        if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(_e){}}
+        _recHReset();setRecHState('idle');return;
+      }
+      if(t&&t.trim())partes.push(t.trim());
+    }
+    const combinado=partes.join('\n\n').trim();
+    if(combinado.length<10){
+      toast('No se captó texto en el audio.','warning');
+      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+      _recHReset();setRecHState('idle');return;
+    }
+    /* Un solo audio: archivar el binario. Varios: NO unir binarios → blob null. */
+    await _finalizarConTranscript(combinado,{durSeg:0,blob:(files.length===1?files[0]:null)});
+  }catch(e){
+    toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
+  }
 }
 /* ════════════════════════════════════════
    v91: CAPTURA DE AUDIO DEL SISTEMA / PESTAÑA (lo que suena en la PC)
@@ -4832,11 +4894,19 @@ async function renderAdmin(){
         <div class="admin-section-title" style="margin:0">📼 Registro</div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button id="uploadAudioBtn" type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio">📎 Subir audio</button>
-          <input id="uploadAudioInput" type="file" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
+          <input id="uploadAudioInput" type="file" multiple accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
           <label style="font-size:11px;color:var(--gray-400);cursor:pointer;display:flex;align-items:center;gap:5px">
             <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
           </label>
         </div>
+      </div>
+      <div id="audioDropZone"
+           ondragover="event.preventDefault();this.style.borderColor='var(--gold)';this.style.background='var(--gray-800)'"
+           ondragleave="this.style.borderColor='var(--gray-600)';this.style.background='none'"
+           ondrop="audioDropHandler(event)"
+           onclick="document.getElementById('uploadAudioInput').click()"
+           style="margin-top:12px;border:2px dashed var(--gray-600);border-radius:8px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--gray-400);transition:.15s">
+        📎 Arrastrá audios acá o tocá para elegir · podés soltar <b>varios</b> y se unen en <b>una sola transcripción</b> (acepta .opus de WhatsApp)
       </div>
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
