@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='99';
+  var CURRENT_VERSION='100';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5405,11 +5405,42 @@ function _blobDuracionSeg(blob){
     }catch(e){fin(0);}
   });
 }
+/* v100 — Carga lamejs (CDN) una sola vez */
+async function _loadLame(){
+  if(window.lamejs)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+    s.onload=res; s.onerror=()=>rej(new Error('No se pudo cargar lamejs'));
+    document.head.appendChild(s);
+  });
+}
+/* v100 — Convierte cualquier audio blob a MP3 mono 16 kHz 32 kbps (~7 MB por hora) */
+async function _comprimirAMp3(blob){
+  await _loadLame();
+  const arrayBuf=await blob.arrayBuffer();
+  const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  let decoded;
+  try{ decoded=await audioCtx.decodeAudioData(arrayBuf); }finally{ audioCtx.close(); }
+  const TARGET_SR=16000, ch=decoded.numberOfChannels, srcSR=decoded.sampleRate, srcLen=decoded.length;
+  const mono=new Float32Array(srcLen);
+  for(let c=0;c<ch;c++){const d=decoded.getChannelData(c);for(let i=0;i<srcLen;i++)mono[i]+=d[i]/ch;}
+  const ratio=srcSR/TARGET_SR, outLen=Math.floor(srcLen/ratio);
+  const resampled=new Float32Array(outLen);
+  for(let i=0;i<outLen;i++){const s=i*ratio,lo=Math.floor(s),hi=Math.min(lo+1,srcLen-1),t=s-lo;resampled[i]=mono[lo]*(1-t)+mono[hi]*t;}
+  const enc=new lamejs.Mp3Encoder(1,TARGET_SR,32);
+  const BLOCK=1152, pcm=new Int16Array(resampled.length);
+  for(let i=0;i<resampled.length;i++)pcm[i]=Math.max(-32768,Math.min(32767,resampled[i]*32767));
+  const mp3Parts=[];
+  for(let i=0;i<pcm.length;i+=BLOCK){const b=enc.encodeBuffer(pcm.subarray(i,i+BLOCK));if(b.length>0)mp3Parts.push(new Int8Array(b));}
+  const last=enc.flush(); if(last.length>0)mp3Parts.push(new Int8Array(last));
+  return new Blob(mp3Parts,{type:'audio/mpeg'});
+}
 /* v99 — Recupera una interrumpida desde los SEGMENTOS guardados (seg_NNN.webm):
    transcribe CADA segmento por separado con el modelo activo (gpt-4o-mini), con
    progreso "Transcribiendo segmento N de M", y concatena → una transcripción.
    NO hace byte-split. Legacy (chunk_NNN por timeslice): ensambla en un webm continuo
-   y transcribe de una sola pasada. */
+   y si supera 24 MB lo comprime a MP3 mono 16kHz 32kbps antes de transcribir. */
 async function _grabReprocesar(id){
   const g=_grabCache[id];
   if(!g){toast('Grabación no encontrada','error');return;}
@@ -5455,8 +5486,16 @@ async function _grabReprocesar(id){
       if(!blobs.length)throw new Error('No se pudo descargar el audio');
       const full=new Blob(blobs,{type:'audio/webm'});
       if(!full.size||full.size<1000)throw new Error('Sin audio disponible');
+      let audioBlob=full, audioName='reunion.webm';
+      if(full.size>24*1024*1024){
+        if(btn)btn.innerHTML='⏳ Comprimiendo...';
+        toast('Comprimiendo audio ('+Math.round(full.size/1024/1024)+' MB → MP3)...','ok');
+        audioBlob=await _comprimirAMp3(full);
+        audioName='reunion.mp3';
+      }
+      if(btn)btn.innerHTML='⏳ Transcribiendo...';
       toast('Transcribiendo...','ok');
-      transcript=(await _whisperSingleBlob(full,cfg.value,'reunion.webm')).trim();
+      transcript=(await _whisperSingleBlob(audioBlob,cfg.value,audioName)).trim();
     }
     if(!transcript||transcript.length<10)throw new Error('No se captó texto en el audio');
     const resumen=await _resumirReunionIA(transcript);
