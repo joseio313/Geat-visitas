@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='103';
+  var CURRENT_VERSION='104';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5480,7 +5480,7 @@ async function _grabReprocesar(id){
     }else{
       /* v103 Legacy (chunk_ por timeslice): transcribir por partes < 22 MB,
          cada parte repite chunk_001 como cabecera webm para que sea válida. */
-      const MAX_PART=22*1024*1024;
+      const MAX_PART=7*1024*1024;
       const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
       const lista=chunks.length?chunks:files;
       if(!lista.length)throw new Error('Sin audio disponible');
