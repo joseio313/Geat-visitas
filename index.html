@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='100';
+  var CURRENT_VERSION='101';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5410,8 +5410,9 @@ async function _loadLame(){
   if(window.lamejs)return;
   await new Promise((res,rej)=>{
     const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
-    s.onload=res; s.onerror=()=>rej(new Error('No se pudo cargar lamejs'));
+    s.src='https://cdn.jsdelivr.net/npm/@breezystack/lamejs@1.2.7/dist/lamejs.iife.js';
+    s.onload=()=>{if(!window.lamejs&&window.lamejsModule)window.lamejs=window.lamejsModule;res();};
+    s.onerror=()=>rej(new Error('No se pudo cargar lamejs'));
     document.head.appendChild(s);
   });
 }
