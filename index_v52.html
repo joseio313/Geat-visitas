@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='102';
+  var CURRENT_VERSION='103';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5478,7 +5478,9 @@ async function _grabReprocesar(id){
       }
       transcript=partes.join('\n\n').trim();
     }else{
-      /* Legacy (chunk_ por timeslice): ensamblar en un webm continuo y transcribir de una. */
+      /* v103 Legacy (chunk_ por timeslice): transcribir por partes < 22 MB,
+         cada parte repite chunk_001 como cabecera webm para que sea válida. */
+      const MAX_PART=22*1024*1024;
       const chunks=files.filter(f=>/chunk_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
       const lista=chunks.length?chunks:files;
       if(!lista.length)throw new Error('Sin audio disponible');
@@ -5486,20 +5488,44 @@ async function _grabReprocesar(id){
       const{data:signed,error:e2}=await sb.storage.from('grabaciones').createSignedUrls(paths,3600);
       if(e2||!signed)throw(e2||new Error('signed urls'));
       const blobs=[];
-      for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){} }
-      if(!blobs.length)throw new Error('No se pudo descargar el audio');
-      const full=new Blob(blobs,{type:'audio/webm'});
-      if(!full.size||full.size<1000)throw new Error('Sin audio disponible');
-      let audioBlob=full, audioName='reunion.webm';
-      if(full.size>24*1024*1024){
-        if(btn)btn.innerHTML='⏳ Comprimiendo...';
-        toast('Comprimiendo audio ('+Math.round(full.size/1024/1024)+' MB → MP3)...','ok');
-        audioBlob=await _comprimirAMp3(full);
-        audioName='reunion.mp3';
+      for(const s of signed){ if(!s.signedUrl)continue; try{const r=await fetch(s.signedUrl);blobs.push(await r.blob());}catch(e){blobs.push(null);} }
+      const validBlobs=blobs.filter(b=>b&&b.size>0);
+      if(!validBlobs.length)throw new Error('No se pudo descargar el audio');
+      const totalBytes=validBlobs.reduce((a,b)=>a+b.size,0);
+      console.log('[rec'+id+'] '+validBlobs.length+' chunks, '+totalBytes+' bytes');
+      const header=validBlobs[0]; // chunk_001: init segment (cabecera webm)
+      // Armar grupos: grupo 1 empieza con header, grupos siguientes también lo llevan
+      const grupos=[];
+      let grupoActual=[header], grupoSize=header.size;
+      for(let i=1;i<validBlobs.length;i++){
+        const b=validBlobs[i];
+        if(grupoSize+b.size>MAX_PART&&grupoActual.length>1){
+          grupos.push(grupoActual);
+          grupoActual=[header,b];
+          grupoSize=header.size+b.size;
+        }else{
+          grupoActual.push(b);
+          grupoSize+=b.size;
+        }
       }
-      if(btn)btn.innerHTML='⏳ Transcribiendo...';
-      toast('Transcribiendo...','ok');
-      transcript=(await _whisperSingleBlob(audioBlob,cfg.value,audioName)).trim();
+      if(grupoActual.length>1||(grupoActual.length===1&&grupos.length===0))grupos.push(grupoActual);
+      console.log('[rec'+id+'] '+grupos.length+' grupos');
+      const partes=[];
+      for(let gi=0;gi<grupos.length;gi++){
+        const gb=new Blob(grupos[gi],{type:'audio/webm'});
+        console.log('[rec'+id+'] transcribiendo parte '+(gi+1)+'/'+grupos.length+' ('+gb.size+' bytes)');
+        if(btn)btn.innerHTML='⏳ Parte '+(gi+1)+'/'+grupos.length;
+        toast('Transcribiendo parte '+(gi+1)+' de '+grupos.length+'...','ok');
+        try{
+          const t=(await _whisperSingleBlob(gb,cfg.value,'parte'+(gi+1)+'.webm')).trim();
+          console.log('[rec'+id+'] parte '+(gi+1)+' ok ('+t.length+' chars)');
+          if(t)partes.push(t);
+        }catch(ep){
+          console.error('[rec'+id+'] parte '+(gi+1)+' FALLO: '+ep.message);
+        }
+      }
+      console.log('[rec'+id+'] total chars: '+partes.join('\n').length);
+      transcript=partes.join('\n').trim();
     }
     if(!transcript||transcript.length<10)throw new Error('No se captó texto en el audio');
     const resumen=await _resumirReunionIA(transcript);
