@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='101';
+  var CURRENT_VERSION='102';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -4085,6 +4085,9 @@ async function prepareFinalize(){
   document.querySelectorAll('.radio-option')[0].classList.add('selected');
   document.querySelectorAll('input[name="continua"]')[0].checked=true;
   setOutcome(document.querySelectorAll('.radio-option')[0],'continue');
+  // v102 — re-habilitar botón por si quedó trabado de una llamada anterior
+  const _bs=document.getElementById('btn-guardar-seg');
+  if(_bs){_bs.disabled=false;_bs.style.opacity='1';_bs.style.cursor='pointer';_bs.innerHTML='💾 Guardar seguimiento';}
   openModal('modalFinalize');
 }
 
@@ -4252,7 +4255,7 @@ async function saveSeguimiento(){
       cargarMarcadoresDia();
       return;
     }
-    if(btn){btn.innerHTML='✅ Guardado';}
+    if(btn){btn.disabled=false;btn.innerHTML='✅ Guardado';}
     _modalBodyLock('modalFinalize',false);
     setTimeout(()=>{closeModal('modalFinalize');},700);
     toast(outcomeMode==='lost'?'Lead marcado como perdido':'✅ Seguimiento guardado y agenda actualizada');
