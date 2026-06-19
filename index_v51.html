@@ -1114,6 +1114,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
 const sb=supabase.createClient(SB_URL,SB_KEY);
+const AUTH_URL=SB_URL+'/functions/v1/geat-auth';
+async function authCall(payload){
+  const r=await fetch(AUTH_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
+  return await r.json();
+}
 
 /* ════════════════════════════════════════
    ESTADO GLOBAL
@@ -1277,18 +1282,20 @@ function estadoClass(nombre){
 let pinVal='';
 async function initLogin(){
   obtenerIP();
-  try{
-    const{data}=await sb.from('colaboradores').select('*').eq('activo',true).order('nombre');
-    colaboradores=data||[];
-  }catch(e){toast('Error cargando colaboradores: '+e.message,'error');}
-  // Restaurar sesión
-  let sess=null;
-  try{sess=JSON.parse(localStorage.getItem('geat_v51_session')||'null');}catch(e){}
-  if(sess&&(Date.now()-sess.timestamp)<12*3600000){
-    const col=colaboradores.find(c=>c.pin===sess.pin);
-    if(col){cu=col;startApp();return;}
+  // Restaurar sesión por token firmado (el PIN ya no se guarda en el navegador)
+  const tk=localStorage.getItem('geat_session_token');
+  if(tk){
+    try{
+      const r=await authCall({action:'restaurar',token:tk});
+      if(r&&r.ok){
+        cu=r.usuario;colaboradores=r.equipo||[];
+        localStorage.setItem('geat_session_token',r.token);
+        startApp();return;
+      }
+    }catch(e){}
   }
-  localStorage.removeItem('geat_v51_session');
+  localStorage.removeItem('geat_session_token');
+  localStorage.removeItem('geat_v51_session'); // limpieza del esquema viejo que guardaba el PIN
 }
 function resetPin(){
   pinVal='';
@@ -1308,19 +1315,19 @@ function delPin(){
 }
 async function checkPin(){
   if(_loginInit) await _loginInit;
-  const col=colaboradores.find(c=>c.pin===pinVal);
-  if(!col){
-    document.getElementById('login-err').textContent='PIN incorrecto';
-    registrarLoginAuditoria(null,pinVal,false);
+  let r=null;
+  try{ r=await authCall({action:'login',pin:pinVal,dispositivo:detectarDispositivo(),navegador:detectarNavegador()}); }catch(e){}
+  if(!r||!r.ok){
+    document.getElementById('login-err').textContent=(r&&r.error)||'PIN incorrecto';
     setTimeout(resetPin,800);
     return;
   }
-  cu=col;
-  registrarLoginAuditoria(col,pinVal,true);
-  localStorage.setItem('geat_v51_session',JSON.stringify({pin:pinVal,timestamp:Date.now()}));
+  cu=r.usuario;colaboradores=r.equipo||[];
+  localStorage.setItem('geat_session_token',r.token);
   startApp();
 }
 function cerrarSesion(){
+  localStorage.removeItem('geat_session_token');
   localStorage.removeItem('geat_v51_session');
   location.reload();
 }
@@ -1331,6 +1338,7 @@ function iniciarIdleTimer(){
     _idleTimer=setTimeout(async()=>{
       const duracion=Math.round((Date.now()-(_sessionStart||Date.now()))/60000);
       await registrarAuditoria('logout_automatico_inactividad','sesion',null,{duracion_minutos:duracion});
+      localStorage.removeItem('geat_session_token');
       localStorage.removeItem('geat_v51_session');
       alert('Tu sesión expiró por inactividad ('+duracion+' min).');
       cu=null;
