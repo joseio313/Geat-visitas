@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='105';
+  var CURRENT_VERSION='106';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1427,6 +1427,13 @@ function checkDupLock(key){
 function _filtrarPorCaptador(q){
   if(cu&&cu.asistente_de)return q.in('captador',[cu.nombre,cu.asistente_de]);
   return q.eq('captador',cu.nombre);
+}
+function _filtrarPorCerrador(q){
+  return q.eq('cerrador',cu.nombre);
+}
+function _filtrarLeadsPorRol(q){
+  if(cu.rol==='closer'||cu.rol==='commercial_lead') return _filtrarPorCerrador(q);
+  return _filtrarPorCaptador(q);
 }
 function _filtrarPorColaborador(q){
   if(cu&&cu.asistente_de)return q.in('colaborador',[cu.nombre,cu.asistente_de]);
@@ -2261,6 +2268,7 @@ function renderFunnel(leads){
    EXPORTAR EXCEL (SheetJS)
 ════════════════════════════════════════ */
 async function exportarPorVendedor(){
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   const rng=getReportRange();
   toast('Generando Excel...','ok');
   try{
@@ -2276,6 +2284,7 @@ async function exportarPorVendedor(){
 }
 
 async function exportarPerdidos(){
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   const rng=getReportRange();
   toast('Generando Excel perdidos...','ok');
   try{
@@ -2291,6 +2300,7 @@ async function exportarPerdidos(){
 }
 
 async function exportarPorMedio(){
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   const rng=getReportRange();
   toast('Generando Excel por medio...','ok');
   try{
@@ -2306,6 +2316,7 @@ async function exportarPorMedio(){
 }
 
 async function exportarTodo(){
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   const rng=getReportRange();
   toast('Generando Excel completo...','ok');
   try{
@@ -2464,11 +2475,11 @@ async function verReporteBusqueda(){
   const desde=document.getElementById('exportFrom')?.value;
   const hasta=document.getElementById('exportTo')?.value;
   if(!desde||!hasta){toast('Ingresá las fechas desde y hasta','error');return;}
-  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  const esAdmin=cu&&cu.rol==='admin';
   toast('Cargando...','ok');
   try{
     let q=sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',new Date(desde+'T00:00:00').toISOString()).lte('created_at',new Date(hasta+'T23:59:59').toISOString()).order('created_at',{ascending:false});
-    if(!esAdmin) q=_filtrarPorCaptador(q);
+    if(!esAdmin) q=_filtrarLeadsPorRol(q);
     const{data,error}=await q;
     if(error)throw error;
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads — ${desde} → ${hasta}</div>
@@ -4485,7 +4496,8 @@ async function execSearch(q){
     document.getElementById('search-results-body').innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres</div>';
     return;
   }
-  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  const esAdmin=cu&&cu.rol==='admin';
+  const esCerrador=cu&&(cu.rol==='closer'||cu.rol==='commercial_lead');
   const orParts=[
     `nombre.ilike.%${query}%`,
     `celular.ilike.%${query}%`,
@@ -4504,12 +4516,16 @@ async function execSearch(q){
   if(searchMode==='reactivar'){
     dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
   }else if(!esAdmin){
-    /* v82: los leads perdidos/archivados son visibles para todos en la búsqueda,
-       además de los propios — permite detectar y reabrir con Nueva Oportunidad */
-    const vis=[`captador.eq."${cu.nombre}"`];
-    if(cu.asistente_de)vis.push(`captador.eq."${cu.asistente_de}"`);
-    vis.push('estado.eq.cerrado_perdido','archivado.eq.true');
-    dbQuery=dbQuery.or(vis.join(','));
+    if(esCerrador){
+      dbQuery=dbQuery.eq('cerrador',cu.nombre);
+    }else{
+      /* v82: los leads perdidos/archivados son visibles para todos en la búsqueda,
+         además de los propios — permite detectar y reabrir con Nueva Oportunidad */
+      const vis=[`captador.eq."${cu.nombre}"`];
+      if(cu.asistente_de)vis.push(`captador.eq."${cu.asistente_de}"`);
+      vis.push('estado.eq.cerrado_perdido','archivado.eq.true');
+      dbQuery=dbQuery.or(vis.join(','));
+    }
   }
 
   const{data}=await dbQuery;
@@ -4662,13 +4678,13 @@ async function confirmarReactivar(leadId,nombre){
 async function cargarLeadsRecientes(){
   const body=document.getElementById('search-leads-table');
   if(!body)return;
-  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  const esAdmin=cu&&cu.rol==='admin';
   try{
     let q=sb.from('leads')
       .select('id,nombre,celular,ciudad,captador,estado,created_at')
       .order('created_at',{ascending:false})
       .limit(50);
-    if(!esAdmin) q=_filtrarPorCaptador(q);
+    if(!esAdmin) q=_filtrarLeadsPorRol(q);
     const{data,error}=await q;
     if(error)throw error;
     const leads=data||[];
@@ -4765,7 +4781,7 @@ async function exportarBusqueda(){
   const desde=document.getElementById('exportFrom')?.value;
   const hasta=document.getElementById('exportTo')?.value;
   if(!desde||!hasta){toast('Ingresá las fechas desde y hasta','error');return;}
-  const esAdmin=cu&&(cu.rol==='admin'||cu.rol==='commercial_lead');
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   toast('Generando Excel...','ok');
   try{
     let q=sb.from('leads')
@@ -4773,7 +4789,6 @@ async function exportarBusqueda(){
       .gte('created_at',new Date(desde+'T00:00:00').toISOString())
       .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
       .order('created_at',{ascending:false});
-    if(!esAdmin) q=_filtrarPorCaptador(q);
     const{data,error}=await q;
     if(error)throw error;
     const rows=(data||[]).map(l=>({
@@ -4795,11 +4810,13 @@ async function generarReporteLeads(){
   if(!desde||!hasta){toast('Ingresá las fechas de rango','error');return;}
   const body=document.getElementById('leads-rango-body');
   body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
-  const{data,error}=await sb.from('leads')
+  let _qrl=sb.from('leads')
     .select('id,nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at,notas')
     .gte('created_at',new Date(desde+'T00:00:00').toISOString())
     .lte('created_at',new Date(hasta+'T23:59:59').toISOString())
     .order('created_at',{ascending:false});
+  if(cu.rol!=='admin') _qrl=_filtrarLeadsPorRol(_qrl);
+  const{data,error}=await _qrl;
   if(error){body.innerHTML='<div style="color:var(--st-atrasado);font-size:12px">Error: '+error.message+'</div>';return;}
   const leads=data||[];
   if(!leads.length){body.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:12px 0">Sin leads en ese rango</div>';return;}
@@ -4819,6 +4836,7 @@ async function generarReporteLeads(){
 }
 
 async function exportarReporteLeads(){
+  if(cu.rol!=='admin'){toast('Solo administración','error');return;}
   const desde=document.getElementById('leadFrom').value;
   const hasta=document.getElementById('leadTo').value;
   if(!desde||!hasta){toast('Ingresá las fechas de rango','error');return;}
