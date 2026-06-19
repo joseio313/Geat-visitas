@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='106';
+  var CURRENT_VERSION='107';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1432,7 +1432,8 @@ function _filtrarPorCerrador(q){
   return q.eq('cerrador',cu.nombre);
 }
 function _filtrarLeadsPorRol(q){
-  if(cu.rol==='closer'||cu.rol==='commercial_lead') return _filtrarPorCerrador(q);
+  if(cu.rol==='commercial_lead') return q;
+  if(cu.rol==='closer') return _filtrarPorCerrador(q);
   return _filtrarPorCaptador(q);
 }
 function _filtrarPorColaborador(q){
