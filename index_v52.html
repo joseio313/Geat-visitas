@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='108';
+  var CURRENT_VERSION='109';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3490,6 +3490,29 @@ async function _grabExtraerYGuardar(grabId,transcript){
   try{await sb.from('grabaciones').update({extraccion:ext}).eq('id',grabId);}catch(e){}
   return ext;
 }
+/* Devuelve true si el título está vacío o es el patrón de fecha genérico inicial */
+function _esTituloGenerico(t){
+  if(!t||!t.trim())return true;
+  return /^Reuni[oó]n\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(t.trim());
+}
+/* Genera un título corto con Haiku a partir de un resumen o fragmento.
+   Prompt del brief v109: 4-7 palabras, sin comillas, sin punto final. */
+async function _grabAutoTituloIA(texto){
+  if(!texto)return null;
+  try{
+    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+    if(ec||!cfg||!cfg.value)return null;
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:50,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:'Devolvé SOLO un título corto de 4 a 7 palabras que describa el tema principal de esta conversación. Sin comillas, sin punto final.\n\n'+(''+texto).slice(0,3000)}]})
+    });
+    if(!resp.ok)return null;
+    const data=await resp.json();
+    const tit=((data.content&&data.content[0]&&data.content[0].text)||'').trim().replace(/^["'«»]|["'«»]$/g,'').replace(/\.$/,'').slice(0,120);
+    return tit||null;
+  }catch(e){return null;}
+}
 
 /* Transcribe un único blob con OpenAI. v98: modelo 'gpt-4o-mini-transcribe' (≈mitad del
    costo de whisper-1). Mismo endpoint /v1/audio/transcriptions y misma API key.
@@ -3774,13 +3797,14 @@ async function _finalizarConTranscript(transcript,opts){
       await sb.from('grabaciones').update(updates).eq('id',_recHGrabId);
       /* Extracción IA en silencio de fondo — sin await ni indicadores.
          Si el usuario NO escribió título, la IA lo deduce del tema y lo pone. */
-      const _gid=_recHGrabId, _manualTit=_recHTituloManual, _tr=_recHTranscript;
+      const _gid=_recHGrabId, _manualTit=_recHTituloManual, _tr=_recHTranscript, _res=_recHResult;
       (async function(){
         try{
           const ext=await _grabExtraerYGuardar(_gid,_tr);
-          if(!_manualTit&&ext&&ext.titulo){
-            const nt=(''+ext.titulo).trim().slice(0,120);
-            if(nt){ try{await sb.from('grabaciones').update({titulo:nt}).eq('id',_gid);}catch(e){} }
+          if(!_manualTit){
+            const tit=(ext&&ext.titulo&&(''+ext.titulo).trim())||
+              await _grabAutoTituloIA(JSON.stringify(_res));
+            if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',_gid);}catch(e){}}
           }
         }catch(e){}
       })();
@@ -5013,6 +5037,7 @@ async function renderAdmin(){
         <div class="admin-section-title" style="margin:0">📼 Registro</div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button id="uploadAudioBtn" type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio">📎 Subir audio</button>
+          <button id="grab-gen-titulos-btn" type="button" class="btn btn-ghost btn-sm" onclick="_grabGenerarTitulosFaltantes()" title="Genera títulos IA para grabaciones sin título o con título de fecha">🏷️ Títulos faltantes</button>
           <input id="uploadAudioInput" type="file" multiple accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
           <label style="display:none">
             <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
@@ -5636,7 +5661,12 @@ async function _grabReprocesar(id){
       estado:'completa'
     }).eq('id',id);
     if(e3)throw e3;
-    await _grabExtraerYGuardar(id,transcript);
+    const ext=await _grabExtraerYGuardar(id,transcript);
+    if(_esTituloGenerico(g.titulo)){
+      const nuevoTit=(ext&&ext.titulo&&(''+ext.titulo).trim())||
+        await _grabAutoTituloIA(JSON.stringify(resumen));
+      if(nuevoTit){try{await sb.from('grabaciones').update({titulo:nuevoTit.slice(0,120)}).eq('id',id);}catch(e){}}
+    }
     try{await registrarAuditoria('reprocesar_grabacion','grabaciones',id,{});}catch(e){}
     toast('✅ Registro procesado','ok');
     const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
@@ -5645,6 +5675,32 @@ async function _grabReprocesar(id){
     toast('Error: '+(e.message||'no se pudo procesar'),'error');
     if(btn){btn.disabled=false;btn.innerHTML='🔁 Procesar';}
   }
+}
+/* Botón admin: genera títulos IA para grabaciones completas con título vacío o de fecha genérica */
+async function _grabGenerarTitulosFaltantes(){
+  const btn=document.getElementById('grab-gen-titulos-btn');
+  if(btn){btn.disabled=true;}
+  try{
+    const{data,error}=await sb.from('grabaciones')
+      .select('id,titulo,transcripcion,resumen')
+      .eq('activo',true).eq('estado','completa').not('transcripcion','is',null);
+    if(error)throw error;
+    const faltantes=(data||[]).filter(function(g){return _esTituloGenerico(g.titulo);});
+    if(!faltantes.length){toast('No hay grabaciones con título faltante','ok');if(btn){btn.disabled=false;}return;}
+    toast('Generando '+faltantes.length+' título(s)...','ok');
+    let done=0;
+    for(var i=0;i<faltantes.length;i++){
+      const g=faltantes[i];
+      if(btn)btn.textContent=''+(i+1)+'/'+faltantes.length;
+      const texto=g.resumen||g.transcripcion||'';
+      const tit=await _grabAutoTituloIA(texto);
+      if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',g.id);}catch(e){}}
+      done++;
+    }
+    toast('✅ '+done+' título(s) generados','ok');
+    await renderRegistroGrabaciones(false);
+  }catch(e){toast('Error: '+e.message,'error');}
+  if(btn){btn.disabled=false;btn.textContent='🏷️ Títulos faltantes';}
 }
 /* Aviso discreto al admin al loguearse: interrumpidas de las últimas 24h con audio sin procesar */
 async function _avisarInterrumpidasPendientes(){
