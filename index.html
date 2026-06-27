@@ -1245,7 +1245,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='107';
+  var CURRENT_VERSION='108';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5014,10 +5014,25 @@ async function renderAdmin(){
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button id="uploadAudioBtn" type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio">📎 Subir audio</button>
           <input id="uploadAudioInput" type="file" multiple accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
-          <label style="font-size:11px;color:var(--gray-400);cursor:pointer;display:flex;align-items:center;gap:5px">
+          <label style="display:none">
             <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
           </label>
         </div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <input id="grab-buscar" type="text" placeholder="🔍 Buscar dentro de los audios…" oninput="_grabDebounceFiltrar()" autocomplete="off" style="flex:1;min-width:180px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 10px;color:var(--gray-100);outline:none">
+        <select id="grab-fil-estado" onchange="_grabRenderFiltrado()" style="width:140px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+          <option value="">Todos los estados</option>
+          <option value="completa">Completas</option>
+          <option value="interrumpida">Interrumpidas</option>
+        </select>
+        <select id="grab-fil-fecha" onchange="_grabRenderFiltrado()" style="width:130px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+          <option value="">Todas las fechas</option>
+          <option value="hoy">Hoy</option>
+          <option value="7">7 días</option>
+          <option value="30">30 días</option>
+        </select>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="_grabLimpiarFiltros()">Limpiar</button>
       </div>
       <div id="audioDropZone"
            ondragover="event.preventDefault();this.style.borderColor='var(--gold)';this.style.background='var(--gray-800)'"
@@ -5150,6 +5165,8 @@ async function renderAdmin(){
    Los chunks del bucket nunca se borran.
 ════════════════════════════════════════ */
 let _grabCache={};
+let _grabListAll=[];
+let _grabFiltrarTimer=null;
 let _registroVerTodasPendiente=false; // seteado por el aviso de interrumpidas: fuerza "Ver todas" al abrir el panel
 function _grabFmtFecha(iso){
   if(!iso)return'—';
@@ -5159,34 +5176,88 @@ function _grabFmtFecha(iso){
 async function renderRegistroGrabaciones(verTodas){
   if(_registroVerTodasPendiente){
     _registroVerTodasPendiente=false;
-    verTodas=true;
     const cb=document.getElementById('rec-ver-todas'); if(cb)cb.checked=true;
   }
   const cont=document.getElementById('registro-grab-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
-    let q=sb.from('grabaciones')
+    const{data,error}=await sb.from('grabaciones')
       .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
-    if(!verTodas) q=q.eq('estado','completa');
-    const{data,error}=await q;
     if(error)throw error;
-    const rows=data||[];
-    if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin grabaciones'+(verTodas?'':' completas')+'.</div>';return;}
+    _grabListAll=data||[];
     _grabCache={};
-    cont.innerHTML='<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">'+rows.length+' grabación(es)</div>'+
-      rows.map(g=>{_grabCache[g.id]=g;return _grabRowHtml(g);}).join('');
+    _grabListAll.forEach(function(g){_grabCache[g.id]=g;});
+    _grabRenderFiltrado();
   }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
 }
-function _grabRowHtml(g){
+function _grabDebounceFiltrar(){
+  if(_grabFiltrarTimer)clearTimeout(_grabFiltrarTimer);
+  _grabFiltrarTimer=setTimeout(_grabRenderFiltrado,250);
+}
+function _grabLimpiarFiltros(){
+  const b=document.getElementById('grab-buscar');if(b)b.value='';
+  const e=document.getElementById('grab-fil-estado');if(e)e.value='';
+  const f=document.getElementById('grab-fil-fecha');if(f)f.value='';
+  _grabRenderFiltrado();
+}
+function _grabRenderFiltrado(){
+  const cont=document.getElementById('registro-grab-body');if(!cont)return;
+  const term=(document.getElementById('grab-buscar')&&document.getElementById('grab-buscar').value||'').trim().toLowerCase();
+  const filEst=(document.getElementById('grab-fil-estado')&&document.getElementById('grab-fil-estado').value)||'';
+  const filFecha=(document.getElementById('grab-fil-fecha')&&document.getElementById('grab-fil-fecha').value)||'';
+  let cutoff=null;
+  if(filFecha==='hoy'){const hoy=ymdLocal(new Date());cutoff=new Date(hoy+'T00:00:00-04:00');}
+  else if(filFecha==='7'){cutoff=new Date(Date.now()-7*24*60*60*1000);}
+  else if(filFecha==='30'){cutoff=new Date(Date.now()-30*24*60*60*1000);}
+  const rows=_grabListAll.filter(function(g){
+    if(filEst&&g.estado!==filEst)return false;
+    if(cutoff&&new Date(g.created_at)<cutoff)return false;
+    if(term){
+      const t=(g.titulo||'').toLowerCase();
+      const r=(typeof g.resumen==='string'?g.resumen:'').toLowerCase();
+      const x=(g.transcripcion||'').toLowerCase();
+      if(t.indexOf(term)<0&&r.indexOf(term)<0&&x.indexOf(term)<0)return false;
+    }
+    return true;
+  });
+  if(!rows.length){
+    const msg=term?'Sin resultados para "'+_escPend(term)+'"':
+      (filEst||filFecha?'Sin grabaciones con esos filtros.':'Sin grabaciones activas.');
+    cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">'+msg+'</div>';
+    return;
+  }
+  const filtrado=term||filEst||filFecha;
+  cont.innerHTML='<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">'+rows.length+' grabación(es)'+(filtrado?' — filtrado':'')+'</div>'+
+    rows.map(function(g){return _grabRowHtml(g,term);}).join('');
+}
+function _grabFragmento(g,term){
+  if(!term)return'';
+  const tl=term.toLowerCase();
+  var buscarEn=function(texto){
+    if(!texto||typeof texto!=='string')return null;
+    const idx=texto.toLowerCase().indexOf(tl);
+    if(idx<0)return null;
+    const start=Math.max(0,idx-30);
+    const end=Math.min(texto.length,idx+tl.length+30);
+    const pre=texto.slice(start,idx);
+    const match=texto.slice(idx,idx+tl.length);
+    const post=texto.slice(idx+tl.length,end);
+    return (start>0?'…':'')+_escPend(pre)+'<b style="color:var(--gold)">'+_escPend(match)+'</b>'+_escPend(post)+(end<texto.length?'…':'');
+  };
+  return buscarEn(g.transcripcion)||buscarEn(typeof g.resumen==='string'?g.resumen:'')||buscarEn(g.titulo||'')||'';
+}
+function _grabRowHtml(g,searchTerm){
   const estCol={completa:'var(--st-completo)',interrumpida:'var(--gold)',descartada:'var(--st-atrasado)',grabando:'#FFC107'};
   const col=estCol[g.estado]||'var(--gray-400)';
   const titulo=_escPend(g.titulo||('Grabación #'+g.id));
+  const frag=searchTerm?_grabFragmento(g,searchTerm):'';
   return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-900)">'+
     '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="_grabToggle('+g.id+')">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+titulo+'</div>'+
         '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+_grabFmtFecha(g.created_at)+' · '+_escPend(g.colaborador||'—')+' · '+_recFmt(g.duracion_seg||0)+'</div>'+
+        (frag?'<div style="font-size:11px;color:var(--gray-300);margin-top:3px;white-space:normal">'+frag+'</div>':'')+
       '</div>'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#000;background:'+col+';padding:2px 9px;border-radius:10px">'+_escPend(g.estado||'—')+'</span>'+
       '<span style="color:var(--gray-400);font-size:12px">▾</span>'+
