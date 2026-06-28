@@ -579,6 +579,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
+    <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
 
   <!-- ══ SCREEN: SEMANA ══ -->
@@ -705,6 +706,18 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>Panel <span class="gold">Admin</span></h1>
     </div>
     <div id="admin-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: MI REGISTRO ══ -->
+  <section id="screen-miregistro" class="screen">
+    <div class="screen-title">
+      <h1>Mi <span class="gold">Registro</span></h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <button type="button" class="btn btn-primary btn-sm" onclick="toggleGrabacionH()">🎙 Grabar registro</button>
+      <input type="text" id="mir-buscar" placeholder="🔍 Buscar en mis registros…" oninput="_mirDebounceFiltrar()" autocomplete="off" style="flex:1;min-width:180px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 10px;color:var(--gray-100);outline:none">
+    </div>
+    <div id="mir-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
 </div><!-- /app -->
@@ -1245,7 +1258,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='109';
+  var CURRENT_VERSION='110';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1638,6 +1651,13 @@ function startApp(){
   if(cu.rol==='field_capturer'){
     const tabRep=document.getElementById('tab-reports');
     if(tabRep)tabRep.style.display='none';
+  }
+  // Mi Registro: visible para field_capturer y commercial_lead
+  if(cu.rol==='field_capturer'||cu.rol==='commercial_lead'){
+    const tabMR=document.getElementById('tab-miregistro');
+    if(tabMR)tabMR.style.display='';
+    const rbh=document.getElementById('recBtnHeader');
+    if(rbh){rbh.style.display='inline-flex';rbh.title='Grabar registro';}
   }
   // Idle logout
   iniciarIdleTimer();
@@ -5732,6 +5752,126 @@ async function _avisarInterrumpidasPendientes(){
     };
     document.body.appendChild(w);
   }catch(e){}
+}
+
+/* ════════════════════════════════════════
+   MI REGISTRO — panel para field_capturer y commercial_lead
+   Solo texto (transcripción + resumen + extracción IA). Sin audio.
+════════════════════════════════════════ */
+let _mirCache={};
+let _mirListAll=[];
+let _mirFiltrarTimer=null;
+async function renderMiRegistro(){
+  const cont=document.getElementById('mir-body'); if(!cont)return;
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    let q=sb.from('grabaciones')
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion')
+      .eq('activo',true).order('created_at',{ascending:false});
+    if(cu.rol==='field_capturer') q=q.eq('colaborador',cu.nombre);
+    const{data,error}=await q;
+    if(error)throw error;
+    let list=data||[];
+    if(cu.rol==='commercial_lead'){
+      const adminSet=new Set((colaboradores||[]).filter(c=>c.rol==='admin').map(c=>c.nombre));
+      list=list.filter(function(g){return!adminSet.has(g.colaborador);});
+    }
+    _mirListAll=list;
+    _mirCache={};
+    _mirListAll.forEach(function(g){_mirCache[g.id]=g;});
+    _mirRenderFiltrado();
+  }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+function _mirDebounceFiltrar(){
+  if(_mirFiltrarTimer)clearTimeout(_mirFiltrarTimer);
+  _mirFiltrarTimer=setTimeout(_mirRenderFiltrado,250);
+}
+function _mirRenderFiltrado(){
+  const cont=document.getElementById('mir-body'); if(!cont)return;
+  const term=(document.getElementById('mir-buscar')&&document.getElementById('mir-buscar').value||'').trim().toLowerCase();
+  const rows=term?_mirListAll.filter(function(g){
+    const t=(g.titulo||'').toLowerCase();
+    const r=(typeof g.resumen==='string'?g.resumen:'').toLowerCase();
+    const x=(g.transcripcion||'').toLowerCase();
+    return t.indexOf(term)>=0||r.indexOf(term)>=0||x.indexOf(term)>=0;
+  }):_mirListAll;
+  if(!rows.length){
+    cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">'+(term?'Sin resultados para "'+_escPend(term)+'"':'Sin registros.')+'</div>';
+    return;
+  }
+  cont.innerHTML='<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">'+rows.length+' registro(s)'+(term?' — filtrado':'')+'</div>'+
+    rows.map(function(g){return _mirRowHtml(g,term);}).join('');
+}
+function _mirRowHtml(g,searchTerm){
+  const estCol={completa:'var(--st-completo)',interrumpida:'var(--gold)',descartada:'var(--st-atrasado)',grabando:'#FFC107'};
+  const col=estCol[g.estado]||'var(--gray-400)';
+  const titulo=_escPend(g.titulo||('Registro #'+g.id));
+  const frag=searchTerm?_grabFragmento(g,searchTerm):'';
+  return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-900)">'+
+    '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="_mirToggle('+g.id+')">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+titulo+'</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">'+_grabFmtFecha(g.created_at)+(cu.rol==='commercial_lead'?' · '+_escPend(g.colaborador||'—'):'')+' · '+_recFmt(g.duracion_seg||0)+'</div>'+
+        (frag?'<div style="font-size:11px;color:var(--gray-300);margin-top:3px;white-space:normal">'+frag+'</div>':'')+
+      '</div>'+
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#000;background:'+col+';padding:2px 9px;border-radius:10px">'+_escPend(g.estado||'—')+'</span>'+
+      '<span style="color:var(--gray-400);font-size:12px">▾</span>'+
+    '</div>'+
+    (g.participantes?'<div style="padding:0 12px 9px;font-size:11px;color:var(--gray-300)">👥 '+_escPend(g.participantes)+'</div>':'')+
+    '<div id="mir-det-'+g.id+'" style="display:none;padding:0 12px 12px"></div>'+
+  '</div>';
+}
+function _mirToggle(id){
+  const det=document.getElementById('mir-det-'+id); if(!det)return;
+  if(det.style.display!=='none'){det.style.display='none';return;}
+  det.style.display='block';
+  if(det.dataset.loaded==='1')return;
+  det.dataset.loaded='1';
+  const g=_mirCache[id]||{};
+  let resumenHtml='';
+  if(g.resumen){
+    let r=null; try{r=JSON.parse(g.resumen);}catch(e){}
+    if(r&&typeof r==='object'){
+      const puntos=(r.puntos_clave||[]).map(function(p){return'<li>'+_escPend(p)+'</li>';}).join('');
+      const objec=(r.objeciones||[]).map(function(o){return'<li>'+_escPend(o)+'</li>';}).join('');
+      resumenHtml=(r.nivel_interes?'<div style="font-size:11px;margin-bottom:4px"><strong>Interés:</strong> '+_escPend(r.nivel_interes)+'</div>':'')+
+        (puntos?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:2px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin:0 0 8px">'+puntos+'</ul>':'')+
+        (objec?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:2px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin:0 0 8px">'+objec+'</ul>':'')+
+        (r.proximo_paso?'<div style="font-size:11px"><strong>Próximo paso:</strong> '+_escPend(r.proximo_paso)+'</div>':'');
+    }else{
+      resumenHtml='<div style="font-size:12px;white-space:pre-wrap">'+_escPend(g.resumen)+'</div>';
+    }
+  }
+  let extHtml=_mirExtraccionHtml(g);
+  det.innerHTML='<div style="border-top:1px solid var(--gray-600);padding-top:10px">'+
+    (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
+    extHtml+
+    (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción disponible.</div>')+
+  '</div>';
+}
+function _mirExtraccionHtml(g){
+  let x=g.extraccion;
+  if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x=null;}}
+  if(!x||typeof x!=='object')return'';
+  const dato=function(lbl,val){return val?'<div style="font-size:11px;margin-bottom:2px"><span style="color:var(--gray-400)">'+lbl+':</span> '+_escPend(val)+'</div>':'';};
+  let datosHtml='';
+  if(x.es_prospecto===true){
+    datosHtml='<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:3px">Prospecto detectado</div>'+
+      dato('Nombre',x.nombre)+dato('Celular',x.celular)+dato('Ciudad',x.ciudad)+
+      dato('Terreno',x.lugar_terreno)+dato('Pago',x.financiamiento)+dato('Plantas',x.plantas)+
+      dato('Cuándo construir',x.cuando_construir)+dato('Presupuesto',x.presupuesto)+
+      dato('Vivienda/Inversión',x.vivienda_o_inversion);
+  }else{
+    datosHtml='<div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">No se detectó un prospecto en esta conversación.</div>';
+  }
+  const temas=(x.temas_clave||[]).map(function(t){return'<li>'+_escPend(t)+'</li>';}).join('');
+  const comps=(x.compromisos||[]).map(function(c){return'<li>'+_escPend(c&&c.texto||'—')+(c&&c.fecha_sugerida?' <span style="color:var(--gold)">('+_escPend(c.fecha_sugerida)+')</span>':'')+'</li>';}).join('');
+  return'<div style="margin-bottom:10px;border:1px solid var(--gray-600);border-radius:6px;padding:8px;background:var(--gray-800)">'+
+    '<div class="section-title" style="font-size:12px;margin-bottom:6px">🤖 Consejos IA</div>'+
+    datosHtml+
+    (temas?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Temas clave</div><ul style="font-size:12px;padding-left:18px;margin:0">'+temas+'</ul>':'')+
+    (comps?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Compromisos</div><ul style="font-size:12px;padding-left:18px;margin:0">'+comps+'</ul>':'')+
+  '</div>';
 }
 
 /* ── Inteligencia del Asistente (panel admin) ── */
