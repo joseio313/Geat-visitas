@@ -714,7 +714,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>Mi <span class="gold">Registro</span></h1>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-      <button type="button" class="btn btn-primary btn-sm" onclick="toggleGrabacionH()">🎙 Grabar registro</button>
+      <button type="button" onclick="toggleGrabacionH()" title="Grabar registro" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>
       <input type="text" id="mir-buscar" placeholder="🔍 Buscar en mis registros…" oninput="_mirDebounceFiltrar()" autocomplete="off" style="flex:1;min-width:180px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 10px;color:var(--gray-100);outline:none">
     </div>
     <div id="mir-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
@@ -1258,7 +1258,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='111';
+  var CURRENT_VERSION='112';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
