@@ -1258,7 +1258,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='112';
+  var CURRENT_VERSION='113';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -4453,6 +4453,13 @@ async function saveLead(){
         if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
         toast('Lead #'+newLead.id+' creado desde este registro');
         _grabRefrescarDetalle(regId);
+        /* Refresh Mi Registro si está activo (captadora/David) */
+        const _mirScr=document.getElementById('screen-miregistro');
+        if(_mirScr&&_mirScr.classList.contains('active')){
+          _mirRenderFiltrado();
+          const _mdet=document.getElementById('mir-det-'+regId);
+          if(_mdet){_mdet.dataset.loaded='';_mdet.style.display='none';}
+        }
       }catch(e){}
     }
 
@@ -5783,7 +5790,7 @@ async function renderMiRegistro(){
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
     let q=sb.from('grabaciones')
-      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion')
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
     if(cu.rol==='field_capturer') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
@@ -5835,6 +5842,7 @@ function _mirRowHtml(g,searchTerm){
       '<span style="color:var(--gray-400);font-size:12px">▾</span>'+
     '</div>'+
     (g.participantes?'<div style="padding:0 12px 9px;font-size:11px;color:var(--gray-300)">👥 '+_escPend(g.participantes)+'</div>':'')+
+    (function(){const a=_mirAccionHtml(g);return a?'<div style="padding:0 12px 9px">'+a+'</div>':'';})() +
     '<div id="mir-det-'+g.id+'" style="display:none;padding:0 12px 12px"></div>'+
   '</div>';
 }
@@ -5860,7 +5868,9 @@ function _mirToggle(id){
     }
   }
   let extHtml=_mirExtraccionHtml(g);
+  const accionDet=_mirAccionHtml(g);
   det.innerHTML='<div style="border-top:1px solid var(--gray-600);padding-top:10px">'+
+    (accionDet?'<div style="margin-bottom:10px">'+accionDet+'</div>':'')+
     (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
     extHtml+
     (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción disponible.</div>')+
@@ -5889,6 +5899,37 @@ function _mirExtraccionHtml(g){
     (temas?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Temas clave</div><ul style="font-size:12px;padding-left:18px;margin:0">'+temas+'</ul>':'')+
     (comps?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Compromisos</div><ul style="font-size:12px;padding-left:18px;margin:0">'+comps+'</ul>':'')+
   '</div>';
+}
+
+/* Acción contextual por registro: Procesar / Crear lead / Ver lead / nada */
+function _mirAccionHtml(g){
+  if(g.estado==='interrumpida'){
+    return'<button class="btn-primary btn-sm" style="font-size:11px" onclick="_mirReprocesar('+g.id+')">🔁 Procesar</button>';
+  }
+  if(g.estado!=='completa')return'';
+  let x=g.extraccion;
+  if(typeof x==='string'){try{x=JSON.parse(x);}catch(e){x=null;}}
+  if(!x||typeof x!=='object')return'';
+  if(x.es_prospecto!==true)return'';
+  if(g.lead_creado_id){
+    return'<button class="btn-ghost btn-sm" style="font-size:11px" onclick="openLeadDetail('+Number(g.lead_creado_id)+',null,\'readonly\')">👁 Ver lead</button>';
+  }
+  return'<button class="btn-primary btn-sm" style="font-size:11px" onclick="_mirCrearLead('+g.id+')">➕ Crear lead</button>';
+}
+function _mirCrearLead(id){
+  if(!_mirCache[id]){toast('Registro no encontrado','error');return;}
+  _grabCache[id]=_mirCache[id];
+  _grabCrearLead(id);
+}
+async function _mirReprocesar(id){
+  if(!_mirCache[id]){toast('Registro no encontrado','error');return;}
+  document.querySelectorAll('[onclick*="_mirReprocesar('+id+')"]').forEach(function(b){b.disabled=true;b.textContent='⏳ Procesando...';});
+  _grabCache[id]=_mirCache[id];
+  try{
+    await _grabReprocesar(id);
+  }finally{
+    await renderMiRegistro();
+  }
 }
 
 /* ── Inteligencia del Asistente (panel admin) ── */
