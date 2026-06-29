@@ -1,0 +1,23 @@
+name: keep-alive-supabase
+
+on:
+  schedule:
+    - cron: '13 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Geat CRM
+        run: |
+          curl -sS -o /dev/null -w "Geat CRM -> HTTP %{http_code}\n" \
+            "https://jsacnpgpnvoslrpurfxc.supabase.co/rest/v1/" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE" \
+            --fail
+      - name: Ping Marketing Brain
+        run: |
+          curl -sS -o /dev/null -w "Marketing Brain -> HTTP %{http_code}\n" \
+            "https://ktcpehzczrblcommwczm.supabase.co/rest/v1/" \
+            -H "apikey: sb_publishable_t_fkSIPwHLcu0pVDgHwLjw_oBk0SXJX" \
+            --fail
