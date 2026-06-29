@@ -588,6 +588,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="screen-title">
       <h1>Agenda <span class="gold">semanal</span></h1>
     </div>
+    <!-- Panel "Para hoy" — solo field_capturer y commercial_lead -->
+    <div id="para-hoy-wrap" style="display:none;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">📋 Para hoy</div>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_paraHoyTodos=false;renderParaHoy()">↺ Actualizar</button>
+      </div>
+      <div id="para-hoy-body"></div>
+    </div>
+
     <div class="filter-bar">
       <select id="filtro-persona" onchange="renderWeek();cargarMarcadoresDia()">
         <option value="">Todos los vendedores</option>
@@ -1274,7 +1283,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='116';
+  var CURRENT_VERSION='117';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1693,6 +1702,10 @@ async function initApp(){
   buildPersonaFilters();
   attachPickerListeners();
   cargarMarcadoresDia();
+  if(cu.rol==='field_capturer'||cu.rol==='commercial_lead'){
+    const _phw=document.getElementById('para-hoy-wrap');if(_phw)_phw.style.display='';
+    renderParaHoy();
+  }
 }
 
 function attachPickerListeners(){
@@ -1808,7 +1821,7 @@ function switchTab(tab,screenId){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
   window.scrollTo(0,0);
-  if(screenId==='screen-week')renderWeek();
+  if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}
   if(screenId==='screen-month')renderMonth();
 }
 function setView(v,btn){
@@ -5864,6 +5877,65 @@ async function _avisarInterrumpidasPendientes(){
     };
     document.body.appendChild(w);
   }catch(e){}
+}
+
+/* ════════════════════════════════════════
+   PARA HOY — leads con proximo_contacto <= hoy
+════════════════════════════════════════ */
+let _paraHoyTodos=false;
+async function renderParaHoy(){
+  const wrap=document.getElementById('para-hoy-wrap'); if(!wrap)return;
+  wrap.style.display='';
+  const cont=document.getElementById('para-hoy-body'); if(!cont)return;
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span></div>';
+  try{
+    const hoy=ymdLocal(new Date());
+    let q=sb.from('leads')
+      .select('id,nombre,celular,grado_interes,proximo_contacto,captador')
+      .lte('proximo_contacto',hoy)
+      .not('estado','in','(cerrado_perdido,cerrado_ganado)')
+      .eq('activo',true)
+      .limit(_paraHoyTodos?200:100);
+    if(cu.rol==='field_capturer') q=q.eq('captador',cu.nombre);
+    const{data,error}=await q;
+    if(error)throw error;
+    const orden={'alto':0,'medio':1,'bajo':2};
+    const todos=(data||[]).slice().sort(function(a,b){return(orden[a.grado_interes]||3)-(orden[b.grado_interes]||3);});
+    const mostrar=_paraHoyTodos?todos:todos.slice(0,20);
+    if(!mostrar.length){
+      cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:6px 0">Sin pendientes para hoy. 🎉</div>';
+      return;
+    }
+    let countByLead={};
+    try{
+      const ids=todos.map(function(l){return l.id;});
+      const{data:acts}=await sb.from('agenda_personal').select('lead_id').in('lead_id',ids);
+      (acts||[]).forEach(function(a){countByLead[a.lead_id]=(countByLead[a.lead_id]||0)+1;});
+    }catch(e){}
+    cont.innerHTML=mostrar.map(function(l){return _paraHoyCard(l,countByLead[l.id]||0);}).join('')+
+      (!_paraHoyTodos&&todos.length>20?'<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px;margin-top:4px" onclick="_paraHoyTodos=true;renderParaHoy()">Ver todos ('+todos.length+')</button>':'');
+  }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:6px 0">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+function _paraHoyCard(l,actCount){
+  const cel=(l.celular||'').replace(/\D/g,'');
+  const nombre=l.nombre||'—';
+  const grado=l.grado_interes||'';
+  const gradoCol={'alto':'var(--st-atrasado)','medio':'var(--gold)','bajo':'var(--st-completo)'};
+  const waMsgs=[
+    'Hola '+nombre+', le habla '+cu.nombre+' de GEAT Construcción. ¿Tiene un momento?',
+    'Hola '+nombre+', le escribo de GEAT. ¿Le viene bien hablar ahora?',
+    'Hola '+nombre+', último intento de nuestra parte. ¿Podemos hablar hoy?'
+  ];
+  const waMsg=encodeURIComponent(waMsgs[Math.min(actCount,2)]);
+  return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:10px 12px;margin-bottom:6px;background:var(--gray-900);display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+    '<div style="flex:1;min-width:140px">'+
+      '<div style="font-weight:700;font-size:13px">'+_escPend(nombre)+'</div>'+
+      '<div style="font-size:11px;color:var(--gray-400)">'+_escPend(l.celular||'—')+(grado?' · <span style="color:'+gradoCol[grado]+'">'+grado+'</span>':'')+(actCount?' · intento #'+(actCount+1):'')+'</div>'+
+    '</div>'+
+    (cel?'<a href="tel:+591'+cel+'" class="btn btn-ghost btn-sm" style="text-decoration:none;font-size:12px" onclick="event.stopPropagation()">📞 Llamar</a>':'')+
+    (cel?'<a href="https://wa.me/591'+cel+'?text='+waMsg+'" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;font-size:12px" onclick="event.stopPropagation()">💬 WhatsApp</a>':'')+
+    '<button type="button" class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openLeadDetail('+l.id+',null,\'normal\')">📋 Ver</button>'+
+  '</div>';
 }
 
 /* ════════════════════════════════════════
