@@ -713,9 +713,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="screen-title">
       <h1>Mi <span class="gold">Registro</span></h1>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
       <button type="button" onclick="toggleGrabacionH()" title="Grabar registro" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>
       <input type="text" id="mir-buscar" placeholder="🔍 Buscar en mis registros…" oninput="_mirDebounceFiltrar()" autocomplete="off" style="flex:1;min-width:180px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 10px;color:var(--gray-100);outline:none">
+    </div>
+    <div id="mir-modo-wrap" style="display:none;gap:4px;margin-bottom:12px">
+      <button id="mir-modo-mios" class="btn btn-primary btn-sm" onclick="_mirSetModo('mios')" style="font-size:11px">👤 Míos</button>
+      <button id="mir-modo-todos" class="btn btn-ghost btn-sm" onclick="_mirSetModo('todos')" style="font-size:11px">👥 Todos</button>
     </div>
     <div id="mir-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
@@ -1258,7 +1262,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='113';
+  var CURRENT_VERSION='114';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -5085,9 +5089,10 @@ async function renderAdmin(){
           <button id="uploadAudioBtn" type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('uploadAudioInput').click()" title="Subir audio">📎 Subir audio</button>
           <button id="grab-gen-titulos-btn" type="button" class="btn btn-ghost btn-sm" onclick="_grabGenerarTitulosFaltantes()" title="Genera títulos IA para grabaciones sin título o con título de fecha">🏷️ Títulos faltantes</button>
           <input id="uploadAudioInput" type="file" multiple accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.webm" style="display:none" onchange="subirAudioArchivo(this)">
-          <label style="display:none">
-            <input type="checkbox" id="rec-ver-todas" onchange="renderRegistroGrabaciones(this.checked)"> Ver todas
-          </label>
+          <div style="display:flex;gap:4px">
+            <button id="grab-modo-mios" class="btn btn-${_grabModo==='mios'?'primary':'ghost'} btn-sm" onclick="_grabSetModo('mios')" style="font-size:11px">👤 Míos</button>
+            <button id="grab-modo-todos" class="btn btn-${_grabModo==='todos'?'primary':'ghost'} btn-sm" onclick="_grabSetModo('todos')" style="font-size:11px">👥 Todos</button>
+          </div>
         </div>
       </div>
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
@@ -5217,7 +5222,7 @@ async function renderAdmin(){
     </div>`;
 
     _pendTab(_pendTabActiva);
-    renderRegistroGrabaciones(false);
+    renderRegistroGrabaciones();
 
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
@@ -5236,29 +5241,35 @@ async function renderAdmin(){
 let _grabCache={};
 let _grabListAll=[];
 let _grabFiltrarTimer=null;
-let _registroVerTodasPendiente=false; // seteado por el aviso de interrumpidas: fuerza "Ver todas" al abrir el panel
+let _grabModo='mios';
 function _grabFmtFecha(iso){
   if(!iso)return'—';
   try{return new Date(iso).toLocaleString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
   catch(e){return new Date(iso).toLocaleString('es-BO');}
 }
-async function renderRegistroGrabaciones(verTodas){
-  if(_registroVerTodasPendiente){
-    _registroVerTodasPendiente=false;
-    const cb=document.getElementById('rec-ver-todas'); if(cb)cb.checked=true;
-  }
+async function renderRegistroGrabaciones(){
   const cont=document.getElementById('registro-grab-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
-    const{data,error}=await sb.from('grabaciones')
+    let q=sb.from('grabaciones')
       .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
+    if(_grabModo==='mios') q=q.eq('colaborador',cu.nombre);
+    const{data,error}=await q;
     if(error)throw error;
     _grabListAll=data||[];
     _grabCache={};
     _grabListAll.forEach(function(g){_grabCache[g.id]=g;});
     _grabRenderFiltrado();
   }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+function _grabSetModo(modo){
+  _grabModo=modo;
+  const bMios=document.getElementById('grab-modo-mios');
+  const bTodos=document.getElementById('grab-modo-todos');
+  if(bMios)bMios.className='btn btn-'+(modo==='mios'?'primary':'ghost')+' btn-sm';
+  if(bTodos)bTodos.className='btn btn-'+(modo==='todos'?'primary':'ghost')+' btn-sm';
+  renderRegistroGrabaciones();
 }
 function _grabDebounceFiltrar(){
   if(_grabFiltrarTimer)clearTimeout(_grabFiltrarTimer);
@@ -5505,8 +5516,7 @@ async function _grabArchivar(id){
     if(error)throw error;
     try{await registrarAuditoria('archivar_grabacion','grabaciones',id,{});}catch(e){}
     toast('Grabación archivada','ok');
-    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
-    renderRegistroGrabaciones(verTodas);
+    renderRegistroGrabaciones();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 /* Eliminar = DELETE real, única excepción al soft-delete: elección explícita del
@@ -5536,8 +5546,7 @@ async function _grabEliminar(id){
     if(!del||!del.length)throw new Error('La base no permitió el DELETE. La copia ya quedó en registro_exportado.');
     try{await registrarAuditoria('eliminar_grabacion','grabaciones',id,{exportado_a:'registro_exportado'});}catch(e){}
     toast('Registro eliminado — transcripción conservada en archivo','ok');
-    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
-    renderRegistroGrabaciones(verTodas);
+    renderRegistroGrabaciones();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 /* Muestra el botón 🔁 Procesar en interrumpidas si hay audio en el bucket */
@@ -5713,8 +5722,7 @@ async function _grabReprocesar(id){
     }
     try{await registrarAuditoria('reprocesar_grabacion','grabaciones',id,{});}catch(e){}
     toast('✅ Registro procesado','ok');
-    const verTodas=document.getElementById('rec-ver-todas')?.checked||false;
-    await renderRegistroGrabaciones(verTodas);
+    await renderRegistroGrabaciones();
   }catch(e){
     toast('Error: '+(e.message||'no se pudo procesar'),'error');
     if(btn){btn.disabled=false;btn.innerHTML='🔁 Procesar';}
@@ -5742,7 +5750,7 @@ async function _grabGenerarTitulosFaltantes(){
       done++;
     }
     toast('✅ '+done+' título(s) generados','ok');
-    await renderRegistroGrabaciones(false);
+    await renderRegistroGrabaciones();
   }catch(e){toast('Error: '+e.message,'error');}
   if(btn){btn.disabled=false;btn.textContent='🏷️ Títulos faltantes';}
 }
@@ -5771,7 +5779,7 @@ async function _avisarInterrumpidasPendientes(){
     w.onclick=function(ev){
       w.remove();
       if(ev.target&&ev.target.tagName==='SPAN')return; // la × solo cierra
-      _registroVerTodasPendiente=true; // que el panel Registro abra con "Ver todas" activo
+      _grabModo='todos';
       const tab=document.getElementById('tab-admin'); if(tab)tab.click();
     };
     document.body.appendChild(w);
@@ -5785,18 +5793,31 @@ async function _avisarInterrumpidasPendientes(){
 let _mirCache={};
 let _mirListAll=[];
 let _mirFiltrarTimer=null;
+let _mirModo='mios';
 async function renderMiRegistro(){
   const cont=document.getElementById('mir-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  const mirWrap=document.getElementById('mir-modo-wrap');
+  if(mirWrap){
+    if(cu.rol==='commercial_lead'){
+      mirWrap.style.display='flex';
+      const bMios=document.getElementById('mir-modo-mios');
+      const bTodos=document.getElementById('mir-modo-todos');
+      if(bMios)bMios.className='btn btn-'+(_mirModo==='mios'?'primary':'ghost')+' btn-sm';
+      if(bTodos)bTodos.className='btn btn-'+(_mirModo==='todos'?'primary':'ghost')+' btn-sm';
+    } else {
+      mirWrap.style.display='none';
+    }
+  }
   try{
     let q=sb.from('grabaciones')
       .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion,lead_creado_id')
       .eq('activo',true).order('created_at',{ascending:false});
-    if(cu.rol==='field_capturer') q=q.eq('colaborador',cu.nombre);
+    if(cu.rol==='field_capturer'||_mirModo==='mios') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
     let list=data||[];
-    if(cu.rol==='commercial_lead'){
+    if(cu.rol==='commercial_lead'&&_mirModo==='todos'){
       const adminSet=new Set((colaboradores||[]).filter(c=>c.rol==='admin').map(c=>c.nombre));
       list=list.filter(function(g){return!adminSet.has(g.colaborador);});
     }
@@ -5805,6 +5826,14 @@ async function renderMiRegistro(){
     _mirListAll.forEach(function(g){_mirCache[g.id]=g;});
     _mirRenderFiltrado();
   }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+function _mirSetModo(modo){
+  _mirModo=modo;
+  const bMios=document.getElementById('mir-modo-mios');
+  const bTodos=document.getElementById('mir-modo-todos');
+  if(bMios)bMios.className='btn btn-'+(modo==='mios'?'primary':'ghost')+' btn-sm';
+  if(bTodos)bTodos.className='btn btn-'+(modo==='todos'?'primary':'ghost')+' btn-sm';
+  renderMiRegistro();
 }
 function _mirDebounceFiltrar(){
   if(_mirFiltrarTimer)clearTimeout(_mirFiltrarTimer);
