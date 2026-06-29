@@ -1262,7 +1262,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='114';
+  var CURRENT_VERSION='115';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -4449,12 +4449,27 @@ async function saveLead(){
       else throw e2;
     }
 
-    /* Lead creado desde un registro de grabación: vincular y refrescar el panel */
+    /* Lead creado desde un registro de grabación: vincular, guardar ind_ y refrescar panel */
     if(_grabOrigenRegId){
       const regId=_grabOrigenRegId; _grabOrigenRegId=null;
+      const extInd=_grabOrigenExtraccion; _grabOrigenExtraccion=null;
       try{
         await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',regId);
         if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
+        /* Guardar campos de indagación extraídos por IA */
+        if(extInd){
+          const indUpd={};
+          if(extInd.plantas!=null)indUpd.ind_plantas=String(extInd.plantas);
+          if(extInd.financiamiento)indUpd.ind_financiamiento=extInd.financiamiento;
+          if(extInd.lugar_terreno)indUpd.ind_lugar_terreno=extInd.lugar_terreno;
+          if(extInd.presupuesto!=null)indUpd.ind_presupuesto=extInd.presupuesto;
+          if(extInd.monto_financiamiento!=null)indUpd.ind_monto_financiamiento=extInd.monto_financiamiento;
+          if(extInd.vivienda_o_inversion)indUpd.ind_tipo=extInd.vivienda_o_inversion;
+          if(extInd.cuando_construir)indUpd.ind_cuando_construir=extInd.cuando_construir;
+          if(Object.keys(indUpd).length){
+            try{await sb.from('leads').update(indUpd).eq('id',newLead.id);}catch(e){}
+          }
+        }
         toast('Lead #'+newLead.id+' creado desde este registro');
         _grabRefrescarDetalle(regId);
         /* Refresh Mi Registro si está activo (captadora/David) */
@@ -4465,6 +4480,8 @@ async function saveLead(){
           if(_mdet){_mdet.dataset.loaded='';_mdet.style.display='none';}
         }
       }catch(e){}
+    } else {
+      _grabOrigenExtraccion=null;
     }
 
     if(btn){btn.innerHTML='✅ Creado';}
@@ -4514,7 +4531,7 @@ function openModal(id){
 function closeModal(id){
   document.getElementById(id).classList.remove('show');
   /* Si se cancela crear lead, soltar el vínculo con el registro de grabación */
-  if(id==='modalNewLead')_grabOrigenRegId=null;
+  if(id==='modalNewLead'){_grabOrigenRegId=null;_grabOrigenExtraccion=null;}
 }
 
 /* CAMBIO 4 — Buscar Lead: solo lectura, separado de Nueva Oportunidad */
@@ -5446,6 +5463,7 @@ async function _grabAnalizarIA(id){
 }
 /* Abre el formulario existente de crear lead pre-llenado desde la extracción */
 let _grabOrigenRegId=null;
+let _grabOrigenExtraccion=null;
 function _grabCrearLead(id){
   const g=_grabCache[id];
   let x=g&&g.extraccion;
@@ -5453,6 +5471,7 @@ function _grabCrearLead(id){
   if(!x||x.es_prospecto!==true){toast('Esta grabación no tiene un prospecto detectado','error');return;}
   if(g.lead_creado_id){toast('Ya se creó el lead #'+g.lead_creado_id+' desde este registro','warning');return;}
   _grabOrigenRegId=id;
+  _grabOrigenExtraccion=x;
   const set=(i,v)=>{const el=document.getElementById(i);if(el)el.value=v||'';};
   set('nl-nombre',x.nombre);
   set('nl-celular',x.celular);
@@ -5466,15 +5485,18 @@ function _grabCrearLead(id){
   /* Método de pago desde financiamiento */
   const mp=x.financiamiento==='contado'?'contado':(x.financiamiento==='financiamiento'?'financiamiento_bancario':'');
   set('nl-metodo-pago',mp);
-  /* Nota inicial con el contexto de la extracción */
-  const notas=['Creado desde registro de grabación #'+id+'.'];
-  if(x.lugar_terreno)notas.push('Terreno: '+x.lugar_terreno);
-  if(x.plantas)notas.push('Plantas: '+x.plantas);
-  if(x.cuando_construir)notas.push('Construir: '+x.cuando_construir);
-  if(x.presupuesto)notas.push('Presupuesto: '+x.presupuesto);
-  if(x.vivienda_o_inversion)notas.push('Destino: '+x.vivienda_o_inversion);
-  if(x.temas_clave&&x.temas_clave.length)notas.push('Temas: '+x.temas_clave.join(', '));
-  set('nl-nota',notas.join(' · '));
+  /* Grado de interés desde nivel_interes del resumen */
+  let resObj=null; try{resObj=JSON.parse(g.resumen);}catch(e){}
+  const nivelMap={'alto':'alto','medio':'medio','bajo':'bajo'};
+  const nivelRaw=(resObj&&resObj.nivel_interes||'').toLowerCase();
+  set('nl-grado-interes',nivelMap[nivelRaw]||'');
+  /* Nota desde puntos_clave del resumen (máx 3) */
+  const pks=resObj&&Array.isArray(resObj.puntos_clave)?resObj.puntos_clave.slice(0,3):[];
+  set('nl-nota',pks.length?pks.join(' · '):'Creado desde registro #'+id+'.');
+  /* Expandir "Datos adicionales" para que el usuario vea los campos prellenados */
+  const deb=document.getElementById('nl-datos-extra-body');
+  const dei=document.getElementById('datos-extra-icon');
+  if(deb&&deb.style.display==='none'){deb.style.display='';if(dei)dei.textContent='▼';}
   openModal('modalNewLead');
 }
 async function _grabCargarAudio(id,audioPath){
@@ -5794,6 +5816,7 @@ let _mirCache={};
 let _mirListAll=[];
 let _mirFiltrarTimer=null;
 let _mirModo='mios';
+let _mirDedup={};
 async function renderMiRegistro(){
   const cont=document.getElementById('mir-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
@@ -5823,7 +5846,35 @@ async function renderMiRegistro(){
     }
     _mirListAll=list;
     _mirCache={};
+    _mirDedup={};
     _mirListAll.forEach(function(g){_mirCache[g.id]=g;});
+    /* Dedup: buscar leads existentes para prospectos sin lead vinculado (celular+nombre) */
+    const _prosSinLead=_mirListAll.filter(function(g){
+      if(g.estado!=='completa'||g.lead_creado_id)return false;
+      let ex=g.extraccion; if(typeof ex==='string'){try{ex=JSON.parse(ex);}catch(e){ex=null;}}
+      return ex&&ex.es_prospecto===true&&ex.celular&&ex.nombre;
+    });
+    if(_prosSinLead.length){
+      const _cels=[...new Set(_prosSinLead.map(function(g){
+        let ex=g.extraccion; if(typeof ex==='string'){try{ex=JSON.parse(ex);}catch(e){ex=null;}}
+        return ex&&ex.celular;
+      }).filter(Boolean))];
+      if(_cels.length){
+        try{
+          const{data:_leads}=await sb.from('leads').select('id,nombre,celular').in('celular',_cels).eq('activo',true);
+          const _lByCel={};
+          (_leads||[]).forEach(function(l){(_lByCel[l.celular]=_lByCel[l.celular]||[]).push(l);});
+          _prosSinLead.forEach(function(g){
+            let ex=g.extraccion; if(typeof ex==='string'){try{ex=JSON.parse(ex);}catch(e){ex=null;}}
+            if(!ex||!ex.celular||!ex.nombre)return;
+            const cands=_lByCel[ex.celular]||[];
+            const extNombre=ex.nombre.toLowerCase().trim();
+            const match=cands.find(function(l){return l.nombre&&l.nombre.toLowerCase().includes(extNombre);});
+            if(match)_mirDedup[g.id]=match;
+          });
+        }catch(e){}
+      }
+    }
     _mirRenderFiltrado();
   }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
 }
@@ -5943,12 +5994,30 @@ function _mirAccionHtml(g){
   if(g.lead_creado_id){
     return'<button class="btn-ghost btn-sm" style="font-size:11px" onclick="openLeadDetail('+Number(g.lead_creado_id)+',null,\'readonly\')">👁 Ver lead</button>';
   }
+  const dupLead=_mirDedup&&_mirDedup[g.id];
+  if(dupLead){
+    return'<button class="btn-primary btn-sm" style="font-size:11px" onclick="_mirSeguimiento('+g.id+','+dupLead.id+')">📝 Registrar seguimiento</button>'+
+      ' <button class="btn-ghost btn-sm" style="font-size:11px" onclick="openLeadDetail('+dupLead.id+',null,\'readonly\')">👁 Ver lead</button>';
+  }
   return'<button class="btn-primary btn-sm" style="font-size:11px" onclick="_mirCrearLead('+g.id+')">➕ Crear lead</button>';
 }
 function _mirCrearLead(id){
   if(!_mirCache[id]){toast('Registro no encontrado','error');return;}
   _grabCache[id]=_mirCache[id];
   _grabCrearLead(id);
+}
+async function _mirSeguimiento(grabId,leadId){
+  const g=_mirCache[grabId]; if(!g){toast('Registro no encontrado','error');return;}
+  currentLeadId=leadId;
+  await prepareFinalize();
+  /* Pre-fill nota con puntos_clave del resumen (máx 3) */
+  let resObj=null; try{resObj=JSON.parse(g.resumen);}catch(e){}
+  const pks=resObj&&Array.isArray(resObj.puntos_clave)?resObj.puntos_clave.slice(0,3):[];
+  const finNota=document.getElementById('fin-nota');
+  if(finNota&&pks.length)finNota.value=pks.join(' · ');
+  /* Sugerir siguiente fecha hoy + 1 día */
+  const finNext=document.getElementById('next-fecha');
+  if(finNext)finNext.value=ymdLocal(addDays(new Date(),1));
 }
 async function _mirReprocesar(id){
   if(!_mirCache[id]){toast('Registro no encontrado','error');return;}
