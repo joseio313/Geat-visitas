@@ -923,7 +923,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="section-title" style="color:var(--st-atrasado)">❌ Motivo de pérdida</div>
         <div class="form-group">
           <label class="form-label">¿Por qué se perdió?</label>
-          <select class="form-control" id="lost-motivo"></select>
+          <select class="form-control" id="lost-motivo" onchange="_lostMotivoChange(this,'lost-otro-wrap')"></select>
+          <div id="lost-otro-wrap" style="display:none;margin-top:6px">
+            <input class="form-control" type="text" id="lost-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Nota adicional</label>
@@ -1083,15 +1086,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <button type="button" class="btn btn-red btn-sm" onclick="toggleNLPerdido()" style="margin-left:auto">❌ Marcar como perdido</button>
       </div>
       <div id="nl-perdido-wrap" style="display:none;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
-        <select id="nl-perdido-motivo" style="flex:1;min-width:160px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+        <select id="nl-perdido-motivo" onchange="_lostMotivoChange(this,'nl-perdido-otro-wrap')" style="flex:1;min-width:160px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
           <option value="">— Motivo —</option>
-          <option>Otro departamento</option>
-          <option>Crédito directo</option>
-          <option>FAP</option>
-          <option>No califica</option>
-          <option>Otro</option>
         </select>
         <button type="button" class="btn btn-red btn-sm" onclick="saveLeadPerdido()">Confirmar pérdida</button>
+        <div id="nl-perdido-otro-wrap" style="display:none;flex:0 0 100%">
+          <input type="text" id="nl-perdido-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off" style="width:100%;box-sizing:border-box;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+        </div>
       </div>
     </div>
   </div>
@@ -1283,7 +1284,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='118';
+  var CURRENT_VERSION='119';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1735,6 +1736,21 @@ async function loadCatalogs(){
   }catch(e){console.error('catalogs:',e);}
 }
 
+const _MOTIVOS_PERDIDA_BASE=['Otro departamento','Crédito directo','FAP','No califica'];
+function _populateLostMotivos(){
+  const dbExtras=(motivosPerdida||[]).map(function(m){return m.nombre;}).filter(function(n){
+    return n!=='Otro'&&!_MOTIVOS_PERDIDA_BASE.includes(n);
+  });
+  const todas=_MOTIVOS_PERDIDA_BASE.concat(dbExtras).concat(['Otro']);
+  const html='<option value="">— Motivo —</option>'+todas.map(function(m){return'<option value="'+_escPend(m)+'">'+_escPend(m)+'</option>';}).join('');
+  const s1=document.getElementById('lost-motivo');if(s1)s1.innerHTML=html;
+  const s2=document.getElementById('nl-perdido-motivo');if(s2)s2.innerHTML=html;
+}
+function _lostMotivoChange(sel,wrapId){
+  const w=document.getElementById(wrapId);
+  if(!w)return;
+  w.style.display=sel.value==='Otro'?'block':'none';
+}
 function populateCatalogSelects(){
   // Filtro estado en semana
   const filt=document.getElementById('filtro-estado');
@@ -1745,8 +1761,8 @@ function populateCatalogSelects(){
   // Select siguiente estado
   const nextEst=document.getElementById('next-estado');
   nextEst.innerHTML=itemsSeg.map(s=>`<option>${s.nombre}</option>`).join('');
-  // Select motivos perdida
-  document.getElementById('lost-motivo').innerHTML=motivosPerdida.map(m=>`<option>${m.nombre}</option>`).join('');
+  // Select motivos perdida (dinámico: base fija + DB + IA + "Otro" al final)
+  _populateLostMotivos();
   // Select motivos ganado
   document.getElementById('won-motivo').innerHTML=motivosGanado.map(m=>`<option>${m.nombre}</option>`).join('');
   // Medios difusion en crear lead
@@ -4195,6 +4211,9 @@ async function prepareFinalize(){
   // v102 — re-habilitar botón por si quedó trabado de una llamada anterior
   const _bs=document.getElementById('btn-guardar-seg');
   if(_bs){_bs.disabled=false;_bs.style.opacity='1';_bs.style.cursor='pointer';_bs.innerHTML='💾 Guardar seguimiento';}
+  // v119 — resetear campo "Otro" de motivo perdida
+  const _ow=document.getElementById('lost-otro-wrap');if(_ow)_ow.style.display='none';
+  const _ot=document.getElementById('lost-otro-texto');if(_ot)_ot.value='';
   openModal('modalFinalize');
 }
 
@@ -4334,7 +4353,12 @@ async function saveSeguimiento(){
       wonData={cod:_vCod,m2,cerrador:_vCerr,captador:_vCap};
 
     } else if(outcomeMode==='lost'){
-      const motivo=document.getElementById('lost-motivo').value;
+      let motivo=document.getElementById('lost-motivo').value;
+      if(motivo==='Otro'){
+        const _otrTxt=(document.getElementById('lost-otro-texto')?.value||'').trim();
+        if(!_otrTxt){toast('Escribí el motivo en el campo de texto','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
+        motivo=_otrTxt;
+      }
       const notaLost=document.getElementById('lost-nota').value;
       const{error:e4}=await sb.from('leads').update({
         estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:notaLost,updated_at:now
@@ -4535,8 +4559,13 @@ async function saveLeadPerdido(){
   const nombre=document.getElementById('nl-nombre')?.value.trim();
   const celular=document.getElementById('nl-celular')?.value.trim();
   if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
-  const motivo=document.getElementById('nl-perdido-motivo')?.value;
+  let motivo=document.getElementById('nl-perdido-motivo')?.value;
   if(!motivo){toast('Elegí un motivo','error');return;}
+  if(motivo==='Otro'){
+    const _otrTxt=(document.getElementById('nl-perdido-otro-texto')?.value||'').trim();
+    if(!_otrTxt){toast('Escribí el motivo en el campo de texto','error');return;}
+    motivo=_otrTxt;
+  }
   const ciudad=document.getElementById('nl-ciudad')?.value||null;
   const medio=document.getElementById('nl-medio')?.value||null;
   const esCaptadora=cu.rol==='field_capturer';
@@ -4602,6 +4631,8 @@ function closeModal(id){
     _grabOrigenRegId=null;_grabOrigenExtraccion=null;
     const _pw=document.getElementById('nl-perdido-wrap');if(_pw)_pw.style.display='none';
     const _pm=document.getElementById('nl-perdido-motivo');if(_pm)_pm.value='';
+    const _pow=document.getElementById('nl-perdido-otro-wrap');if(_pow)_pow.style.display='none';
+    const _pot=document.getElementById('nl-perdido-otro-texto');if(_pot)_pot.value='';
   }
 }
 
@@ -5209,6 +5240,15 @@ async function renderAdmin(){
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
 
+    <!-- 📊 Motivos de pérdida IA -->
+    <div class="admin-section">
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
+        <div class="admin-section-title" style="margin:0">📊 Motivos de pérdida</div>
+        <button id="motivos-ia-btn" type="button" class="btn btn-ghost btn-sm" onclick="_analizarMotivosPerdida()" style="font-size:11px">🧠 Analizar motivos de pérdida</button>
+      </div>
+      <div id="motivos-ia-resultados" style="margin-top:10px"></div>
+    </div>
+
     <!-- 👥 Gestión de Usuarios -->
     <div class="admin-section">
       <div class="admin-section-title">👥 Gestión de Usuarios (${usuarios.length})</div>
@@ -5315,6 +5355,70 @@ async function renderAdmin(){
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
   }
+}
+
+/* ════════════════════════════════════════
+   MOTIVOS DE PÉRDIDA — análisis IA (solo admin)
+════════════════════════════════════════ */
+async function _analizarMotivosPerdida(){
+  const btn=document.getElementById('motivos-ia-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Analizando...';}
+  const res=document.getElementById('motivos-ia-resultados');
+  if(res)res.innerHTML='<div class="loading-state"><span class="spin"></span> Consultando IA...</div>';
+  try{
+    const{data,error}=await sb.from('leads').select('motivo_perdida').not('motivo_perdida','is',null).eq('activo',true);
+    if(error)throw error;
+    const fixed=_MOTIVOS_PERDIDA_BASE.concat((motivosPerdida||[]).map(function(m){return m.nombre;})).concat(['Otro']);
+    const manuales=[...new Set((data||[]).map(function(l){return(l.motivo_perdida||'').trim();}).filter(function(m){return m&&!fixed.includes(m);}))];
+    if(!manuales.length){
+      if(res)res.innerHTML='<div style="color:var(--gray-400);font-size:12px">No hay motivos manuales para analizar todavía.</div>';
+      if(btn){btn.disabled=false;btn.textContent='🧠 Analizar motivos de pérdida';}
+      return;
+    }
+    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
+    if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
+    const iaResp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,
+        messages:[{role:'user',content:'Estos son motivos de pérdida de leads escritos a mano por vendedores. Agrupá los parecidos y devolvé SOLO un JSON array con los 3-5 motivos nuevos más frecuentes que convendría agregar como opción fija. Formato: ["motivo1","motivo2"]. Sin texto extra.\n\n'+manuales.join('\n')}]})
+    });
+    if(!iaResp.ok)throw new Error('API '+iaResp.status);
+    const aiData=await iaResp.json();
+    let txt=(aiData.content&&aiData.content[0]&&aiData.content[0].text)||'';
+    txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+    let sugeridos=JSON.parse(txt);
+    if(!Array.isArray(sugeridos))throw new Error('Respuesta inesperada de IA');
+    sugeridos=sugeridos.map(function(m){return(m+'').trim();}).filter(function(m){return m&&!fixed.includes(m);});
+    if(!sugeridos.length){
+      if(res)res.innerHTML='<div style="color:var(--gray-400);font-size:12px">La IA no encontró patrones nuevos significativos.</div>';
+      if(btn){btn.disabled=false;btn.textContent='🧠 Analizar motivos de pérdida';}
+      return;
+    }
+    if(res)res.innerHTML=
+      '<div style="font-size:12px;margin-bottom:8px;color:var(--gold)">Motivos sugeridos ('+manuales.length+' manuales analizados):</div>'+
+      sugeridos.map(function(m,i){return'<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="m-sug-'+i+'" value="'+_escPend(m)+'"> '+_escPend(m)+'</label>';}).join('')+
+      '<div style="margin-top:10px"><button type="button" class="btn btn-primary btn-sm" style="font-size:11px" onclick="_aprobarMotivosSugeridos()">✅ Agregar seleccionados</button></div>';
+  }catch(e){
+    if(res)res.innerHTML='<div style="color:var(--st-atrasado);font-size:12px">Error: '+_escPend(e.message||'error')+'</div>';
+  }
+  if(btn){btn.disabled=false;btn.textContent='🧠 Analizar motivos de pérdida';}
+}
+async function _aprobarMotivosSugeridos(){
+  const res=document.getElementById('motivos-ia-resultados');
+  const checks=res&&res.querySelectorAll('input[type="checkbox"]:checked');
+  if(!checks||!checks.length){toast('Elegí al menos un motivo','error');return;}
+  const nuevos=Array.from(checks).map(function(c){return(c.value||'').trim();}).filter(Boolean);
+  try{
+    for(var i=0;i<nuevos.length;i++){
+      const{error}=await sb.from('motivos_perdida').insert({nombre:nuevos[i]});
+      if(error&&error.code!=='23505')throw error;
+    }
+    motivosPerdida=motivosPerdida.concat(nuevos.filter(function(n){return!(motivosPerdida||[]).some(function(m){return m.nombre===n;});}).map(function(n){return{nombre:n};}));
+    _populateLostMotivos();
+    toast('✅ '+nuevos.length+' motivo(s) agregado(s) al selector','ok');
+    if(res)res.innerHTML='<div style="color:var(--st-completo);font-size:12px;padding:6px 0">✅ Motivos agregados. Ya aparecen en los selectores.</div>';
+  }catch(e){toast('Error al guardar: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
