@@ -1098,6 +1098,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ MODAL: CONFIRMAR LEAD DESDE GRABACIÓN ══ -->
+<div id="modalConfLead" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalConfLead')">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h2>➕ Crear lead desde grabación</h2>
+      <button class="modal-close" onclick="closeModal('modalConfLead')">×</button>
+    </div>
+    <div class="modal-body" id="modal-conf-lead-body" style="padding:16px"></div>
+  </div>
+</div>
+
 <!-- ══ MODAL: BUSCAR / NUEVA OPORTUNIDAD ══ -->
 <div id="modalSearch" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalSearch')">
   <div class="modal">
@@ -1284,7 +1295,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='120';
+  var CURRENT_VERSION='121';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -4626,6 +4637,9 @@ function openModal(id){
 }
 function closeModal(id){
   document.getElementById(id).classList.remove('show');
+  if(id==='modalConfLead'){
+    _grabOrigenRegId=null;_grabOrigenExtraccion=null;
+  }
   /* Si se cancela crear lead, soltar el vínculo con el registro de grabación */
   if(id==='modalNewLead'){
     _grabOrigenRegId=null;_grabOrigenExtraccion=null;
@@ -5637,7 +5651,7 @@ async function _grabAnalizarIA(id){
     if(btn){btn.disabled=false;btn.innerHTML='🤖 Analizar con IA';}
   }
 }
-/* Abre el formulario existente de crear lead pre-llenado desde la extracción */
+/* ── Crear lead desde grabación: modal de confirmación rápida ── */
 let _grabOrigenRegId=null;
 let _grabOrigenExtraccion=null;
 function _grabCrearLead(id){
@@ -5648,49 +5662,124 @@ function _grabCrearLead(id){
   if(g.lead_creado_id){toast('Ya se creó el lead #'+g.lead_creado_id+' desde este registro','warning');return;}
   _grabOrigenRegId=id;
   _grabOrigenExtraccion=x;
-  const set=(i,v)=>{const el=document.getElementById(i);if(el)el.value=v||'';};
-  set('nl-nombre',x.nombre);
-  set('nl-celular',x.celular);
-  if(x.celular)checkDuplicate(x.celular);
-  /* Ciudad: solo si coincide con una opción del select de departamentos */
-  const selC=document.getElementById('nl-ciudad');
-  if(selC&&x.ciudad){
-    const opt=Array.from(selC.options).find(o=>o.value&&o.value.toLowerCase()===String(x.ciudad).toLowerCase());
-    selC.value=opt?opt.value:'';
+  let resObj=null; try{resObj=JSON.parse(g.resumen);}catch(e){}
+  const nivelRaw=(resObj&&resObj.nivel_interes||'').toLowerCase();
+  const gradoLabel={'alto':'🔴 Alto','medio':'🟡 Medio','bajo':'🟢 Bajo'}[nivelRaw]||'';
+  const filas=[
+    ['Nombre',x.nombre],['Celular',x.celular],['Ciudad',x.ciudad],
+    ['Plantas',x.plantas!=null?x.plantas:null],
+    ['Terreno',x.lugar_terreno],
+    ['Presupuesto',x.presupuesto!=null?('$'+x.presupuesto):null],
+    ['Financiamiento',x.financiamiento],
+    ['Tipo',x.vivienda_o_inversion],
+    ['¿Cuándo construir?',x.cuando_construir],
+    ['Interés',gradoLabel]
+  ].filter(function(r){return r[1]!=null&&r[1]!=='';});
+  const body=document.getElementById('modal-conf-lead-body');
+  if(body){
+    body.innerHTML=
+      '<div style="font-size:12px;color:var(--gray-300);margin-bottom:10px">Revisá los datos antes de crear el lead:</div>'+
+      '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+      filas.map(function(r){return'<tr><td style="color:var(--gray-400);padding:3px 8px 3px 0;white-space:nowrap;vertical-align:top">'+_escPend(r[0])+'</td>'+
+        '<td style="font-weight:700;padding:3px 0">'+_escPend(String(r[1]))+'</td></tr>';}).join('')+
+      '</table>'+
+      '<div style="display:flex;gap:8px;margin-top:16px">'+
+      '<button type="button" class="btn btn-primary btn-sm" id="btn-conf-lead" onclick="_grabCrearLeadDirecto('+id+')" style="flex:1;justify-content:center">✅ Crear lead</button>'+
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="_grabCrearLeadEditar('+id+')" style="flex:1;justify-content:center">✏️ Editar antes</button>'+
+      '</div>';
   }
-  /* Método de pago desde financiamiento */
-  const mp=x.financiamiento==='contado'?'contado':(x.financiamiento==='financiamiento'?'financiamiento_bancario':'');
+  openModal('modalConfLead');
+}
+/* Crea el lead directamente sin abrir el formulario */
+async function _grabCrearLeadDirecto(id){
+  const g=_grabCache[id];
+  const x=_grabOrigenExtraccion;
+  if(!g||!x){toast('Datos no disponibles','error');return;}
+  const btn=document.getElementById('btn-conf-lead');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Creando...';}
+  try{
+    if(x.celular){
+      const{data:dup}=await sb.from('leads').select('id').eq('celular',x.celular).or('archivado.is.null,archivado.eq.false').limit(1);
+      if(dup&&dup.length){toast('Número ya registrado en un lead activo','error');if(btn){btn.disabled=false;btn.textContent='✅ Crear lead';}return;}
+    }
+    let resObj=null; try{resObj=JSON.parse(g.resumen);}catch(e){}
+    const nivelRaw=(resObj&&resObj.nivel_interes||'').toLowerCase();
+    const nivelMap={'alto':'alto','medio':'medio','bajo':'bajo'};
+    const grado=nivelMap[nivelRaw]||null;
+    const pks=resObj&&Array.isArray(resObj.puntos_clave)?resObj.puntos_clave.slice(0,3):[];
+    const nota=pks.length?pks.join(' · '):'Creado desde registro #'+id+'.';
+    const now=new Date().toISOString();
+    const captador=g.colaborador||cu.nombre;
+    const fp=new Date(ymdLocal(new Date())+'T10:00:00').toISOString();
+    const{data:newLead,error:e1}=await sb.from('leads').insert({
+      nombre:x.nombre||'',celular:x.celular||'',ciudad:x.ciudad||null,
+      captador,medio_difusion:null,notas:nota,
+      estado:'nuevo',etapa:'1er intento',
+      grado_interes:grado,
+      fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
+    }).select('id,nombre').single();
+    if(e1)throw e1;
+    const{error:e2}=await sb.from('agenda_personal').insert({
+      colaborador:captador,lead_id:newLead.id,tipo:'1er intento',
+      titulo:newLead.nombre,nota,fecha_programada:fp,completada:false
+    });
+    if(e2&&e2.code!=='23505')throw e2;
+    try{
+      await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',id);
+      if(_grabCache[id])_grabCache[id].lead_creado_id=newLead.id;
+      if(_mirCache[id])_mirCache[id].lead_creado_id=newLead.id;
+    }catch(e){}
+    const indUpd={};
+    if(x.plantas!=null)indUpd.ind_plantas=String(x.plantas);
+    if(x.financiamiento)indUpd.ind_financiamiento=x.financiamiento;
+    if(x.lugar_terreno)indUpd.ind_lugar_terreno=x.lugar_terreno;
+    if(x.presupuesto!=null)indUpd.ind_presupuesto=x.presupuesto;
+    if(x.monto_financiamiento!=null)indUpd.ind_monto_financiamiento=x.monto_financiamiento;
+    if(x.vivienda_o_inversion)indUpd.ind_tipo=x.vivienda_o_inversion;
+    if(x.cuando_construir)indUpd.ind_cuando_construir=x.cuando_construir;
+    if(Object.keys(indUpd).length){try{await sb.from('leads').update(indUpd).eq('id',newLead.id);}catch(e){}}
+    /* Registrar auditoría */
+    try{await registrarAuditoria('crear_lead','lead',newLead.id,'Lead creado desde grabación #'+id);}catch(e){}
+    closeModal('modalConfLead');
+    _grabOrigenRegId=null; _grabOrigenExtraccion=null;
+    toast('✅ Lead #'+newLead.id+' creado ('+_escPend(x.nombre||'')+')');
+    _grabRefrescarDetalle(id);
+    const _mirScr=document.getElementById('screen-miregistro');
+    if(_mirScr&&_mirScr.classList.contains('active'))_mirRenderFiltrado();
+    renderWeek();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='✅ Crear lead';}
+    toast('Error: '+_escPend(e.message||'error'),'error');
+  }
+}
+/* Abre el formulario completo con los datos prellenados */
+function _grabCrearLeadEditar(id){
+  const xSave=_grabOrigenExtraccion;
+  const g=_grabCache[id];
+  closeModal('modalConfLead'); /* resetea _grabOrigenExtraccion via closeModal */
+  if(!xSave||!g){openModal('modalNewLead');return;}
+  _grabOrigenRegId=id;
+  _grabOrigenExtraccion=xSave;
+  openModal('modalNewLead'); /* resetea el formulario — hay que rellenar DESPUÉS */
+  const set=function(i,v){const el=document.getElementById(i);if(el)el.value=v||'';};
+  set('nl-nombre',xSave.nombre);
+  set('nl-celular',xSave.celular);
+  if(xSave.celular)checkDuplicate(xSave.celular);
+  const selC=document.getElementById('nl-ciudad');
+  if(selC&&xSave.ciudad){
+    const opt=Array.from(selC.options).find(function(o){return o.value&&o.value.toLowerCase()===String(xSave.ciudad).toLowerCase();});
+    if(opt)selC.value=opt.value;
+  }
+  const mp=xSave.financiamiento==='contado'?'contado':(xSave.financiamiento==='financiamiento'?'financiamiento_bancario':'');
   set('nl-metodo-pago',mp);
-  /* Grado de interés desde nivel_interes del resumen */
   let resObj=null; try{resObj=JSON.parse(g.resumen);}catch(e){}
   const nivelMap={'alto':'alto','medio':'medio','bajo':'bajo'};
-  const nivelRaw=(resObj&&resObj.nivel_interes||'').toLowerCase();
-  set('nl-grado-interes',nivelMap[nivelRaw]||'');
-  /* Nota desde puntos_clave del resumen (máx 3) */
+  set('nl-grado-interes',nivelMap[(resObj&&resObj.nivel_interes||'').toLowerCase()]||'');
   const pks=resObj&&Array.isArray(resObj.puntos_clave)?resObj.puntos_clave.slice(0,3):[];
   set('nl-nota',pks.length?pks.join(' · '):'Creado desde registro #'+id+'.');
-  /* Expandir "Datos adicionales" */
   const deb=document.getElementById('nl-datos-extra-body');
   const dei=document.getElementById('datos-extra-icon');
   if(deb&&deb.style.display==='none'){deb.style.display='';if(dei)dei.textContent='▼';}
-  /* Preview visible de datos ind_ extraídos (terreno, presupuesto, plantas…) */
-  const _prevOld=document.getElementById('nl-ind-preview');if(_prevOld)_prevOld.remove();
-  const _indRows=[];
-  if(x.lugar_terreno)_indRows.push(['📍 Terreno',x.lugar_terreno]);
-  if(x.plantas!=null)_indRows.push(['🏢 Plantas',x.plantas]);
-  if(x.presupuesto!=null)_indRows.push(['💰 Presupuesto','$'+x.presupuesto]);
-  if(x.vivienda_o_inversion)_indRows.push(['🏠 Tipo',x.vivienda_o_inversion]);
-  if(x.cuando_construir)_indRows.push(['📅 ¿Cuándo?',x.cuando_construir]);
-  if(x.financiamiento)_indRows.push(['💳 Financiamiento',x.financiamiento]);
-  if(_indRows.length&&deb){
-    const _prev=document.createElement('div');
-    _prev.id='nl-ind-preview';
-    _prev.style.cssText='background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:11px';
-    _prev.innerHTML='<div style="color:var(--gold);font-weight:700;margin-bottom:4px">📋 Datos extraídos de la grabación</div>'+
-      _indRows.map(function(r){return'<div><span style="color:var(--gray-400)">'+_escPend(r[0])+':</span> <strong>'+_escPend(String(r[1]))+'</strong></div>';}).join('');
-    deb.appendChild(_prev);
-  }
-  openModal('modalNewLead');
 }
 async function _grabCargarAudio(id,audioPath){
   const cont=document.getElementById('grab-audio-'+id); if(!cont)return;
