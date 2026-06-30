@@ -1295,7 +1295,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='121';
+  var CURRENT_VERSION='122';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -2616,6 +2616,7 @@ async function openLeadDetail(leadId,agendaId,mode){
   document.getElementById('modal-lead-nombre').innerHTML=(lead.nombre||'—')+_fichaBadge+_lapizEditar;
 
   const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
+  if(!currentAgendaId&&current&&!current.completada)currentAgendaId=current.id;
 
   document.getElementById('modal-lead-body').innerHTML=`
     ${currentLeadMode==='readonly'?'<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.</div>':''}
@@ -4393,21 +4394,27 @@ async function saveSeguimiento(){
       _modalBodyLock('modalFinalize',false); // confirmacion de venta queda interactiva
       showWonConfirm(wonData);
       toast('🏆 Lead marcado como GANADO');
-      renderWeek();
-      cargarMarcadoresDia();
+      try{renderWeek();}catch(_re){}
+      try{cargarMarcadoresDia();}catch(_me){}
+      const _phwW=document.getElementById('para-hoy-wrap');
+      if(_phwW&&_phwW.style.display!=='none')try{renderParaHoy();}catch(_pe){}
       return;
     }
     if(btn){btn.disabled=false;btn.innerHTML='✅ Guardado';}
     _modalBodyLock('modalFinalize',false);
     setTimeout(()=>{closeModal('modalFinalize');},700);
     toast(outcomeMode==='lost'?'Lead marcado como perdido':'✅ Seguimiento guardado y agenda actualizada');
-    renderWeek();
-    cargarMarcadoresDia();
   }catch(e){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
     _modalBodyLock('modalFinalize',false);
     toast('Error: '+e.message,'error');
+    return;
   }
+  // Refreshes fuera del try/catch — un error de UI nunca tapa el éxito guardado
+  try{renderWeek();}catch(_re){}
+  try{cargarMarcadoresDia();}catch(_me){}
+  const _phWrap=document.getElementById('para-hoy-wrap');
+  if(_phWrap&&_phWrap.style.display!=='none')try{renderParaHoy();}catch(_pe){}
 }
 
 /* ════════════════════════════════════════
