@@ -1295,7 +1295,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='122';
+  var CURRENT_VERSION='123';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -2653,12 +2653,12 @@ async function openLeadDetail(leadId,agendaId,mode){
           ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
           ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
         </div>
-        ${currentLeadMode==='normal'?(!current.completada?`<div class="action-row" style="align-items:center">
+        ${currentLeadMode==='normal'?(!current.completada&&lead.estado!=='cerrado_perdido'&&lead.estado!=='cerrado_ganado'?`<div class="action-row" style="align-items:center">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
           ${cu.rol==='admin'?`<button id="recBtn" type="button" onclick="toggleGrabacion()" title="Audio" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>`:''}
         </div>
-        <div id="recResultCard"></div>`:'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>'):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
+        <div id="recResultCard"></div>`:(lead.estado==='cerrado_perdido'?'<div style="color:var(--st-atrasado);font-weight:700;font-size:12px;margin-top:8px">❌ Lead marcado como PERDIDO — no se puede finalizar</div>':lead.estado==='cerrado_ganado'?'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">🏆 Lead marcado como GANADO</div>':'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>')):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
       </div>`:''}
       <div class="section">
         <div class="section-title">Línea de tiempo completa</div>
@@ -4366,6 +4366,7 @@ async function saveSeguimiento(){
 
     } else if(outcomeMode==='lost'){
       let motivo=document.getElementById('lost-motivo').value;
+      if(!motivo){toast('Seleccioná un motivo de pérdida','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
       if(motivo==='Otro'){
         const _otrTxt=(document.getElementById('lost-otro-texto')?.value||'').trim();
         if(!_otrTxt){toast('Escribí el motivo en el campo de texto','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
@@ -4415,6 +4416,7 @@ async function saveSeguimiento(){
   try{cargarMarcadoresDia();}catch(_me){}
   const _phWrap=document.getElementById('para-hoy-wrap');
   if(_phWrap&&_phWrap.style.display!=='none')try{renderParaHoy();}catch(_pe){}
+  if(outcomeMode==='lost')try{cargarLeadsRecientes();}catch(_lr){}
 }
 
 /* ════════════════════════════════════════
