@@ -906,6 +906,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             <select class="form-control" id="won-motivo"></select>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Código de venta (opcional)</label>
+            <input class="form-control" type="text" id="won-codigo-venta" placeholder="Autogenerado si se deja vacío">
+          </div>
+        </div>
         <!-- Fix 4a — preview registro en ventas -->
         <div style="background:rgba(46,204,113,0.08);border:1px solid var(--st-completo);border-radius:8px;padding:11px;margin-top:10px">
           <div style="font-size:11px;color:var(--st-completo);font-weight:600;margin-bottom:8px">✅ Se registrará automáticamente en <strong>ventas</strong></div>
@@ -1295,7 +1301,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='124';
+  var CURRENT_VERSION='125';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -4212,6 +4218,11 @@ async function prepareFinalize(){
   const _wsr=document.getElementById('won-success'); if(_wsr)_wsr.style.display='none';
   document.getElementById('fin-fecha-auto').value=fmtDT(new Date());
   document.getElementById('fin-nota').value='';
+  // v125 — resetear bloque GANADO en cada apertura (evita arrastrar monto/m²/fecha de un cierre anterior)
+  document.getElementById('won-monto').value='';
+  document.getElementById('won-m2').value='';
+  document.getElementById('won-codigo-venta').value='';
+  document.getElementById('won-fecha-firma').value=ymdLocal(new Date());
   // Próximo contacto sugerido según la etapa actual del lead (editable)
   let diasSug=2;
   try{
@@ -4341,21 +4352,27 @@ async function saveSeguimiento(){
       const m2=parseFloat(document.getElementById('won-m2').value)||null;
       const fechaFirma=document.getElementById('won-fecha-firma').value||null;
       const motivo=document.getElementById('won-motivo').value;
+      const codigoVentaInput=(document.getElementById('won-codigo-venta').value||'').trim();
+      // v125 — monto y m² son obligatorios para registrar el cierre en ventas
+      if(!monto||!m2){
+        toast('Ingresá el monto del contrato y los m² para registrar el cierre','error');
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        _modalBodyLock('modalFinalize',false);
+        return;
+      }
+      const{data:leadFull}=await sb.from('leads')
+        .select('codigo_venta,nombre,captador').eq('id',currentLeadId).single();
+      const _vCod=codigoVentaInput||(leadFull&&leadFull.codigo_venta)||('GEAT-'+new Date().getFullYear()+'-'+String(currentLeadId).padStart(4,'0'));
       const{error:e3}=await sb.from('leads').update({
         estado:'cerrado_ganado',monto_contrato:monto,metros_cuadrados:m2,
-        fecha_contrato:fechaFirma,motivo_ganado:motivo,updated_at:now
+        fecha_contrato:fechaFirma,motivo_ganado:motivo,cerrador:cu.nombre,codigo_venta:_vCod,updated_at:now
       }).eq('id',currentLeadId);
       if(e3)throw e3;
       registrarAuditoria('marcar_ganado','leads',currentLeadId,{m2,fecha_firma:fechaFirma,motivo});
 
       // Fix 4a — registrar venta automática (no interrumpe el flujo ganado)
-      let _vCod='',_vCerr='',_vCap='';
+      let _vCerr=cu.nombre,_vCap=(leadFull&&leadFull.captador)||'';
       try{
-        const{data:leadFull}=await sb.from('leads')
-          .select('codigo_venta,nombre,cerrador,captador').eq('id',currentLeadId).single();
-        _vCod=(leadFull&&leadFull.codigo_venta)||('GEAT-'+new Date().getFullYear()+'-'+String(currentLeadId).padStart(4,'0'));
-        _vCerr=(leadFull&&leadFull.cerrador)||'';
-        _vCap=(leadFull&&leadFull.captador)||'';
         const ventaRow={lead_id:currentLeadId,codigo_venta:_vCod,
           nombre_cliente:(leadFull&&leadFull.nombre)||'',cerrador:_vCerr,
           captador:_vCap,monto_usd:monto,metros_cuadrados:m2};
