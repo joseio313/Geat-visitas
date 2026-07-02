@@ -1295,7 +1295,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='123';
+  var CURRENT_VERSION='124';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1918,10 +1918,12 @@ async function renderWeek(){
   const _lidsW=[...new Set(agendaData.map(a=>a.lead_id).filter(Boolean))];
   _estadoLeadMap={};
   const _voSet=new Set();
+  const _archSetW=new Set();
   if(_lidsW.length){
-    const{data:_ldW}=await sb.from('leads').select('id,estado,visito_oficina').in('id',_lidsW);
-    (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.visito_oficina)_voSet.add(l.id);});
+    const{data:_ldW}=await sb.from('leads').select('id,estado,visito_oficina,archivado').in('id',_lidsW);
+    (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.visito_oficina)_voSet.add(l.id);if(l.archivado)_archSetW.add(l.id);});
   }
+  agendaData=agendaData.filter(a=>!_archSetW.has(a.lead_id));
   if(filtE==='__visito_oficina')agendaData=agendaData.filter(a=>_voSet.has(a.lead_id));
 
   const grid=document.getElementById('week-grid');
@@ -2020,12 +2022,14 @@ async function renderMonth(){
   }
 
   const {data}=await q;
-  const acts=data||[];
+  let acts=data||[];
   const _lidsM=[...new Set(acts.map(a=>a.lead_id).filter(Boolean))];
   _estadoLeadMap={};
   if(_lidsM.length){
-    const{data:_ldM}=await sb.from('leads').select('id,estado').in('id',_lidsM);
-    (_ldM||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;});
+    const{data:_ldM}=await sb.from('leads').select('id,estado,archivado').in('id',_lidsM);
+    const _archSetM=new Set();
+    (_ldM||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.archivado)_archSetM.add(l.id);});
+    acts=acts.filter(a=>!a.lead_id||!_archSetM.has(a.lead_id));
   }
   document.getElementById('month-total-count').textContent=acts.length;
 
