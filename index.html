@@ -1301,7 +1301,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='127';
+  var CURRENT_VERSION='128';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1504,6 +1504,13 @@ function esLeadPropio(lead){
   if(cu.rol==='commercial_lead'||cu.rol==='closer')return esMio||lead.cerrador===cu.nombre;
   return !!esMio;
 }
+/* v128 — agrupa asistentes bajo su principal en reportes/dashboards de equipo.
+   Excepción: admin ve el desglose completo (principal + asistente por separado). */
+function _keyVendedor(nombre){
+  if(!nombre||(cu&&cu.rol==='admin'))return nombre;
+  const c=(colaboradores||[]).find(x=>x.nombre===nombre);
+  return(c&&c.asistente_de)?c.asistente_de:nombre;
+}
 
 /* CAMBIO 7 — Marcadores del día (v85: auditoría — UNA sola definición para contadores y mini-tabla)
    Realizada = con resultado registrado (completada), fecha_programada hoy (día Bolivia)
@@ -1558,8 +1565,10 @@ async function cargarMarcadoresDia(){
     // Mini-tabla por vendedor — solo jefes y solo cuando no hay filtro persona
     if(tbl){
       if(esJefe&&!filtP){
-        const cnt=(arr,name)=>arr.filter(n=>n===name).length;
-        const colab=(colaboradores||[]).filter(c=>c.activo&&!_esML(c.nombre)&&c.nombre!=='Sistema');
+        // v128 — agrupar asistentes bajo su principal (excepción: admin ve desglose completo)
+        const esAdmin=cu&&cu.rol==='admin';
+        const cnt=(arr,name)=>arr.filter(n=>_keyVendedor(n)===name).length;
+        const colab=(colaboradores||[]).filter(c=>c.activo&&!_esML(c.nombre)&&c.nombre!=='Sistema'&&(esAdmin||!c.asistente_de));
         const filas=colab.map(c=>({
           nombre:c.nombre,
           r:cnt(dR,c.nombre),
@@ -2237,24 +2246,27 @@ async function renderReports(){
   const byPerson={};
   const byCloser={};
   leads.forEach(l=>{
-    const p=l.captador||'Sin asignar';
+    // v128 — agrupa asistentes bajo su principal (excepción: admin ve desglose completo)
+    const p=_keyVendedor(l.captador||'Sin asignar');
     if(!byPerson[p])byPerson[p]={leads:0,ganados:0,m2:0};
     byPerson[p].leads++;
     if(l.estado==='cerrado_ganado')byPerson[p].ganados++;
     byPerson[p].m2+=(Number(l.metros_cuadrados)||0);
     // CAMBIO 2 — atribución por cerrador
     if(l.cerrador){
-      if(!byCloser[l.cerrador])byCloser[l.cerrador]={leads:0,ganados:0,m2:0};
-      byCloser[l.cerrador].leads++;
-      if(l.estado==='cerrado_ganado')byCloser[l.cerrador].ganados++;
-      byCloser[l.cerrador].m2+=(Number(l.metros_cuadrados)||0);
+      const c=_keyVendedor(l.cerrador);
+      if(!byCloser[c])byCloser[c]={leads:0,ganados:0,m2:0};
+      byCloser[c].leads++;
+      if(l.estado==='cerrado_ganado')byCloser[c].ganados++;
+      byCloser[c].m2+=(Number(l.metros_cuadrados)||0);
     }
   });
   const actsByPerson={};
   acts.forEach(a=>{
-    if(!actsByPerson[a.colaborador])actsByPerson[a.colaborador]={total:0,completadas:0};
-    actsByPerson[a.colaborador].total++;
-    if(a.completada)actsByPerson[a.colaborador].completadas++;
+    const co=_keyVendedor(a.colaborador);
+    if(!actsByPerson[co])actsByPerson[co]={total:0,completadas:0};
+    actsByPerson[co].total++;
+    if(a.completada)actsByPerson[co].completadas++;
   });
 
   // Motivos de pérdida
@@ -2290,7 +2302,7 @@ async function renderReports(){
           <thead><tr><th>Equipo</th><th>Leads</th><th>Actividades</th><th>Ganados</th><th>m²</th></tr></thead>
           <tbody>
             <tr><td colspan="5" style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);padding-top:6px">Captadoras</td></tr>
-            ${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer')
+            ${colaboradores.filter(c=>c.activo&&c.rol==='field_capturer'&&(esAdmin||!c.asistente_de))
               .filter((v,i,arr)=>arr.findIndex(x=>x.nombre===v.nombre)===i)
               .map(c=>{
               const p=byPerson[c.nombre]||{leads:0,ganados:0,m2:0};
@@ -2299,7 +2311,7 @@ async function renderReports(){
               return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
             }).join('')}
             <tr><td colspan="5" style="border-top:1px dashed var(--gray-600);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);padding-top:8px">Cerradores</td></tr>
-            ${colaboradores.filter(c=>c.activo&&c.rol==='commercial_lead').map(c=>{
+            ${colaboradores.filter(c=>c.activo&&c.rol==='commercial_lead'&&(esAdmin||!c.asistente_de)).map(c=>{
               const p=byCloser[c.nombre]||{leads:0,ganados:0,m2:0};
               const a=actsByPerson[c.nombre]||{total:0,completadas:0};
               return `<tr><td>${c.nombre}</td><td class="num">${p.leads}</td><td class="num">${a.completadas}/${a.total}</td><td class="num">${p.ganados}</td><td class="num">${p.m2}</td></tr>`;
@@ -2498,12 +2510,14 @@ async function verReporteVendedor(){
   try{
     const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,metros_cuadrados,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta);
     const{data:acts}=await sb.from('agenda_personal').select('colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta);
+    // v128 — agrupa asistentes bajo su principal (excepción: admin ve desglose completo)
+    const esAdmin=cu&&cu.rol==='admin';
     const byP={};const aByP={};
-    (leads||[]).forEach(l=>{const p=l.captador||'Sin asignar';if(!byP[p])byP[p]={leads:0,ganados:0,m2:0};byP[p].leads++;if(l.estado==='cerrado_ganado'){byP[p].ganados++;byP[p].m2+=(l.metros_cuadrados||0);}});
-    (acts||[]).forEach(a=>{if(!aByP[a.colaborador])aByP[a.colaborador]={t:0,c:0};aByP[a.colaborador].t++;if(a.completada)aByP[a.colaborador].c++;});
+    (leads||[]).forEach(l=>{const p=_keyVendedor(l.captador||'Sin asignar');if(!byP[p])byP[p]={leads:0,ganados:0,m2:0};byP[p].leads++;if(l.estado==='cerrado_ganado'){byP[p].ganados++;byP[p].m2+=(l.metros_cuadrados||0);}});
+    (acts||[]).forEach(a=>{const co=_keyVendedor(a.colaborador);if(!aByP[co])aByP[co]={t:0,c:0};aByP[co].t++;if(a.completada)aByP[co].c++;});
     const html=`<table class="team-table" style="width:100%">
       <thead><tr><th>Colaborador</th><th>Leads</th><th>Actividades (comp/total)</th><th>Ganados</th><th>m² cerrados</th><th>Tasa cierre</th></tr></thead>
-      <tbody>${colaboradores.filter(c=>c.activo).map(c=>{
+      <tbody>${colaboradores.filter(c=>c.activo&&(esAdmin||!c.asistente_de)).map(c=>{
         const p=byP[c.nombre]||{leads:0,ganados:0,m2:0};
         const a=aByP[c.nombre]||{t:0,c:0};
         const tasa=p.leads?Math.round(p.ganados/p.leads*100):0;
