@@ -1301,7 +1301,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='126';
+  var CURRENT_VERSION='127';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -1495,6 +1495,14 @@ function _filtrarLeadsPorRol(q){
 function _filtrarPorColaborador(q){
   if(cu&&cu.asistente_de)return q.in('colaborador',[cu.nombre,cu.asistente_de]);
   return q.eq('colaborador',cu.nombre);
+}
+/* v127 — ¿el lead es propio del usuario actual? admin=todos, David(commercial_lead/closer)=sus cierres/captados, resto=solo captador propio */
+function esLeadPropio(lead){
+  if(!cu||!lead)return false;
+  if(cu.rol==='admin')return true;
+  const esMio=lead.captador===cu.nombre||(cu.asistente_de&&lead.captador===cu.asistente_de);
+  if(cu.rol==='commercial_lead'||cu.rol==='closer')return esMio||lead.cerrador===cu.nombre;
+  return !!esMio;
 }
 
 /* CAMBIO 7 — Marcadores del día (v85: auditoría — UNA sola definición para contadores y mini-tabla)
@@ -4820,12 +4828,15 @@ async function execSearch(q){
   }).join('')}</div>`;
 }
 
-/* CAMBIO 4 — Abrir lead en modo solo lectura */
+/* CAMBIO 4 — Abrir lead desde Buscar Lead: editable completo si es propio, solo lectura si es ajeno */
 async function openLeadReadOnly(leadId){
   closeModal('modalSearch');
-  const{data}=await sb.from('agenda_personal').select('id').eq('lead_id',leadId).eq('completada',false).eq('activo',true).order('fecha_programada').limit(1);
+  const[{data:leadRow},{data}]=await Promise.all([
+    sb.from('leads').select('captador,cerrador').eq('id',leadId).single(),
+    sb.from('agenda_personal').select('id').eq('lead_id',leadId).eq('completada',false).eq('activo',true).order('fecha_programada').limit(1)
+  ]);
   const agId=data?.[0]?.id||null;
-  openLeadDetail(leadId,agId,'readonly');
+  openLeadDetail(leadId,agId,esLeadPropio(leadRow)?'normal':'readonly');
 }
 
 /* CAMBIO 2 — Abrir lead para reactivar (muestra perfil + formulario reactivar) */
