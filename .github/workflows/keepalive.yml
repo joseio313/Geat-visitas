@@ -12,12 +12,14 @@ jobs:
       - name: Ping Geat CRM
         run: |
           curl -sS -o /dev/null -w "Geat CRM -> HTTP %{http_code}\n" \
-            "https://jsacnpgpnvoslrpurfxc.supabase.co/rest/v1/" \
+            "https://jsacnpgpnvoslrpurfxc.supabase.co/rest/v1/colores_etapa?select=*&limit=1" \
             -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE" \
             --fail
       - name: Ping Marketing Brain
         run: |
           curl -sS -o /dev/null -w "Marketing Brain -> HTTP %{http_code}\n" \
-            "https://ktcpehzczrblcommwczm.supabase.co/rest/v1/" \
-            -H "apikey: sb_publishable_t_fkSIPwHLcu0pVDgHwLjw_oBk0SXJX" \
+            "https://ktcpehzczrblcommwczm.supabase.co/rest/v1/agents?select=*&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0Y3BlaHpjenJibGNvbW13Y3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODM5NDksImV4cCI6MjA5MzY1OTk0OX0.WfBM0toUXDdADfnQ0CbtMOkH_ZnwvdwWQzr_bt2qY9g" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0Y3BlaHpjenJibGNvbW13Y3ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwODM5NDksImV4cCI6MjA5MzY1OTk0OX0.WfBM0toUXDdADfnQ0CbtMOkH_ZnwvdwWQzr_bt2qY9g" \
             --fail
