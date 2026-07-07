@@ -1,7 +1,17 @@
 # GEAT CRM Development Guardian
 
 ## REGLA #1: NUNCA entregar sin verificar
-Cada cambio DEBE pasar por este ciclo: EDITAR → VALIDAR JS → VERIFICAR FUNCIONALIDAD → COMMIT
+Cada cambio DEBE pasar por este ciclo: EDITAR → VALIDAR JS → VERIFICAR FUNCIONALIDAD → COMMIT → PUSH
+
+## REGLA #2: PUSH AUTOMÁTICO tras cada commit exitoso (autorizado, sin preguntar)
+Después de CADA commit que haya pasado validación JS y con index_v52.html sincronizado
+con index.html: ejecutar `git push origin main` automáticamente, sin pedir confirmación.
+Luego verificar que quedó en producción con:
+  curl -s https://raw.githubusercontent.com/joseio313/Geat-visitas/main/version.json
+Reportar al usuario el version.json que devuelve ese curl (no alcanza con el archivo local
+o con `git log`) — esa es la confirmación de que el push realmente llegó a GitHub.
+Si el curl no coincide con la versión recién commiteada: reintentar el push y avisar,
+NUNCA reportar éxito sin esa verificación remota.
 
 ## ARCHIVO DE PRODUCCIÓN
 El archivo es **index.html** (SIN tilde/acento). `indice.html` no existe. Confirmado: 95 commits, URL https://joseio313.github.io/Geat-visitas/ da 200 OK.
