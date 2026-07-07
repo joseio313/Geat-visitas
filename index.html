@@ -1213,6 +1213,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="modal-body">
       <input type="hidden" id="av-lead-id">
+      <div id="av-gate" style="display:none">
+        <div style="background:var(--gold);color:var(--black);font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">🧭 Antes de agendar, completá la indagación del cliente</div>
+        <div id="av-gate-fields"></div>
+        <div class="action-row">
+          <button class="btn-primary" id="av-gate-btn" onclick="guardarIndagacionYContinuar()">Continuar a agendar</button>
+          <button class="btn-ghost" onclick="closeModal('modalAgendarVisita')">Cancelar</button>
+        </div>
+      </div>
       <div id="av-form">
         <div class="form-group">
           <label class="form-label">Cliente</label>
@@ -1302,7 +1310,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='129';
+  var CURRENT_VERSION='130';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
@@ -3410,7 +3418,73 @@ function _waDraftHtml(){
     como paso, solo dentro del mensaje copiable)
 ════════════════════════════════════════ */
 let _avWaMsg='';
-function abrirAgendarVisita(){
+/* v130 — indagación exigida antes de pasar a visita_agendada (no retroactivo) */
+const IND_CAMPOS=[
+  {key:'grado_interes',label:'Grado de interés',type:'select',opts:[['bajo','🟢 Bajo'],['medio','🟡 Medio'],['alto','🔴 Alto']]},
+  {key:'ind_ciudad',label:'Ciudad',type:'text'},
+  {key:'ind_tipo',label:'¿Vivienda o inversión?',type:'select',opts:[['vivienda','Vivienda'],['inversion','Inversión']]},
+  {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario']]},
+  {key:'ind_monto_financiamiento',label:'Monto financiable ($)',type:'number'},
+  {key:'ind_presupuesto',label:'Presupuesto ($)',type:'number'},
+  {key:'ind_presupuesto_tope',label:'Presupuesto tope ($)',type:'number'},
+  {key:'ind_lugar_terreno',label:'Lugar del terreno',type:'text'},
+  {key:'ind_plantas',label:'Plantas',type:'number'},
+  {key:'ind_cuando_construir',label:'¿Cuándo construir?',type:'text'}
+];
+const IND_CAMPOS_SEL=IND_CAMPOS.map(function(c){return c.key;}).join(',');
+function _avCamposFaltantes(lf){
+  return IND_CAMPOS.filter(function(c){
+    const v=lf?lf[c.key]:null;
+    return v===null||v===undefined||v==='';
+  });
+}
+function _avRenderGate(faltantes){
+  window._avFaltantes=faltantes;
+  document.getElementById('av-form').style.display='none';
+  document.getElementById('av-gate').style.display='';
+  document.getElementById('av-gate-fields').innerHTML=faltantes.map(function(c){
+    const id='av-gate-'+c.key;
+    if(c.type==='select'){
+      const opts=c.opts.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+      return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+        '<select class="form-control" id="'+id+'"><option value="">Seleccionar...</option>'+opts+'</select></div>';
+    }
+    return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+      '<input class="form-control" type="'+(c.type==='number'?'number':'text')+'" id="'+id+'"></div>';
+  }).join('');
+}
+async function guardarIndagacionYContinuar(){
+  const faltantes=window._avFaltantes||[];
+  const l=window._leadAgendar;
+  if(!l||!l.id){toast('Sesión de lead perdida, reabrí el lead','error');return;}
+  const upd={};
+  for(const c of faltantes){
+    const el=document.getElementById('av-gate-'+c.key);
+    const raw=el?el.value:'';
+    if(raw===''||raw==null){toast('Completá: '+c.label,'error');return;}
+    upd[c.key]=c.type==='number'?parseFloat(raw):raw;
+  }
+  const btn=document.getElementById('av-gate-btn');
+  const origTxt=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.style.opacity='.6';btn.innerHTML='⏳ Guardando...';}
+  try{
+    const{data:actual}=await sb.from('leads').select(IND_CAMPOS_SEL).eq('id',l.id).single();
+    const merged=Object.assign({},actual||{},upd);
+    const completa=IND_CAMPOS.filter(function(c){return c.key!=='grado_interes';})
+      .every(function(c){const v=merged[c.key];return v!==null&&v!==undefined&&v!=='';});
+    if(completa)upd.indagacion_completa=true;
+    const{error}=await sb.from('leads').update(upd).eq('id',l.id);
+    if(error)throw error;
+    toast('✅ Indagación guardada');
+    document.getElementById('av-gate').style.display='none';
+    document.getElementById('av-form').style.display='';
+  }catch(e){
+    toast('Error: '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
+  }
+}
+async function abrirAgendarVisita(){
   const l=window._leadAgendar;
   if(!l||!l.id){toast('Abrí un lead primero','error');return;}
   if(!cu){toast('Sesión no válida','error');return;}
@@ -3423,10 +3497,22 @@ function abrirAgendarVisita(){
   document.getElementById('av-modo-pago').value='recursos_propios';
   document.getElementById('av-observacion').value='';
   toggleLugarVisita();
-  document.getElementById('av-form').style.display='';
   document.getElementById('av-resultado').style.display='none';
+  document.getElementById('av-gate').style.display='none';
+  document.getElementById('av-form').style.display='none';
   _avWaMsg='';
   openModal('modalAgendarVisita');
+  try{
+    const{data:lf,error}=await sb.from('leads').select('estado,'+IND_CAMPOS_SEL).eq('id',l.id).single();
+    if(error)throw error;
+    const yaAvanzado=lf&&['visita_agendada','visita_realizada','cerrado_ganado','cerrado_perdido'].includes(lf.estado);
+    const faltantes=yaAvanzado?[]:_avCamposFaltantes(lf);
+    if(faltantes.length){_avRenderGate(faltantes);}
+    else{document.getElementById('av-form').style.display='';}
+  }catch(e){
+    // si falla la verificación no bloqueamos: dejamos avanzar al form normal
+    document.getElementById('av-form').style.display='';
+  }
 }
 function toggleLugarVisita(){
   const r=document.querySelector('input[name="av-lugar"]:checked');
