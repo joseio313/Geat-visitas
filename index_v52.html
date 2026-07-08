@@ -546,6 +546,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 </div>
 
 <!-- ══ APP ══ -->
+<div id="audioUploadBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#FFC107;color:#111;font-weight:700;font-size:13px;text-align:center;padding:8px 12px">⏳ Subiendo audio, no cierres esta pestaña</div>
 <div id="app" style="display:none;flex-direction:column;min-height:100vh">
 
   <!-- HEADER -->
@@ -1310,10 +1311,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='131';
+  var CURRENT_VERSION='132';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
-    try{return _recHState==='grabando'||_recHState==='iniciando'||_recState==='grabando';}catch(e){return false;}
+    try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
   }
   function mostrarBannerManual(v,texto){
     if(document.getElementById('verBannerManual'))return;
@@ -3657,8 +3658,10 @@ let _recHTitulo='', _recHParticipantes='', _recHTituloManual=false;
 
 /* Aviso antes de cerrar si hay sesión de audio activa */
 window.addEventListener('beforeunload',function(e){
-  if(_recHState==='grabando'||_recHState==='iniciando'){
-    const msg='Tenés una sesión activa, ¿seguro que querés salir?';
+  if(_recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'){
+    const msg=(_recHState==='procesando')
+      ? 'Se está subiendo el audio. ¿Seguro que querés salir? Se perderá la grabación.'
+      : 'Tenés una sesión activa, ¿seguro que querés salir?';
     e.preventDefault();e.returnValue=msg;
     if(_recHGrabId){
       fetch(SB_URL+'/rest/v1/grabaciones?id=eq.'+_recHGrabId,{
@@ -3747,20 +3750,32 @@ async function _grabAutoTituloIA(texto){
    costo de whisper-1). Mismo endpoint /v1/audio/transcriptions y misma API key.
    gpt-4o-mini-transcribe NO soporta verbose_json/timestamps → usamos response_format 'json'
    y leemos data.text (igual que antes); el pipeline recibe el texto sin cambios. */
+/* v132: reintenta una operación async hasta 'intentos' veces (backoff simple) antes de relanzar el error. */
+async function _reintentar(fn,intentos){
+  intentos=intentos||3;
+  let lastErr;
+  for(let i=0;i<intentos;i++){
+    try{ return await fn(); }
+    catch(e){ lastErr=e; if(i<intentos-1) await new Promise(function(r){setTimeout(r,1000*(i+1));}); }
+  }
+  throw lastErr;
+}
 async function _whisperSingleBlob(blob,apiKey,fileName){
-  const fd=new FormData();
-  fd.append('file',blob,fileName||'reunion.webm');
-  fd.append('model','gpt-4o-mini-transcribe');
-  fd.append('language','es');
-  fd.append('response_format','json');
-  const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+apiKey},
-    body:fd
-  });
-  if(!resp.ok)throw new Error('Transcripción '+resp.status);
-  const data=await resp.json();
-  return data.text||'';
+  return await _reintentar(async function(){
+    const fd=new FormData();
+    fd.append('file',blob,fileName||'reunion.webm');
+    fd.append('model','gpt-4o-mini-transcribe');
+    fd.append('language','es');
+    fd.append('response_format','json');
+    const resp=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+apiKey},
+      body:fd
+    });
+    if(!resp.ok)throw new Error('Transcripción '+resp.status);
+    const data=await resp.json();
+    return data.text||'';
+  },3);
 }
 
 /* Transcribe con Whisper, segmentando si el audio supera 24 MB.
@@ -3819,7 +3834,10 @@ function _arrancarSegmento(){
       _recHSegBlobs.push(blob);
       if(_recHGrabId){
         const path=_recHGrabId+'/seg_'+String(idx).padStart(3,'0')+'.webm';
-        sb.storage.from('grabaciones').upload(path,blob,{upsert:true}).catch(function(){});
+        _reintentar(async function(){
+          const{error}=await sb.storage.from('grabaciones').upload(path,blob,{upsert:true});
+          if(error)throw error;
+        },3).catch(function(){toast('⚠️ No se pudo archivar un segmento de audio (backup en el servidor). La transcripción no se pierde.','warning');});
       }
     }
     if(_recHState==='grabando'){ _arrancarSegmento(); }            // rotación: próximo segmento
@@ -3872,6 +3890,8 @@ async function _finalizarGrabacionSegmentada(durSeg){
 }
 function setRecHState(state){
   _recHState=state;
+  const banner=document.getElementById('audioUploadBanner');
+  if(banner)banner.style.display=(state==='procesando')?'block':'none';
   const b=document.getElementById('recBtnHeader'); if(!b)return;
   // Ícono de reloj siempre; solo cambia el color del aro. Sin rojo, sin timer, sin micrófono.
   if(state==='idle'||state==='iniciando'){b.style.border='1px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🕐';}
@@ -4017,7 +4037,10 @@ async function _finalizarConTranscript(transcript,opts){
       };
       if(blob){
         const fullPath=String(_recHGrabId)+'/completo.webm';
-        sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true}).catch(function(){});
+        _reintentar(async function(){
+          const{error}=await sb.storage.from('grabaciones').upload(fullPath,blob,{upsert:true});
+          if(error)throw error;
+        },3).catch(function(){toast('⚠️ No se pudo archivar el audio completo en el servidor. La transcripción sí se guardó.','warning');});
         updates.audio_path=String(_recHGrabId)+'/';
       }else if(opts.audioPath){
         /* v99: grabación por segmentos — el audio ya está en seg_NNN, sólo apuntamos la carpeta. */
