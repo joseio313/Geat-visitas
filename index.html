@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='132';
+  var CURRENT_VERSION='133';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -2649,6 +2649,9 @@ async function openLeadDetail(leadId,agendaId,mode){
   ]);
   if(rLead.error){toast('Error: '+rLead.error.message,'error');return;}
   const lead=rLead.data;
+  /* v133 — lead perdido/archivado abierto en modo normal (propio): no se puede operar
+     hasta reactivarlo; se muestra banner con botón ♻️ Reactivar lead */
+  const _leadBloqueado=currentLeadMode==='normal'&&lead.estado!=='cerrado_ganado'&&(lead.archivado===true||lead.estado==='cerrado_perdido');
   window._leadAgendar={id:lead.id,nombre:lead.nombre||'',celular:lead.celular||'',captador:lead.captador||''};
   const history=rHistory.data||[];
   const segs=rSegs.data||[];
@@ -2664,10 +2667,11 @@ async function openLeadDetail(leadId,agendaId,mode){
   document.getElementById('modal-lead-body').innerHTML=`
     ${currentLeadMode==='readonly'?'<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.</div>':''}
     ${currentLeadMode==='reactivar'?'<div class="mobile-note" style="border-color:var(--gold)">♻️ <strong>Reactivar cliente perdido</strong> — revisá el perfil y completá el formulario al pie para agendar.</div>':''}
+    ${_leadBloqueado?`<div class="mobile-note" style="border-color:var(--st-atrasado)">${lead.estado==='cerrado_perdido'?'❌':'📦'} <strong>Lead ${lead.estado==='cerrado_perdido'?'perdido':'archivado'}</strong> — en este estado no se puede agendar ni registrar seguimientos. Si el cliente volvió a interesarse, reactivalo:<div style="margin-top:8px"><button class="btn-primary" id="btn-reactivar-inline" onclick="reactivarLeadDesdePerfil(${lead.id})">♻️ Reactivar lead</button></div></div>`:''}
     <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
-      ${currentLeadMode!=='readonly'?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
+      ${currentLeadMode!=='readonly'&&!_leadBloqueado?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
     </div>
     <div id="lead-tab-detalle">
       <div class="section">
@@ -2696,13 +2700,13 @@ async function openLeadDetail(leadId,agendaId,mode){
           ${current.completada?`<div class="lf-row"><span>Realizado:</span><span style="color:var(--st-completo);font-weight:700">${fmtDT(current.completada_en)} ✓</span></div>`:''}
           ${current.nota?`<div class="lf-note">"${current.nota}"</div>`:''}
         </div>
-        ${currentLeadMode==='normal'?(!current.completada&&lead.estado!=='cerrado_perdido'&&lead.estado!=='cerrado_ganado'?`<div class="action-row" style="align-items:center">
+        ${currentLeadMode==='normal'?(!current.completada&&!_leadBloqueado&&lead.estado!=='cerrado_ganado'?`<div class="action-row" style="align-items:center">
           <button class="btn-primary" onclick="prepareFinalize()">✅ Finalizar este seguimiento</button>
           <a class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 16px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a>
           ${cu.rol==='admin'?`<button id="recBtn" type="button" onclick="toggleGrabacion()" title="Audio" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0">🎙</button>`:''}
         </div>
-        <div id="recResultCard"></div>`:(lead.estado==='cerrado_perdido'?'<div style="color:var(--st-atrasado);font-weight:700;font-size:12px;margin-top:8px">❌ Lead marcado como PERDIDO — no se puede finalizar</div>':lead.estado==='cerrado_ganado'?'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">🏆 Lead marcado como GANADO</div>':'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>')):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
-      </div>`:(currentLeadMode==='normal'&&lead.estado!=='cerrado_perdido'&&lead.estado!=='cerrado_ganado'?`<div class="section">
+        <div id="recResultCard"></div>`:(lead.estado==='cerrado_perdido'?'<div style="color:var(--st-atrasado);font-weight:700;font-size:12px;margin-top:8px">❌ Lead marcado como PERDIDO — reactivalo arriba para volver a trabajarlo</div>':lead.estado==='cerrado_ganado'?'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">🏆 Lead marcado como GANADO</div>':_leadBloqueado?'<div style="color:var(--st-atrasado);font-weight:700;font-size:12px;margin-top:8px">📦 Lead archivado — reactivalo arriba para volver a trabajarlo</div>':'<div style="color:var(--st-completo);font-weight:700;font-size:12px;margin-top:8px">✓ Este seguimiento ya fue completado</div>')):currentLeadMode==='readonly'?`<div style="margin-top:6px"><a class="btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;font-size:11px;padding:6px 12px" href="https://wa.me/591${(lead.celular||'').replace(/\D/g,'')}">💬 WhatsApp</a></div>`:''}
+      </div>`:(currentLeadMode==='normal'&&!_leadBloqueado&&lead.estado!=='cerrado_ganado'?`<div class="section">
         <div class="section-title">Seguimiento</div>
         <div style="color:var(--gray-400);font-size:12px;margin-bottom:8px">Este lead no tiene ningún seguimiento agendado.</div>
         <div class="action-row" style="align-items:center">
@@ -5041,7 +5045,7 @@ async function confirmarReactivar(leadId,nombre){
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   try{
     await sb.from('leads').update({
-      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fecha,updated_at:now
+      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fecha,archivado:false,updated_at:now
     }).eq('id',leadId);
     const{error}=await sb.from('agenda_personal').insert({
       colaborador:asignado,lead_id:leadId,tipo:etapa,
@@ -5069,6 +5073,49 @@ async function confirmarReactivar(leadId,nombre){
     cargarMarcadoresDia();
   }catch(e){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='📅 Reactivar y agendar';}
+    toast('Error: '+e.message,'error');
+  }
+}
+
+/* v133 — Reactivar lead perdido/archivado desde su propio perfil (buscador → lead propio).
+   Deja archivado=false, estado='nuevo' y proximo_contacto=HOY (misma lógica de
+   sincronización que confirmarReactivar en v131: nunca queda una fecha vencida vieja).
+   Luego el lead entra al flujo normal: completar indagación (gate v130) → agendar visita. */
+async function reactivarLeadDesdePerfil(leadId){
+  if(!cu){toast('Sesión no válida','error');return;}
+  const btn=document.getElementById('btn-reactivar-inline');
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Reactivando...';}
+  const lockKey=`reacperfil-${leadId}`;
+  if(!checkDupLock(lockKey)){
+    toast('Ya se está procesando. Esperá.','error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar lead';}
+    return;
+  }
+  const now=new Date().toISOString();
+  const hoy=ymdLocal(new Date());
+  try{
+    const{data:l}=await sb.from('leads').select('nombre,etapa').eq('id',leadId).single();
+    const{error}=await sb.from('leads').update({
+      archivado:false,estado:'nuevo',proximo_contacto:hoy,updated_at:now
+    }).eq('id',leadId);
+    if(error)throw error;
+    try{
+      await sb.from('historial_lead').insert({
+        lead_id:leadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
+        etapa:(l&&l.etapa)||'—', tipo_actividad:'reactivacion',
+        nota:'♻️ Lead reactivado desde el buscador por '+cu.nombre+' — desarchivado · Estado: nuevo · Próximo contacto: '+hoy,
+        fecha_actividad:now, created_at:now
+      });
+    }catch(eh){}
+    try{registrarAuditoria('reactivar_lead','leads',leadId,{origen:'perfil_buscador',proximo_contacto:hoy});}catch(e){}
+    toast('♻️ "'+((l&&l.nombre)||'Lead')+'" reactivado — ya podés operarlo');
+    renderWeek();
+    cargarMarcadoresDia();
+    try{if(cu.rol==='field_capturer'||cu.rol==='commercial_lead')renderParaHoy();}catch(e){}
+    openLeadDetail(leadId,null,'normal');
+  }catch(e){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar lead';}
     toast('Error: '+e.message,'error');
   }
 }
