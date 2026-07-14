@@ -1360,7 +1360,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='141';
+  var CURRENT_VERSION='142';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -4596,8 +4596,21 @@ async function saveSeguimiento(){
         toast('Ingresá la fecha del próximo seguimiento','error');return;
       }
       const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
-      const{data:lead}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
+      const{data:lead}=await sb.from('leads').select('nombre,captador').eq('id',currentLeadId).single();
       const nombreLead=lead?.nombre||'—';
+      /* v142: la Indagación la hace SIEMPRE el captador del lead (protocolo),
+         nunca el cerrador — se ignora el asignado elegido si difiere. */
+      let asignadoFinal=nextAsignado;
+      if(nextEstado==='Indagación'){
+        const capt=lead&&lead.captador;
+        const captOk=capt&&(colaboradores||[]).some(function(c){return c.nombre===capt&&c.activo;});
+        if(captOk&&capt!==nextAsignado){
+          asignadoFinal=capt;
+          toast('🧭 La indagación se asignó al captador del lead: '+capt);
+        }else if(captOk){
+          asignadoFinal=capt;
+        }
+      }
       // Si ya existe una próxima actividad abierta (p.ej. creada por un trigger),
       // usar la fecha elegida por el colaborador en vez de crear un duplicado.
       const{data:actAbierta}=await sb.from('agenda_personal')
@@ -4605,12 +4618,12 @@ async function saveSeguimiento(){
         .neq('id',currentAgendaId).order('fecha_programada').limit(1);
       if(actAbierta&&actAbierta.length){
         const{error:e2u}=await sb.from('agenda_personal').update({
-          colaborador:nextAsignado,tipo:nextEstado,titulo:nombreLead,nota:nextNota,fecha_programada:fp
+          colaborador:asignadoFinal,tipo:nextEstado,titulo:nombreLead,nota:nextNota,fecha_programada:fp
         }).eq('id',actAbierta[0].id);
         if(e2u)throw e2u;
       }else{
         const{error:e2}=await sb.from('agenda_personal').insert({
-          colaborador:nextAsignado,lead_id:currentLeadId,tipo:nextEstado,
+          colaborador:asignadoFinal,lead_id:currentLeadId,tipo:nextEstado,
           titulo:nombreLead,nota:nextNota,fecha_programada:fp,completada:false
         });
         if(e2){
@@ -5444,7 +5457,9 @@ async function exportarReporteLeads(){
 /* ════════════════════════════════════════
    ALTERNANCIA DAVID / GUSTAVO
 ════════════════════════════════════════ */
-const CERRADOR_DAVID='David';
+/* v142: SIEMPRE el nombre completo, igual que colaboradores.nombre — 'David' a
+   secas creaba identidad duplicada en agenda_personal y rompía la alternancia. */
+const CERRADOR_DAVID='David Gambarte';
 const CERRADOR_GUSTAVO='Gustavo Vaca';
 
 async function asignarCerrador(leadId,fechaVisita,clienteMujer){
