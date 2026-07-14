@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='135';
+  var CURRENT_VERSION='136';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -3291,21 +3291,10 @@ function stopGrabacion(){
 
 async function procesarGrabacion(transcript){
   try{
-    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-    if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
     const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
       '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"...","ciudad":null,"metodo_pago":null,"presupuesto_construccion":null,"plantas":null,"cuando_construir":null}\n'+
       'Campos extra: ciudad=ciudad del cliente; metodo_pago=uno de: contado|financiamiento_bancario|credito_directo|mixto; presupuesto_construccion=monto aprox en USD (solo número); plantas=cantidad de plantas/pisos (número); cuando_construir=cuándo planea construir.\n\n'+transcript;
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
-    });
-    if(!resp.ok)throw new Error('API '+resp.status);
-    const data=await resp.json();
-    let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
-    txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
-    _recResultado=JSON.parse(txt);
+    _recResultado=JSON.parse(await _gptMiniIA(userMsg,1024,true));
     setRecState('listo');
     renderRecResult(_recResultado);
   }catch(e){
@@ -3679,43 +3668,42 @@ window.addEventListener('beforeunload',function(e){
   }
 });
 
+/* v136: resumen/extracción/auto-título del pipeline de grabaciones migrados de
+   Anthropic a OpenAI gpt-4o-mini (la key Anthropic quedó sin créditos; decisión
+   de negocio: todo el pipeline IA del CRM opera con OpenAI). Mismos prompts.
+   jsonMode=true fuerza JSON válido (response_format json_object). */
+async function _gptMiniIA(userMsg,maxTokens,jsonMode){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  const body={model:'gpt-4o-mini',max_tokens:maxTokens||1024,
+    messages:[{role:'system',content:'Sos asistente comercial de GEAT Construcción.'},
+              {role:'user',content:userMsg}]};
+  if(jsonMode)body.response_format={type:'json_object'};
+  const resp=await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',
+    headers:{'content-type':'application/json','Authorization':'Bearer '+cfg.value},
+    body:JSON.stringify(body)
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  const txt=((data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'').trim();
+  return txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+}
 async function _resumirReunionIA(transcript){
   /* Sin toast: el procesamiento del botón reloj corre en silencio de fondo */
-  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
     '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"...","ciudad":null,"metodo_pago":null,"presupuesto_construccion":null,"plantas":null,"cuando_construir":null}\n'+
     'Campos extra: ciudad=ciudad del cliente; metodo_pago=uno de: contado|financiamiento_bancario|credito_directo|mixto; presupuesto_construccion=monto aprox en USD (solo número); plantas=cantidad de plantas/pisos (número); cuando_construir=cuándo planea construir.\n\n'+transcript;
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
-  });
-  if(!resp.ok)throw new Error('API '+resp.status);
-  const data=await resp.json();
-  let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
-  txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
-  return JSON.parse(txt);
+  return JSON.parse(await _gptMiniIA(userMsg,1024,true));
 }
 
 /* Extracción IA de datos de prospecto desde la transcripción.
-   Mismo patrón que _resumirReunionIA (anthropic_api_key, Sonnet). */
+   Mismo patrón que _resumirReunionIA (OpenAI gpt-4o-mini vía _gptMiniIA). */
 async function _extraerProspectoIA(transcript){
-  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const userMsg='Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
     '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null}]}\n'+
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha.\n\n'+transcript;
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1500,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:userMsg}]})
-  });
-  if(!resp.ok)throw new Error('API '+resp.status);
-  const data=await resp.json();
-  let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
-  txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
-  return JSON.parse(txt);
+  return JSON.parse(await _gptMiniIA(userMsg,1500,true));
 }
 /* Corre la extracción y la guarda en grabaciones.extraccion.
    Nunca lanza: si falla la API o el parseo guarda null y no rompe el flujo. */
@@ -3736,16 +3724,8 @@ function _esTituloGenerico(t){
 async function _grabAutoTituloIA(texto){
   if(!texto)return null;
   try{
-    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-    if(ec||!cfg||!cfg.value)return null;
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:50,system:'Sos asistente comercial de GEAT Construcción.',messages:[{role:'user',content:'Devolvé SOLO un título corto de 4 a 7 palabras que describa el tema principal de esta conversación. Sin comillas, sin punto final.\n\n'+(''+texto).slice(0,3000)}]})
-    });
-    if(!resp.ok)return null;
-    const data=await resp.json();
-    const tit=((data.content&&data.content[0]&&data.content[0].text)||'').trim().replace(/^["'«»]|["'«»]$/g,'').replace(/\.$/,'').slice(0,120);
+    const raw=await _gptMiniIA('Devolvé SOLO un título corto de 4 a 7 palabras que describa el tema principal de esta conversación. Sin comillas, sin punto final.\n\n'+(''+texto).slice(0,3000),50,false);
+    const tit=raw.trim().replace(/^["'«»]|["'«»]$/g,'').replace(/\.$/,'').slice(0,120);
     return tit||null;
   }catch(e){return null;}
 }
