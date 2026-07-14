@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='138';
+  var CURRENT_VERSION='139';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -5371,7 +5371,7 @@ async function renderAdmin(){
       sb.from('agenda_personal').select('colaborador,completada,fecha_programada').gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
       sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10),
       sb.from('asistente_pendientes').select('*').eq('activo',true).order('created_at',{ascending:false}),
-      authCall({action:'admin_list',token:localStorage.getItem('geat_session_token')})
+      authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')})
     ]);
 
     const logins=rLogins.data||[];
@@ -5387,6 +5387,8 @@ async function renderAdmin(){
     // Gestión de usuarios — excluir SIEMPRE a María Luisa / Maria Luisa
     const _esML=(n)=>/mar[ií]a\s+luisa/i.test(n||'');
     const usuarios=((rUsuarios&&rUsuarios.usuarios)||[]).filter(u=>!_esML(u.nombre));
+    /* v139: activos primero (alfabético), inactivos en gris al final */
+    usuarios.sort((a,b)=>((b.activo?1:0)-(a.activo?1:0))||String(a.nombre||'').localeCompare(String(b.nombre||'')));
     _usrCache=usuarios;
 
     // A. Productividad
@@ -5515,7 +5517,7 @@ async function renderAdmin(){
       </div>
       <div style="overflow-x:auto">
         <table class="prod-table">
-          <thead><tr><th>Nombre</th><th>Rol</th><th>PIN</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <thead><tr><th style="width:26px"></th><th>Nombre</th><th>Rol</th><th>PIN</th><th>Estado</th></tr></thead>
           <tbody>${usuarios.map(_usrRowHtml).join('')}</tbody>
         </table>
       </div>
@@ -6842,21 +6844,39 @@ function _pinsRender(){
 /* ── Gestión de Usuarios (panel admin, tabla colaboradores · pin plano) ── */
 let _usrCache=[];
 const _ROLES_USR=['admin','commercial_lead','field_capturer','tecnico'];
+/* v139: fila compacta (PIN real visible — la vista ya es solo-admin y los datos
+   llegan por admin_pins con token de admin) + fila de detalle colapsada con las
+   acciones, que se abre con la flecha ▸/▾. */
 function _usrRowHtml(u){
   const activo=u.activo!==false;
-  const pinMask='••••';
+  const tdS='padding:4px 8px';
+  const pinTxt=String(u.pin||'—');
+  const pinCorto=pinTxt.length>8?pinTxt.slice(0,8)+'…':pinTxt;
   return '<tr style="'+(activo?'':'opacity:0.5')+'">'+
-    '<td><strong>'+_escPend(u.nombre||'—')+'</strong></td>'+
-    '<td style="font-size:10px;color:var(--gray-400)">'+_escPend(_asistRolHumano(u.rol))+'</td>'+
-    '<td style="font-family:monospace">'+pinMask+'</td>'+
-    '<td>'+(activo?'<span style="color:var(--st-completo)">● Activo</span>':'<span style="color:var(--st-atrasado)">○ Inactivo</span>')+'</td>'+
-    '<td><div style="display:flex;gap:5px;flex-wrap:wrap">'+
-      '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarUsuarioForm('+u.id+')">✏️ Editar</button>'+
-      (activo
-        ? '<button class="btn-red btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',false)">🚫 Desactivar</button>'
-        : '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',true)">♻️ Reactivar</button>')+
-    '</div></td>'+
+    '<td style="padding:2px 0 2px 4px;width:26px"><button type="button" id="usr-flecha-'+u.id+'" onclick="_usrToggleDet('+u.id+')" title="Ver acciones" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:12px;padding:2px 6px;line-height:1">▸</button></td>'+
+    '<td style="'+tdS+'"><strong style="font-size:12px">'+_escPend(u.nombre||'—')+'</strong></td>'+
+    '<td style="'+tdS+';font-size:10px;color:var(--gray-400)">'+_escPend(_asistRolHumano(u.rol))+'</td>'+
+    '<td style="'+tdS+';font-family:monospace;font-weight:700;letter-spacing:1px;font-size:12px">'+_escPend(pinCorto)+'</td>'+
+    '<td style="'+tdS+';font-size:11px">'+(activo?'<span style="color:var(--st-completo)">● Activo</span>':'<span style="color:var(--st-atrasado)">○ Inactivo</span>')+'</td>'+
+  '</tr>'+
+  '<tr id="usr-det-'+u.id+'" style="display:none'+(activo?'':';opacity:0.5')+'">'+
+    '<td style="padding:0"></td>'+
+    '<td colspan="4" style="padding:2px 8px 10px">'+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
+        '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarUsuarioForm('+u.id+')">✏️ Editar</button>'+
+        (activo
+          ? '<button class="btn-red btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',false)">🚫 Desactivar</button>'
+          : '<button class="btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="toggleUsuarioActivo('+u.id+',true)">♻️ Reactivar</button>')+
+      '</div>'+
+    '</td>'+
   '</tr>';
+}
+function _usrToggleDet(id){
+  const det=document.getElementById('usr-det-'+id); if(!det)return;
+  const abierto=det.style.display!=='none';
+  det.style.display=abierto?'none':'table-row';
+  const fl=document.getElementById('usr-flecha-'+id);
+  if(fl)fl.textContent=abierto?'▸':'▾';
 }
 function editarUsuarioForm(id){
   const u=_usrCache.find(x=>String(x.id)===String(id)); if(!u)return;
