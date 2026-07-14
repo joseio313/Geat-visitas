@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='137';
+  var CURRENT_VERSION='138';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -5521,6 +5521,20 @@ async function renderAdmin(){
       </div>
     </div>
 
+    <!-- 🔑 PINs del equipo (v138) — datos SOLO a pedido vía geat-auth admin_pins;
+         el gate real es server-side (token de admin). Solo lectura. -->
+    <div class="admin-section">
+      <div class="admin-section-title">🔑 PINs del equipo</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn-primary btn-sm" onclick="cargarPinsEquipo()">👁 Ver PINs</button>
+        <label style="font-size:11px;color:var(--gray-300);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="pins-inactivos" onchange="_pinsRender()"> mostrar inactivos
+        </label>
+        <span style="font-size:10px;color:var(--gray-400)">Solo lectura — para cambiar un PIN usá Gestión de Usuarios.</span>
+      </div>
+      <div id="pins-body" style="overflow-x:auto"></div>
+    </div>
+
     <!-- A. Productividad -->
     <div class="admin-section">
       <div class="admin-section-title">📊 Productividad del equipo — ${new Date().toLocaleDateString('es-BO',{month:'long',year:'numeric'})}</div>
@@ -6785,6 +6799,44 @@ async function _cambiarEstadoPendiente(id,estado){
     toast('Estado actualizado: '+estado);
     renderAdmin();
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+/* ── PINs del equipo (v138) — SOLO admin. El gate real es server-side:
+   geat-auth action=admin_pins exige token de admin; con token de cualquier
+   otro rol responde 403 sin datos (verificado). El frontend nunca pre-carga
+   los PINs: solo los pide al tocar "Ver PINs" dentro del panel admin. ── */
+let _pinsCache=null;
+async function cargarPinsEquipo(){
+  if(!cu||cu.rol!=='admin'){toast('Solo admin','error');return;}
+  const cont=document.getElementById('pins-body'); if(!cont)return;
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    const r=await authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')});
+    if(!r||!r.ok)throw new Error((r&&r.error)||'No autorizado');
+    _pinsCache=r.usuarios||[];
+    _pinsRender();
+  }catch(e){
+    _pinsCache=null;
+    cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';
+  }
+}
+function _pinsRender(){
+  const cont=document.getElementById('pins-body'); if(!cont||_pinsCache===null)return;
+  const conInactivos=!!(document.getElementById('pins-inactivos')&&document.getElementById('pins-inactivos').checked);
+  const rows=_pinsCache
+    .filter(function(u){return !/mar[ií]a\s+luisa/i.test(u.nombre||'');})
+    .filter(function(u){return conInactivos||u.activo;});
+  if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin colaboradores para mostrar.</div>';return;}
+  cont.innerHTML='<table class="prod-table">'+
+    '<thead><tr><th>Nombre</th><th>Rol</th><th>PIN</th><th>Activo</th></tr></thead>'+
+    '<tbody>'+rows.map(function(u){
+      return '<tr style="'+(u.activo?'':'opacity:0.5')+'">'+
+        '<td><strong>'+_escPend(u.nombre||'—')+'</strong></td>'+
+        '<td style="font-size:10px;color:var(--gray-400)">'+_escPend(_asistRolHumano(u.rol))+'</td>'+
+        '<td style="font-family:monospace;font-weight:700;letter-spacing:2px">'+_escPend(u.pin||'—')+'</td>'+
+        '<td>'+(u.activo?'<span style="color:var(--st-completo)">● sí</span>':'<span style="color:var(--st-atrasado)">○ no</span>')+'</td>'+
+      '</tr>';
+    }).join('')+'</tbody></table>';
 }
 
 /* ── Gestión de Usuarios (panel admin, tabla colaboradores · pin plano) ── */
