@@ -1133,6 +1133,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="form-group">
           <input class="form-control" type="text" id="search-q" placeholder="Nombre, celular, ciudad, medio difusión..." oninput="doSearch(this.value)">
         </div>
+        <div id="search-alerta-visitas" style="display:none;border:1px solid var(--st-atrasado);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--gray-100);background:var(--gray-900)"></div>
         <div id="search-results-body"><div style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">Escribí al menos 2 caracteres para buscar</div></div>
       </div>
       <!-- Ver reporte por rango (solo modo buscar) -->
@@ -1206,6 +1207,54 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 </div>
 
 <!-- ══ AGENDAR VISITA ══ -->
+<div id="modalReserva" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalReserva')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h2>💰 Registrar reserva</h2>
+      <button class="modal-close" onclick="closeModal('modalReserva')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rsv-lead-id">
+      <div class="form-group">
+        <label class="form-label">Monto de la reserva ($) <span style="color:var(--st-atrasado)">*</span></label>
+        <input class="form-control" type="number" id="rsv-monto" min="1" step="any" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha de la reserva <span style="color:var(--st-atrasado)">*</span></label>
+        <input class="form-control" type="date" id="rsv-fecha">
+      </div>
+      <div class="action-row">
+        <button class="btn-primary" id="rsv-btn" onclick="guardarReserva()">💾 Guardar reserva</button>
+        <button class="btn-ghost" onclick="closeModal('modalReserva')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modalResultadoVisita" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalResultadoVisita')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h2>📝 Resultado de la visita</h2>
+      <button class="modal-close" onclick="closeModal('modalResultadoVisita')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rv-lead-id">
+      <div class="form-group">
+        <label class="form-label">¿Cómo salió la visita? <span style="color:var(--st-atrasado)">*</span></label>
+        <div id="rv-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Detalle (opcional)</label>
+        <textarea class="form-control" id="rv-detalle" rows="2" placeholder="Qué se conversó, próximos pasos..."></textarea>
+      </div>
+      <div class="action-row">
+        <button class="btn-primary" id="rv-btn" onclick="guardarResultadoVisita()">💾 Guardar resultado</button>
+        <button class="btn-ghost" onclick="closeModal('modalResultadoVisita')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="modalAgendarVisita" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalAgendarVisita')">
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
@@ -1311,7 +1360,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='139';
+  var CURRENT_VERSION='140';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -1907,6 +1956,7 @@ function estadoBorderColor(estado){
     case 'en_seguimiento': return '#F59E0B';
     case 'visita_agendada': return '#8B5CF6';
     case 'visita_realizada': return '#F97316';
+    case 'reservado': return '#43A047';
     case 'cotizacion': return '#06B6D4';
     case 'negociacion': return '#84CC16';
     case 'cerrado_ganado': return 'var(--st-completo)';
@@ -2672,6 +2722,9 @@ async function openLeadDetail(leadId,agendaId,mode){
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
       ${currentLeadMode!=='readonly'&&!_leadBloqueado?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
+      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px">📝 Resultado visita</button>`:''}
+      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;border-color:#43A047;color:#43A047">💰 Reservado</button>`:''}
+      ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
     </div>
     <div id="lead-tab-detalle">
       <div class="section">
@@ -2881,7 +2934,7 @@ function badgeGradoInteres(g){
 
 /* ── RONDA 5: detectar fase 4/5 (visita o cierre) ── */
 function enFaseCierre(lead){
-  if(lead.estado==='cerrado_ganado')return true;
+  if(lead.estado==='cerrado_ganado'||lead.estado==='reservado')return true;
   const e=(lead.etapa||'').toLowerCase();
   return /visita|propuesta|presentando|reserva|legal|firma|planos|entrega/.test(e);
 }
@@ -3479,6 +3532,82 @@ async function guardarIndagacionYContinuar(){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
   }
 }
+/* ── v140 (orden v134-A/B): reserva y resultado de visita ── */
+const RV_OPCIONES=[
+  ['interesado','😃 Interesado'],
+  ['evaluando_financiamiento','🏦 Evaluando financiamiento'],
+  ['precio_alto','💸 Precio alto'],
+  ['no_convencio','😐 No convenció'],
+  ['perdido','❌ Perdido']
+];
+let _rvSel=null;
+function abrirResultadoVisita(){
+  if(!currentLeadId){toast('Abrí un lead primero','error');return;}
+  _rvSel=null;
+  document.getElementById('rv-lead-id').value=currentLeadId;
+  document.getElementById('rv-detalle').value='';
+  _rvRenderChips();
+  openModal('modalResultadoVisita');
+}
+function _rvRenderChips(){
+  const box=document.getElementById('rv-chips'); if(!box)return;
+  box.innerHTML=RV_OPCIONES.map(function(o){
+    return '<button type="button" class="'+(_rvSel===o[0]?'btn-primary':'btn-ghost')+' btn-sm" style="font-size:11px" onclick="_rvPick(\''+o[0]+'\')">'+o[1]+'</button>';
+  }).join('');
+}
+function _rvPick(k){_rvSel=k;_rvRenderChips();}
+async function guardarResultadoVisita(){
+  const id=Number(document.getElementById('rv-lead-id').value);
+  if(!id){toast('Lead inválido','error');return;}
+  if(!_rvSel){toast('Elegí un resultado','error');return;}
+  const opt=RV_OPCIONES.find(function(o){return o[0]===_rvSel;});
+  const det=(document.getElementById('rv-detalle').value||'').trim();
+  const texto=(opt?opt[1].replace(/^\S+\s/,''):_rvSel)+(det?' — '+det:'');
+  const btn=document.getElementById('rv-btn');
+  if(btn)btn.disabled=true;
+  try{
+    const{error}=await sb.from('leads').update({resultado_estado:_rvSel,resultado_reunion:texto}).eq('id',id);
+    if(error)throw error;
+    try{
+      await sb.from('historial_lead').insert({lead_id:id,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',
+        tipo_actividad:'resultado_visita',resultado:_rvSel,nota:'📝 Resultado de visita: '+texto,
+        fecha_actividad:new Date().toISOString()});
+    }catch(eH){}
+    toast('✅ Resultado de visita registrado');
+    closeModal('modalResultadoVisita');
+    _searchAlertaVisitas();
+  }catch(e){toast('Error: '+e.message,'error');}
+  finally{if(btn)btn.disabled=false;}
+}
+function abrirReserva(){
+  if(!currentLeadId){toast('Abrí un lead primero','error');return;}
+  document.getElementById('rsv-lead-id').value=currentLeadId;
+  document.getElementById('rsv-monto').value='';
+  document.getElementById('rsv-fecha').value=ymdLocal(new Date());
+  openModal('modalReserva');
+}
+async function guardarReserva(){
+  const id=Number(document.getElementById('rsv-lead-id').value);
+  const monto=parseFloat(document.getElementById('rsv-monto').value);
+  const fecha=document.getElementById('rsv-fecha').value;
+  if(!id){toast('Lead inválido','error');return;}
+  if(!monto||monto<=0){toast('Ingresá el monto de la reserva','error');return;}
+  if(!fecha){toast('Ingresá la fecha de la reserva','error');return;}
+  const btn=document.getElementById('rsv-btn');
+  if(btn)btn.disabled=true;
+  try{
+    const{error}=await sb.from('leads').update({estado:'reservado',monto_reserva:monto,fecha_reserva:fecha,etapa:'Reserva'}).eq('id',id);
+    if(error)throw error;
+    try{
+      await sb.from('historial_lead').insert({lead_id:id,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',
+        tipo_actividad:'reserva',resultado:'reservado',nota:'💰 Reserva registrada (fecha '+fecha+')',
+        fecha_actividad:new Date().toISOString()});
+    }catch(eH){}
+    toast('✅ Reserva registrada — lead en estado Reservado');
+    closeModal('modalReserva');
+  }catch(e){toast('Error: '+e.message,'error');}
+  finally{if(btn)btn.disabled=false;}
+}
 async function abrirAgendarVisita(){
   const l=window._leadAgendar;
   if(!l||!l.id){toast('Abrí un lead primero','error');return;}
@@ -3500,13 +3629,16 @@ async function abrirAgendarVisita(){
   try{
     const{data:lf,error}=await sb.from('leads').select('estado,'+IND_CAMPOS_SEL).eq('id',l.id).single();
     if(error)throw error;
-    const yaAvanzado=lf&&['visita_agendada','visita_realizada','cerrado_ganado','cerrado_perdido'].includes(lf.estado);
+    /* v140: cerrado_perdido YA NO exime — revivir un perdido con visita exige indagación */
+    const yaAvanzado=lf&&['visita_agendada','visita_realizada','reservado','cerrado_ganado'].includes(lf.estado);
     const faltantes=yaAvanzado?[]:_avCamposFaltantes(lf);
     if(faltantes.length){_avRenderGate(faltantes);}
     else{document.getElementById('av-form').style.display='';}
   }catch(e){
-    // si falla la verificación no bloqueamos: dejamos avanzar al form normal
-    document.getElementById('av-form').style.display='';
+    /* v140: fail-closed — si no se pudo verificar la indagación NO se deja agendar
+       (antes este catch dejaba pasar y era uno de los huecos del gate v130) */
+    closeModal('modalAgendarVisita');
+    toast('No se pudo verificar la indagación del lead. Revisá tu conexión y reintentá.','error');
   }
 }
 function toggleLugarVisita(){
@@ -4848,6 +4980,30 @@ function openSearchModal(){
   if(eT&&!eT.value)eT.value=lastDay;
   openModal('modalSearch');
   cargarLeadsRecientes();
+  _searchAlertaVisitas();
+}
+/* v140 (orden v134-B): alerta de visitas agendadas con fecha vencida >2 días y sin
+   resultado registrado. Admin ve todas; cerrador/commercial_lead solo las suyas. */
+async function _searchAlertaVisitas(){
+  const box=document.getElementById('search-alerta-visitas'); if(!box)return;
+  box.style.display='none';box.innerHTML='';
+  if(!cu||!['admin','closer','commercial_lead'].includes(cu.rol))return;
+  try{
+    const lim=new Date(Date.now()-2*24*3600000).toISOString();
+    let q=sb.from('leads').select('id,nombre,cerrador,visita_fecha,resultado_reunion')
+      .eq('estado','visita_agendada')
+      .or('archivado.is.null,archivado.eq.false')
+      .lt('visita_fecha',lim);
+    if(cu.rol!=='admin')q=q.eq('cerrador',cu.nombre);
+    const{data,error}=await q;
+    if(error)return;
+    const sinRes=(data||[]).filter(function(l){return !(l.resultado_reunion&&(''+l.resultado_reunion).trim());});
+    if(!sinRes.length)return;
+    box.innerHTML='🚨 <strong>'+sinRes.length+' visita(s) con fecha vencida sin resultado registrado</strong>'+
+      (cu.rol==='admin'?' (todas las carteras)':'')+
+      ' — abrí cada lead y usá "📝 Resultado visita".';
+    box.style.display='block';
+  }catch(e){}
 }
 
 /* CAMBIO 2 — Nueva Oportunidad: muestra perfil antes de agendar */
@@ -4918,8 +5074,9 @@ async function execSearch(q){
   document.getElementById('search-results-body').innerHTML=`<div class="search-results">${leads.map(l=>{
     const isLost=l.estado==='cerrado_perdido';
     const isWon=l.estado==='cerrado_ganado';
+    const isRes=l.estado==='reservado';
     const cls=isLost?'lost':isWon?'won':'open';
-    const lbl=isLost?'Perdido':isWon?'Ganado':'Abierto';
+    const lbl=isRes?'💰 Con reserva':isLost?'Perdido':isWon?'Ganado':'Abierto';
     // Detectar qué campo coincidió
     const matches=[];
     if(l.nombre?.toLowerCase().includes(q_lc))matches.push('nombre');
