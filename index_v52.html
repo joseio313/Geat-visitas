@@ -1360,7 +1360,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='140';
+  var CURRENT_VERSION='141';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
