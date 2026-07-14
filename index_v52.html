@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='133';
+  var CURRENT_VERSION='135';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -5494,6 +5494,7 @@ async function renderAdmin(){
            style="margin-top:12px;border:2px dashed var(--gray-600);border-radius:8px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--gray-400);transition:.15s">
         📎 Arrastrá audios acá o tocá para elegir · podés soltar <b>varios</b> y se unen en <b>una sola transcripción</b> (acepta .opus de WhatsApp)
       </div>
+      <div id="grab-recover-banner" style="display:none;margin-top:12px"></div>
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
 
@@ -5691,6 +5692,8 @@ let _grabCache={};
 let _grabListAll=[];
 let _grabFiltrarTimer=null;
 let _grabModo='mios';
+let _grabRecuperables=[];
+let _grabRecuperando=false;
 function _grabFmtFecha(iso){
   if(!iso)return'—';
   try{return new Date(iso).toLocaleString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -5710,7 +5713,95 @@ async function renderRegistroGrabaciones(){
     _grabCache={};
     _grabListAll.forEach(function(g){_grabCache[g.id]=g;});
     _grabRenderFiltrado();
+    _grabDetectarRecuperables();
   }catch(e){cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:8px">Error: '+_escPend(e.message||'error')+'</div>';}
+}
+/* ════════════════════════════════════════
+   v135 — RECUPERACIÓN DE GRABACIONES INTERRUMPIDAS
+   Grabaciones con estado='interrumpida' y sin transcripción pero CON segmentos
+   seg_NNN.webm en storage (la pestaña se cerró antes de transcribir). El banner
+   del panel Registro ofrece re-correr el mismo pipeline: transcribir cada
+   segmento en orden con OpenAI, concatenar, resumir/extraer y marcar completa.
+════════════════════════════════════════ */
+async function _grabDetectarRecuperables(){
+  const banner=document.getElementById('grab-recover-banner'); if(!banner)return;
+  try{
+    const cand=_grabListAll.filter(function(g){
+      return g.estado==='interrumpida'&&!(g.transcripcion&&g.transcripcion.trim());
+    });
+    const rec=[];
+    for(const g of cand){
+      try{
+        const{data:segs,error}=await sb.storage.from('grabaciones').list(String(g.id)+'/',{limit:200});
+        if(error)continue;
+        if((segs||[]).some(function(s){return /^seg_\d+\.webm$/i.test(s.name);}))rec.push(g.id);
+      }catch(e){}
+    }
+    _grabRecuperables=rec;
+    if(!rec.length){banner.style.display='none';banner.innerHTML='';return;}
+    banner.innerHTML='<div style="border:1px solid var(--gold);border-radius:8px;padding:10px 12px;background:var(--gray-900);display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<div style="flex:1;min-width:180px;font-size:12px;color:var(--gray-100)">🎙 <b>'+rec.length+' grabación(es) recuperable(s)</b> — el audio quedó guardado pero no se transcribió</div>'+
+      '<button type="button" class="btn btn-primary btn-sm" onclick="recuperarGrabacionesInterrumpidas()">Recuperar todas</button>'+
+    '</div>';
+    banner.style.display='block';
+  }catch(e){}
+}
+async function recuperarGrabacionesInterrumpidas(){
+  if(_grabRecuperando)return;
+  if(!_grabRecuperables||!_grabRecuperables.length)return;
+  if(_recHState==='grabando'||_recHState==='procesando'||_recHState==='iniciando'){
+    toast('Esperá a que termine la grabación en curso','warning');return;
+  }
+  _grabRecuperando=true;
+  const banner=document.getElementById('grab-recover-banner');
+  const ids=_grabRecuperables.slice();
+  let ok=0,fallos=[];
+  for(let i=0;i<ids.length;i++){
+    if(banner)banner.innerHTML='<div style="border:1px solid var(--gold);border-radius:8px;padding:10px 12px;background:var(--gray-900);font-size:12px;color:var(--gray-100)"><span class="spin"></span> Recuperando grabación '+(i+1)+' de '+ids.length+' (#'+ids[i]+')… no cierres esta pestaña</div>';
+    try{ await _grabRecuperarUna(ids[i]); ok++; }
+    catch(e){ fallos.push('#'+ids[i]+' ('+(e&&e.message||'error')+')'); }
+  }
+  _grabRecuperando=false;
+  if(fallos.length)toast(ok+' recuperada(s) · fallaron: '+fallos.join(', '),'warning');
+  else toast('✅ '+ok+' grabación(es) recuperada(s)','ok');
+  renderRegistroGrabaciones();
+}
+async function _grabRecuperarUna(id){
+  const g=_grabCache[id]||{};
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  const{data:segs,error:el}=await sb.storage.from('grabaciones').list(String(id)+'/',{limit:200});
+  if(el)throw el;
+  const names=(segs||[]).map(function(s){return s.name;}).filter(function(n){return /^seg_\d+\.webm$/i.test(n);}).sort();
+  if(!names.length)throw new Error('sin segmentos');
+  const partes=[];
+  for(let i=0;i<names.length;i++){
+    const{data:blob,error:ed}=await sb.storage.from('grabaciones').download(String(id)+'/'+names[i]);
+    if(ed||!blob)throw(ed||new Error('descarga falló'));
+    let t='';
+    try{ t=await _whisperSingleBlob(blob,cfg.value,names[i]); }catch(e){ t=''; }
+    if(t&&t.trim())partes.push(t.trim());
+  }
+  const combinado=partes.join('\n\n').trim();
+  if(combinado.length<10)throw new Error('audio sin texto');
+  let resumen=null;
+  try{resumen=await _resumirReunionIA(combinado);}catch(e){}
+  const updates={transcripcion:combinado,estado:'completa',audio_path:String(id)+'/'};
+  if(resumen)updates.resumen=JSON.stringify(resumen);
+  try{
+    const{error:eu}=await sb.from('grabaciones').update(updates).eq('id',id);
+    if(eu)throw eu;
+  }catch(e){throw new Error('no se pudo guardar: '+(e&&e.message||'error'));}
+  /* Extracción IA + título en silencio de fondo, igual que el pipeline normal */
+  (async function(){
+    try{
+      const ext=await _grabExtraerYGuardar(id,combinado);
+      if(_esTituloGenerico(g.titulo)){
+        const tit=(ext&&ext.titulo&&(''+ext.titulo).trim())||await _grabAutoTituloIA(combinado.slice(0,3000));
+        if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',id);}catch(e){}}
+      }
+    }catch(e){}
+  })();
 }
 function _grabSetModo(modo){
   _grabModo=modo;
