@@ -1311,7 +1311,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='136';
+  var CURRENT_VERSION='137';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -5613,18 +5613,9 @@ async function _analizarMotivosPerdida(){
       if(btn){btn.disabled=false;btn.textContent='🧠 Analizar motivos de pérdida';}
       return;
     }
-    const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-    if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
-    const iaResp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,
-        messages:[{role:'user',content:'Estos son motivos de pérdida de leads escritos a mano por vendedores. Agrupá los parecidos y devolvé SOLO un JSON array con los 3-5 motivos nuevos más frecuentes que convendría agregar como opción fija. Formato: ["motivo1","motivo2"]. Sin texto extra.\n\n'+manuales.join('\n')}]})
-    });
-    if(!iaResp.ok)throw new Error('API '+iaResp.status);
-    const aiData=await iaResp.json();
-    let txt=(aiData.content&&aiData.content[0]&&aiData.content[0].text)||'';
-    txt=txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+    /* v137: migrado a OpenAI vía _gptMiniIA (mismo prompt). jsonMode=false porque
+       la respuesta es un JSON array, no un objeto. */
+    const txt=await _gptMiniIA('Estos son motivos de pérdida de leads escritos a mano por vendedores. Agrupá los parecidos y devolvé SOLO un JSON array con los 3-5 motivos nuevos más frecuentes que convendría agregar como opción fija. Formato: ["motivo1","motivo2"]. Sin texto extra.\n\n'+manuales.join('\n'),300,false);
     let sugeridos=JSON.parse(txt);
     if(!Array.isArray(sugeridos))throw new Error('Respuesta inesperada de IA');
     sugeridos=sugeridos.map(function(m){return(m+'').trim();}).filter(function(m){return m&&!fixed.includes(m);});
@@ -6882,8 +6873,8 @@ async function overrideAlternancia(){
 
 /* ════════════════════════════════════════
    ASISTENTE IA FLOTANTE — chat con contexto de leads/actividades.
-   Reutiliza el mismo patrón de llamada a Claude que _resumirReunionIA
-   (anthropic_api_key desde app_config, modelo Sonnet, header browser-access).
+   v137: usa OpenAI gpt-4o-mini vía _gptChatIA (openai_api_key desde app_config),
+   con historial de conversación y visión para "Ve mi pantalla".
 ════════════════════════════════════════ */
 let _asistOpen=false, _asistBusy=false, _asistHist=[], _asistImgB64=null;
 const _ML_RE=/mar[ií]a\s+luisa/gi;   // regla dura: nunca mostrar a María Luisa
@@ -7048,18 +7039,25 @@ function _asistSystemPrompt(contexto){
   ].join('\n');
 }
 
-async function _asistLlamarClaude(systemPrompt,pregunta){
-  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
-  const msgs=_asistHist.slice(-6).concat([{role:'user',content:pregunta}]);
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+/* v137: variante de _gptMiniIA para el asistente — system prompt propio, historial
+   de conversación y soporte de imagen (visión de gpt-4o-mini). messages ya viene
+   en formato OpenAI (content string o array con image_url/text). */
+async function _gptChatIA(systemPrompt,messages,maxTokens){
+  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
+  if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  const resp=await fetch('https://api.openai.com/v1/chat/completions',{
     method:'POST',
-    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:systemPrompt,messages:msgs})
+    headers:{'content-type':'application/json','Authorization':'Bearer '+cfg.value},
+    body:JSON.stringify({model:'gpt-4o-mini',max_tokens:maxTokens||1024,
+      messages:[{role:'system',content:systemPrompt}].concat(messages)})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();
-  return (data.content&&data.content[0]&&data.content[0].text)||'';
+  return ((data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'').trim();
+}
+async function _asistLlamarClaude(systemPrompt,pregunta){
+  const msgs=_asistHist.slice(-6).concat([{role:'user',content:pregunta}]);
+  return await _gptChatIA(systemPrompt,msgs,1024);
 }
 
 function _asistCategoria(q){
@@ -7184,23 +7182,14 @@ async function verMiPantalla(){
   }
 }
 
-/* Llamada a Claude con imagen adjunta (visión). Respuesta CORTA. */
+/* Llamada IA con imagen adjunta (visión gpt-4o-mini, v137). Respuesta CORTA. */
 async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
-  const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','anthropic_api_key').single();
-  if(ec||!cfg||!cfg.value)throw new Error('API key no configurada');
   const instr='El usuario está viendo ESTA pantalla del CRM. Respondé SOLO lo que pregunta, CORTO (1 a 3 frases), sin describir toda la pantalla ni hacer listas largas (el usuario ya ve su pantalla). Si corresponde, indicá el próximo paso según las 5 fases (sin saltear). Pregunta: '+pregunta;
   const msgs=_asistHist.slice(-6).concat([{role:'user',content:[
-    {type:'image',source:{type:'base64',media_type:'image/png',data:imgB64}},
+    {type:'image_url',image_url:{url:'data:image/png;base64,'+imgB64}},
     {type:'text',text:instr}
   ]}]);
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'content-type':'application/json','x-api-key':cfg.value,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,system:systemPrompt,messages:msgs})
-  });
-  if(!resp.ok)throw new Error('API '+resp.status);
-  const data=await resp.json();
-  return (data.content&&data.content[0]&&data.content[0].text)||'';
+  return await _gptChatIA(systemPrompt,msgs,1024);
 }
 
 /* ════════════════════════════════════════
