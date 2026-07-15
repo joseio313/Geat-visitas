@@ -1368,7 +1368,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='143';
+  var CURRENT_VERSION='144';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -4640,22 +4640,10 @@ async function saveSeguimiento(){
 
   try{
     let wonData=null;
-    if(currentAgendaId){
-      const{error:e1}=await sb.from('agenda_personal').update({
-        completada:true,completada_en:now,nota_resultado:nota,tipo:estado
-      }).eq('id',currentAgendaId);
-      if(e1)throw e1;
-    }else{
-      // v126 — sin seguimiento activo: crear la actividad ya completada desde cero
-      const{data:leadNom0}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
-      const{data:actoNuevo,error:e1n}=await sb.from('agenda_personal').insert({
-        colaborador:cu.nombre,lead_id:currentLeadId,tipo:estado,titulo:(leadNom0&&leadNom0.nombre)||'—',
-        nota_resultado:nota,fecha_programada:now,completada:true,completada_en:now,activo:true
-      }).select('id').single();
-      if(e1n)throw e1n;
-      currentAgendaId=actoNuevo&&actoNuevo.id;
-    }
-
+    /* v144 — transaccional: primero se guarda el siguiente paso (o el cierre
+       ganado/perdido) y RECIÉN al final se marca completada la tarea actual.
+       Si el siguiente paso falla, la tarea sigue abierta y el lead no queda
+       huérfano. El trigger trg_exigir_siguiente_paso lo exige server-side. */
     if(outcomeMode==='continue'){
       const nextEstado=document.getElementById('next-estado').value;
       const nextAsignado=document.getElementById('next-asignado').value;
@@ -4685,9 +4673,11 @@ async function saveSeguimiento(){
       }
       // Si ya existe una próxima actividad abierta (p.ej. creada por un trigger),
       // usar la fecha elegida por el colaborador en vez de crear un duplicado.
-      const{data:actAbierta}=await sb.from('agenda_personal')
-        .select('id').eq('lead_id',currentLeadId).eq('completada',false).eq('activo',true)
-        .neq('id',currentAgendaId).order('fecha_programada').limit(1);
+      // v144: currentAgendaId puede ser null acá (flujo v126) — filtrar solo si existe.
+      let qAbierta=sb.from('agenda_personal')
+        .select('id').eq('lead_id',currentLeadId).eq('completada',false).eq('activo',true);
+      if(currentAgendaId)qAbierta=qAbierta.neq('id',currentAgendaId);
+      const{data:actAbierta}=await qAbierta.order('fecha_programada').limit(1);
       if(actAbierta&&actAbierta.length){
         const{error:e2u}=await sb.from('agenda_personal').update({
           colaborador:asignadoFinal,tipo:nextEstado,titulo:nombreLead,nota:nextNota,fecha_programada:fp
@@ -4762,6 +4752,24 @@ async function saveSeguimiento(){
       }).eq('id',currentLeadId);
       if(e4)throw e4;
       registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo,nota:notaLost});
+    }
+
+    /* v144 — completar la tarea actual AL FINAL: el siguiente paso (o el
+       cierre) ya quedó guardado, así el lead nunca queda sin paso abierto. */
+    if(currentAgendaId){
+      const{error:e1}=await sb.from('agenda_personal').update({
+        completada:true,completada_en:now,nota_resultado:nota,tipo:estado
+      }).eq('id',currentAgendaId);
+      if(e1)throw e1;
+    }else{
+      // v126 — sin seguimiento activo: crear la actividad ya completada desde cero
+      const{data:leadNom0}=await sb.from('leads').select('nombre').eq('id',currentLeadId).single();
+      const{data:actoNuevo,error:e1n}=await sb.from('agenda_personal').insert({
+        colaborador:cu.nombre,lead_id:currentLeadId,tipo:estado,titulo:(leadNom0&&leadNom0.nombre)||'—',
+        nota_resultado:nota,fecha_programada:now,completada:true,completada_en:now,activo:true
+      }).select('id').single();
+      if(e1n)throw e1n;
+      currentAgendaId=actoNuevo&&actoNuevo.id;
     }
 
     // Alternancia David/Gustavo si tipo=visita_oficina
