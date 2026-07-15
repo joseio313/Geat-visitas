@@ -503,6 +503,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .search-leads-tbl th { color: var(--gold); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
 .search-leads-tbl td { color: var(--white); }
 .match-tag { font-size: 9px; color: var(--gold); background: rgba(242,197,0,0.1); padding: 1px 5px; border-radius: 9px; border: 1px solid rgba(242,197,0,0.3); margin-left: 4px; }
+.sr-status.res{color:#fff;border-color:#2E7D32;background:#43A047}
+/* v143 — celebración de cierres y reservas (overlay solo visual, se cierra solo o al tocar) */
+#celebracion-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;animation:celebFade .25s ease}
+#celebracion-overlay canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.celeb-titulo{font-size:30px;font-weight:900;color:#FAC305;text-align:center;text-shadow:0 2px 18px rgba(250,195,5,0.55);animation:celebPop .45s cubic-bezier(.18,1.4,.4,1);letter-spacing:.02em;padding:0 16px;position:relative}
+.celeb-sub{font-size:16px;font-weight:700;color:#fff;text-align:center;margin-top:10px;animation:celebPop .6s cubic-bezier(.18,1.4,.4,1);padding:0 16px;position:relative}
+@keyframes celebPop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes celebFade{from{opacity:0}to{opacity:1}}
 </style>
 </head>
 <body>
@@ -1360,7 +1368,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='142';
+  var CURRENT_VERSION='143';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -1524,6 +1532,65 @@ function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
   clearTimeout(el._t);el._t=setTimeout(()=>el.className='',2800);
+}
+
+/* v143 — celebración visual de cierres y reservas. Solo frontend, se dispara DESPUÉS
+   del guardado exitoso y está blindada en try/catch: jamás puede romper el guardado. */
+function celebrar(titulo,sub){
+  try{
+    const prev=document.getElementById('celebracion-overlay');
+    if(prev)prev.remove();
+    const ov=document.createElement('div');
+    ov.id='celebracion-overlay';
+    ov.innerHTML='<canvas></canvas><div class="celeb-titulo"></div><div class="celeb-sub"></div>';
+    ov.querySelector('.celeb-titulo').textContent=titulo;
+    ov.querySelector('.celeb-sub').textContent=sub||'';
+    document.body.appendChild(ov);
+    const cv=ov.querySelector('canvas');
+    cv.width=window.innerWidth;cv.height=window.innerHeight;
+    const ctx=cv.getContext('2d');
+    const colores=['#FAC305','#FFD84D','#FFFFFF','#F2C500'];
+    const piezas=[];
+    for(let i=0;i<140;i++){
+      piezas.push({x:Math.random()*cv.width,y:-20-Math.random()*cv.height*0.5,
+        w:6+Math.random()*6,h:8+Math.random()*8,
+        vy:2.2+Math.random()*3.5,vx:-1.5+Math.random()*3,
+        rot:Math.random()*Math.PI,vr:-0.12+Math.random()*0.24,
+        col:colores[i%colores.length]});
+    }
+    let vivo=true;
+    function frame(){
+      if(!vivo)return;
+      ctx.clearRect(0,0,cv.width,cv.height);
+      piezas.forEach(p=>{
+        p.y+=p.vy;p.x+=p.vx;p.rot+=p.vr;
+        if(p.y>cv.height+20){p.y=-20;p.x=Math.random()*cv.width;}
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+        ctx.fillStyle=p.col;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+      });
+      requestAnimationFrame(frame);
+    }
+    frame();
+    function cerrarCeleb(){vivo=false;if(ov.parentNode)ov.remove();}
+    ov.onclick=cerrarCeleb;
+    setTimeout(cerrarCeleb,2800);
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(AC){
+        const ac=new AC();
+        [[523.25,0],[659.25,0.12],[783.99,0.24]].forEach(n=>{
+          const o=ac.createOscillator(),g=ac.createGain();
+          o.type='triangle';o.frequency.value=n[0];
+          g.gain.setValueAtTime(0.001,ac.currentTime+n[1]);
+          g.gain.exponentialRampToValueAtTime(0.18,ac.currentTime+n[1]+0.02);
+          g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+n[1]+0.35);
+          o.connect(g);g.connect(ac.destination);
+          o.start(ac.currentTime+n[1]);o.stop(ac.currentTime+n[1]+0.4);
+        });
+        setTimeout(()=>{try{ac.close();}catch(_a){}},1500);
+      }
+    }catch(_s){}
+  }catch(_c){}
 }
 
 /* CAMBIO 1.B — Anti-duplicado en memoria */
@@ -2048,9 +2115,10 @@ function renderCard(a,now){
   const _xMode='';
   const _bd=estadoBorderColor(_estadoLeadMap[a.lead_id]);
   const _bdStyle=_bd?` style="border-left:4px solid ${_bd}"`:'';
+  const _esRes=_estadoLeadMap[a.lead_id]==='reservado';
   return `<div class="activity-card ${cls}"${_bdStyle} onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
-    <div class="activity-client">${a.titulo||'—'}</div>
+    <div class="activity-client">${a.titulo||'—'}${_esRes?' <span style="background:#43A047;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 6px;vertical-align:middle;white-space:nowrap">💰 RESERVADO</span>':''}</div>
     <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
     <div class="activity-times">
       <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
@@ -2722,10 +2790,11 @@ async function openLeadDetail(leadId,agendaId,mode){
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
       ${currentLeadMode!=='readonly'&&!_leadBloqueado?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
-      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px">📝 Resultado visita</button>`:''}
-      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;border-color:#43A047;color:#43A047">💰 Reservado</button>`:''}
-      ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
+      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-primary" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px;border:2px solid rgba(0,0,0,0.55)">📝 Resultado visita</button>`:''}
+      ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;background:#43A047;color:#fff;border:2px solid #2E7D32;font-weight:700">💰 Reservado</button>`:''}
+      ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border:2px solid #2E7D32;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
     </div>
+    ${currentLeadMode!=='readonly'&&!_leadBloqueado&&lead.estado==='visita_realizada'?`<div class="mobile-note" style="border-color:#43A047">✅ <strong>Este lead ya tuvo visita</strong> → registrá el resultado o la reserva con los botones de arriba.</div>`:''}
     <div id="lead-tab-detalle">
       <div class="section">
         <div class="section-title">Oportunidad</div>
@@ -3605,6 +3674,9 @@ async function guardarReserva(){
     }catch(eH){}
     toast('✅ Reserva registrada — lead en estado Reservado');
     closeModal('modalReserva');
+    /* v143 — celebración post-guardado (solo visual) */
+    const _nomCli=(window._leadAgendar&&window._leadAgendar.nombre)||'';
+    celebrar('💰 ¡RESERVA REGISTRADA!',(_nomCli?_nomCli+' — ':'')+'$'+monto.toLocaleString('en-US'));
   }catch(e){toast('Error: '+e.message,'error');}
   finally{if(btn)btn.disabled=false;}
 }
@@ -4674,7 +4746,7 @@ async function saveSeguimiento(){
       }catch(eVenta){
         toast('Lead ganado, pero no se registró en ventas: '+eVenta.message,'error');
       }
-      wonData={cod:_vCod,m2,cerrador:_vCerr,captador:_vCap};
+      wonData={cod:_vCod,m2,cerrador:_vCerr,captador:_vCap,nombre:(leadFull&&leadFull.nombre)||''};
 
     } else if(outcomeMode==='lost'){
       let motivo=document.getElementById('lost-motivo').value;
@@ -4707,6 +4779,8 @@ async function saveSeguimiento(){
       _modalBodyLock('modalFinalize',false); // confirmacion de venta queda interactiva
       showWonConfirm(wonData);
       toast('🏆 Lead marcado como GANADO');
+      /* v143 — celebración post-guardado (solo visual) */
+      celebrar('🏆 ¡VENTA CERRADA!',(wonData&&wonData.nombre)||'');
       try{renderWeek();}catch(_re){}
       try{cargarMarcadoresDia();}catch(_me){}
       const _phwW=document.getElementById('para-hoy-wrap');
@@ -5088,7 +5162,7 @@ async function execSearch(q){
     const isLost=l.estado==='cerrado_perdido';
     const isWon=l.estado==='cerrado_ganado';
     const isRes=l.estado==='reservado';
-    const cls=isLost?'lost':isWon?'won':'open';
+    const cls=isRes?'res':isLost?'lost':isWon?'won':'open';
     const lbl=isRes?'💰 Con reserva':isLost?'Perdido':isWon?'Ganado':'Abierto';
     // Detectar qué campo coincidió
     const matches=[];
@@ -5292,9 +5366,9 @@ async function cargarLeadsRecientes(){
       <thead><tr><th>Fecha/Hora</th><th>Captador</th><th>Cliente</th><th>Celular</th><th>Ciudad</th><th>Estado</th><th></th></tr></thead>
       <tbody>${leads.map(l=>{
         const dt=l.created_at?new Date(l.created_at).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
-        const isLost=l.estado==='cerrado_perdido';const isWon=l.estado==='cerrado_ganado';
-        const cls=isLost?'lost':isWon?'won':'open';
-        const lbl=isLost?'Perdido':isWon?'Ganado':'Abierto';
+        const isLost=l.estado==='cerrado_perdido';const isWon=l.estado==='cerrado_ganado';const isRes=l.estado==='reservado';
+        const cls=isRes?'res':isLost?'lost':isWon?'won':'open';
+        const lbl=isRes?'💰 Con reserva':isLost?'Perdido':isWon?'Ganado':'Abierto';
         return `<tr>
           <td style="white-space:nowrap;font-size:10px">${dt}</td>
           <td style="font-size:10px">${l.captador||'—'}</td>
