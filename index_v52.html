@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='145';
+  var CURRENT_VERSION='146';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7669,7 +7669,8 @@ function abrirCVModal(id){
   const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
   if(!c){toast('Postulación no encontrada','error');return;}
   const idA=_cvIdAttr(c.id);
-  const links=String(c.links_detectados||'').split(' | ').map(s=>s.trim()).filter(s=>/^https?:\/\//i.test(s));
+  // v146: separador " | " con espaciado variable; se aceptan links sin protocolo (se antepone https://)
+  const links=String(c.links_detectados||'').split(/\s*\|\s*/).map(s=>s.trim()).filter(Boolean);
   document.getElementById('cv-modal-title').textContent='🎯 '+(c.nombre||'Postulación');
   document.getElementById('cv-modal-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
@@ -7680,12 +7681,12 @@ function abrirCVModal(id){
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
     ${c.cv_filename?`<div style="font-size:12px;margin-top:12px">📎 Adjunto: <strong>${_cvEsc(c.cv_filename)}</strong></div>`:''}
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📎 Links / Portafolios</div>
     ${links.length?`
-      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">🔗 Links del postulante</div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        ${links.map(u=>`<a href="${_cvEsc(u)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;word-break:break-all">↗ ${_cvEsc(u.length>70?u.slice(0,67)+'…':u)}</a>`).join('')}
-      </div>`:''}
-    ${c.gmail_link?`<div style="margin-top:12px;font-size:10px"><a href="${_cvEsc(c.gmail_link)}" target="_blank" rel="noopener" style="color:var(--gray-400);text-decoration:underline">ver correo original en Gmail</a></div>`:''}
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+        ${links.map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return `<a href="${_cvEsc(href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px" title="${_cvEsc(href)}">↗ ${_cvEsc(dom)}</a>`;}).join('')}
+      </div>`:'<div style="font-size:12px;color:var(--gray-400)">Sin links</div>'}
+    ${c.gmail_link?`<div style="margin-top:12px;font-size:11px"><a href="${_cvEsc(c.gmail_link)}" target="_blank" rel="noopener" style="color:var(--gray-400);text-decoration:underline">📧 Ver correo original con adjunto en Gmail</a></div>`:''}
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
       <button type="button" class="btn btn-primary" onclick="cvAccion('${idA}','contactado')">✓ Contactar</button>
       <button type="button" class="btn btn-red" onclick="cvAccion('${idA}','descartado')">✗ Descartar</button>
