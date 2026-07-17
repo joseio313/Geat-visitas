@@ -588,6 +588,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
+    <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
 
@@ -725,6 +726,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>Panel <span class="gold">Admin</span></h1>
     </div>
     <div id="admin-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: RECLUTAMIENTO (v145) — solo admin, datos vía Edge Function geat-cv-panel ══ -->
+  <section id="screen-reclutamiento" class="screen">
+    <div class="screen-title">
+      <h1>🎯 <span class="gold">Reclutamiento</span></h1>
+    </div>
+    <div id="rec-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
   <!-- ══ SCREEN: MI REGISTRO ══ -->
@@ -1125,6 +1134,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ MODAL: DETALLE POSTULACIÓN (v145) — solo admin ══ -->
+<div id="modalCV" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalCV')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="cv-modal-title">🎯 Postulación</h2>
+      <button class="modal-close" onclick="closeModal('modalCV')">×</button>
+    </div>
+    <div class="modal-body" id="cv-modal-body"></div>
+  </div>
+</div>
+
 <!-- ══ MODAL: BUSCAR / NUEVA OPORTUNIDAD ══ -->
 <div id="modalSearch" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalSearch')">
   <div class="modal">
@@ -1368,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='144';
+  var CURRENT_VERSION='145';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -1788,6 +1808,9 @@ async function checkPin(){
     return;
   }
   cu=r.usuario;colaboradores=r.equipo||[];
+  // v145: el PIN queda SOLO en memoria (nunca en localStorage) para geat-cv-panel;
+  // si la sesión se restaura por token, el panel Reclutamiento lo vuelve a pedir.
+  if(cu&&cu.rol==='admin')_cvPin=pinVal;
   localStorage.setItem('geat_session_token',r.token);
   startApp();
 }
@@ -1826,6 +1849,8 @@ function startApp(){
   if(cu.rol==='admin'){
     const tabAdmin=document.getElementById('tab-admin');
     if(tabAdmin)tabAdmin.style.display='';
+    const tabRec=document.getElementById('tab-reclutamiento');
+    if(tabRec)tabRec.style.display='';
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
     /* v96: recibidor de audio (#uploadAudioBtn) movido al panel ADMIN → sección Registro */
@@ -7516,6 +7541,169 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
     {type:'text',text:instr}
   ]}]);
   return await _gptChatIA(systemPrompt,msgs,1024);
+}
+
+/* ════════════════════════════════════════
+   RECLUTAMIENTO (v145) — solo admin.
+   Los datos NUNCA se leen directo de las tablas: todo pasa por la Edge
+   Function geat-cv-panel, que valida el PIN server-side (solo rol admin).
+   El PIN vive SOLO en memoria (_cvPin): se captura en el login y, si la
+   sesión fue restaurada por token, se pide una vez al abrir el panel.
+════════════════════════════════════════ */
+const CV_PANEL_URL=SB_URL+'/functions/v1/geat-cv-panel';
+let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='';
+
+function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
+
+async function _cvCall(payload){
+  const r=await fetch(CV_PANEL_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
+  return await r.json();
+}
+
+function renderReclutamiento(){
+  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  const box=document.getElementById('rec-body');
+  if(!box)return;
+  if(!_cvPin){
+    box.innerHTML=`
+      <div style="max-width:340px;margin:30px auto;background:var(--gray-800);border:1px solid var(--gold);border-radius:16px;padding:24px;text-align:center">
+        <div style="font-size:13px;color:var(--gray-400);margin-bottom:14px">🔒 Panel confidencial. Ingresá tu PIN de admin para ver las postulaciones.</div>
+        <input type="password" inputmode="numeric" maxlength="4" id="cv-pin-input" class="form-control" autocomplete="off" style="text-align:center;font-size:20px;letter-spacing:10px" placeholder="••••" onkeydown="if(event.key==='Enter')_cvPinSubmit()">
+        <button type="button" class="btn btn-primary" style="margin-top:14px;width:100%" onclick="_cvPinSubmit()">Entrar</button>
+      </div>`;
+    const i=document.getElementById('cv-pin-input');if(i)i.focus();
+    return;
+  }
+  _cvCargar();
+}
+
+function _cvPinSubmit(){
+  const el=document.getElementById('cv-pin-input');
+  const v=(el&&el.value)||'';
+  if(!/^\d{4}$/.test(v)){toast('El PIN debe tener 4 dígitos','error');return;}
+  _cvPin=v;
+  _cvCargar();
+}
+
+async function _cvCargar(){
+  const box=document.getElementById('rec-body');
+  if(!box)return;
+  box.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando postulaciones...</div>';
+  let r=null;
+  try{r=await _cvCall({pin:_cvPin});}catch(e){}
+  if(!r||!r.ok){
+    _cvPin=null;_cvData=null;
+    toast((r&&r.error)||'No se pudo cargar Reclutamiento','error');
+    renderReclutamiento();
+    return;
+  }
+  _cvData=r;
+  _cvRender();
+}
+
+function _cvRender(){
+  const box=document.getElementById('rec-body');
+  if(!box)return;
+  const cvs=(_cvData&&_cvData.cvs)||[];
+  const campanas=(_cvData&&_cvData.campanas)||[];
+  const estados=[...new Set(cvs.map(c=>c.estado).filter(Boolean))];
+  ['nuevo','contactado','descartado'].forEach(e=>{if(!estados.includes(e))estados.push(e);});
+  const fil=cvs.filter(c=>
+    (!_cvFilCampana||String(c.campana_id)===String(_cvFilCampana))&&
+    (!_cvFilPerfil||(c.perfil||'')===_cvFilPerfil)&&
+    (!_cvFilEstado||(c.estado||'')===_cvFilEstado));
+  box.innerHTML=`
+    <div class="filter-bar">
+      <select onchange="_cvFilCampana=this.value;_cvRender()">
+        <option value="">Todas las campañas</option>
+        ${campanas.map(k=>`<option value="${_cvEsc(k.id)}" ${String(_cvFilCampana)===String(k.id)?'selected':''}>${_cvEsc(k.nombre||k.titulo||('Campaña '+k.id))}</option>`).join('')}
+      </select>
+      <select onchange="_cvFilPerfil=this.value;_cvRender()">
+        <option value="">Todos los perfiles</option>
+        ${['obra','diseño','mixto'].map(p=>`<option value="${p}" ${_cvFilPerfil===p?'selected':''}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`).join('')}
+      </select>
+      <select onchange="_cvFilEstado=this.value;_cvRender()">
+        <option value="">Todos los estados</option>
+        ${estados.map(e=>`<option value="${_cvEsc(e)}" ${_cvFilEstado===e?'selected':''}>${_cvEsc(e.charAt(0).toUpperCase()+e.slice(1))}</option>`).join('')}
+      </select>
+      <div style="font-size:12px;color:var(--gray-400)">${fil.length} de ${cvs.length}</div>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_cvCargar()">↺ Actualizar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">
+      ${fil.map(c=>_cvCard(c)).join('')||'<div style="grid-column:1/-1;color:var(--gray-400);padding:36px;text-align:center">Sin postulaciones con esos filtros</div>'}
+    </div>`;
+}
+
+function _cvCard(c){
+  const p=Number(c.puntaje)||0;
+  const est=(c.estado||'nuevo');
+  const estCol=est==='contactado'?'#5BC98B':(est==='descartado'?'var(--gray-400)':'var(--gold)');
+  const id=_cvIdAttr(c.id);
+  return `
+  <div style="background:var(--gray-800);border:1px solid ${p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:14px">${_cvEsc(c.nombre||'—')}</div>
+        <div style="font-size:11px;color:var(--gray-400)">📍 ${_cvEsc(c.ciudad||'—')} · 🏗 ${c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+' años de obra':'sin dato de obra'}</div>
+      </div>
+      <div style="font-size:28px;font-weight:800;color:${p>=70?'var(--gold)':'var(--gray-400)'};line-height:1;flex-shrink:0">${p}</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em">
+      <span style="border:1px solid var(--gold);color:var(--gold);border-radius:10px;padding:2px 9px">${_cvEsc(c.perfil||'—')}</span>
+      <span style="border:1px solid ${estCol};color:${estCol};border-radius:10px;padding:2px 9px">${_cvEsc(est)}</span>
+      ${c.ejecuto_obra?'<span style="border:1px solid var(--gray-600);color:var(--gray-400);border-radius:10px;padding:2px 9px">Ejecutó obra</span>':''}
+    </div>
+    ${c.bandera?`<div style="font-size:11px;color:#FF8A78">🚩 ${_cvEsc(c.bandera)}</div>`:''}
+    <div style="font-size:11px;color:var(--gray-400)">💰 ${c.pretension_bs?_cvEsc(c.pretension_bs)+' Bs':'Pretensión: —'} · 📞 ${_cvEsc(c.telefono||'—')}</div>
+    <div style="font-size:12px;opacity:0.85;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_cvEsc(c.resumen||'')}</div>
+    <div style="display:flex;gap:6px;margin-top:auto;flex-wrap:wrap">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="cvAccion('${id}','contactado')">✓ Contactar</button>
+      <button type="button" class="btn btn-red btn-sm" onclick="cvAccion('${id}','descartado')">✗ Descartar</button>
+    </div>
+  </div>`;
+}
+
+function abrirCVModal(id){
+  const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+  if(!c){toast('Postulación no encontrada','error');return;}
+  const idA=_cvIdAttr(c.id);
+  const links=String(c.links_detectados||'').split(' | ').map(s=>s.trim()).filter(s=>/^https?:\/\//i.test(s));
+  document.getElementById('cv-modal-title').textContent='🎯 '+(c.nombre||'Postulación');
+  document.getElementById('cv-modal-body').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--gray-400)">📍 ${_cvEsc(c.ciudad||'—')} · 🏗 ${c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+' años':'—'} · ${_cvEsc(c.perfil||'—')} · 💰 ${c.pretension_bs?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')} ${c.email?' · ✉️ '+_cvEsc(c.email):''}</div>
+      <div style="font-size:30px;font-weight:800;color:${(Number(c.puntaje)||0)>=70?'var(--gold)':'var(--gray-400)'};flex-shrink:0">${Number(c.puntaje)||0}</div>
+    </div>
+    ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
+    <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
+    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px">📎 Adjunto: <strong>${_cvEsc(c.cv_filename)}</strong></div>`:''}
+    ${links.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">🔗 Links del postulante</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${links.map(u=>`<a href="${_cvEsc(u)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;word-break:break-all">↗ ${_cvEsc(u.length>70?u.slice(0,67)+'…':u)}</a>`).join('')}
+      </div>`:''}
+    ${c.gmail_link?`<div style="margin-top:12px;font-size:10px"><a href="${_cvEsc(c.gmail_link)}" target="_blank" rel="noopener" style="color:var(--gray-400);text-decoration:underline">ver correo original en Gmail</a></div>`:''}
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button type="button" class="btn btn-primary" onclick="cvAccion('${idA}','contactado')">✓ Contactar</button>
+      <button type="button" class="btn btn-red" onclick="cvAccion('${idA}','descartado')">✗ Descartar</button>
+    </div>`;
+  document.getElementById('modalCV').classList.add('show');
+}
+
+async function cvAccion(id,nuevoEstado){
+  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'estado',id:id,nuevo_estado:nuevoEstado});
+    if(!r||!r.ok)throw new Error((r&&r.error)||'No se pudo actualizar el estado');
+    toast(nuevoEstado==='contactado'?'✓ Marcado para contactar':'✗ Postulación descartada');
+    const m=document.getElementById('modalCV');
+    if(m&&m.classList.contains('show'))closeModal('modalCV');
+    await _cvCargar();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
