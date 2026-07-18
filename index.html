@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='149';
+  var CURRENT_VERSION='150';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7589,6 +7589,25 @@ function _cvEtapaSelect(id,est){
 
 function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
+/* v150: teléfono a dígitos internacionales (Bolivia 591, sin duplicar prefijo) */
+function _cvTelDig(t){let d=String(t||'').replace(/\D/g,'');if(d&&d.indexOf('591')!==0)d='591'+d;return d;}
+/* v150: mensaje de WhatsApp condicional — si ya sabemos la pretensión no la volvemos a pedir */
+function _cvWaMsg(c){
+  const nom=String(c.nombre||'').trim().split(/\s+/)[0]||'';
+  const tienePret=c.pretension_bs!=null&&c.pretension_bs!=='';
+  const msg=tienePret
+    ?'Hola '+nom+', te escribo de GEAT Construcción por tu postulación a Arquitecto de Obra. Nos interesó tu perfil y queremos coordinar una llamada corta. ¿Qué horario te queda cómodo en los próximos días?'
+    :'Hola '+nom+', te escribo de GEAT Construcción por tu postulación a Arquitecto de Obra. Nos interesó tu perfil y queremos coordinar una llamada corta. Antes, ¿me confirmás tu pretensión salarial y desde cuándo podrías empezar?';
+  return encodeURIComponent(msg);
+}
+/* v150: candidato de oro — obra + puntaje alto + dentro de presupuesto (o pretensión desconocida) */
+function _cvEsTop(c){
+  if((c.perfil||'')!=='obra')return false;
+  if((Number(c.puntaje)||0)<80)return false;
+  if(c.pretension_bs==null||c.pretension_bs==='')return true;
+  const pret=Number(String(c.pretension_bs).replace(/[^\d.]/g,''));
+  return isNaN(pret)||pret<=4500;
+}
 
 async function _cvCall(payload){
   const r=await fetch(CV_PANEL_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
@@ -7673,8 +7692,11 @@ function _cvCard(c){
   const p=Number(c.puntaje)||0;
   const est=(c.estado||'nuevo');
   const id=_cvIdAttr(c.id);
+  const esTop=_cvEsTop(c);
+  const tel=_cvTelDig(c.telefono);
   return `
-  <div style="background:var(--gray-800);border:1px solid ${p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
+  <div style="background:var(--gray-800);border:1px solid ${esTop||p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
+    ${esTop?'<div><span style="background:var(--gold);color:var(--black);font-size:10px;font-weight:800;letter-spacing:0.06em;border-radius:10px;padding:3px 10px;text-transform:uppercase">⭐ TOP</span></div>':''}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div style="min-width:0">
         <div style="font-weight:700;font-size:14px">${_cvEsc(c.nombre||'—')}</div>
@@ -7689,6 +7711,11 @@ function _cvCard(c){
     ${c.bandera?`<div style="font-size:11px;color:#FF8A78">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;color:var(--gray-400)">💰 Pretensión: ${c.pretension_bs!=null&&c.pretension_bs!==''?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')}</div>
     <div style="font-size:12px;opacity:0.85;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_cvEsc(c.resumen||'')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${tel?`<a href="tel:+${tel}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📞 Llamar</a>`:''}
+      ${tel?`<a href="https://wa.me/${tel}?text=${_cvWaMsg(c)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">💬 WhatsApp</a>`:''}
+      ${c.email?`<a href="mailto:${_cvEsc(c.email)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📧 Email</a>`:''}
+    </div>
     <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
       ${_cvEtapaSelect(id,est)}
@@ -7717,7 +7744,6 @@ function abrirCVModal(id){
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
         ${links.map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return `<a href="${_cvEsc(href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px" title="${_cvEsc(href)}">↗ ${_cvEsc(dom)}</a>`;}).join('')}
       </div>`:'<div style="font-size:12px;color:var(--gray-400)">Sin links</div>'}
-    ${c.gmail_link?`<div style="margin-top:12px;font-size:11px"><a href="${_cvEsc(c.gmail_link)}" target="_blank" rel="noopener" style="color:var(--gray-400);text-decoration:underline">📧 Ver correo original con adjunto en Gmail</a></div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📝 Notas internas</div>
     <textarea id="cv-nota-input" class="form-control" rows="3" placeholder="Notas confidenciales sobre el candidato...">${_cvEsc(c.notas||'')}</textarea>
     <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
