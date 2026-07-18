@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='147';
+  var CURRENT_VERSION='148';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7552,6 +7552,24 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
 ════════════════════════════════════════ */
 const CV_PANEL_URL=SB_URL+'/functions/v1/geat-cv-panel';
 let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='';
+/* v148: etapas del pipeline de reclutamiento, cada una con su color */
+const _CV_ETAPAS=[
+  {v:'nuevo',l:'Nuevo',c:'var(--gold)'},
+  {v:'contactado',l:'Contactado',c:'#5BC98B'},
+  {v:'entrevista',l:'Entrevista',c:'#6FB7FF'},
+  {v:'prueba_tecnica',l:'Prueba técnica',c:'#C792EA'},
+  {v:'oferta',l:'Oferta',c:'#FFB74D'},
+  {v:'contratado',l:'Contratado',c:'#4CAF50'},
+  {v:'descartado',l:'Descartado',c:'#9E9E9E'}
+];
+function _cvEtapaInfo(v){return _CV_ETAPAS.find(e=>e.v===v)||{v:v,l:v||'nuevo',c:'var(--gray-400)'};}
+function _cvEtapaSelect(id,est){
+  const info=_cvEtapaInfo(est);
+  return `<select onchange="cvAccion('${id}',this.value)" style="background:var(--gray-900);color:${info.c};border:1px solid ${info.c};border-radius:8px;padding:4px 8px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer">
+    ${_CV_ETAPAS.map(e=>`<option value="${e.v}" ${e.v===est?'selected':''}>${e.l}</option>`).join('')}
+    ${_CV_ETAPAS.some(e=>e.v===est)?'':`<option value="${_cvEsc(est)}" selected>${_cvEsc(est)}</option>`}
+  </select>`;
+}
 
 function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
@@ -7607,8 +7625,8 @@ function _cvRender(){
   if(!box)return;
   const cvs=(_cvData&&_cvData.cvs)||[];
   const campanas=(_cvData&&_cvData.campanas)||[];
-  const estados=[...new Set(cvs.map(c=>c.estado).filter(Boolean))];
-  ['nuevo','contactado','descartado'].forEach(e=>{if(!estados.includes(e))estados.push(e);});
+  const estados=_CV_ETAPAS.map(e=>e.v);
+  cvs.map(c=>c.estado).filter(Boolean).forEach(e=>{if(!estados.includes(e))estados.push(e);});
   const fil=cvs.filter(c=>
     (!_cvFilCampana||String(c.campana_id)===String(_cvFilCampana))&&
     (!_cvFilPerfil||(c.perfil||'')===_cvFilPerfil)&&
@@ -7625,7 +7643,7 @@ function _cvRender(){
       </select>
       <select onchange="_cvFilEstado=this.value;_cvRender()">
         <option value="">Todos los estados</option>
-        ${estados.map(e=>`<option value="${_cvEsc(e)}" ${_cvFilEstado===e?'selected':''}>${_cvEsc(e.charAt(0).toUpperCase()+e.slice(1))}</option>`).join('')}
+        ${estados.map(e=>`<option value="${_cvEsc(e)}" ${_cvFilEstado===e?'selected':''}>${_cvEsc(_cvEtapaInfo(e).l)}</option>`).join('')}
       </select>
       <div style="font-size:12px;color:var(--gray-400)">${fil.length} de ${cvs.length}</div>
       <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_cvCargar()">↺ Actualizar</button>
@@ -7638,7 +7656,6 @@ function _cvRender(){
 function _cvCard(c){
   const p=Number(c.puntaje)||0;
   const est=(c.estado||'nuevo');
-  const estCol=est==='contactado'?'#5BC98B':(est==='descartado'?'var(--gray-400)':'var(--gold)');
   const id=_cvIdAttr(c.id);
   return `
   <div style="background:var(--gray-800);border:1px solid ${p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
@@ -7651,16 +7668,14 @@ function _cvCard(c){
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em">
       <span style="border:1px solid var(--gold);color:var(--gold);border-radius:10px;padding:2px 9px">${_cvEsc(c.perfil||'—')}</span>
-      <span style="border:1px solid ${estCol};color:${estCol};border-radius:10px;padding:2px 9px">${_cvEsc(est)}</span>
       ${c.ejecuto_obra?'<span style="border:1px solid var(--gray-600);color:var(--gray-400);border-radius:10px;padding:2px 9px">Ejecutó obra</span>':''}
     </div>
     ${c.bandera?`<div style="font-size:11px;color:#FF8A78">🚩 ${_cvEsc(c.bandera)}</div>`:''}
-    <div style="font-size:11px;color:var(--gray-400)">💰 ${c.pretension_bs?_cvEsc(c.pretension_bs)+' Bs':'Pretensión: —'} · 📞 ${_cvEsc(c.telefono||'—')}</div>
+    <div style="font-size:11px;color:var(--gray-400)">💰 Pretensión: ${c.pretension_bs!=null&&c.pretension_bs!==''?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')}</div>
     <div style="font-size:12px;opacity:0.85;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_cvEsc(c.resumen||'')}</div>
-    <div style="display:flex;gap:6px;margin-top:auto;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="cvAccion('${id}','contactado')">✓ Contactar</button>
-      <button type="button" class="btn btn-red btn-sm" onclick="cvAccion('${id}','descartado')">✗ Descartar</button>
+      ${_cvEtapaSelect(id,est)}
     </div>
   </div>`;
 }
@@ -7687,9 +7702,12 @@ function abrirCVModal(id){
         ${links.map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return `<a href="${_cvEsc(href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px" title="${_cvEsc(href)}">↗ ${_cvEsc(dom)}</a>`;}).join('')}
       </div>`:'<div style="font-size:12px;color:var(--gray-400)">Sin links</div>'}
     ${c.gmail_link?`<div style="margin-top:12px;font-size:11px"><a href="${_cvEsc(c.gmail_link)}" target="_blank" rel="noopener" style="color:var(--gray-400);text-decoration:underline">📧 Ver correo original con adjunto en Gmail</a></div>`:''}
-    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-      <button type="button" class="btn btn-primary" onclick="cvAccion('${idA}','contactado')">✓ Contactar</button>
-      <button type="button" class="btn btn-red" onclick="cvAccion('${idA}','descartado')">✗ Descartar</button>
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📝 Notas internas</div>
+    <textarea id="cv-nota-input" class="form-control" rows="3" placeholder="Notas confidenciales sobre el candidato...">${_cvEsc(c.notas||'')}</textarea>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn btn-primary btn-sm" onclick="cvGuardarNota('${idA}')">💾 Guardar nota</button>
+      <span style="font-size:11px;color:var(--gray-400)">Etapa:</span>
+      ${_cvEtapaSelect(idA,(c.estado||'nuevo'))}
     </div>`;
   document.getElementById('modalCV').classList.add('show');
 }
@@ -7700,10 +7718,24 @@ async function cvAccion(id,nuevoEstado){
   try{
     const r=await _cvCall({pin:_cvPin,accion:'estado',id:id,nuevo_estado:nuevoEstado});
     if(!r||!r.ok)throw new Error((r&&r.error)||'No se pudo actualizar el estado');
-    toast(nuevoEstado==='contactado'?'✓ Marcado para contactar':'✗ Postulación descartada');
+    toast('Etapa actualizada: '+_cvEtapaInfo(nuevoEstado).l);
     const m=document.getElementById('modalCV');
     if(m&&m.classList.contains('show'))closeModal('modalCV');
     await _cvCargar();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function cvGuardarNota(id){
+  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  const el=document.getElementById('cv-nota-input');
+  const nota=(el&&el.value)||'';
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'nota',id:id,nota:nota});
+    if(!r||!r.ok)throw new Error((r&&r.error)||'No se pudo guardar la nota');
+    toast('📝 Nota guardada');
+    const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+    if(c)c.notas=nota;
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
