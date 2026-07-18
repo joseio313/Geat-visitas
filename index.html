@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='148';
+  var CURRENT_VERSION='149';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -1687,7 +1687,7 @@ async function cargarMarcadoresDia(){
     let qP=sb.from('agenda_personal').select('colaborador')
       .eq('completada',false).eq('activo',true).neq('colaborador','Sistema')
       .gte('fecha_programada',ahora).lte('fecha_programada',hoyFin);
-    let qA=sb.from('agenda_personal').select('colaborador')
+    let qA=sb.from('agenda_personal').select('colaborador,lead_id')
       .eq('completada',false).eq('activo',true).neq('colaborador','Sistema')
       .lt('fecha_programada',ahora);
     if(!esJefe){
@@ -1699,7 +1699,18 @@ async function cargarMarcadoresDia(){
     // Listas de nombres normalizados — fuente única para contadores y mini-tabla
     const dR=(r1.data||[]).map(x=>_normColab(x.colaborador));
     const dP=(r2.data||[]).map(x=>_normColab(x.colaborador));
-    const dA=(r3.data||[]).map(x=>_normColab(x.colaborador));
+    /* v149 defensivo: no contar como atrasada una tarea colgada de lead cerrado/archivado */
+    let _atrRows=(r3.data||[]);
+    try{
+      const _lidsA=[...new Set(_atrRows.map(x=>x.lead_id).filter(Boolean))];
+      if(_lidsA.length){
+        const{data:_ldA}=await sb.from('leads').select('id').in('id',_lidsA)
+          .or('estado.in.(cerrado_perdido,cerrado_ganado),archivado.eq.true');
+        const _badA=new Set((_ldA||[]).map(l=>l.id));
+        _atrRows=_atrRows.filter(x=>!x.lead_id||!_badA.has(x.lead_id));
+      }
+    }catch(e){}
+    const dA=_atrRows.map(x=>_normColab(x.colaborador));
     const pick=(arr)=>(esJefe&&filtP)?arr.filter(n=>n===filtP).length:arr.length;
     const mR=document.getElementById('m-realizado');
     const mP=document.getElementById('m-pendiente');
@@ -2100,6 +2111,9 @@ async function renderWeek(){
     (_ldW||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.visito_oficina)_voSet.add(l.id);if(l.archivado)_archSetW.add(l.id);});
   }
   agendaData=agendaData.filter(a=>!_archSetW.has(a.lead_id));
+  /* v149 defensivo: tarea ABIERTA de lead cerrado no es accionable — no mostrarla
+     aunque haya quedado colgada (el trigger de BD ya las cierra; esto es cinturón+tirantes) */
+  agendaData=agendaData.filter(a=>a.completada||!/^cerrado_/.test(_estadoLeadMap[a.lead_id]||''));
   if(filtE==='__visito_oficina')agendaData=agendaData.filter(a=>_voSet.has(a.lead_id));
 
   const grid=document.getElementById('week-grid');
@@ -2207,6 +2221,8 @@ async function renderMonth(){
     const _archSetM=new Set();
     (_ldM||[]).forEach(l=>{_estadoLeadMap[l.id]=l.estado;if(l.archivado)_archSetM.add(l.id);});
     acts=acts.filter(a=>!a.lead_id||!_archSetM.has(a.lead_id));
+    /* v149 defensivo: tarea abierta de lead cerrado no se muestra */
+    acts=acts.filter(a=>a.completada||!a.lead_id||!/^cerrado_/.test(_estadoLeadMap[a.lead_id]||''));
   }
   document.getElementById('month-total-count').textContent=acts.length;
 
@@ -6703,7 +6719,7 @@ async function renderParaHoy(){
     let q=sb.from('leads')
       .select('id,nombre,celular,grado_interes,proximo_contacto,captador')
       .lte('proximo_contacto',hoy)
-      .not('estado','in','(cerrado_perdido,cerrado_ganado,visita_agendada,visita_realizada)')
+      .not('estado','in','(cerrado_perdido,cerrado_ganado,visita_agendada,visita_realizada,reservado)')
       .or('archivado.is.null,archivado.eq.false')
       .limit(_paraHoyTodos?200:100);
     if(cu.rol==='field_capturer') q=q.eq('captador',cu.nombre);
