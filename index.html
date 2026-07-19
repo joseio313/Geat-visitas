@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='153';
+  var CURRENT_VERSION='154';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7567,7 +7567,7 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
    sesión fue restaurada por token, se pide una vez al abrir el panel.
 ════════════════════════════════════════ */
 const CV_PANEL_URL=SB_URL+'/functions/v1/geat-cv-panel';
-let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='',_cvFilBusca='';
+let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='',_cvFilBusca='',_cvPendientes=null;
 /* v148: etapas del pipeline de reclutamiento, cada una con su color */
 const _CV_ETAPAS=[
   {v:'nuevo',l:'Nuevo',c:'var(--gold)'},
@@ -7611,9 +7611,13 @@ function _cvEsTop(c){
   return isNaN(pret)||pret<=4500;
 }
 
-async function _cvCall(payload){
-  const r=await fetch(CV_PANEL_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
-  return await r.json();
+async function _cvCall(payload,timeoutMs){
+  const ctrl=timeoutMs?new AbortController():null;
+  const t=ctrl?setTimeout(()=>ctrl.abort(),timeoutMs):null;
+  try{
+    const r=await fetch(CV_PANEL_URL,{method:'POST',cache:'no-store',signal:ctrl?ctrl.signal:undefined,headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
+    return await r.json();
+  }finally{if(t)clearTimeout(t);}
 }
 
 function renderReclutamiento(){
@@ -7655,6 +7659,29 @@ async function _cvCargar(){
   }
   _cvData=r;
   _cvRender();
+}
+
+/* v154: dispara el procesamiento de correos nuevos en Gmail (accion:'procesar', hasta 90s). */
+async function _cvProcesar(){
+  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  const btn=document.getElementById('cv-procesar-btn');
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.style.cursor='wait';btn.textContent='⏳ Procesando correos...';}
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'procesar'},120000);
+    if(!r||!r.ok)throw new Error((r&&r.error)||'respuesta inválida');
+    const proc=Number(r.procesados)||0,pend=Number(r.pendientes)||0,err=Number(r.errores)||0;
+    _cvPendientes=pend;
+    let msg='✅ '+proc+' procesados';
+    if(pend>0)msg+=' · quedan '+pend+', tocá otra vez';
+    if(err>0)msg+=' · ⚠ '+err+' con error';
+    toast(msg);
+    await _cvCargar();
+  }catch(e){
+    const det=e&&e.name==='AbortError'?'la llamada tardó demasiado':(e&&e.message)||'error';
+    toast('⚠ No se pudo procesar: '+det,'error');
+    if(btn){btn.disabled=false;btn.style.opacity='';btn.style.cursor='';btn.textContent='🔄 Procesar nuevos'+(_cvPendientes>0?' ('+_cvPendientes+')':'');}
+  }
 }
 
 function _cvFiltrados(){
@@ -7699,7 +7726,8 @@ function _cvRender(){
         ${estados.map(e=>`<option value="${_cvEsc(e)}" ${_cvFilEstado===e?'selected':''}>${_cvEsc(_cvEtapaInfo(e).l)}</option>`).join('')}
       </select>
       <div id="cv-count" style="font-size:12px;color:var(--gray-400)"></div>
-      <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_cvCargar()">↺ Actualizar</button>
+      <button type="button" id="cv-procesar-btn" class="btn btn-primary btn-sm" style="margin-left:auto" onclick="_cvProcesar()">🔄 Procesar nuevos${_cvPendientes>0?' ('+_cvPendientes+')':''}</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="_cvCargar()">↺ Actualizar</button>
     </div>
     <div id="cv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px"></div>`;
   _cvRenderGrid();
@@ -7713,6 +7741,7 @@ function _cvCard(c){
   const tel=_cvTelDig(c.telefono);
   const arch=String(c.archivo_url||'').trim();
   const mail=String(c.email||'').trim();
+  const reciente=c.created_at&&(Date.now()-new Date(c.created_at).getTime())<86400000;
   return `
   <div style="background:var(--gray-800);border:1px solid ${esTop||p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
     ${esTop?'<div><span style="background:var(--gold);color:var(--black);font-size:10px;font-weight:800;letter-spacing:0.06em;border-radius:10px;padding:3px 10px;text-transform:uppercase">⭐ TOP</span></div>':''}
@@ -7725,6 +7754,7 @@ function _cvCard(c){
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em">
       <span style="border:1px solid var(--gold);color:var(--gold);border-radius:10px;padding:2px 9px">${_cvEsc(c.perfil||'—')}</span>
+      ${reciente?'<span style="border:1px solid #6FB7FF;color:#6FB7FF;border-radius:10px;padding:2px 9px">🕐 Reciente</span>':''}
       ${c.ejecuto_obra?'<span style="border:1px solid var(--gray-600);color:var(--gray-400);border-radius:10px;padding:2px 9px">Ejecutó obra</span>':''}
     </div>
     ${c.bandera?`<div style="font-size:11px;color:#FF8A78">🚩 ${_cvEsc(c.bandera)}</div>`:''}
