@@ -132,6 +132,42 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 /* FILTER BAR */
 .filter-bar{background:var(--gray-800);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;border:1px solid var(--gray-600)}
 .filter-bar select,.filter-bar input{background:var(--gray-900);color:var(--white);border:1px solid var(--gray-600);padding:7px 10px;border-radius:6px;font-family:inherit;font-size:12px;font-weight:500}
+/* v155: Reclutamiento — lista compacta tipo inbox/ATS */
+.cv-list{display:flex;flex-direction:column;border:1px solid var(--gray-600);border-radius:10px;overflow:visible}
+.cv-row{display:flex;align-items:center;gap:12px;padding:8px 12px;min-height:48px;cursor:pointer;border-bottom:1px solid var(--gray-900);border-left:3px solid transparent;position:relative;background:var(--gray-900)}
+.cv-row:nth-child(even){background:var(--gray-800)}
+.cv-row:hover{background:#262626}
+.cv-row.cv-top{border-left-color:var(--gold)}
+.cv-row.cv-desc{opacity:0.4}
+.cv-row:last-child{border-bottom:none;border-radius:0 0 9px 9px}
+.cv-row:first-child{border-radius:9px 9px 0 0}
+.cv-score{flex-shrink:0;width:48px;text-align:center;font-size:21px;font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center;gap:2px}
+.cv-star{font-size:11px}
+.cv-main{flex:1;min-width:0}
+.cv-name{font-weight:700;font-size:14px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-meta{font-size:11px;color:var(--gray-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.cv-meta .cv-flag{color:#FF8A78}
+.cv-pret{flex-shrink:0;font-size:12px;color:var(--gray-200);white-space:nowrap;text-align:right;min-width:64px}
+.cv-etapa{flex-shrink:0}
+.cv-etapa select{font-size:11px!important;padding:3px 7px!important}
+.cv-actions{flex-shrink:0;display:flex;align-items:center;gap:4px}
+.cv-ic{background:var(--gray-900);border:1px solid var(--gray-600);color:var(--white);border-radius:7px;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:14px;cursor:pointer;padding:0;line-height:1}
+.cv-ic:hover{border-color:var(--gray-400)}
+.cv-ic.cv-wa{border-color:var(--gold);color:var(--gold)}
+.cv-menuwrap{position:relative;display:inline-flex}
+.cv-menu-pop{display:none;position:absolute;right:0;top:36px;z-index:50;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:6px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,0.5)}
+.cv-menu-pop a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;color:var(--white);text-decoration:none;font-size:12px;white-space:nowrap}
+.cv-menu-pop a:hover{background:var(--gray-900)}
+@media(max-width:640px){
+  .cv-row{flex-wrap:wrap;row-gap:6px;padding:8px 10px}
+  .cv-score{order:1}
+  .cv-main{order:2;flex:1}
+  .cv-actions{order:3}
+  .cv-name{white-space:normal}
+  .cv-meta{white-space:normal}
+  .cv-etapa{order:4}
+  .cv-pret{order:5;margin-left:auto}
+}
 .date-range{color:var(--gold);font-weight:700;font-size:13px;padding:0 6px}
 .view-toggle{display:flex;gap:3px;background:var(--gray-900);padding:3px;border-radius:7px;border:1px solid var(--gray-600)}
 .view-toggle button{background:transparent;color:var(--gray-400);border:none;padding:5px 12px;border-radius:5px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;transition:all 0.15s}
@@ -1388,7 +1424,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='154';
+  var CURRENT_VERSION='155';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7698,7 +7734,7 @@ function _cvRenderGrid(){
   const grid=document.getElementById('cv-grid');
   if(!grid)return;
   const fil=_cvFiltrados();
-  grid.innerHTML=fil.map(c=>_cvCard(c)).join('')||'<div style="grid-column:1/-1;color:var(--gray-400);padding:36px;text-align:center">Sin postulaciones con esos filtros</div>';
+  grid.innerHTML=fil.map(c=>_cvRow(c)).join('')||'<div style="color:var(--gray-400);padding:36px;text-align:center">Sin postulaciones con esos filtros</div>';
   const cnt=document.getElementById('cv-count');
   if(cnt)cnt.textContent=fil.length+' resultado'+(fil.length===1?'':'s');
 }
@@ -7729,11 +7765,29 @@ function _cvRender(){
       <button type="button" id="cv-procesar-btn" class="btn btn-primary btn-sm" style="margin-left:auto" onclick="_cvProcesar()">🔄 Procesar nuevos${_cvPendientes>0?' ('+_cvPendientes+')':''}</button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="_cvCargar()">↺ Actualizar</button>
     </div>
-    <div id="cv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px"></div>`;
+    <div id="cv-grid" class="cv-list"></div>`;
+  _cvMenuInit();
   _cvRenderGrid();
 }
 
-function _cvCard(c){
+/* v155: menú "⋯" por fila (Email / Ver CV / links). Cierra al hacer clic fuera. */
+function _cvMenuInit(){
+  if(window._cvMenuBound)return;
+  window._cvMenuBound=true;
+  document.addEventListener('click',function(){document.querySelectorAll('.cv-menu-pop').forEach(function(x){x.style.display='none';});});
+}
+function _cvMenuToggle(id,ev){
+  if(ev)ev.stopPropagation();
+  const m=document.getElementById('cv-menu-'+id);
+  if(!m)return;
+  const willOpen=m.style.display!=='block';
+  document.querySelectorAll('.cv-menu-pop').forEach(function(x){x.style.display='none';});
+  m.style.display=willOpen?'block':'none';
+}
+function _cvMenuClose(){document.querySelectorAll('.cv-menu-pop').forEach(function(x){x.style.display='none';});}
+
+/* v155: fila compacta tipo inbox. Clic en la fila abre el modal; botones/dropdown no propagan. */
+function _cvRow(c){
   const p=Number(c.puntaje)||0;
   const est=(c.estado||'nuevo');
   const id=_cvIdAttr(c.id);
@@ -7742,34 +7796,35 @@ function _cvCard(c){
   const arch=String(c.archivo_url||'').trim();
   const mail=String(c.email||'').trim();
   const reciente=c.created_at&&(Date.now()-new Date(c.created_at).getTime())<86400000;
+  const sc=p>=80?'var(--gold)':(p>=60?'var(--gray-200)':'var(--gray-400)');
+  const pret=c.pretension_bs!=null&&c.pretension_bs!==''?_cvEsc(c.pretension_bs)+' Bs':'—';
+  const meta=[_cvEsc(c.ciudad||'—'),
+    (c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+'a obra':'s/obra'),
+    _cvEsc(c.perfil||'—')].concat(reciente?['🕐']:[]).join(' · ')
+    +(c.bandera?' · <span class="cv-flag">🚩 '+_cvEsc(c.bandera)+'</span>':'');
+  const links=_cvParseLinks(c.links_detectados).slice(0,2);
+  const sinExtra=!mail&&!arch&&links.length===0;
   return `
-  <div style="background:var(--gray-800);border:1px solid ${esTop||p>=70?'var(--gold)':'var(--gray-600)'};border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px">
-    ${esTop?'<div><span style="background:var(--gold);color:var(--black);font-size:10px;font-weight:800;letter-spacing:0.06em;border-radius:10px;padding:3px 10px;text-transform:uppercase">⭐ TOP</span></div>':''}
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-      <div style="min-width:0">
-        <div style="font-weight:700;font-size:14px">${_cvEsc(c.nombre||'—')}</div>
-        <div style="font-size:11px;color:var(--gray-400)">📍 ${_cvEsc(c.ciudad||'—')} · 🏗 ${c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+' años de obra':'sin dato de obra'}</div>
+  <div class="cv-row${esTop?' cv-top':''}${est==='descartado'?' cv-desc':''}" onclick="abrirCVModal('${id}')">
+    <div class="cv-score" style="color:${sc}">${p}${esTop?'<span class="cv-star">⭐</span>':''}</div>
+    <div class="cv-main">
+      <div class="cv-name">${_cvEsc(c.nombre||'—')}</div>
+      <div class="cv-meta">${meta}</div>
+    </div>
+    <div class="cv-pret">${pret}</div>
+    <span class="cv-etapa" onclick="event.stopPropagation()">${_cvEtapaSelect(id,est)}</span>
+    <div class="cv-actions">
+      ${tel?`<a href="https://wa.me/${tel}?text=${_cvWaMsg(c)}" target="_blank" rel="noopener" class="cv-ic cv-wa" title="WhatsApp" onclick="event.stopPropagation()">💬</a>`:''}
+      ${tel?`<a href="tel:+${tel}" class="cv-ic" title="Llamar" onclick="event.stopPropagation()">📞</a>`:''}
+      <div class="cv-menuwrap">
+        <button type="button" class="cv-ic" title="Más" onclick="_cvMenuToggle('${id}',event)">⋯</button>
+        <div class="cv-menu-pop" id="cv-menu-${id}">
+          ${mail?`<a href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mail)}" target="_blank" rel="noopener" onclick="event.stopPropagation();_cvMenuClose()">📧 Email</a>`:''}
+          ${arch?`<a href="${_cvEsc(arch)}" target="_blank" rel="noopener" onclick="event.stopPropagation();_cvMenuClose()">📄 Ver CV</a>`:''}
+          ${links.map(l=>`<a href="${_cvEsc(l.href)}" target="_blank" rel="noopener" title="${_cvEsc(l.href)}" onclick="event.stopPropagation();_cvMenuClose()">🔗 ${_cvEsc(l.dom)}</a>`).join('')}
+          ${sinExtra?'<div style="padding:8px 10px;font-size:11px;color:var(--gray-400)">Sin acciones extra</div>':''}
+        </div>
       </div>
-      <div style="font-size:28px;font-weight:800;color:${p>=70?'var(--gold)':'var(--gray-400)'};line-height:1;flex-shrink:0">${p}</div>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em">
-      <span style="border:1px solid var(--gold);color:var(--gold);border-radius:10px;padding:2px 9px">${_cvEsc(c.perfil||'—')}</span>
-      ${reciente?'<span style="border:1px solid #6FB7FF;color:#6FB7FF;border-radius:10px;padding:2px 9px">🕐 Reciente</span>':''}
-      ${c.ejecuto_obra?'<span style="border:1px solid var(--gray-600);color:var(--gray-400);border-radius:10px;padding:2px 9px">Ejecutó obra</span>':''}
-    </div>
-    ${c.bandera?`<div style="font-size:11px;color:#FF8A78">🚩 ${_cvEsc(c.bandera)}</div>`:''}
-    <div style="font-size:11px;color:var(--gray-400)">💰 Pretensión: ${c.pretension_bs!=null&&c.pretension_bs!==''?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')}</div>
-    <div style="font-size:12px;opacity:0.85;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_cvEsc(c.resumen||'')}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      ${tel?`<a href="tel:+${tel}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📞 Llamar</a>`:''}
-      ${tel?`<a href="https://wa.me/${tel}?text=${_cvWaMsg(c)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">💬 WhatsApp</a>`:''}
-      ${mail?`<a href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mail)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📧 Email</a>`:''}
-    </div>
-    <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap;align-items:center">
-      <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
-      ${arch?`<a href="${_cvEsc(arch)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📄 Ver CV</a>`:''}
-      ${_cvParseLinks(c.links_detectados).slice(0,2).map(l=>`<a href="${_cvEsc(l.href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center" title="${_cvEsc(l.href)}">🔗 ${_cvEsc(l.dom)}</a>`).join('')}
-      ${_cvEtapaSelect(id,est)}
     </div>
   </div>`;
 }
