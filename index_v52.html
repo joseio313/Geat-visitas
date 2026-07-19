@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='150';
+  var CURRENT_VERSION='151';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7567,7 +7567,7 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
    sesión fue restaurada por token, se pide una vez al abrir el panel.
 ════════════════════════════════════════ */
 const CV_PANEL_URL=SB_URL+'/functions/v1/geat-cv-panel';
-let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='';
+let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='',_cvFilBusca='';
 /* v148: etapas del pipeline de reclutamiento, cada una con su color */
 const _CV_ETAPAS=[
   {v:'nuevo',l:'Nuevo',c:'var(--gold)'},
@@ -7588,6 +7588,7 @@ function _cvEtapaSelect(id,est){
 }
 
 function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function _cvNorm(s){return String(s==null?'':s).normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();}
 function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
 /* v150: teléfono a dígitos internacionales (Bolivia 591, sin duplicar prefijo) */
 function _cvTelDig(t){let d=String(t||'').replace(/\D/g,'');if(d&&d.indexOf('591')!==0)d='591'+d;return d;}
@@ -7655,6 +7656,25 @@ async function _cvCargar(){
   _cvRender();
 }
 
+function _cvFiltrados(){
+  const cvs=(_cvData&&_cvData.cvs)||[];
+  const q=_cvNorm(_cvFilBusca).trim();
+  return cvs.filter(c=>
+    (!_cvFilCampana||String(c.campana_id)===String(_cvFilCampana))&&
+    (!_cvFilPerfil||(c.perfil||'')===_cvFilPerfil)&&
+    (!_cvFilEstado||(c.estado||'')===_cvFilEstado)&&
+    (!q||_cvNorm([c.nombre,c.ciudad,c.resumen,c.cv_filename,c.cuerpo_correo].join(' ')).includes(q)));
+}
+
+function _cvRenderGrid(){
+  const grid=document.getElementById('cv-grid');
+  if(!grid)return;
+  const fil=_cvFiltrados();
+  grid.innerHTML=fil.map(c=>_cvCard(c)).join('')||'<div style="grid-column:1/-1;color:var(--gray-400);padding:36px;text-align:center">Sin postulaciones con esos filtros</div>';
+  const cnt=document.getElementById('cv-count');
+  if(cnt)cnt.textContent=fil.length+' resultado'+(fil.length===1?'':'s');
+}
+
 function _cvRender(){
   const box=document.getElementById('rec-body');
   if(!box)return;
@@ -7662,12 +7682,9 @@ function _cvRender(){
   const campanas=(_cvData&&_cvData.campanas)||[];
   const estados=_CV_ETAPAS.map(e=>e.v);
   cvs.map(c=>c.estado).filter(Boolean).forEach(e=>{if(!estados.includes(e))estados.push(e);});
-  const fil=cvs.filter(c=>
-    (!_cvFilCampana||String(c.campana_id)===String(_cvFilCampana))&&
-    (!_cvFilPerfil||(c.perfil||'')===_cvFilPerfil)&&
-    (!_cvFilEstado||(c.estado||'')===_cvFilEstado));
   box.innerHTML=`
     <div class="filter-bar">
+      <input type="text" id="cv-busca" class="form-control" placeholder="🔍 Buscar por nombre, ciudad, experiencia..." value="${_cvEsc(_cvFilBusca)}" style="flex:1;min-width:200px" oninput="_cvFilBusca=this.value;_cvRenderGrid()">
       <select onchange="_cvFilCampana=this.value;_cvRender()">
         <option value="">Todas las campañas</option>
         ${campanas.map(k=>`<option value="${_cvEsc(k.id)}" ${String(_cvFilCampana)===String(k.id)?'selected':''}>${_cvEsc(k.nombre||k.titulo||('Campaña '+k.id))}</option>`).join('')}
@@ -7680,12 +7697,11 @@ function _cvRender(){
         <option value="">Todos los estados</option>
         ${estados.map(e=>`<option value="${_cvEsc(e)}" ${_cvFilEstado===e?'selected':''}>${_cvEsc(_cvEtapaInfo(e).l)}</option>`).join('')}
       </select>
-      <div style="font-size:12px;color:var(--gray-400)">${fil.length} de ${cvs.length}</div>
+      <div id="cv-count" style="font-size:12px;color:var(--gray-400)"></div>
       <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="_cvCargar()">↺ Actualizar</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">
-      ${fil.map(c=>_cvCard(c)).join('')||'<div style="grid-column:1/-1;color:var(--gray-400);padding:36px;text-align:center">Sin postulaciones con esos filtros</div>'}
-    </div>`;
+    <div id="cv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px"></div>`;
+  _cvRenderGrid();
 }
 
 function _cvCard(c){
@@ -7718,6 +7734,7 @@ function _cvCard(c){
     </div>
     <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
+      ${c.archivo_url?`<a href="${_cvEsc(c.archivo_url)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📄 Ver CV</a>`:''}
       ${_cvEtapaSelect(id,est)}
     </div>
   </div>`;
@@ -7738,7 +7755,7 @@ function abrirCVModal(id){
     ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
-    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px">📎 Adjunto: <strong>${_cvEsc(c.cv_filename)}</strong></div>`:''}
+    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${c.archivo_url?`<a href="${_cvEsc(c.archivo_url)}" target="_blank" rel="noopener" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a><a href="${_cvEsc(c.archivo_url)}" download class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📎 Links / Portafolios</div>
     ${links.length?`
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
