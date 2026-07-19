@@ -1388,7 +1388,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='152';
+  var CURRENT_VERSION='153';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7590,6 +7590,7 @@ function _cvEtapaSelect(id,est){
 function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function _cvNorm(s){return String(s==null?'':s).normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();}
 function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
+function _cvParseLinks(s){return String(s==null?'':s).split(/\s*\|\s*/).map(x=>x.trim()).filter(Boolean).map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return {href,dom};});}
 /* v150: teléfono a dígitos internacionales (Bolivia 591, sin duplicar prefijo) */
 function _cvTelDig(t){let d=String(t||'').replace(/\D/g,'');if(d&&d.indexOf('591')!==0)d='591'+d;return d;}
 /* v150: mensaje de WhatsApp condicional — si ya sabemos la pretensión no la volvemos a pedir */
@@ -7611,7 +7612,7 @@ function _cvEsTop(c){
 }
 
 async function _cvCall(payload){
-  const r=await fetch(CV_PANEL_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
+  const r=await fetch(CV_PANEL_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
   return await r.json();
 }
 
@@ -7737,6 +7738,7 @@ function _cvCard(c){
     <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn btn-ghost btn-sm" onclick="abrirCVModal('${id}')">👁 Ver todo</button>
       ${arch?`<a href="${_cvEsc(arch)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">📄 Ver CV</a>`:''}
+      ${_cvParseLinks(c.links_detectados).slice(0,2).map(l=>`<a href="${_cvEsc(l.href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center" title="${_cvEsc(l.href)}">🔗 ${_cvEsc(l.dom)}</a>`).join('')}
       ${_cvEtapaSelect(id,est)}
     </div>
   </div>`;
