@@ -566,6 +566,34 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .ger-hist-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--gray-800)}
 .ger-hist-row input{width:110px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:5px 8px;color:var(--gray-100)}
 .ger-hist-row .nom{flex:1;min-width:130px;font-weight:700;font-size:12px;color:var(--white)}
+/* v159 — Parte del Día (panel del CEO en Agenda semanal, solo admin) */
+.pd-box{border:1px solid var(--gold);border-radius:10px;background:var(--gray-900);overflow:hidden}
+.pd-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 13px;cursor:pointer;background:rgba(242,197,0,0.07)}
+.pd-bar-t{font-size:13px;font-weight:800;color:var(--gold);letter-spacing:.04em}
+.pd-body{padding:4px 13px 13px}
+.pd-sec{margin-top:12px}
+.pd-sec-t{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px;color:var(--gray-300)}
+.pd-line{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;background:var(--gray-800);margin-bottom:6px;flex-wrap:wrap}
+.pd-line.click{cursor:pointer;transition:.14s}
+.pd-line.click:hover{background:var(--gray-700,#333);transform:translateX(2px)}
+.pd-n{font-size:17px;font-weight:900;min-width:30px;text-align:center;font-variant-numeric:tabular-nums}
+.pd-tx{flex:1;min-width:120px;font-size:12px;color:var(--white)}
+.pd-sub{font-size:10px;color:var(--gray-400);margin-top:1px}
+.pd-rojo{color:#FF5252}.pd-ama{color:#FFC107}.pd-verde{color:var(--st-completo)}
+.pd-det{margin:0 0 8px 8px;border-left:2px solid var(--gray-600);padding-left:9px}
+.pd-det-row{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--gray-100)}
+.pd-det-row:hover{background:var(--gray-800)}
+.pd-det-row .d{font-size:10px;color:var(--gray-400);white-space:nowrap}
+.pd-pulso{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px}
+.pd-pulso div{background:var(--gray-800);border-radius:8px;padding:9px;text-align:center;cursor:pointer;transition:.14s}
+.pd-pulso div:hover{background:var(--gray-700,#333)}
+.pd-pulso .v{font-size:18px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+.pd-pulso .l{font-size:9px;color:var(--gray-400);margin-top:3px;line-height:1.25}
+.pd-ceo-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--gray-800);margin-bottom:5px}
+.pd-ceo-row .t{flex:1;min-width:110px;font-size:12px;color:var(--white)}
+.pd-ceo-row button{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;color:var(--gray-400)}
+.pd-ceo-row button:hover{color:var(--gold)}
+.pd-p1{border-left:3px solid #FF5252}.pd-p2{border-left:3px solid #FFC107}.pd-p3{border-left:3px solid var(--gray-600)}
 </style>
 </head>
 <body>
@@ -654,6 +682,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="screen-title">
       <h1>Agenda <span class="gold">semanal</span></h1>
     </div>
+    <!-- ══ PARTE DEL DÍA (v159) — solo rol admin. Plegable, arranca desplegado.
+         Todo se calcula en vivo desde Supabase; nada se precalcula para otros roles. ══ -->
+    <div id="parte-dia-wrap" style="display:none;margin-bottom:16px"></div>
+
     <!-- Panel "Para hoy" — solo field_capturer y commercial_lead -->
     <div id="para-hoy-wrap" style="display:none;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1453,7 +1485,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='158';
+  var CURRENT_VERSION='159';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2165,6 +2197,8 @@ async function initApp(){
     const _phw=document.getElementById('para-hoy-wrap');if(_phw)_phw.style.display='';
     renderParaHoy();
   }
+  /* v159 — Parte del Día: solo admin. Para el resto ni se consulta. */
+  if(cu.rol==='admin')renderParteDia();
 }
 
 function attachPickerListeners(){
@@ -2295,7 +2329,7 @@ function switchTab(tab,screenId){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
   window.scrollTo(0,0);
-  if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}
+  if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
   if(screenId==='screen-month')renderMonth();
 }
 function setView(v,btn){
@@ -7361,6 +7395,205 @@ async function _gerGuardarTodos(){
   }
   toast(ok===listos.length?('✅ '+ok+' histórico(s) guardado(s)')
     :('Guardados '+ok+' de '+listos.length+' — revisá los que fallaron'),ok?'ok':'error');
+}
+
+/* ════════════════════════════════════════
+   v159 — PARTE DEL DÍA (panel del CEO, SOLO rol admin)
+   Bloque plegable arriba de la Agenda semanal. Arranca desplegado.
+   Todo se calcula en vivo; para cualquier rol que no sea admin ni siquiera se
+   dispara la consulta. Los números son operativos: abren la lista de leads
+   involucrados y desde ahí se entra al lead para accionar.
+════════════════════════════════════════ */
+const PD_ESTADOS_CALIENTES=['visita_agendada','visita_realizada','reservado'];
+const PD_DIAS_VISITA_VENCIDA=2;
+let _pdAbierto=true;        // arranca desplegado para el admin
+let _pdDatos=null;          // último cálculo, para expandir listas sin re-consultar
+let _pdDetalleAbierto=null; // qué lista está desplegada
+
+function _pdEsAdmin(){return !!(cu&&cu.rol==='admin');}
+
+async function renderParteDia(){
+  const wrap=document.getElementById('parte-dia-wrap'); if(!wrap)return;
+  if(!_pdEsAdmin()){wrap.style.display='none';wrap.innerHTML='';return;}
+  wrap.style.display='';
+  if(!_pdDatos)wrap.innerHTML='<div class="pd-box"><div class="pd-body"><div class="loading-state"><span class="spin"></span> Armando el parte...</div></div></div>';
+  try{
+    const hoyYmd=ymdLocal(new Date());
+    const inicioHoy=new Date(hoyYmd+'T00:00:00-04:00').toISOString();
+    const corteVisita=new Date(Date.now()-PD_DIAS_VISITA_VENCIDA*24*3600000).toISOString();
+    const hace7=new Date(Date.now()-7*24*3600000);
+
+    const[rCal,rNuevos,rCerr,rTareas,rCeo]=await Promise.all([
+      sb.from('leads').select('id,nombre,estado,captador,cerrador,visita_fecha,resultado_reunion,updated_at,created_at')
+        .in('estado',PD_ESTADOS_CALIENTES).or('archivado.is.null,archivado.eq.false'),
+      sb.from('leads').select('id',{count:'exact',head:true})
+        .eq('estado','nuevo').or('archivado.is.null,archivado.eq.false'),
+      sb.from('leads').select('id',{count:'exact',head:true})
+        .eq('estado','cerrado_ganado').gte('fecha_contrato',ymdLocal(hace7)),
+      sb.from('agenda_personal').select('id',{count:'exact',head:true})
+        .eq('activo',true).eq('completada',false).lt('fecha_programada',inicioHoy),
+      sb.from('pendientes_ceo').select('*').eq('activo',true).eq('resuelto',false)
+        .order('prioridad',{ascending:true}).order('id',{ascending:true})
+    ]);
+    if(rCal.error)throw rCal.error;
+
+    const cal=rCal.data||[];
+    const vencidas=cal.filter(l=>l.estado==='visita_agendada'&&l.visita_fecha&&
+      l.visita_fecha<corteVisita&&!(l.resultado_reunion&&(''+l.resultado_reunion).trim()));
+    const reservas=cal.filter(l=>l.estado==='reservado');
+    /* Foco: los calientes con más días sin gestión (updated_at más viejo) */
+    const foco=cal.slice().sort((a,b)=>new Date(a.updated_at||a.created_at||0)-new Date(b.updated_at||b.created_at||0)).slice(0,3);
+
+    _pdDatos={vencidas,reservas,caliente:cal,foco,
+      tareasAtrasadas:rTareas.count||0,nuevos:rNuevos.count||0,cerradosSemana:rCerr.count||0,
+      ceo:rCeo.data||[]};
+    _pdPintar();
+  }catch(e){
+    wrap.innerHTML='<div class="pd-box"><div class="pd-body"><div style="color:var(--st-atrasado);font-size:12px;padding:6px">No se pudo armar el parte: '+_escPend(e.message||'error')+
+      ' <button type="button" class="btn btn-ghost btn-sm" onclick="renderParteDia()">Reintentar</button></div></div></div>';
+  }
+}
+
+function _pdDias(iso){
+  if(!iso)return'—';
+  const d=Math.floor((Date.now()-new Date(iso).getTime())/86400000);
+  return d<=0?'hoy':(d+'d');
+}
+
+function _pdPintar(){
+  const wrap=document.getElementById('parte-dia-wrap'); if(!wrap||!_pdDatos)return;
+  const D=_pdDatos;
+  const urgentes=D.vencidas.length+D.tareasAtrasadas+D.reservas.length;
+
+  const linea=(clave,n,cls,tx,sub)=>
+    '<div class="pd-line'+(n>0?' click':'')+'"'+(n>0?' onclick="_pdVerDetalle(\''+clave+'\')"':'')+'>'+
+      '<span class="pd-n '+cls+'">'+n+'</span>'+
+      '<span class="pd-tx">'+tx+(sub?'<div class="pd-sub">'+sub+'</div>':'')+'</span>'+
+      (n>0?'<span style="color:var(--gray-400);font-size:11px">'+(_pdDetalleAbierto===clave?'▲':'▼')+'</span>':'')+
+    '</div>'+
+    (_pdDetalleAbierto===clave?_pdDetalleHtml(clave):'');
+
+  wrap.innerHTML=
+  '<div class="pd-box">'+
+    '<div class="pd-bar" onclick="_pdToggle()">'+
+      '<span class="pd-bar-t">📋 PARTE DEL DÍA'+(urgentes>0?' · <span class="pd-rojo">'+urgentes+' urgente(s)</span>':'')+'</span>'+
+      '<span style="display:flex;align-items:center;gap:8px">'+
+        '<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="event.stopPropagation();_pdDatos=null;renderParteDia()">↺ Actualizar</button>'+
+        '<span style="font-size:11px;color:var(--gray-400)">'+(_pdAbierto?'▲':'▼')+'</span>'+
+      '</span>'+
+    '</div>'+
+    (_pdAbierto?'<div class="pd-body">'+
+      /* 🔴 URGENTE HOY */
+      '<div class="pd-sec"><div class="pd-sec-t pd-rojo">🔴 Urgente hoy</div>'+
+        linea('vencidas',D.vencidas.length,'pd-rojo','Visitas vencidas sin resultado','Pasaron +'+PD_DIAS_VISITA_VENCIDA+' días y nadie registró qué pasó')+
+        linea('tareas',D.tareasAtrasadas,'pd-rojo','Tareas atrasadas del equipo','Vencidas y sin completar')+
+        linea('reservas',D.reservas.length,'pd-rojo','Reservas sin cerrar','Plata puesta esperando')+
+      '</div>'+
+      /* 🟡 DEPENDE DE VOS */
+      '<div class="pd-sec"><div class="pd-sec-t pd-ama">🟡 Depende de vos</div>'+
+        (D.ceo.length?D.ceo.map(p=>
+          '<div class="pd-ceo-row pd-p'+(p.prioridad||2)+'">'+
+            '<span class="t">'+_escPend(p.texto||'')+'</span>'+
+            '<button type="button" title="Marcar resuelto" onclick="_pdResolverCeo('+p.id+')">✓</button>'+
+            '<button type="button" title="Borrar" onclick="_pdBorrarCeo('+p.id+')">🗑</button>'+
+          '</div>').join('')
+          :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Nada pendiente de tu lado. 👌</div>')+
+        '<div style="display:flex;gap:6px;margin-top:7px">'+
+          '<input type="text" id="pd-ceo-nuevo" placeholder="Agregar pendiente propio…" onkeydown="if(event.key===\'Enter\')_pdAgregarCeo()" style="flex:1;min-width:120px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 9px;color:var(--gray-100);outline:none">'+
+          '<select id="pd-ceo-prio" style="width:96px;font-size:11px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px;color:var(--gray-100)">'+
+            '<option value="1">Alta</option><option value="2" selected>Media</option><option value="3">Baja</option></select>'+
+          '<button type="button" class="btn btn-ghost btn-sm" onclick="_pdAgregarCeo()">+</button>'+
+        '</div>'+
+      '</div>'+
+      /* 🟢 FOCO DEL DÍA */
+      '<div class="pd-sec"><div class="pd-sec-t pd-verde">🟢 Foco del día</div>'+
+        (D.foco.length?D.foco.map(l=>
+          '<div class="pd-det-row" style="background:var(--gray-800);margin-bottom:5px" onclick="openLeadDetail('+l.id+',null,\'normal\')">'+
+            '<span style="flex:1;min-width:110px;font-weight:700">'+_escPend(l.nombre||('Lead #'+l.id))+'</span>'+
+            '<span class="d">'+_escPend(l.estado||'')+' · '+_pdDias(l.updated_at||l.created_at)+' sin gestión</span>'+
+          '</div>').join('')
+          :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Sin leads calientes.</div>')+
+      '</div>'+
+      /* 📊 PULSO */
+      '<div class="pd-sec"><div class="pd-sec-t">📊 Pulso</div>'+
+        '<div class="pd-pulso">'+
+          '<div onclick="_pdVerDetalle(\'caliente\')"><div class="v">'+D.caliente.length+'</div><div class="l">Pipeline caliente</div></div>'+
+          '<div onclick="openSearchModal()"><div class="v">'+D.nuevos+'</div><div class="l">Nuevos por trabajar</div></div>'+
+          '<div onclick="_pdVerDetalle(\'reservas\')"><div class="v">'+D.reservas.length+'</div><div class="l">Reservas activas</div></div>'+
+          '<div onclick="switchTabGerencia()"><div class="v">'+D.cerradosSemana+'</div><div class="l">Cerrados esta semana</div></div>'+
+        '</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:6px">Los montos en $ viven en el panel de Gerencia.</div>'+
+      '</div>'+
+    '</div>':'')+
+  '</div>';
+}
+
+/* Listas desplegables: cada fila abre el lead en modo operativo. */
+function _pdDetalleHtml(clave){
+  const D=_pdDatos; if(!D)return'';
+  if(clave==='tareas'){
+    return '<div class="pd-det"><div style="font-size:11px;color:var(--gray-400);padding:5px 7px">'+
+      D.tareasAtrasadas+' tarea(s) atrasada(s) repartidas en el equipo. Se trabajan desde la agenda de cada uno.</div></div>';
+  }
+  const map={vencidas:D.vencidas,reservas:D.reservas,caliente:D.caliente};
+  const filas=map[clave]||[];
+  if(!filas.length)return'';
+  const orden=filas.slice().sort((a,b)=>new Date(a.updated_at||0)-new Date(b.updated_at||0));
+  const tope=orden.slice(0,15);
+  return '<div class="pd-det">'+tope.map(l=>
+    '<div class="pd-det-row" onclick="openLeadDetail('+l.id+',null,\'normal\')">'+
+      '<span style="flex:1;min-width:110px">'+_escPend(l.nombre||('Lead #'+l.id))+'</span>'+
+      '<span class="d">'+_escPend(l.cerrador||l.captador||'—')+' · '+_pdDias(l.updated_at)+'</span>'+
+    '</div>').join('')+
+    (orden.length>tope.length?'<div style="font-size:10px;color:var(--gray-400);padding:4px 7px">+'+(orden.length-tope.length)+' más</div>':'')+
+  '</div>';
+}
+
+function _pdToggle(){_pdAbierto=!_pdAbierto;_pdPintar();}
+function _pdVerDetalle(clave){
+  _pdDetalleAbierto=(_pdDetalleAbierto===clave)?null:clave;
+  _pdPintar();
+}
+/* Atajo del pulso: abre la pestaña Gerencia sin duplicar el gate */
+function switchTabGerencia(){
+  const tab=document.getElementById('tab-gerencia');
+  if(tab&&tab.style.display!=='none')tab.click();
+}
+
+async function _pdAgregarCeo(){
+  if(!_pdEsAdmin())return;
+  const inp=document.getElementById('pd-ceo-nuevo');
+  const sel=document.getElementById('pd-ceo-prio');
+  const texto=(inp&&inp.value||'').trim();
+  if(!texto){toast('Escribí el pendiente','error');return;}
+  try{
+    const{error}=await sb.from('pendientes_ceo')
+      .insert({texto:texto,prioridad:parseInt(sel&&sel.value,10)||2,resuelto:false,activo:true});
+    if(error)throw error;
+    if(inp)inp.value='';
+    toast('✅ Pendiente agregado');
+    _pdDatos=null;await renderParteDia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function _pdResolverCeo(id){
+  if(!_pdEsAdmin())return;
+  try{
+    const{error}=await sb.from('pendientes_ceo').update({resuelto:true}).eq('id',id);
+    if(error)throw error;
+    toast('✅ Resuelto');
+    _pdDatos=null;await renderParteDia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Soft-delete: activo=false, nunca borrado físico */
+async function _pdBorrarCeo(id){
+  if(!_pdEsAdmin())return;
+  if(!confirm('¿Borrar este pendiente de la lista?'))return;
+  try{
+    const{error}=await sb.from('pendientes_ceo').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    toast('Pendiente borrado');
+    _pdDatos=null;await renderParteDia();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
