@@ -1453,7 +1453,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='157';
+  var CURRENT_VERSION='158';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -7309,9 +7309,12 @@ async function _gerGuardarHistorico(id,opts){
     /* Cache al día para que los KPI cuadren sin volver a la base */
     const l=_gerCache.find(x=>Number(x.id)===Number(id));
     if(l){l.monto_contrato=monto;l.metros_cuadrados=m2;}
-    _gerMarcarFilaGuardada(id);
+    const _nom=(l&&l.nombre)||('Lead #'+id);
+    _gerMarcarFilaGuardada(id,_nom,monto,m2);
     _gerActualizarKpis();
-    if(!opts.sinConfirmar)toast('✅ Histórico completado');
+    /* v158 — confirmación explícita: quién, cuánto y cuántos m². El mensaje
+       genérico no alcanzaba, el usuario no sabía si había guardado. */
+    if(!opts.sinConfirmar)toast('✅ '+_nom+' guardado — '+_gerUSD(monto)+' · '+_gerM2(m2));
     return true;
   }catch(e){
     toast('Error: '+e.message,'error');
@@ -7320,13 +7323,19 @@ async function _gerGuardarHistorico(id,opts){
   }
 }
 
-/* Feedback verde y salida de la fila, sin mover el resto de la lista. */
-function _gerMarcarFilaGuardada(id){
+/* Feedback verde y salida de la fila, sin mover el resto de la lista.
+   v158 — la fila muestra lo que quedó guardado y se queda 1.6s antes de irse:
+   con 0.7s el usuario no llegaba a leerla y parecía que no había pasado nada. */
+function _gerMarcarFilaGuardada(id,nombre,monto,m2){
   const row=document.getElementById('gh-row-'+id);
   if(!row)return;
-  row.style.transition='opacity .45s ease';
-  row.innerHTML='<span class="nom" style="color:var(--st-completo)">✓ Guardado</span>';
-  setTimeout(()=>{try{row.remove();}catch(_e){}},700);
+  row.innerHTML='<span class="nom" style="color:var(--st-completo);font-weight:800">'+
+    '✓ '+_escPend(nombre||'')+' guardado</span>'+
+    '<span style="font-size:12px;font-weight:700;color:var(--st-completo);white-space:nowrap">'+
+    _gerUSD(monto)+' · '+_gerM2(m2)+'</span>';
+  row.style.transition='opacity .5s ease';
+  setTimeout(()=>{try{row.style.opacity='0';}catch(_e){}},1100);
+  setTimeout(()=>{try{row.remove();}catch(_e){}},1600);
 }
 
 /* Guarda de una todas las filas con monto y m² cargados. Los montos bajos se
