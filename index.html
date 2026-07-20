@@ -1485,7 +1485,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='159';
+  var CURRENT_VERSION='160';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -7491,12 +7491,20 @@ function _pdPintar(){
       '</div>'+
       /* 🟡 DEPENDE DE VOS */
       '<div class="pd-sec"><div class="pd-sec-t pd-ama">🟡 Depende de vos</div>'+
-        (D.ceo.length?D.ceo.map(p=>
-          '<div class="pd-ceo-row pd-p'+(p.prioridad||2)+'">'+
-            '<span class="t">'+_escPend(p.texto||'')+'</span>'+
+        (D.ceo.length?D.ceo.map(p=>{
+          /* 🤖 = lo cargó el Chief of Staff por SQL; sin marca = lo cargó el CEO por UI */
+          const bot=(p.origen==='chief_of_staff');
+          const det=(p.detalle&&(''+p.detalle).trim())||'';
+          return '<div class="pd-ceo-row pd-p'+(p.prioridad||2)+'">'+
+            '<span class="t">'+
+              (bot?'<span title="Cargado por el Chief of Staff" style="opacity:.75;margin-right:4px">🤖</span>':'')+
+              _escPend(p.texto||'')+
+              (det?'<div class="pd-sub" style="margin-top:3px">'+_escPend(det)+'</div>':'')+
+            '</span>'+
             '<button type="button" title="Marcar resuelto" onclick="_pdResolverCeo('+p.id+')">✓</button>'+
             '<button type="button" title="Borrar" onclick="_pdBorrarCeo('+p.id+')">🗑</button>'+
-          '</div>').join('')
+          '</div>';
+        }).join('')
           :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Nada pendiente de tu lado. 👌</div>')+
         '<div style="display:flex;gap:6px;margin-top:7px">'+
           '<input type="text" id="pd-ceo-nuevo" placeholder="Agregar pendiente propio…" onkeydown="if(event.key===\'Enter\')_pdAgregarCeo()" style="flex:1;min-width:120px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 9px;color:var(--gray-100);outline:none">'+
@@ -7568,7 +7576,8 @@ async function _pdAgregarCeo(){
   if(!texto){toast('Escribí el pendiente','error');return;}
   try{
     const{error}=await sb.from('pendientes_ceo')
-      .insert({texto:texto,prioridad:parseInt(sel&&sel.value,10)||2,resuelto:false,activo:true});
+      .insert({texto:texto,prioridad:parseInt(sel&&sel.value,10)||2,
+        origen:'ceo',resuelto:false,activo:true});
     if(error)throw error;
     if(inp)inp.value='';
     toast('✅ Pendiente agregado');
@@ -7578,7 +7587,8 @@ async function _pdAgregarCeo(){
 async function _pdResolverCeo(id){
   if(!_pdEsAdmin())return;
   try{
-    const{error}=await sb.from('pendientes_ceo').update({resuelto:true}).eq('id',id);
+    const{error}=await sb.from('pendientes_ceo')
+      .update({resuelto:true,resuelto_en:new Date().toISOString()}).eq('id',id);
     if(error)throw error;
     toast('✅ Resuelto');
     _pdDatos=null;await renderParteDia();
