@@ -1486,7 +1486,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='162';
+  var CURRENT_VERSION='163';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8391,6 +8391,7 @@ async function _asistLlamarClaudeImg(systemPrompt,pregunta,imgB64){
    sesión fue restaurada por token, se pide una vez al abrir el panel.
 ════════════════════════════════════════ */
 const CV_PANEL_URL=SB_URL+'/functions/v1/geat-cv-panel';
+const CV_ANALISIS_URL=SB_URL+'/functions/v1/geat-cv-analisis';
 let _cvPin=null,_cvData=null,_cvFilCampana='',_cvFilPerfil='',_cvFilEstado='',_cvFilBusca='',_cvPendientes=null;
 /* v148: etapas del pipeline de reclutamiento, cada una con su color */
 const _CV_ETAPAS=[
@@ -8649,6 +8650,70 @@ function _cvRow(c){
   </div>`;
 }
 
+/* ── v163: ANALISIS PROFUNDO ──────────────────────────────
+   Capa adicional sobre el CV: el puntaje original NO se toca.
+   Colapsado por defecto para no ensuciar la ficha. */
+const _CV_EV={fuerte:'#4CAF50',media:'#FFB74D',debil:'#FF8A78',nula:'#9E9E9E'};
+function _cvEvChip(lbl,v){
+  const k=String(v||'').toLowerCase();
+  const c=_CV_EV[k]||'var(--gray-400)';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-400)">${lbl}
+    <strong style="color:${c};text-transform:uppercase;letter-spacing:.04em">${_cvEsc(k||'—')}</strong></span>`;
+}
+function _cvAnalisisHTML(c){
+  const a=c.analisis_profundo;
+  if(!a)return `<div style="font-size:12px;color:var(--gray-400)">⏳ En cola…
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="cvAnalizar('${_cvIdAttr(c.id)}')">Analizar ahora</button></div>`;
+  if(a.error==='sin_cv')return '<div style="font-size:12px;color:var(--gray-400)">Sin CV adjunto — no se analiza (no gasta tokens).</div>';
+  if(a.error)return `<div style="font-size:12px;color:#FF8A78">⚠ No se pudo analizar: ${_cvEsc(a.detalle||a.error)}
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="cvAnalizar('${_cvIdAttr(c.id)}')">Reintentar</button></div>`;
+  const obras=Array.isArray(a.obras)?a.obras:[];
+  const rojas=Array.isArray(a.banderas_rojas)?a.banderas_rojas:[];
+  const preg=Array.isArray(a.preguntas_entrevista)?a.preguntas_entrevista:[];
+  return `
+    ${a.fuente==='solo_correo'?`<div style="font-size:11px;color:#FFB74D;margin-bottom:8px">⚠ Analizado SOLO con el cuerpo del correo${a.motivo_sin_pdf?' ('+_cvEsc(a.motivo_sin_pdf)+')':''} — evidencia menos confiable.</div>`:''}
+    <div style="background:var(--black);border:1px solid var(--gold);border-radius:10px;padding:10px;font-size:12px;margin-bottom:10px">
+      <strong style="color:var(--gold)">Veredicto:</strong> ${_cvEsc(a.veredicto||'—')}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+      ${_cvEvChip('Obra:',a.evidencia_obra)}${_cvEvChip('Documentación:',a.evidencia_documentacion)}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🏗 Obras (${obras.length})</div>
+    ${obras.length?`<ul style="margin:0 0 10px 16px;padding:0;font-size:12px">${obras.map(o=>
+        `<li style="margin-bottom:3px"><strong>${_cvEsc(o.proyecto||'—')}</strong> — ${_cvEsc(o.rol||'—')}${o.tipo?' · '+_cvEsc(o.tipo):''}</li>`).join('')}</ul>`
+      :'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">No declara obras concretas.</div>'}
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚩 Banderas rojas (${rojas.length})</div>
+    ${rojas.length?`<ul style="margin:0 0 10px 16px;padding:0;font-size:12px;color:#FF8A78">${rojas.map(b=>`<li style="margin-bottom:3px">${_cvEsc(b)}</li>`).join('')}</ul>`
+      :'<div style="font-size:12px;color:#5BC98B;margin-bottom:10px">Ninguna detectada.</div>'}
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">❓ Preguntas para la entrevista</div>
+    ${preg.length?`<ol style="margin:0 0 4px 16px;padding:0;font-size:12px">${preg.map(p=>`<li style="margin-bottom:4px">${_cvEsc(p)}</li>`).join('')}</ol>`
+      :'<div style="font-size:12px;color:var(--gray-400)">—</div>'}
+    ${c.analisis_en?`<div style="font-size:10px;color:var(--gray-400);margin-top:8px">Analizado el ${_cvEsc(ymdLocal(new Date(c.analisis_en)))}</div>`:''}`;
+}
+function cvAnalisisToggle(){
+  const b=document.getElementById('cv-analisis-box'),t=document.getElementById('cv-analisis-btn');
+  if(!b||!t)return;
+  const abrir=b.style.display==='none';
+  b.style.display=abrir?'block':'none';
+  t.textContent=(abrir?'▾':'▸')+' 🔍 Análisis profundo';
+}
+async function cvAnalizar(id){
+  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  const box=document.getElementById('cv-analisis-box');
+  if(box)box.innerHTML='<div class="loading-state"><span class="spin"></span> Analizando el CV completo…</div>';
+  try{
+    const r=await fetch(CV_ANALISIS_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({pin:_cvPin,accion:'uno',id:id})});
+    const d=await r.json();
+    if(!d||!d.ok)throw new Error((d&&(d.detalle||d.error))||'No se pudo analizar');
+    const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+    if(c){c.analisis_profundo=d.analisis;c.analisis_en=d.analisis_en;if(box)box.innerHTML=_cvAnalisisHTML(c);}
+    toast('🔍 Análisis listo');
+  }catch(e){
+    toast('Error: '+e.message,'error');
+    const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+    if(box&&c)box.innerHTML=_cvAnalisisHTML(c);
+  }
+}
+
 function abrirCVModal(id){
   const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
   if(!c){toast('Postulación no encontrada','error');return;}
@@ -8672,6 +8737,10 @@ function abrirCVModal(id){
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
         ${links.map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return `<a href="${_cvEsc(href)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px" title="${_cvEsc(href)}">↗ ${_cvEsc(dom)}</a>`;}).join('')}
       </div>`:'<div style="font-size:12px;color:var(--gray-400)">Sin links</div>'}
+    <div style="margin:14px 0 6px">
+      <button type="button" id="cv-analisis-btn" class="btn btn-ghost btn-sm" onclick="cvAnalisisToggle()">▸ 🔍 Análisis profundo</button>
+    </div>
+    <div id="cv-analisis-box" style="display:none;border-left:2px solid var(--gold);padding-left:12px;margin-bottom:6px">${_cvAnalisisHTML(c)}</div>
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📝 Notas internas</div>
     <textarea id="cv-nota-input" class="form-control" rows="3" placeholder="Notas confidenciales sobre el candidato...">${_cvEsc(c.notas||'')}</textarea>
     <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
