@@ -2,3 +2,9 @@
 --- VALIDACION OK --- 
 PASS: JS sintaxis OK | len=251184 | sonnet=0 | haiku=5 | ver95=true 
         1 archivo(s) copiado(s).
+[main 0fd2e63] v94+v95: revivir asistente (haiku 4.5) + deploy oculto + titulo automatico por IA
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+--- PUSH --- 
+To https://github.com/joseio313/Geat-visitas.git
+   76dca9a..0fd2e63  main -> main
+=== FIN EXITCODE 0 === 

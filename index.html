@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>GEAT CRM v80</title>
+<title>GEAT CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -580,7 +580,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="login-logo-mark">G</div>
         <div class="login-logo-name">GE<span>AT</span></div>
       </div>
-      <div class="login-sub">Construcción · CRM v80</div>
+      <div class="login-sub" id="login-sub-ver">Construcción · CRM</div>
     </div>
     <div class="login-card">
       <div class="pin-label">Ingresá tu PIN</div>
@@ -1453,7 +1453,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='156';
+  var CURRENT_VERSION='157';
+  /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
+     mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
+  try{
+    document.title='GEAT CRM v'+CURRENT_VERSION;
+    var _lsub=document.getElementById('login-sub-ver');
+    if(_lsub)_lsub.textContent='Construcción · CRM v'+CURRENT_VERSION;
+  }catch(_tv){}
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -7140,6 +7147,22 @@ function _gerMesLbl(ym){
   return n.charAt(0).toUpperCase()+n.slice(1)+' '+a;
 }
 let _gerCache=[];
+/* v157 — un cierre ganado por debajo de este monto casi seguro es carga errónea
+   (caso real: Yasmany Lopez con $18.66). Entra a "Completar históricos" como
+   REVISAR aunque tenga monto y m², y al guardar pide confirmación explícita. */
+const GER_MONTO_SOSPECHOSO=100;
+
+function _gerFaltaDato(l){
+  return !(Number(l.monto_contrato)>0)||!(Number(l.metros_cuadrados)>0);
+}
+function _gerEsSospechoso(l){
+  const m=Number(l.monto_contrato);
+  return m>0&&m<GER_MONTO_SOSPECHOSO;
+}
+/* Filas que necesitan mano: sin monto, sin m², o con monto sospechosamente bajo. */
+function _gerIncompletos(){
+  return _gerCache.filter(l=>_gerFaltaDato(l)||_gerEsSospechoso(l));
+}
 
 async function renderGerencia(){
   const cont=document.getElementById('gerencia-body'); if(!cont)return;
@@ -7167,8 +7190,7 @@ function _gerPintar(){
   const total=conMonto.reduce((s,l)=>s+Number(l.monto_contrato||0),0);
   const totalM2=L.reduce((s,l)=>s+Number(l.metros_cuadrados||0),0);
   const ticket=conMonto.length?total/conMonto.length:0;
-  /* Incompletos = sin monto O sin m². Es el único punto de carga manual. */
-  const incompletos=L.filter(l=>!(Number(l.monto_contrato)>0)||!(Number(l.metros_cuadrados)>0));
+  const incompletos=_gerIncompletos();
 
   /* Agrupadores: montos y m² solamente */
   const agrupar=(campo)=>{
@@ -7201,11 +7223,11 @@ function _gerPintar(){
 
   cont.innerHTML=
     '<div class="ger-kpis">'+
-      '<div class="ger-kpi"><div class="lbl">Total vendido</div><div class="val">'+_gerUSD(total)+'</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">Total m²</div><div class="val">'+_gerM2(totalM2)+'</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">Ticket promedio</div><div class="val">'+_gerUSD(ticket)+'</div>'+
-        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">sobre '+conMonto.length+' con monto cargado</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">Cantidad de ventas</div><div class="val">'+L.length+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Total vendido</div><div class="val" id="ger-kpi-total">'+_gerUSD(total)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Total m²</div><div class="val" id="ger-kpi-m2">'+_gerM2(totalM2)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Ticket promedio</div><div class="val" id="ger-kpi-ticket">'+_gerUSD(ticket)+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px" id="ger-kpi-ticket-nota">sobre '+conMonto.length+' con monto cargado</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Cantidad de ventas</div><div class="val" id="ger-kpi-n">'+L.length+'</div></div>'+
     '</div>'+
     (incompletos.length?_gerHistoricosHtml(incompletos):'')+
     tabla('🏆 Por cerrador','Cerrador',porCerrador)+
@@ -7213,37 +7235,123 @@ function _gerPintar(){
     tabla('📅 Por mes','Mes',porMes.map(f=>({...f,k:_gerMesLbl(f.k)})));
 }
 
-/* Bloque de carga manual — desaparece solo cuando N llega a 0. */
+/* Bloque de carga manual — desaparece solo cuando N llega a 0.
+   v157: las filas se guardan de a una SIN re-renderizar el panel, para poder cargar
+   varias de corrido sin perder el scroll ni la posición. */
 function _gerHistoricosHtml(incompletos){
   return '<div class="admin-section" id="ger-historicos">'+
-    '<div class="admin-section-title">📝 Completar históricos ('+incompletos.length+')</div>'+
-    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">Cierres ganados sin monto o sin m². Completalos para que entren en los totales.</div>'+
-    incompletos.map(l=>
-      '<div class="ger-hist-row">'+
-        '<span class="nom">'+_escPend(l.nombre||('Lead #'+l.id))+'</span>'+
-        '<input type="number" id="gh-monto-'+l.id+'" placeholder="Monto $" min="0" step="any" value="'+(Number(l.monto_contrato)>0?l.monto_contrato:'')+'">'+
-        '<input type="number" id="gh-m2-'+l.id+'" placeholder="m²" min="0" step="any" value="'+(Number(l.metros_cuadrados)>0?l.metros_cuadrados:'')+'">'+
-        '<button type="button" class="btn btn-primary btn-sm" onclick="_gerGuardarHistorico('+l.id+')">Guardar</button>'+
-      '</div>').join('')+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
+      '<div class="admin-section-title" style="margin:0">📝 Completar históricos (<span id="ger-hist-n">'+incompletos.length+'</span>)</div>'+
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="_gerGuardarTodos()">💾 Guardar todos</button>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--gray-400);margin:8px 0 10px">Cierres ganados sin monto, sin m², o con un monto sospechosamente bajo (menos de '+_gerUSD(GER_MONTO_SOSPECHOSO)+', casi siempre un error de carga).</div>'+
+    '<div id="ger-hist-filas">'+incompletos.map(_gerHistFilaHtml).join('')+'</div>'+
   '</div>';
 }
 
-async function _gerGuardarHistorico(id){
-  if(!_esGerencia()){toast('Sin permiso','error');return;}
+function _gerHistFilaHtml(l){
+  const sosp=_gerEsSospechoso(l);
+  return '<div class="ger-hist-row" id="gh-row-'+l.id+'">'+
+    '<span class="nom">'+_escPend(l.nombre||('Lead #'+l.id))+
+      (sosp?' <span style="font-size:9px;font-weight:800;color:#000;background:var(--gold);padding:2px 7px;border-radius:9px;vertical-align:middle">⚠️ REVISAR</span>':'')+
+    '</span>'+
+    '<input type="number" id="gh-monto-'+l.id+'" placeholder="Monto $" min="0" step="any" value="'+(Number(l.monto_contrato)>0?l.monto_contrato:'')+'">'+
+    '<input type="number" id="gh-m2-'+l.id+'" placeholder="m²" min="0" step="any" value="'+(Number(l.metros_cuadrados)>0?l.metros_cuadrados:'')+'">'+
+    '<button type="button" class="btn btn-primary btn-sm" id="gh-btn-'+l.id+'" onclick="_gerGuardarHistorico('+l.id+')">Guardar</button>'+
+  '</div>';
+}
+
+/* Recalcula los KPI y el contador (N) en el lugar, sin rearmar el panel. */
+function _gerActualizarKpis(){
+  const L=_gerCache;
+  const conMonto=L.filter(l=>Number(l.monto_contrato)>0);
+  const total=conMonto.reduce((s,l)=>s+Number(l.monto_contrato||0),0);
+  const totalM2=L.reduce((s,l)=>s+Number(l.metros_cuadrados||0),0);
+  const ticket=conMonto.length?total/conMonto.length:0;
+  const set=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
+  set('ger-kpi-total',_gerUSD(total));
+  set('ger-kpi-m2',_gerM2(totalM2));
+  set('ger-kpi-ticket',_gerUSD(ticket));
+  set('ger-kpi-ticket-nota','sobre '+conMonto.length+' con monto cargado');
+  set('ger-kpi-n',String(L.length));
+  const pendientes=_gerIncompletos().length;
+  set('ger-hist-n',String(pendientes));
+  /* El bloque entero se va cuando ya no queda nada por cargar */
+  if(pendientes===0){
+    const sec=document.getElementById('ger-historicos');
+    if(sec)sec.remove();
+  }
+}
+
+/* Guarda UNA fila. No re-renderiza: marca la fila en verde y la saca.
+   opts.sinConfirmar salta el confirm (lo usa "Guardar todos", que ya preguntó). */
+async function _gerGuardarHistorico(id,opts){
+  opts=opts||{};
+  if(!_esGerencia()){toast('Sin permiso','error');return false;}
   const iM=document.getElementById('gh-monto-'+id);
   const iA=document.getElementById('gh-m2-'+id);
   const monto=parseFloat(iM&&iM.value);
   const m2=parseFloat(iA&&iA.value);
-  if(!(monto>0)||!(m2>0)){toast('Cargá monto y m² (mayores a 0)','error');return;}
+  if(!(monto>0)||!(m2>0)){toast('Cargá monto y m² (mayores a 0)','error');return false;}
+  if(monto<GER_MONTO_SOSPECHOSO&&!opts.sinConfirmar){
+    const l=_gerCache.find(x=>Number(x.id)===Number(id));
+    if(!confirm('¿Seguro? '+_gerUSD(monto)+' parece muy bajo para un cierre'+
+      ((l&&l.nombre)?' de '+l.nombre:'')+'.\n\nAceptá solo si el monto es correcto.'))return false;
+  }
+  const btn=document.getElementById('gh-btn-'+id);
+  if(btn){btn.disabled=true;btn.textContent='...';}
   try{
     const{error}=await sb.from('leads')
       .update({monto_contrato:monto,metros_cuadrados:m2,updated_at:new Date().toISOString()})
       .eq('id',id);
     if(error)throw error;
     registrarAuditoria('completar_historico','leads',id,{monto,m2});
-    toast('✅ Histórico completado');
-    await renderGerencia();
-  }catch(e){toast('Error: '+e.message,'error');}
+    /* Cache al día para que los KPI cuadren sin volver a la base */
+    const l=_gerCache.find(x=>Number(x.id)===Number(id));
+    if(l){l.monto_contrato=monto;l.metros_cuadrados=m2;}
+    _gerMarcarFilaGuardada(id);
+    _gerActualizarKpis();
+    if(!opts.sinConfirmar)toast('✅ Histórico completado');
+    return true;
+  }catch(e){
+    toast('Error: '+e.message,'error');
+    if(btn){btn.disabled=false;btn.textContent='Guardar';}
+    return false;
+  }
+}
+
+/* Feedback verde y salida de la fila, sin mover el resto de la lista. */
+function _gerMarcarFilaGuardada(id){
+  const row=document.getElementById('gh-row-'+id);
+  if(!row)return;
+  row.style.transition='opacity .45s ease';
+  row.innerHTML='<span class="nom" style="color:var(--st-completo)">✓ Guardado</span>';
+  setTimeout(()=>{try{row.remove();}catch(_e){}},700);
+}
+
+/* Guarda de una todas las filas con monto y m² cargados. Los montos bajos se
+   confirman UNA sola vez, en lote, para no encadenar diálogos. */
+async function _gerGuardarTodos(){
+  if(!_esGerencia()){toast('Sin permiso','error');return;}
+  const listos=_gerIncompletos().filter(l=>{
+    const iM=document.getElementById('gh-monto-'+l.id);
+    const iA=document.getElementById('gh-m2-'+l.id);
+    return parseFloat(iM&&iM.value)>0&&parseFloat(iA&&iA.value)>0;
+  });
+  if(!listos.length){toast('Cargá monto y m² en al menos una fila','error');return;}
+  const bajos=listos.filter(l=>parseFloat(document.getElementById('gh-monto-'+l.id).value)<GER_MONTO_SOSPECHOSO);
+  if(bajos.length){
+    const detalle=bajos.map(l=>'· '+(l.nombre||('Lead #'+l.id))+': '+
+      _gerUSD(parseFloat(document.getElementById('gh-monto-'+l.id).value))).join('\n');
+    if(!confirm('¿Seguro? Estos montos parecen muy bajos para un cierre:\n\n'+detalle+
+      '\n\nAceptá solo si son correctos.'))return;
+  }
+  let ok=0;
+  for(const l of listos){
+    if(await _gerGuardarHistorico(l.id,{sinConfirmar:true}))ok++;
+  }
+  toast(ok===listos.length?('✅ '+ok+' histórico(s) guardado(s)')
+    :('Guardados '+ok+' de '+listos.length+' — revisá los que fallaron'),ok?'ok':'error');
 }
 
 /* ════════════════════════════════════════
