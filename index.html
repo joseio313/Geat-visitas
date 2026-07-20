@@ -1486,7 +1486,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='161';
+  var CURRENT_VERSION='162';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8415,16 +8415,46 @@ function _cvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</
 function _cvNorm(s){return String(s==null?'':s).normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();}
 function _cvIdAttr(id){return String(id==null?'':id).replace(/[^\w-]/g,'');}
 function _cvParseLinks(s){return String(s==null?'':s).split(/\s*\|\s*/).map(x=>x.trim()).filter(Boolean).map(u=>{const href=/^https?:\/\//i.test(u)?u:'https://'+u;const dom=href.replace(/^https?:\/\//i,'').split(/[/?#]/)[0];return {href,dom};});}
-/* v150: teléfono a dígitos internacionales (Bolivia 591, sin duplicar prefijo) */
-function _cvTelDig(t){let d=String(t||'').replace(/\D/g,'');if(d&&d.indexOf('591')!==0)d='591'+d;return d;}
-/* v150: mensaje de WhatsApp condicional — si ya sabemos la pretensión no la volvemos a pedir */
+/* v162: teléfono → número WhatsApp. Formatos reales en cv_postulaciones:
+   "68390347" (8 díg, empieza 6/7) y "+591 69825910" / "+59162737675" (11 díg).
+   Devuelve '' si no hay número usable (botón deshabilitado). */
+function _cvTelWa(t){
+  const d=String(t||'').replace(/\D/g,'');
+  if(d.length===8&&/^[67]/.test(d))return '591'+d;
+  if(d.length===11&&d.indexOf('591')===0&&/^[67]/.test(d.slice(3)))return d;
+  return '';
+}
+/* v162: mensaje según el dato que falta. Orden de prioridad: pretensión → sin CV → convocatoria. */
 function _cvWaMsg(c){
   const nom=String(c.nombre||'').trim().split(/\s+/)[0]||'';
-  const tienePret=c.pretension_bs!=null&&c.pretension_bs!=='';
-  const msg=tienePret
-    ?'Hola '+nom+', te escribo de GEAT Construcción por tu postulación a Arquitecto de Obra. Nos interesó tu perfil y queremos coordinar una llamada corta. ¿Qué horario te queda cómodo en los próximos días?'
-    :'Hola '+nom+', te escribo de GEAT Construcción por tu postulación a Arquitecto de Obra. Nos interesó tu perfil y queremos coordinar una llamada corta. Antes, ¿me confirmás tu pretensión salarial y desde cuándo podrías empezar?';
-  return encodeURIComponent(msg);
+  const sinPret=c.pretension_bs==null||c.pretension_bs==='';
+  const sinCV=_cvNorm(c.bandera).includes('sin cv adjunto');
+  if(sinPret)return 'Hola '+nom+', te escribimos de GEAT Construcción por tu postulación al puesto de Arquitecto de Obra en Santa Cruz. Para avanzar necesitamos tu pretensión salarial (Bs/mes). Quedamos atentos.';
+  if(sinCV)return 'Hola '+nom+', recibimos tu postulación a GEAT pero llegó sin el CV adjunto. Reenvialo a talentos@geatconsulting.com para avanzar. Gracias.';
+  return 'Hola '+nom+', te escribimos de GEAT Construcción. Tu perfil avanzó a la siguiente etapa del proceso de Arquitecto de Obra. Queremos coordinar una evaluación técnica presencial esta semana en nuestras oficinas (Torres Evolution, Santa Cruz). ¿Qué día y horario te acomoda?';
+}
+/* v162: abre WhatsApp con el mensaje precargado y EDITABLE. No envía nada:
+   el envío siempre lo confirma el usuario dentro de WhatsApp.
+   window.open va PRIMERO y sincrónico — si se hace await antes, el bloqueador
+   de popups mata la ventana por perder el gesto del usuario. */
+function cvWhatsApp(id){
+  const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+  if(!c){toast('Postulación no encontrada','error');return;}
+  const tel=_cvTelWa(c.telefono);
+  if(!tel){toast('Sin teléfono válido','error');return;}
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(_cvWaMsg(c)),'_blank','noopener');
+  if((c.estado||'nuevo')==='nuevo')_cvMarcarContactado(id);
+}
+/* v162: marca contactado sólo si seguía en 'nuevo'. No pisa etapas más avanzadas. */
+async function _cvMarcarContactado(id){
+  if(!cu||cu.rol!=='admin')return;
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');return;}
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'estado',id:id,nuevo_estado:'contactado'});
+    if(!r||!r.ok)throw new Error((r&&r.error)||'No se pudo marcar contactado');
+    toast('💬 WhatsApp abierto · marcado Contactado');
+    await _cvCargar();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 /* v150: candidato de oro — obra + puntaje alto + dentro de presupuesto (o pretensión desconocida) */
 function _cvEsTop(c){
@@ -8580,7 +8610,7 @@ function _cvRow(c){
   const est=(c.estado||'nuevo');
   const id=_cvIdAttr(c.id);
   const esTop=_cvEsTop(c);
-  const tel=_cvTelDig(c.telefono);
+  const tel=_cvTelWa(c.telefono);
   const arch=String(c.archivo_url||'').trim();
   const mail=String(c.email||'').trim();
   const reciente=c.created_at&&(Date.now()-new Date(c.created_at).getTime())<86400000;
@@ -8602,7 +8632,9 @@ function _cvRow(c){
     <div class="cv-pret">${pret}</div>
     <span class="cv-etapa" onclick="event.stopPropagation()">${_cvEtapaSelect(id,est)}</span>
     <div class="cv-actions">
-      ${tel?`<a href="https://wa.me/${tel}?text=${_cvWaMsg(c)}" target="_blank" rel="noopener" class="cv-ic cv-wa" title="WhatsApp" onclick="event.stopPropagation()">💬</a>`:''}
+      ${tel
+        ?`<button type="button" class="btn btn-ghost btn-sm cv-wa" title="WhatsApp" onclick="event.stopPropagation();cvWhatsApp('${id}')">📱 WhatsApp</button>`
+        :`<button type="button" class="btn btn-ghost btn-sm" title="Sin teléfono" disabled style="opacity:.45;cursor:not-allowed">📱 WhatsApp</button>`}
       ${tel?`<a href="tel:+${tel}" class="cv-ic" title="Llamar" onclick="event.stopPropagation()">📞</a>`:''}
       <div class="cv-menuwrap">
         <button type="button" class="cv-ic" title="Más" onclick="_cvMenuToggle('${id}',event)">⋯</button>
@@ -8644,6 +8676,9 @@ function abrirCVModal(id){
     <textarea id="cv-nota-input" class="form-control" rows="3" placeholder="Notas confidenciales sobre el candidato...">${_cvEsc(c.notas||'')}</textarea>
     <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn btn-primary btn-sm" onclick="cvGuardarNota('${idA}')">💾 Guardar nota</button>
+      ${_cvTelWa(c.telefono)
+        ?`<button type="button" class="btn btn-ghost btn-sm cv-wa" title="WhatsApp" onclick="cvWhatsApp('${idA}')">📱 WhatsApp</button>`
+        :`<button type="button" class="btn btn-ghost btn-sm" title="Sin teléfono" disabled style="opacity:.45;cursor:not-allowed">📱 WhatsApp</button>`}
       <span style="font-size:11px;color:var(--gray-400)">Etapa:</span>
       ${_cvEtapaSelect(idA,(c.estado||'nuevo'))}
     </div>`;
