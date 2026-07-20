@@ -547,6 +547,25 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .celeb-sub{font-size:16px;font-weight:700;color:#fff;text-align:center;margin-top:10px;animation:celebPop .6s cubic-bezier(.18,1.4,.4,1);padding:0 16px;position:relative}
 @keyframes celebPop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes celebFade{from{opacity:0}to{opacity:1}}
+/* v156 — barra de reacciones sobre la celebración (Realtime) */
+.celeb-reac{position:relative;margin-top:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.celeb-reac button{background:rgba(255,255,255,0.10);border:1px solid rgba(250,195,5,0.45);color:#fff;border-radius:22px;padding:8px 15px;font-size:17px;font-weight:800;cursor:pointer;transition:.14s;line-height:1;display:flex;align-items:center;gap:7px}
+.celeb-reac button:hover{background:rgba(250,195,5,0.22);transform:translateY(-2px)}
+.celeb-reac button.mia{background:rgba(250,195,5,0.30);border-color:#FAC305}
+.celeb-reac .n{font-size:13px;font-weight:800;color:#FAC305;min-width:9px}
+.celeb-cerrador{position:relative;margin-top:14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.62);text-align:center}
+/* v156 — panel de gerencia (solo admin + socios). Montos de VENTA y m², nunca comisiones. */
+.ger-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.ger-kpi{background:var(--gray-900);border:1px solid var(--gray-600);border-radius:10px;padding:14px}
+.ger-kpi .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400)}
+.ger-kpi .val{font-size:22px;font-weight:900;color:var(--gold);margin-top:6px;line-height:1.1}
+.ger-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.ger-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);padding:7px 8px;border-bottom:1px solid var(--gray-600)}
+.ger-tbl td{padding:7px 8px;border-bottom:1px solid var(--gray-800);color:var(--white)}
+.ger-tbl td.num,.ger-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.ger-hist-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--gray-800)}
+.ger-hist-row input{width:110px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:5px 8px;color:var(--gray-100)}
+.ger-hist-row .nom{flex:1;min-width:130px;font-weight:700;font-size:12px;color:var(--white)}
 </style>
 </head>
 <body>
@@ -624,6 +643,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
+    <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
@@ -762,6 +782,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>Panel <span class="gold">Admin</span></h1>
     </div>
     <div id="admin-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: GERENCIA (v156) — solo admin + socios (es_socio). Montos de VENTA y m².
+       NUNCA comisiones ni utilidad: eso queda fuera de toda vista de equipo. ══ -->
+  <section id="screen-gerencia" class="screen">
+    <div class="screen-title">
+      <h1>Panel de <span class="gold">Gerencia</span></h1>
+    </div>
+    <div id="gerencia-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
   <!-- ══ SCREEN: RECLUTAMIENTO (v145) — solo admin, datos vía Edge Function geat-cv-panel ══ -->
@@ -1424,7 +1453,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='155';
+  var CURRENT_VERSION='156';
   /* SEGURO ANTI-RELOAD: nunca recargar solo mientras hay una grabación activa */
   function hayGrabacionActiva(){
     try{return _recHState==='grabando'||_recHState==='iniciando'||_recHState==='procesando'||_recState==='grabando';}catch(e){return false;}
@@ -1590,18 +1619,37 @@ function toast(msg,tipo='ok'){
   clearTimeout(el._t);el._t=setTimeout(()=>el.className='',2800);
 }
 
-/* v143 — celebración visual de cierres y reservas. Solo frontend, se dispara DESPUÉS
-   del guardado exitoso y está blindada en try/catch: jamás puede romper el guardado. */
-function celebrar(titulo,sub){
+/* v143 — celebración visual de cierres y reservas. Se dispara DESPUÉS del guardado
+   exitoso y está blindada en try/catch: jamás puede romper el guardado.
+   v156 — opts.id (fila de `celebraciones`) habilita la barra de reacciones en vivo.
+   REGLA: solo se muestra el monto de la VENTA. Nunca comisiones ni utilidad. */
+function celebrar(titulo,sub,opts){
+  opts=opts||{};
   try{
     const prev=document.getElementById('celebracion-overlay');
     if(prev)prev.remove();
     const ov=document.createElement('div');
     ov.id='celebracion-overlay';
-    ov.innerHTML='<canvas></canvas><div class="celeb-titulo"></div><div class="celeb-sub"></div>';
+    ov.innerHTML='<canvas></canvas><div class="celeb-titulo"></div><div class="celeb-sub"></div>'+
+      '<div class="celeb-cerrador"></div><div class="celeb-reac" style="display:none"></div>';
     ov.querySelector('.celeb-titulo').textContent=titulo;
     ov.querySelector('.celeb-sub').textContent=sub||'';
+    ov.querySelector('.celeb-cerrador').textContent=opts.cerrador?('Cerró: '+opts.cerrador):'';
     document.body.appendChild(ov);
+    /* v156 — barra de reacciones: solo si la celebración quedó persistida */
+    if(opts.id){
+      const bar=ov.querySelector('.celeb-reac');
+      bar.style.display='flex';
+      bar.dataset.celebId=String(opts.id);
+      CELEB_EMOJIS.forEach(em=>{
+        const b=document.createElement('button');
+        b.type='button';b.dataset.emoji=em;
+        b.innerHTML='<span>'+em+'</span><span class="n">0</span>';
+        b.onclick=function(ev){ev.stopPropagation();_celebReaccionar(opts.id,em);};
+        bar.appendChild(b);
+      });
+      _celebPintarReacciones(opts.id);
+    }
     const cv=ov.querySelector('canvas');
     cv.width=window.innerWidth;cv.height=window.innerHeight;
     const ctx=cv.getContext('2d');
@@ -1627,26 +1675,188 @@ function celebrar(titulo,sub){
       requestAnimationFrame(frame);
     }
     frame();
-    function cerrarCeleb(){vivo=false;if(ov.parentNode)ov.remove();}
+    function cerrarCeleb(){vivo=false;if(ov.parentNode)ov.remove();if(_celebOverlayId===opts.id)_celebOverlayId=null;}
     ov.onclick=cerrarCeleb;
-    setTimeout(cerrarCeleb,2800);
-    try{
-      const AC=window.AudioContext||window.webkitAudioContext;
-      if(AC){
-        const ac=new AC();
-        [[523.25,0],[659.25,0.12],[783.99,0.24]].forEach(n=>{
-          const o=ac.createOscillator(),g=ac.createGain();
-          o.type='triangle';o.frequency.value=n[0];
-          g.gain.setValueAtTime(0.001,ac.currentTime+n[1]);
-          g.gain.exponentialRampToValueAtTime(0.18,ac.currentTime+n[1]+0.02);
-          g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+n[1]+0.35);
-          o.connect(g);g.connect(ac.destination);
-          o.start(ac.currentTime+n[1]);o.stop(ac.currentTime+n[1]+0.4);
-        });
-        setTimeout(()=>{try{ac.close();}catch(_a){}},1500);
-      }
-    }catch(_s){}
+    /* Confetti 2.8s. Con reacciones el overlay queda más tiempo para poder reaccionar. */
+    setTimeout(()=>{vivo=false;},2800);
+    setTimeout(cerrarCeleb,opts.id?9000:2800);
+    _celebOverlayId=opts.id||null;
+    _celebChaChing();
   }catch(_c){}
+}
+
+/* v156 — cha-ching de caja registradora (WebAudio, sin archivo externo).
+   Respeta autoplay: si el navegador tiene el contexto suspendido y no deja
+   reanudarlo, no suena y no rompe nada. */
+function _celebChaChing(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return;
+    const ac=new AC();
+    const arrancar=()=>{
+      if(ac.state!=='running')return; // autoplay bloqueado → silencio, sin error
+      const t0=ac.currentTime;
+      /* Dos campanillas metálicas (el "cha-ching") */
+      [[0,1046.5,1568.0],[0.13,1318.5,1975.0]].forEach(([off,f1,f2])=>{
+        [f1,f2].forEach((f,i)=>{
+          const o=ac.createOscillator(),g=ac.createGain();
+          o.type='triangle';o.frequency.value=f;
+          const amp=i===0?0.20:0.10;
+          g.gain.setValueAtTime(0.0001,t0+off);
+          g.gain.exponentialRampToValueAtTime(amp,t0+off+0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001,t0+off+0.42);
+          o.connect(g);g.connect(ac.destination);
+          o.start(t0+off);o.stop(t0+off+0.45);
+        });
+      });
+      /* Golpe corto del cajón */
+      const dur=0.09,sr=ac.sampleRate,buf=ac.createBuffer(1,Math.floor(sr*dur),sr),ch=buf.getChannelData(0);
+      for(let i=0;i<ch.length;i++)ch[i]=(Math.random()*2-1)*Math.pow(1-i/ch.length,3);
+      const src=ac.createBufferSource(),ng=ac.createGain();
+      src.buffer=buf;ng.gain.value=0.11;
+      src.connect(ng);ng.connect(ac.destination);
+      src.start(t0+0.24);
+      setTimeout(()=>{try{ac.close();}catch(_a){}},1800);
+    };
+    if(ac.state==='suspended'){
+      const p=ac.resume();
+      if(p&&p.then)p.then(arrancar).catch(()=>{try{ac.close();}catch(_b){}});
+      else arrancar();
+    }else arrancar();
+  }catch(_s){}
+}
+
+/* ════════════════════════════════════════
+   v156 — CELEBRACIONES COMPARTIDAS (Realtime + persistencia + reacciones)
+   Se persiste cada cierre/reserva en `celebraciones`; Realtime la empuja a todas
+   las sesiones abiertas. Quien no estaba conectado la ve al entrar, UNA sola vez.
+   REGLA TRANSVERSAL: acá solo viaja el monto de la VENTA. Cero comisiones.
+════════════════════════════════════════ */
+const CELEB_EMOJIS=['🔥','👏','🎉'];
+const CELEB_VENTANA_H=48;                 // ventana de celebraciones "recientes"
+const CELEB_LS_VISTAS='geat_celeb_vistas';
+let _celebOverlayId=null;                 // id de la celebración visible ahora
+let _celebCanal=null;
+
+function _celebVistas(){
+  try{const v=JSON.parse(localStorage.getItem(CELEB_LS_VISTAS)||'[]');return Array.isArray(v)?v:[];}
+  catch(_e){return[];}
+}
+function _celebMarcarVista(id){
+  try{
+    const v=_celebVistas();
+    if(v.indexOf(id)!==-1)return;
+    v.push(id);
+    localStorage.setItem(CELEB_LS_VISTAS,JSON.stringify(v.slice(-200)));
+  }catch(_e){}
+}
+function _celebTitulo(tipo){return tipo==='reserva'?'💰 ¡RESERVA REGISTRADA!':'🏆 ¡VENTA CERRADA!';}
+function _celebSub(cliente,monto){
+  const m=(monto!=null&&monto!=='')?('$'+Number(monto).toLocaleString('en-US')):'';
+  return [cliente||'',m].filter(Boolean).join(' — ');
+}
+
+/* Persiste la celebración y la muestra localmente. Blindada: si falla el insert,
+   igual celebra en local (sin reacciones) y NUNCA rompe el guardado del lead. */
+async function _celebPublicar(tipo,leadId,cliente,monto,cerrador){
+  let id=null;
+  try{
+    const{data,error}=await sb.from('celebraciones')
+      .insert({lead_id:leadId||null,tipo:tipo,cliente:cliente||'',monto:(monto!=null?monto:null),
+        cerrador:cerrador||'',activo:true})
+      .select('id').single();
+    if(error)throw error;
+    id=data&&data.id;
+    if(id){
+      /* El broadcast de Realtime puede llegar ANTES que la respuesta del insert.
+         Si ya quedó marcada como vista, la celebración ya está en pantalla: no repetir. */
+      const yaMostrada=_celebVistas().indexOf(id)!==-1;
+      _celebMarcarVista(id);
+      if(yaMostrada)return;
+    }
+  }catch(_e){}
+  celebrar(_celebTitulo(tipo),_celebSub(cliente,monto),{id:id,cerrador:cerrador});
+}
+
+/* Celebración que llega por Realtime o quedó pendiente de una sesión anterior. */
+function _celebMostrarFila(row){
+  if(!row||row.activo===false)return;
+  if(_celebVistas().indexOf(row.id)!==-1)return;   // ya la vio
+  _celebMarcarVista(row.id);
+  celebrar(_celebTitulo(row.tipo),_celebSub(row.cliente,row.monto),{id:row.id,cerrador:row.cerrador});
+}
+
+/* Conteo de reacciones + marca de las propias. Repinta la barra si está visible. */
+async function _celebPintarReacciones(celebId){
+  if(!celebId)return;
+  let filas=[];
+  try{
+    const{data,error}=await sb.from('celebracion_reacciones')
+      .select('colaborador,emoji,activo').eq('celebracion_id',celebId).eq('activo',true);
+    if(error)throw error;
+    filas=data||[];
+  }catch(_e){return;}
+  const bar=document.querySelector('.celeb-reac[data-celeb-id="'+celebId+'"]');
+  if(!bar)return;
+  CELEB_EMOJIS.forEach(em=>{
+    const btn=bar.querySelector('button[data-emoji="'+em+'"]');
+    if(!btn)return;
+    const delEmoji=filas.filter(f=>f.emoji===em);
+    btn.querySelector('.n').textContent=String(delEmoji.length);
+    const mia=cu&&delEmoji.some(f=>f.colaborador===cu.nombre);
+    btn.classList.toggle('mia',!!mia);
+  });
+}
+
+/* Un colaborador, una reacción por emoji: si ya reaccionó, alterna activo. */
+async function _celebReaccionar(celebId,emoji){
+  if(!cu||!celebId)return;
+  try{
+    const{data,error}=await sb.from('celebracion_reacciones')
+      .select('id,activo').eq('celebracion_id',celebId).eq('colaborador',cu.nombre).eq('emoji',emoji).limit(1);
+    if(error)throw error;
+    const prev=(data||[])[0];
+    if(prev){
+      const{error:eU}=await sb.from('celebracion_reacciones').update({activo:!prev.activo}).eq('id',prev.id);
+      if(eU)throw eU;
+    }else{
+      const{error:eI}=await sb.from('celebracion_reacciones')
+        .insert({celebracion_id:celebId,colaborador:cu.nombre,emoji:emoji,activo:true});
+      if(eI)throw eI;
+    }
+    _celebPintarReacciones(celebId);
+  }catch(e){toast('No se pudo reaccionar: '+e.message,'error');}
+}
+
+/* Suscripción Realtime — celebraciones nuevas y reacciones en vivo. */
+function _celebSuscribir(){
+  try{
+    if(_celebCanal)return;
+    _celebCanal=sb.channel('geat-celebraciones')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'celebraciones'},
+        p=>{try{_celebMostrarFila(p.new);}catch(_e){}})
+      .on('postgres_changes',{event:'*',schema:'public',table:'celebracion_reacciones'},
+        p=>{try{
+          const cid=(p.new&&p.new.celebracion_id)||(p.old&&p.old.celebracion_id);
+          if(cid&&Number(cid)===Number(_celebOverlayId))_celebPintarReacciones(cid);
+        }catch(_e){}})
+      .subscribe();
+  }catch(_e){}
+}
+
+/* Al entrar: celebraciones de las últimas 48h que este navegador no vio todavía. */
+async function _celebPendientes(){
+  try{
+    const desde=new Date(Date.now()-CELEB_VENTANA_H*3600000).toISOString();
+    const{data,error}=await sb.from('celebraciones')
+      .select('*').eq('activo',true).gte('created_at',desde)
+      .order('created_at',{ascending:true}).limit(10);
+    if(error)throw error;
+    const vistas=_celebVistas();
+    const nuevas=(data||[]).filter(r=>vistas.indexOf(r.id)===-1);
+    /* Encoladas: una atrás de otra, para que no se pisen */
+    nuevas.forEach((row,i)=>setTimeout(()=>{try{_celebMostrarFila(row);}catch(_e){}},i*3200));
+  }catch(_e){}
 }
 
 /* CAMBIO 1.B — Anti-duplicado en memoria */
@@ -1905,6 +2115,12 @@ function startApp(){
     const cab=document.getElementById('capAudioBtn');
     if(cab&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)cab.style.display='inline-flex';
   }
+  /* v156 — Gerencia: admin + socios (flag es_socio). Si geat-auth todavía no
+     devuelve es_socio, degrada a solo-admin: nunca se abre de más. */
+  if(_esGerencia()){
+    const tabGer=document.getElementById('tab-gerencia');
+    if(tabGer)tabGer.style.display='';
+  }
   // Reportes tab: oculto para field_capturer
   if(cu.rol==='field_capturer'){
     const tabRep=document.getElementById('tab-reports');
@@ -1931,6 +2147,9 @@ async function initApp(){
   /* Aviso discreto al admin si hay interrumpidas de las últimas 24h con audio sin procesar */
   if(cu&&cu.rol==='admin')_avisarInterrumpidasPendientes();
   await Promise.all([loadCatalogs(),loadColaboradores()]);
+  /* v156 — celebraciones: escuchar en vivo y recuperar las no vistas de las últimas 48h */
+  _celebSuscribir();
+  _celebPendientes();
   await renderWeek();
   buildPersonaFilters();
   attachPickerListeners();
@@ -3751,9 +3970,9 @@ async function guardarReserva(){
     }catch(eH){}
     toast('✅ Reserva registrada — lead en estado Reservado');
     closeModal('modalReserva');
-    /* v143 — celebración post-guardado (solo visual) */
+    /* v156 — celebración persistida + Realtime a todo el equipo (solo monto de reserva) */
     const _nomCli=(window._leadAgendar&&window._leadAgendar.nombre)||'';
-    celebrar('💰 ¡RESERVA REGISTRADA!',(_nomCli?_nomCli+' — ':'')+'$'+monto.toLocaleString('en-US'));
+    _celebPublicar('reserva',id,_nomCli,monto,cu.nombre);
   }catch(e){toast('Error: '+e.message,'error');}
   finally{if(btn)btn.disabled=false;}
 }
@@ -4813,7 +5032,8 @@ async function saveSeguimiento(){
       }catch(eVenta){
         toast('Lead ganado, pero no se registró en ventas: '+eVenta.message,'error');
       }
-      wonData={cod:_vCod,m2,cerrador:_vCerr,captador:_vCap,nombre:(leadFull&&leadFull.nombre)||''};
+      /* v156 — monto viaja en wonData: es const de bloque y la celebración se dispara más abajo */
+      wonData={cod:_vCod,m2,monto,cerrador:_vCerr,captador:_vCap,nombre:(leadFull&&leadFull.nombre)||''};
 
     } else if(outcomeMode==='lost'){
       let motivo=document.getElementById('lost-motivo').value;
@@ -4864,8 +5084,8 @@ async function saveSeguimiento(){
       _modalBodyLock('modalFinalize',false); // confirmacion de venta queda interactiva
       showWonConfirm(wonData);
       toast('🏆 Lead marcado como GANADO');
-      /* v143 — celebración post-guardado (solo visual) */
-      celebrar('🏆 ¡VENTA CERRADA!',(wonData&&wonData.nombre)||'');
+      /* v156 — celebración persistida + Realtime a todo el equipo (solo monto de venta) */
+      _celebPublicar('ganado',currentLeadId,(wonData&&wonData.nombre)||'',(wonData&&wonData.monto)||null,cu.nombre);
       try{renderWeek();}catch(_re){}
       try{cargarMarcadoresDia();}catch(_me){}
       const _phwW=document.getElementById('para-hoy-wrap');
@@ -5786,12 +6006,12 @@ async function renderAdmin(){
       </div>
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <input id="grab-buscar" type="text" placeholder="🔍 Buscar dentro de los audios…" oninput="_grabDebounceFiltrar()" autocomplete="off" style="flex:1;min-width:180px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 10px;color:var(--gray-100);outline:none">
-        <select id="grab-fil-estado" onchange="_grabRenderFiltrado()" style="width:140px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+        <select id="grab-fil-estado" onchange="_grabFiltroCambio()" style="width:140px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
           <option value="">Todos los estados</option>
           <option value="completa">Completas</option>
           <option value="interrumpida">Interrumpidas</option>
         </select>
-        <select id="grab-fil-fecha" onchange="_grabRenderFiltrado()" style="width:130px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+        <select id="grab-fil-fecha" onchange="_grabFiltroCambio()" style="width:130px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
           <option value="">Todas las fechas</option>
           <option value="hoy">Hoy</option>
           <option value="7">7 días</option>
@@ -6012,14 +6232,37 @@ let _grabFiltrarTimer=null;
 let _grabModo='mios';
 let _grabRecuperables=[];
 let _grabRecuperando=false;
+let _grabAbierto=false;   // v156 — lista de grabaciones colapsada por defecto
 function _grabFmtFecha(iso){
   if(!iso)return'—';
   try{return new Date(iso).toLocaleString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
   catch(e){return new Date(iso).toLocaleString('es-BO');}
 }
+/* v156 — la lista arranca COLAPSADA: solo un botón con el conteo. Ni se traen ni se
+   renderizan las N filas hasta que el usuario la despliega. */
+function _grabBotonHtml(n){
+  return '<button type="button" class="btn btn-ghost btn-sm" onclick="_grabAbrirLista()" '+
+    'style="width:100%;justify-content:center;padding:10px;font-size:12px">'+
+    '🎙 Ver todas las grabaciones ('+n+')</button>';
+}
+async function _grabAbrirLista(){
+  _grabAbierto=true;
+  await renderRegistroGrabaciones();
+}
 async function renderRegistroGrabaciones(){
   const cont=document.getElementById('registro-grab-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  if(!_grabAbierto){
+    /* Conteo sin traer filas (head:true) */
+    try{
+      let qc=sb.from('grabaciones').select('id',{count:'exact',head:true}).eq('activo',true);
+      if(_grabModo==='mios') qc=qc.eq('colaborador',cu.nombre);
+      const{count,error}=await qc;
+      if(error)throw error;
+      cont.innerHTML=_grabBotonHtml(count||0);
+    }catch(e){cont.innerHTML=_grabBotonHtml('—');}
+    return;
+  }
   try{
     let q=sb.from('grabaciones')
       .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
@@ -6131,7 +6374,12 @@ function _grabSetModo(modo){
 }
 function _grabDebounceFiltrar(){
   if(_grabFiltrarTimer)clearTimeout(_grabFiltrarTimer);
-  _grabFiltrarTimer=setTimeout(_grabRenderFiltrado,250);
+  _grabFiltrarTimer=setTimeout(_grabFiltroCambio,250);
+}
+/* v156 — buscar/filtrar es acción explícita del usuario: despliega la lista si está colapsada */
+function _grabFiltroCambio(){
+  if(!_grabAbierto){_grabAbrirLista();return;}
+  _grabRenderFiltrado();
 }
 function _grabLimpiarFiltros(){
   const b=document.getElementById('grab-buscar');if(b)b.value='';
@@ -6141,6 +6389,8 @@ function _grabLimpiarFiltros(){
 }
 function _grabRenderFiltrado(){
   const cont=document.getElementById('registro-grab-body');if(!cont)return;
+  /* v156 — colapsada: refrescar el botón/conteo, sin pintar filas */
+  if(!_grabAbierto){renderRegistroGrabaciones();return;}
   const term=(document.getElementById('grab-buscar')&&document.getElementById('grab-buscar').value||'').trim().toLowerCase();
   const filEst=(document.getElementById('grab-fil-estado')&&document.getElementById('grab-fil-estado').value)||'';
   const filFecha=(document.getElementById('grab-fil-fecha')&&document.getElementById('grab-fil-fecha').value)||'';
@@ -6859,6 +7109,144 @@ function _toggleEnCierre(){
 }
 
 /* ════════════════════════════════════════
+   v156 — PANEL DE GERENCIA (solo admin + socios)
+   Dashboard de LECTURA sobre leads cerrado_ganado: total vendido, m², ticket
+   promedio, cantidad, y desglose por cerrador, por captador y por mes.
+   REGLA TRANSVERSAL: acá solo se muestran montos de VENTA y m².
+   NUNCA comisiones ni utilidad — las tablas `comisiones` / `comisiones_calculadas`
+   no se consultan desde el frontend. Las captadoras no-socias no ven este panel.
+════════════════════════════════════════ */
+function _esGerencia(){
+  return !!(cu&&(cu.rol==='admin'||cu.es_socio===true));
+}
+function _gerUSD(n){
+  return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
+}
+function _gerM2(n){
+  return Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:1})+' m²';
+}
+/* Mes de la venta: fecha_contrato es DATE ('YYYY-MM-DD') → se corta el string para
+   no cruzar zona horaria. Si falta, cae a created_at con ymdLocal (Bolivia UTC-4). */
+function _gerMes(l){
+  if(l.fecha_contrato&&/^\d{4}-\d{2}/.test(l.fecha_contrato))return String(l.fecha_contrato).slice(0,7);
+  if(l.created_at){try{return ymdLocal(new Date(l.created_at)).slice(0,7);}catch(_e){}}
+  return '—';
+}
+function _gerMesLbl(ym){
+  if(!ym||ym==='—')return 'Sin fecha';
+  const[a,m]=ym.split('-');
+  const nombres=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const n=nombres[parseInt(m,10)-1]||m;
+  return n.charAt(0).toUpperCase()+n.slice(1)+' '+a;
+}
+let _gerCache=[];
+
+async function renderGerencia(){
+  const cont=document.getElementById('gerencia-body'); if(!cont)return;
+  if(!_esGerencia()){
+    cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Sin acceso.</div>';
+    return;
+  }
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    const{data,error}=await sb.from('leads')
+      .select('id,nombre,monto_contrato,metros_cuadrados,fecha_contrato,cerrador,captador,created_at')
+      .eq('estado','cerrado_ganado');
+    if(error)throw error;
+    _gerCache=data||[];
+    _gerPintar();
+  }catch(e){
+    cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
+  }
+}
+
+function _gerPintar(){
+  const cont=document.getElementById('gerencia-body'); if(!cont)return;
+  const L=_gerCache;
+  const conMonto=L.filter(l=>Number(l.monto_contrato)>0);
+  const total=conMonto.reduce((s,l)=>s+Number(l.monto_contrato||0),0);
+  const totalM2=L.reduce((s,l)=>s+Number(l.metros_cuadrados||0),0);
+  const ticket=conMonto.length?total/conMonto.length:0;
+  /* Incompletos = sin monto O sin m². Es el único punto de carga manual. */
+  const incompletos=L.filter(l=>!(Number(l.monto_contrato)>0)||!(Number(l.metros_cuadrados)>0));
+
+  /* Agrupadores: montos y m² solamente */
+  const agrupar=(campo)=>{
+    const m={};
+    L.forEach(l=>{
+      const k=(l[campo]||'Sin asignar');
+      if(!m[k])m[k]={n:0,monto:0,m2:0};
+      m[k].n++;m[k].monto+=Number(l.monto_contrato||0);m[k].m2+=Number(l.metros_cuadrados||0);
+    });
+    return Object.keys(m).sort((a,b)=>m[b].monto-m[a].monto).map(k=>({k,...m[k]}));
+  };
+  const porCerrador=agrupar('cerrador');
+  const porCaptador=agrupar('captador');
+  const mesesMap={};
+  L.forEach(l=>{
+    const k=_gerMes(l);
+    if(!mesesMap[k])mesesMap[k]={n:0,monto:0,m2:0};
+    mesesMap[k].n++;mesesMap[k].monto+=Number(l.monto_contrato||0);mesesMap[k].m2+=Number(l.metros_cuadrados||0);
+  });
+  const porMes=Object.keys(mesesMap).sort().reverse().map(k=>({k,...mesesMap[k]}));
+
+  const tabla=(titulo,col1,filas)=>
+    '<div class="admin-section"><div class="admin-section-title">'+titulo+'</div>'+
+    (filas.length?'<table class="ger-tbl"><thead><tr><th>'+col1+'</th><th class="num">Ventas</th>'+
+      '<th class="num">Monto</th><th class="num">m²</th></tr></thead><tbody>'+
+      filas.map(f=>'<tr><td>'+_escPend(f.k==='—'?'Sin fecha':f.k)+'</td><td class="num">'+f.n+'</td>'+
+        '<td class="num">'+_gerUSD(f.monto)+'</td><td class="num">'+_gerM2(f.m2)+'</td></tr>').join('')+
+      '</tbody></table>'
+      :'<div style="color:var(--gray-400);font-size:12px">Sin datos.</div>')+'</div>';
+
+  cont.innerHTML=
+    '<div class="ger-kpis">'+
+      '<div class="ger-kpi"><div class="lbl">Total vendido</div><div class="val">'+_gerUSD(total)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Total m²</div><div class="val">'+_gerM2(totalM2)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Ticket promedio</div><div class="val">'+_gerUSD(ticket)+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">sobre '+conMonto.length+' con monto cargado</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Cantidad de ventas</div><div class="val">'+L.length+'</div></div>'+
+    '</div>'+
+    (incompletos.length?_gerHistoricosHtml(incompletos):'')+
+    tabla('🏆 Por cerrador','Cerrador',porCerrador)+
+    tabla('🎯 Por captador','Captador',porCaptador)+
+    tabla('📅 Por mes','Mes',porMes.map(f=>({...f,k:_gerMesLbl(f.k)})));
+}
+
+/* Bloque de carga manual — desaparece solo cuando N llega a 0. */
+function _gerHistoricosHtml(incompletos){
+  return '<div class="admin-section" id="ger-historicos">'+
+    '<div class="admin-section-title">📝 Completar históricos ('+incompletos.length+')</div>'+
+    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">Cierres ganados sin monto o sin m². Completalos para que entren en los totales.</div>'+
+    incompletos.map(l=>
+      '<div class="ger-hist-row">'+
+        '<span class="nom">'+_escPend(l.nombre||('Lead #'+l.id))+'</span>'+
+        '<input type="number" id="gh-monto-'+l.id+'" placeholder="Monto $" min="0" step="any" value="'+(Number(l.monto_contrato)>0?l.monto_contrato:'')+'">'+
+        '<input type="number" id="gh-m2-'+l.id+'" placeholder="m²" min="0" step="any" value="'+(Number(l.metros_cuadrados)>0?l.metros_cuadrados:'')+'">'+
+        '<button type="button" class="btn btn-primary btn-sm" onclick="_gerGuardarHistorico('+l.id+')">Guardar</button>'+
+      '</div>').join('')+
+  '</div>';
+}
+
+async function _gerGuardarHistorico(id){
+  if(!_esGerencia()){toast('Sin permiso','error');return;}
+  const iM=document.getElementById('gh-monto-'+id);
+  const iA=document.getElementById('gh-m2-'+id);
+  const monto=parseFloat(iM&&iM.value);
+  const m2=parseFloat(iA&&iA.value);
+  if(!(monto>0)||!(m2>0)){toast('Cargá monto y m² (mayores a 0)','error');return;}
+  try{
+    const{error}=await sb.from('leads')
+      .update({monto_contrato:monto,metros_cuadrados:m2,updated_at:new Date().toISOString()})
+      .eq('id',id);
+    if(error)throw error;
+    registrarAuditoria('completar_historico','leads',id,{monto,m2});
+    toast('✅ Histórico completado');
+    await renderGerencia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ════════════════════════════════════════
    MI REGISTRO — panel para field_capturer y commercial_lead
    Solo texto (transcripción + resumen + extracción IA). Sin audio.
 ════════════════════════════════════════ */
@@ -6867,9 +7255,35 @@ let _mirListAll=[];
 let _mirFiltrarTimer=null;
 let _mirModo='mios';
 let _mirDedup={};
+let _mirAbierto=false;   // v156 — lista de registros colapsada por defecto
+/* v156 — igual que el panel admin: botón con conteo, sin traer ni pintar las N filas. */
+function _mirBotonHtml(n){
+  return '<button type="button" class="btn btn-ghost btn-sm" onclick="_mirAbrirLista()" '+
+    'style="width:100%;justify-content:center;padding:10px;font-size:12px">'+
+    '🎙 Ver todas las grabaciones ('+n+')</button>';
+}
+async function _mirAbrirLista(){
+  _mirAbierto=true;
+  await renderMiRegistro();
+}
 async function renderMiRegistro(){
   const cont=document.getElementById('mir-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  if(!_mirAbierto){
+    try{
+      let qc=sb.from('grabaciones').select('id',{count:'exact',head:true}).eq('activo',true);
+      if(cu.rol==='field_capturer'||_mirModo==='mios') qc=qc.eq('colaborador',cu.nombre);
+      else{
+        /* modo 'todos': el listado excluye a los admin, el conteo también */
+        const adminNoms=(colaboradores||[]).filter(c=>c.rol==='admin').map(c=>c.nombre);
+        if(adminNoms.length)qc=qc.not('colaborador','in','('+adminNoms.map(n=>'"'+n+'"').join(',')+')');
+      }
+      const{count,error}=await qc;
+      if(error)throw error;
+      cont.innerHTML=_mirBotonHtml(count||0);
+    }catch(e){cont.innerHTML=_mirBotonHtml('—');}
+    return;
+  }
   const mirWrap=document.getElementById('mir-modo-wrap');
   if(mirWrap){
     if(cu.rol==='commercial_lead'){
@@ -6938,10 +7352,15 @@ function _mirSetModo(modo){
 }
 function _mirDebounceFiltrar(){
   if(_mirFiltrarTimer)clearTimeout(_mirFiltrarTimer);
-  _mirFiltrarTimer=setTimeout(_mirRenderFiltrado,250);
+  _mirFiltrarTimer=setTimeout(function(){
+    if(!_mirAbierto){_mirAbrirLista();return;}
+    _mirRenderFiltrado();
+  },250);
 }
 function _mirRenderFiltrado(){
   const cont=document.getElementById('mir-body'); if(!cont)return;
+  /* v156 — colapsada: refrescar el botón/conteo, sin pintar filas */
+  if(!_mirAbierto){renderMiRegistro();return;}
   const term=(document.getElementById('mir-buscar')&&document.getElementById('mir-buscar').value||'').trim().toLowerCase();
   const rows=term?_mirListAll.filter(function(g){
     const t=(g.titulo||'').toLowerCase();
