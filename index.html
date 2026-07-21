@@ -1486,7 +1486,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='165';
+  var CURRENT_VERSION='166';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3145,7 +3145,8 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
           <dt>Correo</dt><dd>${lead.correo?`${lead.correo} <a class="btn-ghost" style="text-decoration:none;font-size:10px;padding:2px 8px;margin-left:4px" href="mailto:${lead.correo}">📧 Enviar email</a>`:'—'}</dd>
-          <dt>Visitó oficina</dt><dd><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lead-visito-oficina" ${lead.visito_oficina?'checked':''} ${currentLeadMode==='readonly'?'disabled':''} onchange="toggleVisitoOficina(${lead.id},this)"> <span>✅ Visitó oficina</span></label></dd>
+          <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Reasignar':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
+          <dt>Visitó oficina</dt><dd><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lead-visito-oficina" ${lead.visito_oficina?'checked':''} ${_leadBloqueado||lead.estado==='cerrado_ganado'?'disabled':''} onchange="toggleVisitoOficina(${lead.id},this)"> <span>✅ Visitó oficina</span></label>${_leadBloqueado||lead.estado==='cerrado_ganado'?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Lead cerrado o archivado — no editable</div>':'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Se marca solo al completar la tarea "Visita oficina"; tildalo a mano solo si la visita ocurrió fuera del CRM</div>'}</dd>
           <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
         </dl>
       </div>
@@ -3209,18 +3210,89 @@ async function openLeadDetail(leadId,agendaId,mode){
   `;
 }
 
-/* Checkbox "Visitó oficina" — guarda al instante en leads.visito_oficina */
+/* ── v166 BUG 3 — Reasignar cerrador desde la ficha del lead ──
+   No existía NINGÚN camino en la app para cambiar leads.cerrador de un lead ya
+   creado: asignar_cerrador_alternancia (trigger) solo asigna cuando el campo
+   está vacío, y overrideAlternancia solo orienta la rotación siguiente. Tampoco
+   existe (ni existió) regla alguna que prohíba reasignar en fase visita: el
+   asistente IA lo inventó. Se puede reasignar en cualquier fase abierta. */
+function _puedeReasignarCerrador(){
+  return !!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'));
+}
+function _cerradoresActivos(){
+  return (colaboradores||[]).filter(function(c){
+    return c.activo&&(c.rol==='closer'||c.rol==='commercial_lead');
+  }).map(function(c){return c.nombre;});
+}
+function abrirReasignarCerrador(leadId){
+  const cont=document.getElementById('reasig-cerrador-'+leadId);
+  if(!cont)return;
+  if(cont.style.display!=='none'){cont.style.display='none';return;}
+  const opts=_cerradoresActivos();
+  if(!opts.length){toast('No hay cerradores activos en colaboradores','error');return;}
+  cont.style.display='block';
+  cont.innerHTML='<select class="fselect" id="reasig-sel-'+leadId+'" style="font-size:11px;padding:4px">'+
+      opts.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join('')+
+    '</select>'+
+    '<button class="btn-primary btn-sm" style="font-size:10px;margin-left:6px" onclick="guardarReasignarCerrador('+leadId+')">Guardar</button>'+
+    '<button class="btn-ghost btn-sm" style="font-size:10px;margin-left:4px" onclick="abrirReasignarCerrador('+leadId+')">Cancelar</button>';
+}
+async function guardarReasignarCerrador(leadId){
+  const sel=document.getElementById('reasig-sel-'+leadId);
+  const nuevo=sel&&sel.value;
+  if(!nuevo){toast('Elegí un cerrador','error');return;}
+  try{
+    const{data:prev}=await sb.from('leads').select('cerrador,nombre').eq('id',leadId).single();
+    const anterior=(prev&&prev.cerrador)||null;
+    if(anterior===nuevo){toast('Ese lead ya está asignado a '+nuevo,'warning');return;}
+    const{data,error}=await sb.from('leads')
+      .update({cerrador:nuevo,cerrador_confirmacion:'asignado',cerrador_asignado_en:new Date().toISOString(),updated_at:new Date().toISOString()})
+      .eq('id',leadId).select('id,cerrador');
+    if(error)throw error;
+    if(!data||!data.length||data[0].cerrador!==nuevo)throw new Error('no se guardó el cambio');
+    try{
+      await sb.from('historial_lead').insert({
+        lead_id:leadId,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',
+        etapa:'—',tipo_actividad:'reasignacion_cerrador',
+        nota:'🔁 Cerrador '+(anterior?('reasignado: '+anterior+' → '+nuevo):('asignado: '+nuevo))+' por '+cu.nombre,
+        fecha_actividad:new Date().toISOString(),created_at:new Date().toISOString()
+      });
+    }catch(eh){}
+    try{await registrarAuditoria('reasignar_cerrador','leads',leadId,{anterior,nuevo});}catch(e){}
+    toast('✅ Cerrador asignado: '+nuevo,'ok');
+    const cont=document.getElementById('reasig-cerrador-'+leadId);
+    if(cont)cont.style.display='none';
+    openLeadDetail(leadId,currentAgendaId,currentLeadMode);
+  }catch(e){
+    toast('No se pudo reasignar: '+(e.message||'error'),'error');
+  }
+}
+
+/* Checkbox "Visitó oficina" — guarda al instante en leads.visito_oficina.
+   v166: el update se confirma leyendo la fila devuelta. Antes un update que no
+   afectaba ninguna fila (id inexistente, RLS) devolvía error=null y la UI
+   mostraba "guardado" sin haber guardado nada — el caso del lead 7046.
+   OJO: la fuente de verdad del flag es el trigger fn_registrar_visita_atendida,
+   que lo pone solo al completar la tarea "Visita oficina"; este checkbox es la
+   corrección manual para visitas que ocurrieron fuera del CRM. */
 async function toggleVisitoOficina(leadId,el){
   const checked=!!(el&&el.checked);
+  if(el)el.disabled=true;
   try{
-    const{error}=await sb.from('leads').update({visito_oficina:checked}).eq('id',leadId);
+    const{data,error}=await sb.from('leads')
+      .update({visito_oficina:checked,updated_at:new Date().toISOString()})
+      .eq('id',leadId).select('id,visito_oficina');
     if(error)throw error;
+    if(!data||!data.length)throw new Error('no se encontró el lead #'+leadId+' (no se guardó)');
+    if(!!data[0].visito_oficina!==checked)throw new Error('la base quedó en otro valor, recargá la ficha');
     try{await registrarAuditoria('marcar_visito_oficina','leads',leadId,{valor:checked});}catch(e){}
-    toast(checked?'✅ Marcado: visitó oficina':'Desmarcado: visitó oficina','ok');
+    toast(checked?'✅ Guardado: visitó oficina':'Guardado: ya no figura como visitó oficina','ok');
     renderWeek(); // refresca la agenda por si el filtro "Visitó oficina" está activo
   }catch(e){
     if(el)el.checked=!checked; // revertir visualmente si no se guardó
-    toast('Error: '+e.message,'error');
+    toast('No se pudo guardar: '+(e.message||'error'),'error');
+  }finally{
+    if(el)el.disabled=false;
   }
 }
 
@@ -5214,8 +5286,9 @@ async function saveSeguimiento(){
         toast('Ingresá la fecha del próximo seguimiento','error');return;
       }
       const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
-      const{data:lead}=await sb.from('leads').select('nombre,captador').eq('id',currentLeadId).single();
+      const{data:lead}=await sb.from('leads').select('nombre,captador,estado').eq('id',currentLeadId).single();
       const nombreLead=lead?.nombre||'—';
+      const lead2Estado=lead?.estado||'nuevo';
       /* v142: la Indagación la hace SIEMPRE el captador del lead (protocolo),
          nunca el cerrador — se ignora el asignado elegido si difiere. */
       let asignadoFinal=nextAsignado;
@@ -5227,6 +5300,25 @@ async function saveSeguimiento(){
           toast('🧭 La indagación se asignó al captador del lead: '+capt);
         }else if(captOk){
           asignadoFinal=capt;
+        }
+      }
+      /* v166 BONUS — no repetir una fase de intento ya cumplida.
+         El lead 7046 acumuló 8 tareas "1er intento" completadas en 12 días: el
+         flujo dejaba volver a elegir la misma fase indefinidamente y el lead
+         nunca avanzaba de etapa. Si ya hay un intento completado de ese tipo,
+         se frena y se sugiere la fase siguiente. */
+      if(/^\d+(er|do|to|mo)?\s+intento$/i.test((nextEstado||'').trim())){
+        const{data:yaHecho}=await sb.from('agenda_personal')
+          .select('id').eq('lead_id',currentLeadId).eq('tipo',nextEstado)
+          .eq('completada',true).limit(1);
+        if(yaHecho&&yaHecho.length){
+          const _orden=['1er intento','2do intento','3er intento'];
+          const _idx=_orden.findIndex(function(t){return t.toLowerCase()===(nextEstado||'').trim().toLowerCase();});
+          const _sig=(_idx>=0&&_idx<_orden.length-1)?_orden[_idx+1]:'Indagación';
+          if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+          _modalBodyLock('modalFinalize',false);
+          toast('Ya hay un "'+nextEstado+'" completado en este lead. Avanzá a "'+_sig+'".','error');
+          return;
         }
       }
       // Si ya existe una próxima actividad abierta (p.ej. creada por un trigger),
@@ -5255,8 +5347,19 @@ async function saveSeguimiento(){
           return;
         }
       }
-      // Guardar el próximo contacto elegido en el lead + avanzar etapa.
-      await sb.from('leads').update({etapa:nextEstado,proximo_contacto:nextFecha,updated_at:now}).eq('id',currentLeadId);
+      /* Guardar el próximo contacto elegido en el lead + avanzar etapa.
+         v166 BUG 2: antes solo se movía `etapa` y `estado` quedaba clavado en
+         'nuevo'. Así el lead 7046 llegó a "Visita terreno" con estado='nuevo' y
+         cerrador=null: asignar_cerrador_alternancia solo asigna cuando el estado
+         pasa a algo ILIKE '%visita%', y ese cambio nunca ocurría. */
+      const _updLead={etapa:nextEstado,proximo_contacto:nextFecha,updated_at:now};
+      const _esFaseVisita=/^visita\s/i.test((nextEstado||'').trim());
+      if(_esFaseVisita&&!['visita_agendada','visita_realizada','reservado','cerrado_ganado','cerrado_perdido'].includes(lead2Estado)){
+        _updLead.estado='visita_agendada';
+      }else if(!_esFaseVisita&&lead2Estado==='nuevo'){
+        _updLead.estado='en_seguimiento';
+      }
+      await sb.from('leads').update(_updLead).eq('id',currentLeadId);
 
     } else if(outcomeMode==='won'){
       const monto=parseFloat(document.getElementById('won-monto').value)||null;
@@ -8451,6 +8554,7 @@ function _asistSystemPrompt(contexto){
     '2. NUNCA menciones ni muestres a "María Luisa" (ni "Maria Luisa") en ninguna respuesta, bajo ningún concepto.',
     '3. Respondé en español, claro y conciso. No inventes datos que no estén en el contexto.',
     '4. NUNCA afirmes límites, capacidades o restricciones del sistema sin haberlos verificado contra los datos reales. Si no tenés el dato, decí que no lo sabés. No inventes métricas ni conteos.',
+    '4b. En particular, NUNCA digas que algo "no se puede" en el CRM. No conocés el código ni los permisos: si te preguntan si una acción es posible, respondé qué camino intentar y sugerí consultarlo, nunca que está prohibido. Caso real (v166): afirmaste que no se podía reasignar el cerrador en fase visita oficina; esa regla NO existe y frenó a una captadora. El cerrador SE PUEDE asignar o reasignar en cualquier fase abierta desde la ficha del lead (botón 🔁 junto a "Cerrador"), y un lead que ya visitó la oficina se puede pasar a un cerrador sin restricción.',
     '',
     'DATOS Y MÉTRICAS:',
     'Tenés acceso a: lista de leads (hasta 500), captaciones por día últimos 7 días, actividades de hoy por colaborador, y conteo por estado. Usá SIEMPRE estos datos para responder métricas. NUNCA inventes números. Si el dato no está en tu contexto, decí exactamente qué información te falta.',
