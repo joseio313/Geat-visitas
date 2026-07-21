@@ -1486,7 +1486,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='163';
+  var CURRENT_VERSION='164';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4255,13 +4255,224 @@ async function _extraerProspectoIA(transcript){
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha.\n\n'+transcript;
   return JSON.parse(await _gptMiniIA(userMsg,1500,true));
 }
-/* Corre la extracción y la guarda en grabaciones.extraccion.
+/* ════════════════════════════════════════
+   v164 — CONTEXTO DE LA GRABACIÓN + TAREAS AUTOMÁTICAS
+   La IA clasifica cada grabación en venta | reclutamiento | equipo/otro y se
+   guarda en grabaciones.contexto. Según el contexto cambia el esquema de
+   extracción, y si la conversación dejó una cita o un próximo paso se crea
+   sola la tarea en la agenda personal del colaborador que grabó.
+════════════════════════════════════════ */
+/* Normaliza un nombre para comparar: minúsculas, sin acentos, sin puntuación */
+function _normNom(s){
+  return _cvNorm(s).replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+/* Distancia de edición (Levenshtein) */
+function _levNom(a,b){
+  const m=a.length,n=b.length;
+  if(!m)return n;
+  if(!n)return m;
+  let prev=[],cur=[];
+  for(let j=0;j<=n;j++)prev[j]=j;
+  for(let i=1;i<=m;i++){
+    cur=[i];
+    for(let j=1;j<=n;j++)cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[n];
+}
+/* true si dos textos comparten un nombre propio parecido. Tolera los errores
+   típicos de transcripción de audio (Sorayda/Zoraida, Yanela/Janela). */
+function _nombresParecidos(a,b){
+  const ta=_normNom(a).split(' ').filter(function(t){return t.length>=4;});
+  const tb=_normNom(b).split(' ').filter(function(t){return t.length>=4;});
+  for(let i=0;i<ta.length;i++)for(let j=0;j<tb.length;j++){
+    const x=ta[i],y=tb[j];
+    if(x===y)return true;
+    const tol=x.length>=6?2:1;
+    if(Math.abs(x.length-y.length)<=tol&&_levNom(x,y)<=tol)return true;
+  }
+  return false;
+}
+/* Últimos 8 dígitos de un teléfono (ignora prefijo país y separadores) */
+function _telNorm(t){
+  const d=(''+(t||'')).replace(/\D/g,'');
+  return d.length>=8?d.slice(-8):'';
+}
+/* Timestamp de una cita en hora de Bolivia (America/La_Paz, UTC-4 fijo, sin DST).
+   fecha='YYYY-MM-DD'; hora='HH:MM' (acepta "11 am"/"3pm"); sin hora → 09:00. */
+function _fechaHoraLaPaz(fecha,hora){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(''+(fecha||'')))return null;
+  const h=(''+(hora||'')).trim();
+  let hh=9,mm=0;
+  const m=h.match(/(\d{1,2})\s*[:.h]?\s*(\d{2})?/);
+  if(m){
+    hh=parseInt(m[1],10);
+    mm=m[2]?parseInt(m[2],10):0;
+    if(/p\.?\s*m/i.test(h)&&hh<12)hh+=12;
+    if(/a\.?\s*m/i.test(h)&&hh===12)hh=0;
+  }
+  if(!(hh>=0&&hh<=23)||!(mm>=0&&mm<=59))return null;
+  const d=new Date(fecha+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00-04:00');
+  return isNaN(d.getTime())?null:d.toISOString();
+}
+/* Clasifica el contexto de la conversación. Ante cualquier fallo devuelve
+   'venta' para conservar el comportamiento histórico del pipeline. */
+async function _grabClasificarIA(transcript){
+  const userMsg='Clasificá el contexto de esta conversación de GEAT Construcción. Devolvé SOLO JSON: {"contexto":"venta"|"reclutamiento"|"equipo/otro"}\n'+
+    'venta = conversación con un cliente o posible cliente sobre construir/cotizar una vivienda. '+
+    'reclutamiento = entrevista, llamada o conversación con alguien que postula a un puesto de trabajo. '+
+    'equipo/otro = reunión interna del equipo, proveedores, o cualquier otro tema.\n\n'+
+    (''+transcript).slice(0,6000);
+  try{
+    const j=JSON.parse(await _gptMiniIA(userMsg,60,true));
+    const c=((j&&j.contexto)||'').toLowerCase().trim();
+    return (c==='venta'||c==='reclutamiento')?c:'equipo/otro';
+  }catch(e){return 'venta';}
+}
+/* Extracción para contexto=reclutamiento. fechaRef = día de la grabación
+   (YYYY-MM-DD Bolivia) para que la IA resuelva "el miércoles" a fecha real. */
+async function _extraerReclutamientoIA(transcript,fechaRef){
+  const userMsg='Analizá esta transcripción de una entrevista o llamada de reclutamiento de GEAT Construcción y extraé los datos del candidato. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+    '{"titulo":null,"candidato":null,"telefono":null,"pretension_bs":null,"ciudad":null,"experiencia_clave":["..."],"cita":{"fecha":"YYYY-MM-DD","hora":"HH:MM","lugar":null},"alertas":["..."],"proximo_paso":null}\n'+
+    'titulo=título corto de 3 a 6 palabras que describa la conversación (ej: "Entrevista arquitecta de obra"); siempre completalo. '+
+    'candidato=nombre completo del postulante. telefono=su celular. pretension_bs=pretensión salarial mensual en bolivianos (solo el número). '+
+    'ciudad=ciudad del candidato. experiencia_clave=puntos fuertes de su experiencia. '+
+    'cita=SOLO si se acordó una entrevista, prueba o reunión futura concreta; fecha en formato YYYY-MM-DD y hora en formato 24h HH:MM; si no se acordó nada, poné cita:null. '+
+    'alertas=señales de riesgo o cosas a verificar. proximo_paso=qué hay que hacer después de esta conversación.\n'+
+    'La conversación ocurrió el '+fechaRef+' (zona horaria de Bolivia). Si mencionan un día de la semana ("el miércoles"), resolvelo a la fecha futura más cercana a esa fecha.\n\n'+transcript;
+  return JSON.parse(await _gptMiniIA(userMsg,1500,true));
+}
+/* Unifica los dos esquemas de extracción en los campos que necesita la tarea */
+function _grabDatosTarea(ext){
+  if(!ext||typeof ext!=='object')return null;
+  if(ext.candidato!==undefined||ext.cita!==undefined){
+    return{persona:ext.candidato||null,cita:ext.cita||null,
+      proximo_paso:ext.proximo_paso||null,alertas:ext.alertas||[]};
+  }
+  /* Esquema venta: la cita sale del primer compromiso con fecha sugerida */
+  const comps=ext.compromisos||[];
+  const conFecha=comps.filter(function(c){return c&&c.fecha_sugerida;})[0]||null;
+  return{persona:ext.nombre||null,
+    cita:conFecha?{fecha:conFecha.fecha_sugerida,hora:null,lugar:null}:null,
+    proximo_paso:(conFecha&&conFecha.texto)||((comps[0]||{}).texto)||null,
+    alertas:[]};
+}
+/* Vincula la extracción de reclutamiento con una postulación ya existente
+   (teléfono exacto, o nombre aproximado). NUNCA crea postulaciones fantasma:
+   si no matchea devuelve null y el flujo sigue solo con la tarea. */
+async function _grabVincularPostulacion(grabId,ext,fechaRef){
+  const nom=ext&&ext.candidato;
+  const tel=_telNorm(ext&&ext.telefono);
+  if(!nom&&!tel)return null;
+  let post=null;
+  try{
+    const{data,error}=await sb.from('cv_postulaciones').select('id,nombre,telefono,pretension_bs,estado,notas');
+    if(error)throw error;
+    const rows=data||[];
+    if(tel)post=rows.filter(function(p){return _telNorm(p.telefono)===tel;})[0]||null;
+    if(!post&&nom)post=rows.filter(function(p){return _nombresParecidos(nom,p.nombre);})[0]||null;
+  }catch(e){return null;}
+  if(!post)return null;
+  const marca='[grab #'+grabId+']';
+  const upd={};
+  /* Anti-duplicado de notas: no re-anexar si esta grabación ya dejó su bloque */
+  if((post.notas||'').indexOf(marca)<0){
+    const partes=[];
+    if((ext.experiencia_clave||[]).length)partes.push('Experiencia: '+ext.experiencia_clave.join('; '));
+    if(ext.cita&&ext.cita.fecha)partes.push('Cita: '+ext.cita.fecha+(ext.cita.hora?' '+ext.cita.hora:'')+(ext.cita.lugar?' — '+ext.cita.lugar:''));
+    if((ext.alertas||[]).length)partes.push('Alertas: '+ext.alertas.join('; '));
+    if(ext.proximo_paso)partes.push('Próximo paso: '+ext.proximo_paso);
+    const bloque=marca+' '+fechaRef+' · '+(partes.join(' | ')||'Conversación registrada.');
+    upd.notas=((post.notas?post.notas+'\n\n':'')+bloque).slice(0,8000);
+  }
+  const pret=parseInt(ext.pretension_bs,10);
+  if(post.pretension_bs==null&&!isNaN(pret)&&pret>0)upd.pretension_bs=pret;
+  if(ext.cita&&ext.cita.fecha&&post.estado!=='entrevista')upd.estado='entrevista';
+  if(!Object.keys(upd).length)return{id:post.id,nombre:post.nombre};
+  try{await sb.from('cv_postulaciones').update(upd).eq('id',post.id);}catch(e){return null;}
+  return{id:post.id,nombre:post.nombre};
+}
+/* Crea la tarea automática en agenda_personal del colaborador que grabó.
+   Devuelve {creada,titulo,fecha,agenda_id} o {creada:false,motivo} — el
+   resultado se guarda en extraccion._tarea y se muestra en la ficha. */
+async function _grabCrearTareaAuto(g,contexto,ext){
+  const colab=g&&g.colaborador;
+  if(!colab)return{creada:false,motivo:'La grabación no tiene colaborador asignado'};
+  const d=_grabDatosTarea(ext);
+  if(!d)return{creada:false,motivo:'Sin extracción para generar la tarea'};
+  const persona=d.persona||'';
+  let fp=null,teniaFecha=false;
+  if(d.cita&&d.cita.fecha){
+    fp=_fechaHoraLaPaz(d.cita.fecha,d.cita.hora);
+    teniaFecha=!!fp;
+  }
+  if(!fp){
+    /* Próximo paso sin fecha → día siguiente a la grabación, 09:00 Bolivia */
+    if(!d.proximo_paso)return{creada:false,motivo:'La conversación no dejó cita ni próximo paso'};
+    const base=new Date(g.created_at||new Date().toISOString());
+    base.setTime(base.getTime()+24*60*60*1000);
+    fp=_fechaHoraLaPaz(ymdBolivia(base),'09:00');
+  }
+  if(!fp)return{creada:false,motivo:'No se pudo interpretar la fecha de la cita'};
+  const tit=('🎯 ['+contexto+'] '+(persona||'seguimiento')).slice(0,120);
+  /* Anti-duplicado: mismo día calendario boliviano, ±2h, mismo nombre en el título */
+  try{
+    const t=new Date(fp).getTime();
+    const{data:prev}=await sb.from('agenda_personal')
+      .select('id,titulo,fecha_programada')
+      .eq('colaborador',colab).eq('activo',true)
+      .gte('fecha_programada',new Date(t-2*60*60*1000).toISOString())
+      .lte('fecha_programada',new Date(t+2*60*60*1000).toISOString());
+    const dia=ymdBolivia(fp);
+    const dup=(prev||[]).filter(function(a){
+      if(ymdBolivia(a.fecha_programada)!==dia)return false;
+      return (persona&&_nombresParecidos(persona,a.titulo))||a.titulo===tit;
+    })[0];
+    if(dup)return{creada:false,agenda_id:dup.id,
+      motivo:'Ya existe el evento #'+dup.id+' ("'+dup.titulo+'") ese día a esa hora'};
+  }catch(e){}
+  const nota=[d.proximo_paso||'',
+    (d.alertas||[]).length?'⚠️ '+d.alertas.join('; '):'',
+    (d.cita&&d.cita.lugar)?'📍 '+d.cita.lugar:'',
+    'Generada desde grabación #'+g.id].filter(Boolean).join('\n');
+  try{
+    const{data:ins,error}=await sb.from('agenda_personal').insert({
+      colaborador:colab,tipo:'evento',titulo:tit,nota:nota.slice(0,2000),
+      fecha_programada:fp,completada:false,activo:true
+    }).select('id').single();
+    if(error)throw error;
+    /* Si la tarea es del usuario en pantalla, refrescar su agenda ya mismo */
+    if(cu&&cu.nombre===colab){
+      try{if(typeof renderWeek==='function')renderWeek();}catch(e){}
+      try{if(typeof cargarMarcadoresDia==='function')cargarMarcadoresDia();}catch(e){}
+    }
+    return{creada:true,titulo:tit,fecha:fp,agenda_id:ins&&ins.id,sin_fecha_acordada:!teniaFecha};
+  }catch(e){return{creada:false,motivo:'Error al guardar la tarea: '+(e.message||'error')};}
+}
+/* Corre clasificación + extracción y las guarda en grabaciones.
    Nunca lanza: si falla la API o el parseo guarda null y no rompe el flujo. */
 async function _grabExtraerYGuardar(grabId,transcript){
   if(!grabId||!transcript)return null;
+  let g=null;
+  try{
+    const{data}=await sb.from('grabaciones').select('id,colaborador,created_at,titulo').eq('id',grabId).single();
+    g=data||null;
+  }catch(e){}
+  if(!g)g={id:grabId,colaborador:(typeof cu!=='undefined'&&cu&&cu.nombre)||null,created_at:new Date().toISOString()};
+  const fechaRef=ymdBolivia(g.created_at||new Date());
+  const contexto=await _grabClasificarIA(transcript);
   let ext=null;
-  try{ext=await _extraerProspectoIA(transcript);}catch(e){ext=null;}
-  try{await sb.from('grabaciones').update({extraccion:ext}).eq('id',grabId);}catch(e){}
+  try{
+    ext=(contexto==='reclutamiento')?await _extraerReclutamientoIA(transcript,fechaRef)
+                                    :await _extraerProspectoIA(transcript);
+  }catch(e){ext=null;}
+  if(ext&&typeof ext==='object'){
+    if(contexto==='reclutamiento'){
+      ext._postulacion=await _grabVincularPostulacion(grabId,ext,fechaRef);
+    }
+    ext._tarea=await _grabCrearTareaAuto(g,contexto,ext);
+  }
+  try{await sb.from('grabaciones').update({extraccion:ext,contexto:contexto}).eq('id',grabId);}catch(e){}
   return ext;
 }
 /* Devuelve true si el título está vacío o es el patrón de fecha genérico inicial */
@@ -6315,7 +6526,7 @@ async function renderRegistroGrabaciones(){
   }
   try{
     let q=sb.from('grabaciones')
-      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id')
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id,contexto')
       .eq('activo',true).order('created_at',{ascending:false});
     if(_grabModo==='mios') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
@@ -6552,7 +6763,18 @@ function _grabExtraccionHtml(g){
   }
   const dato=(lbl,val)=>val?'<div style="font-size:11px;margin-bottom:2px"><span style="color:var(--gray-400)">'+lbl+':</span> '+_escPend(val)+'</div>':'';
   let datosHtml='';
-  if(x.es_prospecto===true){
+  if(x.candidato!==undefined||g.contexto==='reclutamiento'){
+    /* v164 — esquema de reclutamiento */
+    datosHtml='<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:3px">Candidato</div>'+
+      dato('Nombre',x.candidato)+dato('Teléfono',x.telefono)+dato('Ciudad',x.ciudad)+
+      dato('Pretensión (Bs)',x.pretension_bs)+
+      dato('Cita',x.cita&&x.cita.fecha?(x.cita.fecha+(x.cita.hora?' '+x.cita.hora:'')+(x.cita.lugar?' — '+x.cita.lugar:'')):null);
+    const exp=(x.experiencia_clave||[]).map(e=>'<li>'+_escPend(e)+'</li>').join('');
+    const aler=(x.alertas||[]).map(a=>'<li>'+_escPend(a)+'</li>').join('');
+    datosHtml+=(exp?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Experiencia clave</div><ul style="font-size:12px;padding-left:18px;margin:0">'+exp+'</ul>':'')+
+      (aler?'<div style="font-size:10px;color:var(--gold);text-transform:uppercase;margin:6px 0 2px">Alertas</div><ul style="font-size:12px;padding-left:18px;margin:0;color:var(--gold)">'+aler+'</ul>':'')+
+      (x.proximo_paso?'<div style="font-size:11px;margin-top:6px"><strong>Próximo paso:</strong> '+_escPend(x.proximo_paso)+'</div>':'');
+  }else if(x.es_prospecto===true){
     datosHtml='<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:3px">Prospecto detectado</div>'+
       dato('Nombre',x.nombre)+dato('Celular',x.celular)+dato('Ciudad',x.ciudad)+
       dato('Terreno',x.lugar_terreno)+dato('Pago',x.financiamiento)+dato('Plantas',x.plantas)+
@@ -6563,6 +6785,23 @@ function _grabExtraccionHtml(g){
   }
   const temas=(x.temas_clave||[]).map(t=>'<li>'+_escPend(t)+'</li>').join('');
   const comps=(x.compromisos||[]).map(c=>'<li>'+_escPend(c&&c.texto||'—')+(c&&c.fecha_sugerida?' <span style="color:var(--gold)">('+_escPend(c.fecha_sugerida)+')</span>':'')+'</li>').join('');
+  /* v164 — contexto, vínculo con la postulación y resultado de la tarea automática */
+  const ctxHtml=g.contexto?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Contexto: <span style="color:var(--gold)">'+_escPend(g.contexto)+'</span></div>':'';
+  let postHtml='';
+  if(x._postulacion&&x._postulacion.id){
+    postHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">🔗 Vinculado a postulación #'+x._postulacion.id+' — '+_escPend(x._postulacion.nombre||'')+'</div>';
+  }else if(g.contexto==='reclutamiento'){
+    postHtml='<div style="font-size:11px;color:var(--gray-400);margin-top:6px">🔗 Sin postulación coincidente (no se creó ninguna)</div>';
+  }
+  let tareaHtml='';
+  const tk=x._tarea;
+  if(tk&&tk.creada){
+    tareaHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">✅ Tarea creada: '+_escPend(tk.titulo||'')+
+      (tk.fecha?' <span style="color:var(--gray-400)">('+_grabFmtFecha(tk.fecha)+')</span>':'')+
+      (tk.sin_fecha_acordada?' <span style="color:var(--gray-400)">— sin fecha acordada, agendada al día siguiente</span>':'')+'</div>';
+  }else if(tk){
+    tareaHtml='<div style="font-size:11px;color:var(--gold);margin-top:6px">⚠️ Tarea no creada: '+_escPend(tk.motivo||'—')+'</div>';
+  }
   let accionHtml='';
   if(g.lead_creado_id){
     accionHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">✅ Lead #'+g.lead_creado_id+' creado desde este registro</div>';
@@ -6571,9 +6810,12 @@ function _grabExtraccionHtml(g){
   }
   return '<div style="margin-bottom:10px;border:1px solid var(--gray-600);border-radius:6px;padding:8px;background:var(--gray-800)">'+
     '<div class="section-title" style="font-size:12px;margin-bottom:6px">🤖 Extracción IA</div>'+
+    ctxHtml+
     datosHtml+
     (temas?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Temas clave</div><ul style="font-size:12px;padding-left:18px;margin:0">'+temas+'</ul>':'')+
     (comps?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin:6px 0 2px">Compromisos</div><ul style="font-size:12px;padding-left:18px;margin:0">'+comps+'</ul>':'')+
+    postHtml+
+    tareaHtml+
     accionHtml+
   '</div>';
 }
