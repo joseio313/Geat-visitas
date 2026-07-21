@@ -1486,7 +1486,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='164';
+  var CURRENT_VERSION='165';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4467,6 +4467,7 @@ async function _grabExtraerYGuardar(grabId,transcript){
                                     :await _extraerProspectoIA(transcript);
   }catch(e){ext=null;}
   if(ext&&typeof ext==='object'){
+    ext._contexto=contexto;
     if(contexto==='reclutamiento'){
       ext._postulacion=await _grabVincularPostulacion(grabId,ext,fechaRef);
     }
@@ -6762,8 +6763,10 @@ function _grabExtraccionHtml(g){
     return '';
   }
   const dato=(lbl,val)=>val?'<div style="font-size:11px;margin-bottom:2px"><span style="color:var(--gray-400)">'+lbl+':</span> '+_escPend(val)+'</div>':'';
+  /* v164 — contexto: de la columna, o del propio JSON tras un re-análisis en vivo */
+  const ctx=g.contexto||x._contexto||'';
   let datosHtml='';
-  if(x.candidato!==undefined||g.contexto==='reclutamiento'){
+  if(x.candidato!==undefined||ctx==='reclutamiento'){
     /* v164 — esquema de reclutamiento */
     datosHtml='<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:3px">Candidato</div>'+
       dato('Nombre',x.candidato)+dato('Teléfono',x.telefono)+dato('Ciudad',x.ciudad)+
@@ -6786,11 +6789,11 @@ function _grabExtraccionHtml(g){
   const temas=(x.temas_clave||[]).map(t=>'<li>'+_escPend(t)+'</li>').join('');
   const comps=(x.compromisos||[]).map(c=>'<li>'+_escPend(c&&c.texto||'—')+(c&&c.fecha_sugerida?' <span style="color:var(--gold)">('+_escPend(c.fecha_sugerida)+')</span>':'')+'</li>').join('');
   /* v164 — contexto, vínculo con la postulación y resultado de la tarea automática */
-  const ctxHtml=g.contexto?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Contexto: <span style="color:var(--gold)">'+_escPend(g.contexto)+'</span></div>':'';
+  const ctxHtml=ctx?'<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Contexto: <span style="color:var(--gold)">'+_escPend(ctx)+'</span></div>':'';
   let postHtml='';
   if(x._postulacion&&x._postulacion.id){
     postHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">🔗 Vinculado a postulación #'+x._postulacion.id+' — '+_escPend(x._postulacion.nombre||'')+'</div>';
-  }else if(g.contexto==='reclutamiento'){
+  }else if(ctx==='reclutamiento'){
     postHtml='<div style="font-size:11px;color:var(--gray-400);margin-top:6px">🔗 Sin postulación coincidente (no se creó ninguna)</div>';
   }
   let tareaHtml='';
@@ -6802,6 +6805,10 @@ function _grabExtraccionHtml(g){
   }else if(tk){
     tareaHtml='<div style="font-size:11px;color:var(--gold);margin-top:6px">⚠️ Tarea no creada: '+_escPend(tk.motivo||'—')+'</div>';
   }
+  /* v164 — re-analizar: vuelve a clasificar el contexto y re-corre la extracción
+     sobre una grabación que ya tenía extracción del esquema viejo */
+  const reHtml=(g.estado==='completa'&&g.transcripcion)?
+    '<div style="margin-top:8px"><button class="btn-ghost btn-sm" style="font-size:11px" id="grab-analizar-'+g.id+'" onclick="_grabAnalizarIA('+g.id+')">🔄 Re-analizar con IA</button></div>':'';
   let accionHtml='';
   if(g.lead_creado_id){
     accionHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">✅ Lead #'+g.lead_creado_id+' creado desde este registro</div>';
@@ -6817,6 +6824,7 @@ function _grabExtraccionHtml(g){
     postHtml+
     tareaHtml+
     accionHtml+
+    reHtml+
   '</div>';
 }
 /* Refresca el detalle abierto de una grabación tras cambiar su cache */
@@ -6837,6 +6845,7 @@ async function _grabAnalizarIA(id){
     const ext=await _grabExtraerYGuardar(id,g.transcripcion);
     if(ext===null){toast('No se pudo extraer datos de esta grabación','warning');if(btn){btn.disabled=false;btn.innerHTML='🤖 Analizar con IA';}return;}
     g.extraccion=ext;
+    if(ext._contexto)g.contexto=ext._contexto;
     toast('✅ Análisis IA completado');
     _grabRefrescarDetalle(id);
   }catch(e){
