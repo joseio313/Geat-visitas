@@ -594,6 +594,35 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .pd-ceo-row button{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;color:var(--gray-400)}
 .pd-ceo-row button:hover{color:var(--gold)}
 .pd-p1{border-left:3px solid #FF5252}.pd-p2{border-left:3px solid #FFC107}.pd-p3{border-left:3px solid var(--gray-600)}
+/* ── v167: Gestor de tareas del CEO (panel flotante) ── */
+#tareasFab{display:none;position:fixed;bottom:88px;right:20px;width:56px;height:56px;border-radius:50%;border:2px solid var(--black);background:#FAC305;color:var(--black);font-size:24px;line-height:1;cursor:pointer;z-index:850;box-shadow:0 4px 14px rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:0}
+#tareasFab .tc-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#FF5252;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid var(--gray-900)}
+#tareasPanel{display:none;position:fixed;bottom:88px;right:20px;width:360px;max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 130px);background:var(--gray-900);border:1px solid #FAC305;border-radius:14px;z-index:851;flex-direction:column;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.55)}
+.tc-head{background:var(--black);border-bottom:1px solid #FAC305;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tc-head .tc-cnt{font-size:10px;font-weight:800;color:var(--black);background:#FAC305;border-radius:10px;padding:2px 8px;margin-left:8px}
+.tc-tabs{display:flex;flex-shrink:0;background:var(--gray-800);border-bottom:1px solid var(--gray-600)}
+.tc-tab{flex:1;text-align:center;font-size:11px;font-weight:700;padding:8px 4px;cursor:pointer;color:var(--gray-400);border-bottom:2px solid transparent;white-space:nowrap}
+.tc-tab.on{color:#FAC305;border-bottom-color:#FAC305}
+.tc-tab .b{display:inline-block;min-width:15px;font-size:10px;color:var(--gray-100)}
+.tc-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px}
+.tc-row{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border-radius:7px;background:var(--gray-800);border-left:3px solid var(--gray-600);transition:opacity .5s,background .3s}
+.tc-row.urg{border-left-color:#FF5252}.tc-row.cur{border-left-color:#FFC107}.tc-row.reu{border-left-color:#A855F7}
+.tc-row.done-anim{opacity:.35}
+.tc-row .ck{flex-shrink:0;width:18px;height:18px;border-radius:5px;border:2px solid var(--gray-400);background:none;cursor:pointer;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--black);padding:0}
+.tc-row .ck.mk{background:#FAC305;border-color:#FAC305}
+.tc-row .tx{flex:1;min-width:0;font-size:12.5px;color:var(--gray-100);line-height:1.4}
+.tc-row .tx.tach{text-decoration:line-through;color:var(--gray-400)}
+.tc-row .sub{font-size:10.5px;color:var(--gray-400);margin-top:2px}
+.tc-row .act{flex-shrink:0;display:flex;gap:3px}
+.tc-row .act button{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 3px;color:var(--gray-400);border-radius:4px}
+.tc-row .act button:hover{color:#FAC305}
+.tc-emptp{font-size:11.5px;color:var(--gray-400);padding:14px 6px;text-align:center}
+.tc-grp{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);margin:6px 2px 2px}
+.tc-sug-hd{font-size:11px;font-weight:800;color:#A855F7;padding:2px 2px 4px}
+.tc-auto{font-size:10.5px;color:var(--st-completo,#4ADE80);background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.25);border-radius:6px;padding:5px 8px;margin-bottom:4px}
+.tc-add{border-top:1px solid var(--gray-600);padding:9px 10px;display:flex;gap:6px;flex-shrink:0;align-items:center}
+.tc-add input{flex:1;min-width:0;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:7px 9px;color:var(--gray-100);outline:none}
+.tc-add button{flex-shrink:0;background:#FAC305;color:var(--black);border:none;border-radius:6px;font-size:16px;font-weight:800;width:34px;height:32px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -1477,6 +1506,26 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- v167 — Gestor de tareas del CEO (solo admin). FAB por encima del asistente. -->
+<button id="tareasFab" type="button" onclick="toggleTareasPanel()" title="Mis tareas">✅<span class="tc-badge" id="tcBadge">0</span></button>
+<div id="tareasPanel">
+  <div class="tc-head">
+    <div style="display:flex;align-items:center"><span style="font-weight:800;font-size:13px;color:#FAC305">✅ Mis tareas</span><span class="tc-cnt" id="tcHoyCnt">0 hoy</span></div>
+    <button class="modal-close" onclick="toggleTareasPanel()" style="font-size:20px;color:var(--gray-100)">×</button>
+  </div>
+  <div class="tc-tabs" id="tcTabs">
+    <div class="tc-tab on" data-tab="hoy" onclick="_tceoTab('hoy')">Hoy <span class="b" id="tcTabHoy"></span></div>
+    <div class="tc-tab" data-tab="cola" onclick="_tceoTab('cola')">Cola <span class="b" id="tcTabCola"></span></div>
+    <div class="tc-tab" data-tab="reu" onclick="_tceoTab('reu')">🎙 <span class="b" id="tcTabReu"></span></div>
+    <div class="tc-tab" data-tab="hecho" onclick="_tceoTab('hecho')">✓</div>
+  </div>
+  <div class="tc-body" id="tcBody"><div class="tc-emptp"><span class="spin"></span> Cargando…</div></div>
+  <div class="tc-add" id="tcAddBar">
+    <input type="text" id="tcNueva" placeholder="+ tarea rápida…" onkeydown="if(event.key==='Enter')_tceoAgregarRapida()">
+    <button type="button" onclick="_tceoAgregarRapida()" title="Agregar">+</button>
+  </div>
+</div>
+
 <script>
 /* ════════════════════════════════════════
    CACHE-BUSTING — auto-reload nueva versión (anti-loop)
@@ -1486,7 +1535,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='166';
+  var CURRENT_VERSION='167';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2144,6 +2193,9 @@ function startApp(){
   const _fab=document.getElementById('asistFab'); if(_fab)_fab.style.display='flex';
   // Admin tab
   if(cu.rol==='admin'){
+    // v167 — gestor de tareas del CEO: FAB flotante solo para admin
+    const _tfab=document.getElementById('tareasFab'); if(_tfab)_tfab.style.display='flex';
+    try{cargarTareasCeo();}catch(_e){}
     const tabAdmin=document.getElementById('tab-admin');
     if(tabAdmin)tabAdmin.style.display='';
     const tabRec=document.getElementById('tab-reclutamiento');
@@ -4546,7 +4598,41 @@ async function _grabExtraerYGuardar(grabId,transcript){
     ext._tarea=await _grabCrearTareaAuto(g,contexto,ext);
   }
   try{await sb.from('grabaciones').update({extraccion:ext,contexto:contexto}).eq('id',grabId);}catch(e){}
+  /* v167 — Paso ADICIONAL y aislado: detectar compromisos/tareas para el CEO.
+     Va en su propio try/catch: si falla, la transcripción/resumen/extracción ya
+     quedaron guardados arriba y el pipeline NO se rompe. */
+  try{await _grabDetectarTareasCeo(grabId,transcript);}catch(e){}
   return ext;
+}
+/* v167 — Detecta compromisos accionables hablados en la reunión y los guarda como
+   tareas SUGERIDAS del CEO (origen='transcripcion', sugerida=true) para que él las
+   confirme o descarte en el panel flotante. Un solo llamado a gpt-4o-mini.
+   Idempotente: si esta grabación ya dejó sugeridas pendientes, no vuelve a detectar. */
+async function _grabDetectarTareasCeo(grabId,transcript){
+  if(!grabId||!transcript||!(''+transcript).trim())return;
+  /* Anti-duplicado en re-análisis (v165): no re-detectar si ya hay sugeridas vivas */
+  try{
+    const{count}=await sb.from('tareas_ceo').select('id',{count:'exact',head:true})
+      .eq('grabacion_id',grabId).eq('origen','transcripcion').eq('sugerida',true).eq('activo',true);
+    if(count&&count>0)return;
+  }catch(e){/* si la tabla no existe todavía, salir sin romper */ return;}
+  const userMsg='De esta transcripción de una reunión de GEAT Construcción, extraé SOLO los compromisos o tareas accionables que alguien se comprometió a hacer o que quedaron pendientes (ej: "hay que mandar el presupuesto", "llamar al arquitecto", "coordinar la visita al terreno"). No inventes: si no hay tareas claras, devolvé lista vacía. Devolvé SOLO JSON:\n'+
+    '{"tareas":[{"texto":"acción concreta en imperativo, breve","contexto_min":"momento aprox si se puede inferir, ej 12:30, o null"}]}\n\n'+
+    (''+transcript).slice(0,8000);
+  let arr=[];
+  try{
+    const j=JSON.parse(await _gptMiniIA(userMsg,600,true));
+    arr=(j&&Array.isArray(j.tareas))?j.tareas:[];
+  }catch(e){return;}
+  const filas=arr.filter(function(t){return t&&(''+(t.texto||'')).trim();}).slice(0,8).map(function(t){
+    const ctx=(t.contexto_min&&(''+t.contexto_min).trim());
+    return{texto:(''+t.texto).trim().slice(0,300),
+      detalle:ctx&&ctx.toLowerCase()!=='null'?('🎙 ~'+ctx):null,
+      origen:'transcripcion',estado:'por_hacer',prioridad:2,
+      grabacion_id:grabId,sugerida:true,activo:true};
+  });
+  if(!filas.length)return;
+  try{await sb.from('tareas_ceo').insert(filas);}catch(e){}
 }
 /* Devuelve true si el título está vacío o es el patrón de fecha genérico inicial */
 function _esTituloGenerico(t){
@@ -7795,7 +7881,8 @@ async function renderParteDia(){
         .eq('estado','cerrado_ganado').gte('fecha_contrato',ymdLocal(hace7)),
       sb.from('agenda_personal').select('id',{count:'exact',head:true})
         .eq('activo',true).eq('completada',false).lt('fecha_programada',inicioHoy),
-      sb.from('pendientes_ceo').select('*').eq('activo',true).eq('resuelto',false)
+      sb.from('tareas_ceo').select('*').eq('activo',true).eq('sugerida',false)
+        .neq('estado','hecho')
         .order('prioridad',{ascending:true}).order('id',{ascending:true})
     ]);
     if(rCal.error)throw rCal.error;
@@ -7852,29 +7939,21 @@ function _pdPintar(){
         linea('tareas',D.tareasAtrasadas,'pd-rojo','Tareas atrasadas del equipo','Vencidas y sin completar')+
         linea('reservas',D.reservas.length,'pd-rojo','Reservas sin cerrar','Plata puesta esperando')+
       '</div>'+
-      /* 🟡 DEPENDE DE VOS */
+      /* 🟡 DEPENDE DE VOS — ahora un lanzador del gestor de tareas flotante (v167) */
       '<div class="pd-sec"><div class="pd-sec-t pd-ama">🟡 Depende de vos</div>'+
-        (D.ceo.length?D.ceo.map(p=>{
-          /* 🤖 = lo cargó el Chief of Staff por SQL; sin marca = lo cargó el CEO por UI */
-          const bot=(p.origen==='chief_of_staff');
-          const det=(p.detalle&&(''+p.detalle).trim())||'';
-          return '<div class="pd-ceo-row pd-p'+(p.prioridad||2)+'">'+
+        (D.ceo.length?D.ceo.slice(0,3).map(p=>{
+          /* 🤖 = tarea del sistema; sin marca = manual del CEO */
+          const bot=(p.origen==='sistema');
+          return '<div class="pd-ceo-row pd-p'+(p.prioridad||2)+'" style="cursor:pointer" onclick="abrirTareasPanel()">'+
             '<span class="t">'+
-              (bot?'<span title="Cargado por el Chief of Staff" style="opacity:.75;margin-right:4px">🤖</span>':'')+
+              (bot?'<span title="Tarea del sistema" style="opacity:.75;margin-right:4px">🤖</span>':'')+
               _escPend(p.texto||'')+
-              (det?'<div class="pd-sub" style="margin-top:3px">'+_escPend(det)+'</div>':'')+
             '</span>'+
-            '<button type="button" title="Marcar resuelto" onclick="_pdResolverCeo('+p.id+')">✓</button>'+
-            '<button type="button" title="Borrar" onclick="_pdBorrarCeo('+p.id+')">🗑</button>'+
           '</div>';
-        }).join('')
+        }).join('')+
+          (D.ceo.length>3?'<div style="font-size:10px;color:var(--gray-400);padding:2px 2px">+'+(D.ceo.length-3)+' más</div>':'')
           :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Nada pendiente de tu lado. 👌</div>')+
-        '<div style="display:flex;gap:6px;margin-top:7px">'+
-          '<input type="text" id="pd-ceo-nuevo" placeholder="Agregar pendiente propio…" onkeydown="if(event.key===\'Enter\')_pdAgregarCeo()" style="flex:1;min-width:120px;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 9px;color:var(--gray-100);outline:none">'+
-          '<select id="pd-ceo-prio" style="width:96px;font-size:11px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px;color:var(--gray-100)">'+
-            '<option value="1">Alta</option><option value="2" selected>Media</option><option value="3">Baja</option></select>'+
-          '<button type="button" class="btn btn-ghost btn-sm" onclick="_pdAgregarCeo()">+</button>'+
-        '</div>'+
+        '<button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:7px" onclick="abrirTareasPanel()">✅ Abrir gestor de tareas</button>'+
       '</div>'+
       /* 🟢 FOCO DEL DÍA */
       '<div class="pd-sec"><div class="pd-sec-t pd-verde">🟢 Foco del día</div>'+
@@ -7966,6 +8045,244 @@ async function _pdBorrarCeo(id){
     if(error)throw error;
     toast('Pendiente borrado');
     _pdDatos=null;await renderParteDia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ════════════════════════════════════════
+   v167 — GESTOR DE TAREAS DEL CEO (panel flotante, solo admin)
+   Tabla tareas_ceo. 3 orígenes: manual (CEO), sistema (migrado de pendientes_ceo),
+   transcripcion (detectado en reuniones → entra como SUGERIDA a confirmar).
+   Soft-delete SIEMPRE: activo=false / estado='hecho'. Nunca DELETE.
+════════════════════════════════════════ */
+let _tceoTabAct='hoy';
+let _tceoData={hoy:[],cola:[],reu:[],hecho:[],avisos:[]};
+let _tceoOpen=false;
+let _tceoCargando=false;
+
+function toggleTareasPanel(){
+  const p=document.getElementById('tareasPanel'); if(!p)return;
+  _tceoOpen=!_tceoOpen;
+  p.style.display=_tceoOpen?'flex':'none';
+  if(_tceoOpen){cargarTareasCeo();setTimeout(function(){const i=document.getElementById('tcNueva');if(i)i.focus();},80);}
+}
+function abrirTareasPanel(){
+  const p=document.getElementById('tareasPanel'); if(!p)return;
+  _tceoOpen=true;p.style.display='flex';cargarTareasCeo();
+}
+function _tceoTab(t){_tceoTabAct=t;_tceoRender();}
+
+/* Etiqueta de origen para el subtítulo de cada tarea */
+function _tceoOrigen(t){
+  const o=t&&t.origen;
+  if(o==='transcripcion')return '🎙 reunión';
+  if(o==='sistema')return '📊 sistema';
+  return '✍️ propia';
+}
+/* Clase de borde: rojo=urgente, ámbar=en curso, morado=de reunión */
+function _tceoClase(t,esReu){
+  if(esReu)return 'reu';
+  if(t.estado==='en_curso')return 'cur';
+  const hoy=ymdBolivia(new Date());
+  if((t.prioridad||2)===1)return 'urg';
+  if(t.fecha_objetivo&&(''+t.fecha_objetivo).slice(0,10)<hoy)return 'urg';
+  return '';
+}
+
+/* Marca sola las tareas del SISTEMA que se pueden verificar objetivamente.
+   Nunca toca tareas manuales del CEO. Devuelve los avisos "se completó sola". */
+async function _tceoAutoCompletar(rows){
+  const avisos=[];
+  const cand=(rows||[]).filter(function(t){return t.origen==='sistema'&&t.activo&&t.estado!=='hecho'&&!t.sugerida;});
+  for(const t of cand){
+    const txt=(''+(t.texto||'')).toLowerCase();
+    let ok=false,razon='';
+    /* Regla: "cargar históricos" → cuando ningún cierre queda sin monto ni m² */
+    if(/hist[oó]ric/.test(txt)){
+      try{
+        const{data}=await sb.from('leads').select('monto_contrato,metros_cuadrados')
+          .eq('estado','cerrado_ganado').or('archivado.is.null,archivado.eq.false');
+        const faltan=(data||[]).filter(function(l){return !(Number(l.monto_contrato)>0)||!(Number(l.metros_cuadrados)>0);}).length;
+        if(faltan===0){ok=true;razon='Ya no quedan cierres sin monto ni m² cargados';}
+      }catch(e){}
+    }
+    if(ok){
+      try{
+        await sb.from('tareas_ceo').update({estado:'hecho',auto_completada:true,completada_en:new Date().toISOString()}).eq('id',t.id);
+        t.estado='hecho';t.auto_completada=true;t.completada_en=new Date().toISOString();
+        avisos.push({texto:t.texto,razon:razon});
+      }catch(e){}
+    }
+  }
+  return avisos;
+}
+
+async function cargarTareasCeo(){
+  if(!_pdEsAdmin())return;
+  if(_tceoCargando)return; _tceoCargando=true;
+  try{
+    const{data,error}=await sb.from('tareas_ceo').select('*').eq('activo',true)
+      .order('prioridad',{ascending:true}).order('id',{ascending:false});
+    if(error)throw error;
+    const rows=data||[];
+    const avisos=await _tceoAutoCompletar(rows); /* puede pasar algunas a 'hecho' */
+    const hoy=ymdBolivia(new Date());
+    const activas=rows.filter(function(t){return !t.sugerida&&t.estado!=='hecho';});
+    const _fo=function(t){return t.fecha_objetivo?(''+t.fecha_objetivo).slice(0,10):null;};
+    _tceoData.hoy=activas.filter(function(t){return !_fo(t)||_fo(t)<=hoy;});
+    _tceoData.cola=activas.filter(function(t){return _fo(t)&&_fo(t)>hoy;});
+    _tceoData.reu=rows.filter(function(t){return t.sugerida&&t.estado!=='hecho';});
+    /* Hechas: últimos 30 días, más recientes primero */
+    const corte=Date.now()-30*24*3600000;
+    _tceoData.hecho=rows.filter(function(t){return t.estado==='hecho'&&t.completada_en&&new Date(t.completada_en).getTime()>=corte;})
+      .sort(function(a,b){return new Date(b.completada_en)-new Date(a.completada_en);});
+    _tceoData.avisos=avisos;
+    _tceoRefreshBadge();
+    if(_tceoOpen)_tceoRender();
+  }catch(e){
+    /* Tabla ausente u otro error: no romper la app, mostrar estado vacío */
+    if(_tceoOpen){
+      const b=document.getElementById('tcBody');
+      if(b)b.innerHTML='<div class="tc-emptp">No se pudieron cargar las tareas.<br><span style="font-size:10px">'+_escPend(e.message||'error')+'</span></div>';
+    }
+    _tceoRefreshBadge(true);
+  }finally{_tceoCargando=false;}
+}
+
+function _tceoRefreshBadge(vaciar){
+  const n=vaciar?0:_tceoData.hoy.length;
+  const badge=document.getElementById('tcBadge');
+  if(badge){badge.textContent=n>99?'99+':n;badge.style.display=n>0?'flex':'none';}
+  const cnt=document.getElementById('tcHoyCnt'); if(cnt)cnt.textContent=n+' hoy';
+}
+
+function _tceoRender(){
+  /* Tabs activos + contadores */
+  document.querySelectorAll('#tcTabs .tc-tab').forEach(function(el){
+    el.classList.toggle('on',el.getAttribute('data-tab')===_tceoTabAct);
+  });
+  const setB=function(id,v){const e=document.getElementById(id);if(e)e.textContent=v>0?v:'';};
+  setB('tcTabHoy',_tceoData.hoy.length);
+  setB('tcTabCola',_tceoData.cola.length);
+  setB('tcTabReu',_tceoData.reu.length);
+  _tceoRefreshBadge();
+  const body=document.getElementById('tcBody'); if(!body)return;
+  const addBar=document.getElementById('tcAddBar');
+  if(addBar)addBar.style.display=(_tceoTabAct==='hoy'||_tceoTabAct==='cola')?'flex':'none';
+
+  if(_tceoTabAct==='reu'){body.innerHTML=_tceoReuHtml();return;}
+  if(_tceoTabAct==='hecho'){body.innerHTML=_tceoHechoHtml();return;}
+  const lista=_tceoData[_tceoTabAct]||[];
+  if(!lista.length){
+    body.innerHTML='<div class="tc-emptp">'+(_tceoTabAct==='hoy'?'Nada para hoy. 👌':'Cola vacía.')+'</div>';
+    return;
+  }
+  body.innerHTML=lista.map(function(t){return _tceoRowHtml(t,false);}).join('');
+}
+
+function _tceoRowHtml(t,esReu){
+  const sub=_tceoOrigen(t)+((t.detalle&&(''+t.detalle).trim())?' · '+_escPend((''+t.detalle).trim()):'');
+  return '<div class="tc-row '+_tceoClase(t,esReu)+'" data-tid="'+t.id+'">'+
+    (esReu?'':'<button class="ck" title="Marcar hecha" onclick="_tceoCompletar('+t.id+')"></button>')+
+    '<div class="tx">'+_escPend(t.texto||'')+'<div class="sub">'+sub+'</div></div>'+
+    '<div class="act">'+
+      (esReu
+        ?'<button title="Agregar a mis tareas" onclick="_tceoConfirmar('+t.id+')" style="color:#4ADE80">＋</button>'+
+         '<button title="Descartar" onclick="_tceoDescartar('+t.id+')">✕</button>'
+        :'<button title="Borrar" onclick="_tceoBorrar('+t.id+')">🗑</button>')+
+    '</div>'+
+  '</div>';
+}
+
+function _tceoReuHtml(){
+  const l=_tceoData.reu;
+  if(!l.length)return '<div class="tc-emptp">Sin tareas detectadas en reuniones.<br><span style="font-size:10px">Cuando proceses una grabación con un compromiso hablado, aparece acá para confirmar.</span></div>';
+  return '<div class="tc-sug-hd">🎙 Detectado en reunión · confirmá</div>'+
+    l.map(function(t){return _tceoRowHtml(t,true);}).join('');
+}
+
+function _tceoHechoHtml(){
+  const l=_tceoData.hecho;
+  const avisos=(_tceoData.avisos||[]).map(function(a){
+    return '<div class="tc-auto">✓ Se completó sola: '+_escPend(a.razon||'')+'<div style="opacity:.8;margin-top:2px">'+_escPend(a.texto||'')+'</div></div>';
+  }).join('');
+  if(!l.length)return avisos+'<div class="tc-emptp">Todavía no completaste tareas.</div>';
+  const hoy=ymdBolivia(new Date());
+  const ayer=ymdBolivia(new Date(Date.now()-24*3600000));
+  const ini7=ymdBolivia(new Date(Date.now()-7*24*3600000));
+  const g={hoy:[],ayer:[],sem:[],antes:[]};
+  l.forEach(function(t){
+    const d=ymdBolivia(new Date(t.completada_en));
+    if(d===hoy)g.hoy.push(t); else if(d===ayer)g.ayer.push(t);
+    else if(d>=ini7)g.sem.push(t); else g.antes.push(t);
+  });
+  const grupo=function(tit,arr){
+    if(!arr.length)return '';
+    return '<div class="tc-grp">'+tit+'</div>'+arr.map(function(t){
+      return '<div class="tc-row '+(t.origen==='transcripcion'?'reu':'')+'" data-tid="'+t.id+'">'+
+        '<button class="ck mk" title="Completada">✓</button>'+
+        '<div class="tx tach">'+_escPend(t.texto||'')+'<div class="sub">'+_tceoOrigen(t)+(t.auto_completada?' · 🤖 auto':'')+'</div></div>'+
+      '</div>';
+    }).join('');
+  };
+  return avisos+grupo('Hoy',g.hoy)+grupo('Ayer',g.ayer)+grupo('Esta semana',g.sem)+grupo('Antes',g.antes);
+}
+
+/* Tikear: transición visible (~0.9s) y recién ahí sale de la vista activa */
+async function _tceoCompletar(id){
+  const row=document.querySelector('.tc-row[data-tid="'+id+'"]');
+  if(row){row.classList.add('done-anim');const tx=row.querySelector('.tx');if(tx)tx.classList.add('tach');const ck=row.querySelector('.ck');if(ck){ck.classList.add('mk');ck.textContent='✓';}}
+  try{
+    const{error}=await sb.from('tareas_ceo').update({estado:'hecho',completada_en:new Date().toISOString()}).eq('id',id);
+    if(error)throw error;
+  }catch(e){toast('Error: '+e.message,'error');await cargarTareasCeo();return;}
+  setTimeout(function(){cargarTareasCeo();if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}},900);
+}
+/* Alta rápida de tarea manual del CEO */
+async function _tceoAgregarRapida(){
+  if(!_pdEsAdmin())return;
+  const inp=document.getElementById('tcNueva');
+  const texto=(inp&&inp.value||'').trim();
+  if(!texto){if(inp)inp.focus();return;}
+  try{
+    const{error}=await sb.from('tareas_ceo').insert({texto:texto.slice(0,300),origen:'manual',
+      estado:'por_hacer',prioridad:2,sugerida:false,activo:true});
+    if(error)throw error;
+    if(inp)inp.value='';
+    _tceoTabAct='hoy';
+    await cargarTareasCeo();
+    if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Confirmar una sugerida → pasa a tarea activa (sugerida=false) */
+async function _tceoConfirmar(id){
+  if(!_pdEsAdmin())return;
+  try{
+    const{error}=await sb.from('tareas_ceo').update({sugerida:false}).eq('id',id);
+    if(error)throw error;
+    toast('✅ Agregada a tus tareas');
+    await cargarTareasCeo();
+    if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Descartar una sugerida (soft-delete) */
+async function _tceoDescartar(id){
+  if(!_pdEsAdmin())return;
+  try{
+    const{error}=await sb.from('tareas_ceo').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    toast('Descartada');
+    await cargarTareasCeo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Borrar una tarea activa (soft-delete, nunca DELETE) */
+async function _tceoBorrar(id){
+  if(!_pdEsAdmin())return;
+  try{
+    const{error}=await sb.from('tareas_ceo').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    toast('Tarea borrada');
+    await cargarTareasCeo();
+    if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
