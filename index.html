@@ -1418,7 +1418,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="modal-body">
       <input type="hidden" id="av-lead-id">
       <div id="av-gate" style="display:none">
-        <div style="background:var(--gold);color:var(--black);font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">🧭 Antes de agendar, completá la indagación del cliente</div>
+        <div style="background:var(--gold);color:var(--black);font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">🧭 Hay dos salidas para agendar esta visita:<br>1) Completá la indagación acá abajo.<br>2) Si el cliente YA vino a la oficina, marcá "🏢 Visitó oficina" en la ficha del lead y volvé a agendar.</div>
         <div id="av-gate-fields"></div>
         <div class="action-row">
           <button class="btn-primary" id="av-gate-btn" onclick="guardarIndagacionYContinuar()">Continuar a agendar</button>
@@ -1535,7 +1535,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='167';
+  var CURRENT_VERSION='168';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3311,9 +3311,40 @@ async function guardarReasignarCerrador(leadId){
       });
     }catch(eh){}
     try{await registrarAuditoria('reasignar_cerrador','leads',leadId,{anterior,nuevo});}catch(e){}
-    toast('✅ Cerrador asignado: '+nuevo,'ok');
+    /* v168 BUG 3 — verificar que el lead NO quedó huérfano. El trigger
+       fn_tarea_para_nuevo_cerrador crea la tarea del nuevo cerrador y cierra las
+       del anterior; acá se relee para confirmarlo y, si por lo que fuera no hay
+       ninguna abierta, se crea desde la app (fallback, nunca dejar el lead
+       invisible como pasó con el 5865). */
+    let _resumen='';
+    try{
+      const{data:ab}=await sb.from('agenda_personal')
+        .select('id,colaborador,tipo').eq('lead_id',leadId)
+        .eq('completada',false).eq('activo',true);
+      const abiertas=ab||[];
+      const delNuevo=abiertas.filter(function(a){return a.colaborador===nuevo;});
+      const deOtros=abiertas.filter(function(a){return a.colaborador!==nuevo;});
+      if(!delNuevo.length){
+        const _f=new Date();_f.setDate(_f.getDate()+1);_f.setHours(9,0,0,0);
+        const{error:eIns}=await sb.from('agenda_personal').insert({
+          colaborador:nuevo,lead_id:leadId,tipo:'Indagación',
+          titulo:(prev&&prev.nombre)||('Lead #'+leadId),
+          nota:'Tarea creada al asignarte el lead como cerrador',
+          fecha_programada:_f.toISOString(),completada:false,activo:true
+        });
+        if(!eIns)_resumen=' · tarea creada';
+      }else{
+        _resumen=' · tarea abierta: '+delNuevo[0].tipo;
+      }
+      if(deOtros.length)_resumen+=' · ⚠️ quedan '+deOtros.length+' tarea(s) de '+deOtros[0].colaborador;
+    }catch(eV){}
+    toast('✅ Cerrador asignado: '+nuevo+_resumen,'ok');
     const cont=document.getElementById('reasig-cerrador-'+leadId);
     if(cont)cont.style.display='none';
+    /* refrescos: el lead cambió de agenda (sale de la del captador, entra en la del cerrador) */
+    try{renderWeek();}catch(e){}
+    try{cargarMarcadoresDia();}catch(e){}
+    try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
     openLeadDetail(leadId,currentAgendaId,currentLeadMode);
   }catch(e){
     toast('No se pudo reasignar: '+(e.message||'error'),'error');
@@ -4183,6 +4214,16 @@ async function abrirAgendarVisita(){
     toast('No se pudo verificar la indagación del lead. Revisá tu conexión y reintentá.','error');
   }
 }
+/* v168 BUG 5 — el bloqueo del trigger bloquear_visita_sin_indagacion llegaba
+   crudo ("INDAGACION_INCOMPLETA: completá la indagación...") y solo nombraba
+   una de las dos salidas. Se traduce a las dos, igual que el cartel del gate. */
+function _msgErrorAgendarVisita(e){
+  const m=(e&&e.message)||'error';
+  if(m.indexOf('INDAGACION_INCOMPLETA')>=0){
+    return '🧭 Faltan datos para agendar. Completá la indagación del lead, O si el cliente ya vino, marcá "Visitó oficina" en la ficha y reintentá.';
+  }
+  return 'Error: '+m;
+}
 function toggleLugarVisita(){
   const r=document.querySelector('input[name="av-lugar"]:checked');
   const esTerreno=r&&r.value==='terreno';
@@ -4261,7 +4302,7 @@ async function guardarAgendarVisita(){
     try{cargarMarcadoresDia();}catch(e){}
     try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
   }catch(e){
-    toast('Error: '+e.message,'error');
+    toast(_msgErrorAgendarVisita(e),'error');
   }finally{
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
   }
