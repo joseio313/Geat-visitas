@@ -680,7 +680,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
       <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
-      <button id="capAudioBtn" type="button" onclick="capturarAudioPC()" title="Capturar audio de la PC" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🔊</button>
+      <button id="capAudioBtn" type="button" onclick="capturarAudioPC()" title="Grabar llamada (audio de la PC + tu micrófono)" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🔊</button>
       <span id="capAudioStatus" style="display:none;align-items:center;gap:6px;font-size:11px;color:#FF1744;font-weight:700;white-space:nowrap">🔴 Capturando audio de la PC...<button class="btn-red btn-sm" type="button" onclick="stopCapturaPC()">Detener</button></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1535,7 +1535,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='169';
+  var CURRENT_VERSION='170';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4413,6 +4413,8 @@ async function guardarGrabacion(){
 let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStream=null,
     _recHWakeLock=null, _recHSeconds=0, _recHResult=null, _recHLeadId=null,
     _recHGrabId=null, _recHChunkIdx=0, _recHTranscript='', _capDisplayStream=null;
+/* v170: captura mezclada sistema + micrófono (ver capturarAudioPC) */
+let _capMicStream=null, _capAudioCtx=null, _capConMic=false;
 /* v99: estado de la grabación por segmentos en curso */
 let _recHSegBlobs=[], _recHSegIdx=0, _recHFileBase='reunion', _recHFinalCb=null, _recHFinalizando=false;
 /* Título/participantes del modal previo. NO se limpian en _recHReset():
@@ -4810,6 +4812,9 @@ function _recHReset(){
   if(_recHTimer){clearInterval(_recHTimer);_recHTimer=null;}
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_capMicStream)_capMicStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_capAudioCtx&&_capAudioCtx.state!=='closed')_capAudioCtx.close();}catch(e){}
+  _capMicStream=null;_capAudioCtx=null;_capConMic=false;
   try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
   _recHMR=null;_recHChunks=[];_recHStream=null;_capDisplayStream=null;_recHWakeLock=null;_recHSeconds=0;
   _recHResult=null;_recHLeadId=null;_recHGrabId=null;_recHChunkIdx=0;_recHTranscript='';_recHState='idle';
@@ -5186,9 +5191,13 @@ function _setCapUI(on){
   const s=document.getElementById('capAudioStatus');
   if(b){
     if(on){b.style.border='2px solid #FF1744';b.style.color='#FF1744';b.innerHTML='🔴';b.title='Detener captura';}
-    else{b.style.border='1px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🔊';b.title='Capturar audio de la PC';}
+    else{b.style.border='1px solid var(--gray-600)';b.style.color='var(--gray-400)';b.innerHTML='🔊';b.title='Grabar llamada (audio de la PC + tu micrófono)';}
   }
-  if(s)s.style.display=on?'inline-flex':'none';
+  if(s){
+    s.style.display=on?'inline-flex':'none';
+    if(on)s.innerHTML='🔴 '+(_capConMic?'Grabando llamada (PC + tu micrófono)':'Grabando solo audio de la PC — tu voz NO queda')+
+      '...<button class="btn-red btn-sm" type="button" onclick="stopCapturaPC()">Detener</button>';
+  }
 }
 async function capturarAudioPC(){
   /* Toggle: si ya está capturando, este click detiene */
@@ -5203,19 +5212,53 @@ async function capturarAudioPC(){
     stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
   }catch(e){ toast('Captura cancelada','warning');_recHState='idle';return; }
   const aTracks=(stream.getAudioTracks&&stream.getAudioTracks())||[];
-  /* NO detener la pista de video: en Chrome eso corta toda la sesión de getDisplayMedia
-     y mata también la pista de audio (se grabaría silencio). La mantenemos viva y
-     guardamos el stream completo para detenerlo recién al final. */
+  /* La pista de VIDEO queda FUERA del stream que graba el MediaRecorder (grabamos
+     solo audio → archivo liviano), pero NO se detiene: en Chrome detenerla corta
+     toda la sesión de getDisplayMedia y mata también la pista de audio (se grabaría
+     silencio). Se mantiene viva y se detiene recién al final vía _capDisplayStream. */
   if(!aTracks.length){
     try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
     toast("Tildá 'Compartir audio del sistema/pestaña' en la ventana de Chrome",'error');
     _recHState='idle';return;
   }
+  /* v170 — SALIDA + ENTRADA. getDisplayMedia trae solo la SALIDA (la voz del otro
+     por los parlantes). Sumamos el MICRÓFONO (tu voz) o la transcripción sale de
+     un solo lado. Los dos streams se mezclan con Web Audio en un único destino. */
+  let micStream=null;
+  try{
+    if(navigator.mediaDevices.getUserMedia)
+      micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  }catch(e){ micStream=null; }
+  if(!micStream){
+    if(!confirm('⚠️ Sin micrófono solo se grabará al otro interlocutor: tu voz NO va a quedar en la grabación ni en la transcripción.\n\n¿Grabar igual?')){
+      try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
+      toast('Captura cancelada','warning');_recHState='idle';return;
+    }
+  }
   _recHReset();            // limpia globals compartidos (deja _recHState='idle')
   _recHTituloManual=false; // captura PC: sin título manual, lo pone la IA
   _recHState='iniciando';  // re-bloquear tras el reset
-  const audioStream=new MediaStream([aTracks[0]]);
+  /* Mezcla: audio del sistema + micrófono → un solo MediaStream de audio.
+     MediaRecorder graba el destino de la mezcla (ver _arrancarSegmento). */
+  let audioStream=null;
+  const _AC=window.AudioContext||window.webkitAudioContext;
+  if(_AC&&micStream){
+    try{
+      const ctx=new _AC();
+      const dest=ctx.createMediaStreamDestination();
+      ctx.createMediaStreamSource(new MediaStream([aTracks[0]])).connect(dest);
+      ctx.createMediaStreamSource(micStream).connect(dest);
+      _capAudioCtx=ctx;
+      audioStream=dest.stream;
+    }catch(e){
+      try{if(_capAudioCtx)_capAudioCtx.close();}catch(e2){}
+      _capAudioCtx=null;audioStream=null;
+    }
+  }
+  if(!audioStream)audioStream=new MediaStream([aTracks[0]]); // fallback: solo sistema
+  _capConMic=!!(micStream&&_capAudioCtx);
   _recHStream=audioStream;
+  _capMicStream=micStream;
   _capDisplayStream=stream; // stream completo (audio+video) para detener al final
   /* Si el usuario corta el "compartir" desde el chip de Chrome */
   aTracks[0].onended=function(){ if(_recHState==='grabando')stopCapturaPC(); };
@@ -5240,13 +5283,17 @@ async function capturarAudioPC(){
     if(_recHSeconds>0&&_recHSeconds%_SEG_DURACION_SEG===0)_rotarSegmento();
   },1000);
   _setCapUI(true);
-  toast('🔴 Capturando audio de la PC...','ok');
+  toast(_capConMic
+    ? '🔴 Grabando PC + tu micrófono · usá auriculares para que no se duplique la voz del otro'
+    : '⚠️ Grabando SOLO el audio de la PC: tu voz no va a quedar','ok');
 }
 async function _onStopCapturaPC(){
   _setCapUI(false);
   try{if(_capDisplayStream)_capDisplayStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  try{if(_capMicStream)_capMicStream.getTracks().forEach(t=>t.stop());}catch(e){}
   try{if(_recHStream)_recHStream.getTracks().forEach(t=>t.stop());}catch(e){}
-  _capDisplayStream=null;
+  try{if(_capAudioCtx&&_capAudioCtx.state!=='closed')_capAudioCtx.close();}catch(e){}
+  _capDisplayStream=null;_capMicStream=null;_capAudioCtx=null;
   await _finalizarGrabacionSegmentada(_recHSeconds);
 }
 function stopCapturaPC(){
