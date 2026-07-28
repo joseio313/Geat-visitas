@@ -1535,7 +1535,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='168';
+  var CURRENT_VERSION='169';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3183,7 +3183,10 @@ async function openLeadDetail(leadId,agendaId,mode){
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-primary" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px;border:2px solid rgba(0,0,0,0.55)">📝 Resultado visita</button>`:''}
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;background:#43A047;color:#fff;border:2px solid #2E7D32;font-weight:700">💰 Reservado</button>`:''}
       ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border:2px solid #2E7D32;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
+      ${currentLeadMode!=='reactivar'&&_soyCerrador()&&_leadTomable(lead)&&lead.cerrador!==cu.nombre?`<button class="btn-primary" onclick="tomarComoCerrador(${lead.id})" style="font-size:11px;padding:6px 12px;background:#1565C0;color:#fff;border:2px solid #0D47A1;font-weight:700">🤝 ${lead.cerrador?'Continuar este lead (cambiar cerrador)':'Tomar como cerrador'}</button>`:''}
+      ${_soyCerrador()&&lead.cerrador===cu.nombre?`<span style="font-size:11px;font-weight:700;color:var(--st-completo);align-self:center">🤝 Sos el cerrador</span>`:''}
     </div>
+    ${currentLeadMode!=='reactivar'&&_soyCerrador()&&_leadTomable(lead)&&!lead.cerrador?`<div class="mobile-note" style="border-color:#1565C0">🤝 <strong>Este lead todavía no tiene cerrador.</strong> Si lo estás trabajando vos, tocá <strong>“Tomar como cerrador”</strong> arriba: queda a tu nombre con su tarea, aparece en “En cierre” de ${lead.captador||'el captador'} y el captador conserva su captación.</div>`:''}
     ${currentLeadMode!=='readonly'&&!_leadBloqueado&&lead.estado==='visita_realizada'?`<div class="mobile-note" style="border-color:#43A047">✅ <strong>Este lead ya tuvo visita</strong> → registrá el resultado o la reserva con los botones de arriba.</div>`:''}
     <div id="lead-tab-detalle">
       <div class="section">
@@ -3197,7 +3200,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
           <dt>Correo</dt><dd>${lead.correo?`${lead.correo} <a class="btn-ghost" style="text-decoration:none;font-size:10px;padding:2px 8px;margin-left:4px" href="mailto:${lead.correo}">📧 Enviar email</a>`:'—'}</dd>
-          <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Reasignar':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
+          <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${cu&&lead.cerrador===cu.nombre?' <span style="font-size:10px;color:var(--st-completo);font-weight:700">(sos vos)</span>':''}${_soyCerrador()&&_leadTomable(lead)&&lead.cerrador!==cu.nombre?` <button class="btn-primary" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="tomarComoCerrador(${lead.id})">🤝 ${lead.cerrador?'Tomarlo yo':'Tomar como cerrador'}</button>`:''}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Cambiar cerrador':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
           <dt>Visitó oficina</dt><dd><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lead-visito-oficina" ${lead.visito_oficina?'checked':''} ${_leadBloqueado||lead.estado==='cerrado_ganado'?'disabled':''} onchange="toggleVisitoOficina(${lead.id},this)"> <span>✅ Visitó oficina</span></label>${_leadBloqueado||lead.estado==='cerrado_ganado'?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Lead cerrado o archivado — no editable</div>':'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Se marca solo al completar la tarea "Visita oficina"; tildalo a mano solo si la visita ocurrió fuera del CRM</div>'}</dd>
           <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
         </dl>
@@ -3269,12 +3272,26 @@ async function openLeadDetail(leadId,agendaId,mode){
    existe (ni existió) regla alguna que prohíba reasignar en fase visita: el
    asistente IA lo inventó. Se puede reasignar en cualquier fase abierta. */
 function _puedeReasignarCerrador(){
-  return !!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'));
+  return !!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'||cu.rol==='closer'));
 }
 function _cerradoresActivos(){
   return (colaboradores||[]).filter(function(c){
     return c.activo&&(c.rol==='closer'||c.rol==='commercial_lead');
   }).map(function(c){return c.nombre;});
+}
+/* ── v169 — "Tomar como cerrador" desde el flujo de seguimiento ──
+   Un lead en seguimiento / envío de información que el cerrador ya estaba
+   trabajando quedaba con cerrador=null: no aparecía en "En cierre" del captador
+   y solo se arreglaba por SQL (caso real: Alejandra Eguez, Rolando Justiniano,
+   Victor Morales, Jose, Enrique Palenque). Ahora el propio cerrador se
+   autoasigna con un toque. El captador NO se toca — la comisión es suya. */
+function _soyCerrador(){
+  return !!(cu&&(cu.rol==='closer'||cu.rol==='commercial_lead')&&_cerradoresActivos().indexOf(cu.nombre)>=0);
+}
+function _leadTomable(lead){
+  if(!lead)return false;
+  if(lead.archivado===true)return false;
+  return ['cerrado_ganado','cerrado_perdido'].indexOf(lead.estado||'')<0;
 }
 function abrirReasignarCerrador(leadId){
   const cont=document.getElementById('reasig-cerrador-'+leadId);
@@ -3293,10 +3310,31 @@ async function guardarReasignarCerrador(leadId){
   const sel=document.getElementById('reasig-sel-'+leadId);
   const nuevo=sel&&sel.value;
   if(!nuevo){toast('Elegí un cerrador','error');return;}
+  await _aplicarCerrador(leadId,nuevo,'reasignacion');
+}
+/* v169 — un solo toque: el cerrador logueado se asigna a sí mismo el lead que
+   ya está trabajando. Si el lead ya tiene otro cerrador pide confirmación y lo
+   REEMPLAZA limpio (no duplica: el trigger fn_tarea_para_nuevo_cerrador cierra
+   las tareas del anterior y abre la del nuevo). */
+async function tomarComoCerrador(leadId){
+  if(!_soyCerrador()){toast('Tu usuario no figura como cerrador activo','error');return;}
+  let anterior=null;
+  try{
+    const{data:p}=await sb.from('leads').select('cerrador').eq('id',leadId).single();
+    anterior=(p&&p.cerrador)||null;
+  }catch(e){}
+  if(anterior===cu.nombre){toast('Ya sos el cerrador de este lead','warning');return;}
+  if(anterior&&!confirm('Este lead lo tiene '+anterior+' como cerrador.\n\n¿Pasarlo a tu nombre? Se cerrarán las tareas abiertas de '+anterior+' y se creará la tuya.'))return;
+  await _aplicarCerrador(leadId,cu.nombre,'toma');
+}
+/* v169 — núcleo compartido por "Reasignar" (v168) y "Tomar como cerrador".
+   origen: 'reasignacion' | 'toma' — solo cambia el texto de historial/toast. */
+async function _aplicarCerrador(leadId,nuevo,origen){
+  const esToma=origen==='toma';
   try{
     const{data:prev}=await sb.from('leads').select('cerrador,nombre').eq('id',leadId).single();
     const anterior=(prev&&prev.cerrador)||null;
-    if(anterior===nuevo){toast('Ese lead ya está asignado a '+nuevo,'warning');return;}
+    if(anterior===nuevo){toast(esToma?'Ya sos el cerrador de este lead':'Ese lead ya está asignado a '+nuevo,'warning');return false;}
     const{data,error}=await sb.from('leads')
       .update({cerrador:nuevo,cerrador_confirmacion:'asignado',cerrador_asignado_en:new Date().toISOString(),updated_at:new Date().toISOString()})
       .eq('id',leadId).select('id,cerrador');
@@ -3305,12 +3343,14 @@ async function guardarReasignarCerrador(leadId){
     try{
       await sb.from('historial_lead').insert({
         lead_id:leadId,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',
-        etapa:'—',tipo_actividad:'reasignacion_cerrador',
-        nota:'🔁 Cerrador '+(anterior?('reasignado: '+anterior+' → '+nuevo):('asignado: '+nuevo))+' por '+cu.nombre,
+        etapa:'—',tipo_actividad:esToma?'toma_cerrador':'reasignacion_cerrador',
+        nota:esToma
+          ?('🤝 '+cu.nombre+' tomó este lead como cerrador'+(anterior?(' (antes lo tenía '+anterior+')'):' (estaba sin cerrador)'))
+          :('🔁 Cerrador '+(anterior?('reasignado: '+anterior+' → '+nuevo):('asignado: '+nuevo))+' por '+cu.nombre),
         fecha_actividad:new Date().toISOString(),created_at:new Date().toISOString()
       });
     }catch(eh){}
-    try{await registrarAuditoria('reasignar_cerrador','leads',leadId,{anterior,nuevo});}catch(e){}
+    try{await registrarAuditoria(esToma?'tomar_cerrador':'reasignar_cerrador','leads',leadId,{anterior,nuevo});}catch(e){}
     /* v168 BUG 3 — verificar que el lead NO quedó huérfano. El trigger
        fn_tarea_para_nuevo_cerrador crea la tarea del nuevo cerrador y cierra las
        del anterior; acá se relee para confirmarlo y, si por lo que fuera no hay
@@ -3338,16 +3378,32 @@ async function guardarReasignarCerrador(leadId){
       }
       if(deOtros.length)_resumen+=' · ⚠️ quedan '+deOtros.length+' tarea(s) de '+deOtros[0].colaborador;
     }catch(eV){}
-    toast('✅ Cerrador asignado: '+nuevo+_resumen,'ok');
+    toast((esToma?'🤝 Tomaste este lead como cerrador':'✅ Cerrador asignado: '+nuevo)+_resumen,'ok');
     const cont=document.getElementById('reasig-cerrador-'+leadId);
     if(cont)cont.style.display='none';
     /* refrescos: el lead cambió de agenda (sale de la del captador, entra en la del cerrador) */
     try{renderWeek();}catch(e){}
     try{cargarMarcadoresDia();}catch(e){}
     try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
-    openLeadDetail(leadId,currentAgendaId,currentLeadMode);
+    try{_renderEnCierre();}catch(e){}
+    /* v169 — si lo tomó desde una ficha en solo-lectura, ahora el lead es suyo:
+       se reabre en modo normal para que pueda operarlo sin dar otro rodeo. */
+    const _modo=(esToma&&nuevo===cu.nombre&&currentLeadMode==='readonly')?'normal':currentLeadMode;
+    let _ag=currentAgendaId;
+    if(esToma){
+      try{
+        const{data:t}=await sb.from('agenda_personal').select('id')
+          .eq('lead_id',leadId).eq('colaborador',nuevo)
+          .eq('completada',false).eq('activo',true)
+          .order('fecha_programada').limit(1);
+        if(t&&t.length)_ag=t[0].id;
+      }catch(e){}
+    }
+    openLeadDetail(leadId,_ag,_modo);
+    return true;
   }catch(e){
-    toast('No se pudo reasignar: '+(e.message||'error'),'error');
+    toast('No se pudo asignar el cerrador: '+(e.message||'error'),'error');
+    return false;
   }
 }
 
@@ -5937,7 +5993,10 @@ async function execSearch(q){
     dbQuery=dbQuery.or('estado.eq.cerrado_perdido,archivado.eq.true');
   }else if(!esAdmin){
     if(esCerrador){
-      dbQuery=dbQuery.eq('cerrador',cu.nombre);
+      /* v169 — además de los suyos, el cerrador ve los leads SIN cerrador: son
+         los que puede tomar. Sin esto el botón "Tomar como cerrador" era
+         inalcanzable justo para el caso que lo motivó (leads en seguimiento). */
+      dbQuery=dbQuery.or('cerrador.eq."'+cu.nombre+'",cerrador.is.null');
     }else{
       /* v82: los leads perdidos/archivados son visibles para todos en la búsqueda,
          además de los propios — permite detectar y reabrir con Nueva Oportunidad */
@@ -7591,14 +7650,20 @@ async function _renderEnCierre(){
   const box=document.getElementById('en-cierre-wrap'); if(!box)return;
   if(!(cu&&cu.rol==='field_capturer')){box.style.display='none';return;}
   try{
+    /* v169 — antes solo entraban los leads con visita agendada/realizada, así que
+       un lead en seguimiento que un cerrador ya había tomado no aparecía por
+       ningún lado para la captadora. Ahora entra TODO lead abierto que tenga
+       cerrador asignado, además de los de fase visita. */
     const{data,error}=await sb.from('leads')
-      .select('id,nombre,cerrador,estado')
+      .select('id,nombre,cerrador,estado,etapa')
       .eq('captador',cu.nombre)
-      .in('estado',['visita_agendada','visita_realizada'])
+      .not('estado','eq','cerrado_perdido').not('estado','eq','cerrado_ganado')
       .or('archivado.is.null,archivado.eq.false')
       .order('id',{ascending:false});
     if(error)throw error;
-    const leads=data||[];
+    const leads=(data||[]).filter(function(l){
+      return ['visita_agendada','visita_realizada'].indexOf(l.estado)>=0||!!l.cerrador;
+    });
     if(!leads.length){box.style.display='none';box.innerHTML='';return;}
     let fechaByLead={};
     try{
@@ -7612,7 +7677,7 @@ async function _renderEnCierre(){
     box.style.display='';
     const itemsHtml=leads.map(function(l){
       const f=fechaByLead[l.id];
-      const fTxt=f?(new Date(f).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit'})+' '+new Date(f).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})):'—';
+      const fTxt=f?(new Date(f).toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit'})+' '+new Date(f).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'})):_escPend(l.etapa||'seguimiento');
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--gray-700)">'+
         '<div style="flex:1;min-width:140px">'+
           '<div style="font-weight:700;font-size:12px">'+_escPend(l.nombre||'—')+'</div>'+
@@ -7626,7 +7691,7 @@ async function _renderEnCierre(){
         '<span style="font-size:12px;font-weight:700;color:var(--gold)">🔒 En cierre ('+leads.length+')'+resumenCerrador+'</span>'+
         '<span id="en-cierre-arrow" style="font-size:11px;color:var(--gray-400)">'+(_enCierreOpen?'▲':'▼')+'</span>'+
       '</div>'+
-      '<div id="en-cierre-panel" style="max-height:'+(_enCierreOpen?'1000px':'0')+';overflow:hidden;transition:max-height .25s ease;border:1px solid var(--gray-600);border-top:none;border-radius:0 0 8px 8px;background:var(--gray-900)">'+
+      '<div id="en-cierre-panel" style="max-height:'+(_enCierreOpen?'2400px':'0')+';overflow:hidden;transition:max-height .25s ease;border:1px solid var(--gray-600);border-top:none;border-radius:0 0 8px 8px;background:var(--gray-900)">'+
         itemsHtml+
       '</div>';
   }catch(e){box.style.display='none';box.innerHTML='';}
