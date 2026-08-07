@@ -168,6 +168,30 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
   .cv-etapa{order:4}
   .cv-pret{order:5;margin-left:auto}
 }
+/* v171: Reclutamiento — editor de criterios de evaluación (solo admin/ceo) */
+.crit-box{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.crit-head{display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;flex-wrap:wrap}
+.crit-head:hover{background:var(--gray-900)}
+.crit-title{font-size:13px;font-weight:700;color:var(--gold);flex:1;min-width:160px}
+.crit-body{padding:0 12px 12px;border-top:1px solid var(--gray-600)}
+.crit-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.crit-ta{width:100%;min-height:300px;background:var(--black);color:var(--gray-100);border:1px solid var(--gray-600);border-radius:8px;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;outline:none;box-sizing:border-box}
+.crit-ta:focus{border-color:var(--gold)}
+.crit-cnt{font-size:11px;color:var(--gray-400);margin-top:4px}
+.crit-sec{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px}
+.crit-hist{display:flex;flex-direction:column;gap:6px}
+.crit-hrow{display:flex;align-items:center;gap:10px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;padding:8px 10px;flex-wrap:wrap}
+.crit-hmeta{flex:1;min-width:150px;font-size:12px;color:var(--gray-200)}
+.crit-hmeta small{color:var(--gray-400)}
+.crit-bar{height:10px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;overflow:hidden;margin-top:6px}
+.crit-fill{height:100%;width:0;background:var(--gold);transition:width .4s ease}
+.crit-warn{background:rgba(250,195,5,0.10);border:1px solid var(--gold);border-radius:10px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gold)}
+.crit-warn span{flex:1;min-width:180px}
+@media(max-width:640px){
+  .crit-body{padding:0 10px 10px}
+  .crit-row .btn{flex:1;min-width:130px}
+  .crit-ta{font-size:13px}
+}
 .date-range{color:var(--gold);font-weight:700;font-size:13px;padding:0 6px}
 .view-toggle{display:flex;gap:3px;background:var(--gray-900);padding:3px;border-radius:7px;border:1px solid var(--gray-600)}
 .view-toggle button{background:transparent;color:var(--gray-400);border:none;padding:5px 12px;border-radius:5px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;transition:all 0.15s}
@@ -1535,7 +1559,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='170';
+  var CURRENT_VERSION='171';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -9391,6 +9415,7 @@ function _cvRender(){
   const estados=_CV_ETAPAS.map(e=>e.v);
   cvs.map(c=>c.estado).filter(Boolean).forEach(e=>{if(!estados.includes(e))estados.push(e);});
   box.innerHTML=`
+    ${_cvCritHTML(campanas)}
     <div class="filter-bar">
       <input type="text" id="cv-busca" class="form-control" placeholder="🔍 Buscar por nombre, ciudad, experiencia..." value="${_cvEsc(_cvFilBusca)}" style="flex:1;min-width:200px" oninput="_cvFilBusca=this.value;_cvRenderGrid()">
       <select onchange="_cvFilCampana=this.value;_cvRender()">
@@ -9409,9 +9434,295 @@ function _cvRender(){
       <button type="button" id="cv-procesar-btn" class="btn btn-primary btn-sm" style="margin-left:auto" onclick="_cvProcesar()">🔄 Procesar nuevos${_cvPendientes>0?' ('+_cvPendientes+')':''}</button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="_cvCargar()">↺ Actualizar</button>
     </div>
+    <div id="cv-warn">${_cvWarnHTML()}</div>
     <div id="cv-grid" class="cv-list"></div>`;
   _cvMenuInit();
   _cvRenderGrid();
+}
+
+/* ── v171: CRITERIOS DE EVALUACIÓN ────────────────────────
+   La rúbrica con la que la IA puntúa cada CV vive en rec_campanas.rubrica.
+   rec_campanas y cv_postulaciones tienen RLS solo para 'authenticated' y el
+   front entra como anon: TODA lectura/escritura pasa por geat-cv-panel v7,
+   que valida el PIN server-side (admin/ceo). Antes de sobrescribir, la Edge
+   Function archiva la versión vigente en rec_campanas_historial. */
+const CRIT_USD_CV=0.001;   /* costo aprox. por CV y por pasada (gpt-4o-mini) */
+const CRIT_MAX_ITER=15;    /* guarda de seguridad del bucle de batch */
+let _critCamp='',_critRub=null,_critDraft='',_critHist=[];
+let _critAbierto=false,_critCargando=false,_critCorriendo=false,_critProgSt=null;
+
+function _cvEsAdmin(){return !!cu&&(cu.rol==='admin'||cu.rol==='ceo');}
+
+/* Campaña que edita el bloque: la que ya estaba elegida, si no la del filtro,
+   si no la primera. Nunca queda apuntando a una campaña inexistente. */
+function _critCampActiva(camps){
+  if(_critCamp&&camps.some(k=>String(k.id)===String(_critCamp)))return String(_critCamp);
+  if(_cvFilCampana&&camps.some(k=>String(k.id)===String(_cvFilCampana)))return String(_cvFilCampana);
+  return camps.length?String(camps[0].id):'';
+}
+function _critNCvs(){
+  return (((_cvData&&_cvData.cvs)||[])).filter(c=>String(c.campana_id)===String(_critCamp)).length;
+}
+/* CVs marcados para re-puntaje dentro de la campaña que está filtrando el listado. */
+function _critPendientes(){
+  return (((_cvData&&_cvData.cvs)||[])).filter(c=>
+    String(c.bandera||'').toLowerCase()==='repuntuar'&&
+    (!_cvFilCampana||String(c.campana_id)===String(_cvFilCampana))).length;
+}
+function _critFecha(iso){
+  if(!iso)return '—';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '—';
+  return ymdLocal(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+
+/* Banner sobre el listado cuando quedaron CVs con la rúbrica vieja. */
+function _cvWarnHTML(){
+  if(!_cvEsAdmin())return '';
+  const n=_critPendientes();
+  if(!n)return '';
+  return `<div class="crit-warn">
+    <span>⚠️ ${n} candidato${n===1?'':'s'} evaluado${n===1?'':'s'} con criterios anteriores</span>
+    <button type="button" class="btn btn-primary btn-sm" ${_critCorriendo?'disabled style="opacity:.5;cursor:wait"':''} onclick="cvCritReanudar()">🔁 Re-puntuar</button>
+  </div>`;
+}
+
+function _cvCritHTML(camps){
+  if(!_cvEsAdmin())return '';
+  camps=camps||[];
+  _critCamp=_critCampActiva(camps);
+  return `
+  <div class="crit-box">
+    <div class="crit-head" onclick="cvCritToggle()">
+      <span class="crit-title">⚙️ Criterios de evaluación</span>
+      <span style="font-size:11px;color:var(--gray-400)">Rúbrica con la que la IA puntúa los CVs</span>
+      <span id="crit-caret" style="color:var(--gold);font-size:13px">${_critAbierto?'▾':'▸'}</span>
+    </div>
+    <div class="crit-body" id="crit-body" style="display:${_critAbierto?'block':'none'}">${_critAbierto?_critInnerHTML(camps):''}</div>
+  </div>`;
+}
+
+function _critProgHTML(){
+  if(!_critProgSt)return '';
+  const p=_critProgSt;
+  return `<div style="margin-top:10px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-400);gap:10px;flex-wrap:wrap">
+      <span>${_cvEsc(p.txt)}</span><span>${p.pct}% · $${p.costo.toFixed(3)} USD</span></div>
+    <div class="crit-bar"><div class="crit-fill" style="width:${p.pct}%"></div></div>
+  </div>`;
+}
+
+function _critInnerHTML(camps){
+  if(_critCargando)return '<div class="loading-state"><span class="spin"></span> Cargando criterios…</div>';
+  if(_critRub===null)return `<div style="font-size:12px;color:var(--gray-400);padding:12px 0">
+    No se pudieron cargar los criterios.
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="_cvCritCargar()">Reintentar</button></div>`;
+  const n=_critNCvs();
+  const dis=_critCorriendo?'disabled style="opacity:.5;cursor:wait"':'';
+  return `
+    <div class="crit-row">
+      <select id="crit-camp" onchange="cvCritCampana(this.value)" style="background:var(--gray-900);color:var(--white);border:1px solid var(--gray-600);padding:7px 10px;border-radius:6px;font-family:inherit;font-size:12px;font-weight:500;flex:1;min-width:180px">
+        ${camps.map(k=>`<option value="${_cvEsc(k.id)}" ${String(_critCamp)===String(k.id)?'selected':''}>${_cvEsc(k.nombre||('Campaña '+k.id))}</option>`).join('')}
+      </select>
+      <span style="font-size:11px;color:var(--gray-400)">${n} CV${n===1?'':'s'} en esta campaña</span>
+    </div>
+    <textarea id="crit-ta" class="crit-ta" spellcheck="false" oninput="cvCritInput(this.value)" placeholder="Criterios con los que la IA evalúa cada CV…">${_cvEsc(_critDraft)}</textarea>
+    <div class="crit-cnt" id="crit-cnt">${_critDraft.length} caracteres${_critDraft!==_critRub?' · <strong style="color:var(--gold)">sin guardar</strong>':''}</div>
+    <div class="crit-row">
+      <button type="button" class="btn btn-primary btn-sm" ${dis} onclick="cvCritGuardar()">💾 Guardar criterios</button>
+      <button type="button" class="btn btn-ghost btn-sm" ${dis} onclick="cvCritRevertir()">↺ Descartar cambios</button>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto;border-color:var(--gold);color:var(--gold)" ${dis} onclick="cvCritRepuntuar()">🔁 Re-puntuar campaña</button>
+    </div>
+    <div id="crit-prog">${_critProgHTML()}</div>
+    <div class="crit-sec">🕘 Versiones anteriores (${_critHist.length})</div>
+    ${_critHist.length
+      ?`<div class="crit-hist">${_critHist.map((h,i)=>`
+        <div class="crit-hrow">
+          <div class="crit-hmeta">${_critFecha(h.created_at)} <small>· ${_cvEsc(h.editado_por||'—')} · ${String(h.rubrica||'').length} car.</small></div>
+          <button type="button" class="btn btn-ghost btn-sm" ${dis} onclick="cvCritRestaurar(${i})">Restaurar</button>
+        </div>`).join('')}</div>`
+      :'<div style="font-size:12px;color:var(--gray-400)">Todavía no hay versiones anteriores. La primera se archiva al guardar un cambio.</div>'}`;
+}
+
+/* Repinta SOLO el interior del bloque: no toca el listado ni los filtros. */
+function _critPintar(){
+  const b=document.getElementById('crit-body');
+  if(b)b.innerHTML=_critInnerHTML((_cvData&&_cvData.campanas)||[]);
+}
+function _critProg(pct,txt,costo){
+  _critProgSt={pct:Math.max(0,Math.min(100,Math.round(pct))),txt:txt,costo:Number(costo)||0};
+  const p=document.getElementById('crit-prog');
+  if(p)p.innerHTML=_critProgHTML();
+}
+
+/* Deja el bloque abierto en el DOM (lo usa también el banner amarillo). */
+function _critAbrir(){
+  _critAbierto=true;
+  const c=document.getElementById('crit-caret');
+  if(c)c.textContent='▾';
+  const b=document.getElementById('crit-body');
+  if(b)b.style.display='block';
+}
+function cvCritToggle(){
+  _critAbierto=!_critAbierto;
+  const c=document.getElementById('crit-caret');
+  if(c)c.textContent=_critAbierto?'▾':'▸';
+  const b=document.getElementById('crit-body');
+  if(!b)return;
+  b.style.display=_critAbierto?'block':'none';
+  if(!_critAbierto)return;
+  if(_critRub===null&&!_critCargando)_cvCritCargar();
+  else _critPintar();
+}
+
+async function _cvCritCargar(){
+  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  if(!_critCamp){toast('No hay campañas configuradas','error');return;}
+  _critCargando=true;_critPintar();
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'rubrica_get',campana_id:Number(_critCamp)},60000);
+    if(!r||!r.ok)throw new Error((r&&(r.detalle||r.error))||'No se pudieron cargar los criterios');
+    _critRub=String((r.campana&&r.campana.rubrica)||'');
+    _critDraft=_critRub;
+    _critHist=Array.isArray(r.historial)?r.historial:[];
+  }catch(e){
+    _critRub=null;_critDraft='';_critHist=[];
+    toast('Error: '+e.message,'error');
+  }finally{
+    _critCargando=false;_critPintar();
+  }
+}
+
+function cvCritCampana(v){
+  if(_critCorriendo){toast('Esperá a que termine el re-puntaje','error');_critPintar();return;}
+  if(_critRub!==null&&_critDraft!==_critRub&&!confirm('Tenés cambios sin guardar en los criterios. ¿Cambiar de campaña y descartarlos?')){_critPintar();return;}
+  _critCamp=String(v);_critRub=null;_critDraft='';_critHist=[];_critProgSt=null;
+  _cvCritCargar();
+}
+
+function cvCritInput(v){
+  _critDraft=v;
+  const c=document.getElementById('crit-cnt');
+  if(c)c.innerHTML=v.length+' caracteres'+(v!==_critRub?' · <strong style="color:var(--gold)">sin guardar</strong>':'');
+}
+
+function cvCritRevertir(){
+  if(_critRub===null)return;
+  if(_critDraft===_critRub){toast('No hay cambios para descartar');return;}
+  _critDraft=_critRub;_critPintar();
+  toast('Cambios descartados');
+}
+
+async function cvCritGuardar(){
+  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  const ta=document.getElementById('crit-ta');
+  const val=ta?ta.value:_critDraft;
+  if(!String(val).trim()){toast('Los criterios no pueden quedar vacíos','error');return;}
+  if(val===_critRub){toast('No hay cambios para guardar');return;}
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'rubrica_set',campana_id:Number(_critCamp),rubrica:val},60000);
+    if(!r||!r.ok)throw new Error((r&&(r.detalle||r.error))||'No se pudieron guardar los criterios');
+    _critRub=String(val);_critDraft=_critRub;
+    if(Array.isArray(r.historial))_critHist=r.historial;
+    _critPintar();
+    toast('⚙️ Criterios guardados · versión anterior archivada');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* Carga una versión vieja en el textarea. NO la aplica: hay que Guardar. */
+function cvCritRestaurar(i){
+  const h=_critHist[i];
+  if(!h){toast('Versión no encontrada','error');return;}
+  _critDraft=String(h.rubrica||'');
+  _critPintar();
+  const ta=document.getElementById('crit-ta');
+  if(ta){ta.focus();ta.setSelectionRange(0,0);ta.scrollTop=0;}
+  toast('Versión del '+_critFecha(h.created_at)+' cargada — revisá y tocá «Guardar criterios»');
+}
+
+/* Marca toda la campaña y arranca el re-puntaje. */
+async function cvCritRepuntuar(){
+  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  if(_critCorriendo){toast('Ya hay un re-puntaje en curso','error');return;}
+  if(_critRub!==null&&_critDraft!==_critRub){toast('Guardá los criterios antes de re-puntuar','error');return;}
+  const n=_critNCvs();
+  if(!n){toast('Esta campaña no tiene CVs para re-puntuar','error');return;}
+  const camp=(((_cvData&&_cvData.campanas)||[])).find(k=>String(k.id)===String(_critCamp));
+  const est=n*CRIT_USD_CV*2;
+  if(!confirm('Se van a re-evaluar '+n+' CV'+(n===1?'':'s')+' de «'+((camp&&camp.nombre)||'la campaña')+'» con los criterios actuales.\n\n'+
+    'Cada CV pasa dos veces por la IA: re-puntaje + análisis profundo.\n'+
+    'Costo estimado: ≈ $'+est.toFixed(2)+' USD.\n\n'+
+    'Los puntajes y análisis actuales se reemplazan. ¿Continuar?'))return;
+  _critCorriendo=true;_critProg(0,'Marcando '+n+' CVs…',0);_critPintar();
+  try{
+    const r=await _cvCall({pin:_cvPin,accion:'marcar_repuntar',campana_id:Number(_critCamp)},60000);
+    if(!r||!r.ok)throw new Error((r&&(r.detalle||r.error))||'No se pudo marcar la campaña');
+    toast('🔁 '+(r.marcados!=null?r.marcados:n)+' CVs marcados — arranca el re-puntaje');
+  }catch(e){
+    _critCorriendo=false;_critProg(0,'No se pudo marcar la campaña',0);_critPintar();
+    toast('Error: '+e.message,'error');
+    return;
+  }
+  await _critBatchLoop();
+}
+
+/* Retoma los que ya están marcados (banner amarillo), sin volver a marcar. */
+async function cvCritReanudar(){
+  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
+  if(_critCorriendo){toast('Ya hay un re-puntaje en curso','error');return;}
+  const n=_critPendientes();
+  if(!n){toast('No quedan candidatos con criterios anteriores');return;}
+  if(!confirm('Hay '+n+' candidato'+(n===1?'':'s')+' evaluado'+(n===1?'':'s')+' con criterios anteriores.\n\n'+
+    'Costo estimado: ≈ $'+(n*CRIT_USD_CV*2).toFixed(2)+' USD. ¿Re-puntuar ahora?'))return;
+  _critAbrir();_critCorriendo=true;
+  _critProg(0,'Iniciando…',0);
+  if(_critRub===null&&!_critCargando)await _cvCritCargar();else _critPintar();
+  await _critBatchLoop();
+}
+
+/* geat-cv-analisis vuelve a los ~60s aunque queden pendientes: hay que
+   llamarla en bucle. Corta cuando no queda nada, cuando dos vueltas
+   seguidas no avanzan, o a las CRIT_MAX_ITER vueltas. */
+async function _critBatchLoop(){
+  _critCorriendo=true;
+  let procesados=0,total=0,costo=0,errores=0,iter=0,restan=0,estancado=0;
+  try{
+    while(iter<CRIT_MAX_ITER){
+      iter++;
+      _critProg(total?procesados*100/total:0,'Vuelta '+iter+' · procesando…',costo);
+      const resp=await fetch(CV_ANALISIS_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({pin:_cvPin,accion:'batch'})});
+      const d=await resp.json();
+      if(!d||!d.ok)throw new Error((d&&(d.detalle||d.error))||'el motor de análisis falló');
+      const hechos=(Number(d.analizados)||0)+(Number(d.repuntuados)||0)+(Number(d.errores)||0);
+      restan=(Number(d.pendientes)||0)+(Number(d.pendientes_repuntaje)||0);
+      procesados+=hechos;
+      costo+=Number(d.costo_usd)||0;
+      errores+=Number(d.errores)||0;
+      if(procesados+restan>total)total=procesados+restan;   /* si entran CVs nuevos, el total sube */
+      _critProg(total?procesados*100/total:100,
+        procesados+' / '+total+' procesados'+(errores?' · ⚠ '+errores+' con error':''),costo);
+      if(restan<=0)break;
+      estancado=hechos>0?0:estancado+1;
+      if(estancado>=2)break;
+    }
+    if(restan>0){
+      _critProg(total?procesados*100/total:0,'⏸ Quedan '+restan+' pendientes tras '+iter+' vueltas'+(errores?' · ⚠ '+errores+' con error':''),costo);
+      toast('⏸ Quedaron '+restan+' pendientes — tocá «Re-puntuar» otra vez','error');
+    }else{
+      _critProg(100,'✅ '+procesados+' procesados'+(errores?' · ⚠ '+errores+' con error':''),costo);
+      toast('✅ Re-puntaje completo · '+procesados+' CVs · $'+costo.toFixed(3)+' USD');
+    }
+  }catch(e){
+    _critProg(total?procesados*100/total:0,'⚠ '+e.message,costo);
+    toast('Error en el re-puntaje: '+e.message,'error');
+  }finally{
+    _critCorriendo=false;
+    await _cvCargar();   /* refresca listado, banner y contadores */
+  }
 }
 
 /* v155: menú "⋯" por fila (Email / Ver CV / links). Cierra al hacer clic fuera. */
