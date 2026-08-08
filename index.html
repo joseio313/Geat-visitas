@@ -1005,6 +1005,20 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- ══ MODAL: COBRANZAS — ALTA AUTOMÁTICA DESDE EL CONTRATO (v178) ══
+     Todo lo que extrae geat-contrato-leer queda EDITABLE: la IA propone, el CEO
+     confirma. El cuerpo se pinta por JS (_cobPintarLeido) porque la cantidad de
+     cuotas la define el contrato, no el HTML. -->
+<div id="modalCobLeerContrato" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalCobLeerContrato')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📄 Contrato leído</h2>
+      <button class="modal-close" onclick="closeModal('modalCobLeerContrato')">×</button>
+    </div>
+    <div class="modal-body" id="cob-lc-body"></div>
+  </div>
+</div>
+
 <!-- ══ MODAL: GRABACIÓN DESDE HEADER ══ -->
 <div id="modalGrabH" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalGrabH')">
   <div class="modal">
@@ -1632,7 +1646,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='176';
+  var CURRENT_VERSION='178';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8258,6 +8272,8 @@ async function _pdAlmacenamiento(){
    contrato. Las comisiones son informativas y NUNCA salen de este panel.
    ═══════════════════════════════════════════════════════════════════════ */
 let _cobContratos=[],_cobPagos=[],_cobCfg={},_cobPagoActual=null,_cobAbierto=null;
+/* v178 — alta automática desde el contrato de la obra */
+let _cobObras=[],_cobObrasConContrato=[],_cobPanelObras=false,_cobLeyendo=null,_cobLeido=null,_cobLeadsGanados=[];
 
 function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -8320,6 +8336,31 @@ function _cobComision(monto){
   return{total:total,captador:total*sc,cerrador:total*(1-sc)};
 }
 
+/* ── v178 · hito de avance de obra ────────────────────────────────────
+   El contrato pacta un % de avance para habilitar una cuota
+   (informe_previo_pct_pactado). Cuando el avance real cargado en rec_obras
+   llega a ese %, esa cuota deja de ser una estimación por días y pasa a ser
+   plata cobrable HOY. */
+function _cobObra(id){return _cobObras.find(function(o){return o.id===id;})||null;}
+/* pagos_cliente no guarda la condición del contrato: la cuota atada al avance
+   se identifica por su descripción (ahí queda el condicion_detalle) y, si no
+   aparece, por el 2do hito — el que va por avance en el esquema de GEAT. */
+function _cobCuotaAvance(c){
+  const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id&&!_cobEsCobrado(p);});
+  return pagos.find(function(p){return /avance/i.test(p.descripcion||'');})||
+         pagos.find(function(p){return p.numero_pago===2;})||null;
+}
+function _cobHitoObraCumplido(c){
+  if(!c||!c.obra_id)return null;
+  const pact=Number(c.informe_previo_pct_pactado);
+  if(!(pact>0))return null;
+  const o=_cobObra(c.obra_id); if(!o)return null;
+  const av=Number(o.avance_pct);
+  if(!isFinite(av)||av<pact)return null;
+  const p=_cobCuotaAvance(c); if(!p)return null;
+  return{obra:o,pago:p,avance:av,pactado:pact};
+}
+
 async function renderCobranzas(){
   const cont=document.getElementById('cobranzas-body'); if(!cont)return;
   if(!cu||cu.rol!=='admin'){
@@ -8338,6 +8379,15 @@ async function renderCobranzas(){
     _cobPagos=pgs||[];
     const{data:cfg}=await sb.from('app_config').select('key,value').like('key','cobranza%');
     _cobCfg={};(cfg||[]).forEach(function(r){_cobCfg[r.key]=r.value;});
+    /* v178 — obras activas: alimentan el alta automática y el 🔔 de hito de avance.
+       Los obra_id ya usados se leen SIN filtrar por activo: un contrato archivado
+       sigue siendo un contrato, la obra no debe volver a la lista de pendientes. */
+    const{data:obs}=await sb.from('rec_obras')
+      .select('id,nombre,codigo,avance_pct,docs_prop_confirmados,contrato_propietario_nombre')
+      .eq('activo',true).order('nombre');
+    _cobObras=obs||[];
+    const{data:occ}=await sb.from('cobranza_contratos').select('obra_id').not('obra_id','is',null);
+    _cobObrasConContrato=(occ||[]).map(function(r){return r.obra_id;});
     _cobPintar();
   }catch(e){
     cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
@@ -8386,6 +8436,28 @@ function _cobPintar(){
     }).join('');
   }
 
+  /* ── 1.b 🏗️ Hito de avance cumplido (v178) ─────────────────────── */
+  const hitosObra=[];
+  _cobContratos.forEach(function(c){
+    const h=_cobHitoObraCumplido(c);
+    if(h)hitosObra.push({c:c,h:h});
+  });
+  const htmlHitosObra=hitosObra.length?
+    ('<div class="section-title" style="margin:16px 0 6px">🏗️ Hitos de obra cumplidos</div>'+
+     hitosObra.map(function(t){
+       return '<div style="border:1px solid var(--gold);border-left:3px solid var(--gold);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--gray-800)">'+
+         '<div style="font-size:13px"><strong>🔔 Hito cumplido — cobrar</strong></div>'+
+         '<div style="font-size:12px;margin:4px 0">'+_escPend(t.c.cliente_nombre||'—')+
+           ' · obra '+_escPend(t.h.obra.nombre||'—')+' ('+_escPend(t.h.obra.codigo||'sin código')+')</div>'+
+         '<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Avance real '+t.h.avance+
+           '% ≥ '+t.h.pactado+'% pactado · '+_cobNomHito(t.h.pago.numero_pago)+' '+_cobBs(t.h.pago.monto_bs)+' pendiente</div>'+
+         '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+           '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobPedirAvanceFatima('+t.c.id+','+t.h.pago.numero_pago+')">📲 Pedir avance a Fátima</button>'+
+           '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirCobro('+t.h.pago.id+')">✓ Registrar cobro</button>'+
+         '</div>'+
+       '</div>';
+     }).join('')):'';
+
   /* ── 2. 📋 Cronograma por cliente ──────────────────────────────── */
   const htmlCron=_cobContratos.length?_cobContratos.map(function(c){
     const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id;})
@@ -8407,7 +8479,8 @@ function _cobPintar(){
     }).join('');
     return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-800)">'+
       '<div style="padding:10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="_cobToggle('+c.id+')">'+
-        '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+'</strong>'+
+        '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+
+          (_cobHitoObraCumplido(c)?' <span style="color:var(--gold)" title="Hito cumplido — cobrar">🔔</span>':'')+'</strong>'+
         '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(c.contrato_codigo||'')+' · '+_cobBs(cobrado)+' / '+_cobBs(c.precio_total_bs)+'</span>'+
       '</div>'+
       (abierto?'<div style="padding:0 10px 10px">'+(filas||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+
@@ -8442,8 +8515,10 @@ function _cobPintar(){
   cont.innerHTML=
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
       '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirContrato()">➕ Cargar contrato</button>'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobTogglePanelObras()">📄 Leer contratos de obras</button>'+
       '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="renderCobranzas()">↺ Actualizar</button>'+
     '</div>'+
+    _cobHtmlPanelObras()+
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--gray-400)">'+
       '<span>📲 WhatsApp de Fátima:</span>'+
       '<input type="text" id="cob-wa-fatima" class="form-control" style="width:170px;padding:4px 8px;font-size:11px" placeholder="591XXXXXXXX" value="'+_escPend(wa)+'">'+
@@ -8451,6 +8526,7 @@ function _cobPintar(){
       (wa?'':'<span style="color:var(--gold)">— cargalo para habilitar el botón de avance</span>')+
     '</div>'+
     '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
+    htmlHitosObra+
     '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron+
     '<div class="section-title" style="margin:16px 0 6px">💰 Caja</div>'+htmlCaja;
 }
@@ -8717,6 +8793,323 @@ async function _cobDesdeDocx(inp){
     poner(faltan.length?'✅ Pre-llenado. Completá a mano: '+faltan.join(', '):'✅ Datos extraídos — revisá y confirmá.',
           faltan.length?'var(--gold)':'var(--st-completo)');
   }catch(e){ poner('No se pudo extraer con IA ('+_escPend(e.message||'error')+'). Cargalo a mano.','var(--gold)'); }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   v178 — ALTA AUTOMÁTICA DE CONTRATOS DESDE LA OBRA
+
+   El contrato del propietario ya está subido en Operativa 1. geat-contrato-leer
+   lo baja del bucket, lo pasa a texto y devuelve el plan de pagos estructurado.
+   La IA NO da de alta nada: devuelve `.extraido` y `.avisos`, el CEO revisa
+   TODO campo (incluidas las cuotas) y recién ahí se escribe en la base.
+
+   Dos candados antes de generar cobranza:
+     · docs_prop_confirmados=false → Steffi no confirmó el escaneado, no se
+       cobra contra un documento que nadie validó.
+     · precio_total vacío → sin precio no hay cuotas que valgan.
+   ════════════════════════════════════════════════════════════════════ */
+const CONTRATO_URL=SB_URL+'/functions/v1/geat-contrato-leer';
+const COB_COND=['reserva','firma','avance_obra','fecha_fija','entrega','desembolso_banco','otro'];
+
+/* Mismo criterio que _driveCall: el token de sesión es lo normal, el PIN
+   (que sólo vive en memoria del CEO) va como respaldo. */
+async function _cobContratoCall(payload,timeoutMs){
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const t=ctrl?setTimeout(function(){ctrl.abort();},timeoutMs||180000):null;
+  try{
+    const body=Object.assign({token:localStorage.getItem('geat_session_token')||null},payload||{});
+    if(_cvPin)body.pin=_cvPin;
+    const r=await fetch(CONTRATO_URL,{method:'POST',cache:'no-store',signal:ctrl?ctrl.signal:undefined,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+      body:JSON.stringify(body)});
+    return await r.json();
+  }finally{if(t)clearTimeout(t);}
+}
+
+function _cobTogglePanelObras(){_cobPanelObras=!_cobPanelObras;_cobPintar();}
+
+/* Obras activas que todavía NO tienen contrato de cobranza */
+function _cobHtmlPanelObras(){
+  if(!_cobPanelObras)return '';
+  const pend=_cobObras.filter(function(o){return _cobObrasConContrato.indexOf(o.id)<0;});
+  const filas=pend.length?pend.map(function(o){
+    const sinArch=!o.contrato_propietario_nombre;
+    const leyendo=(_cobLeyendo===o.id);
+    return '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--gray-700)">'+
+      '<div style="min-width:180px">'+
+        '<strong style="font-size:12px">'+_escPend(o.nombre||'—')+'</strong> '+
+        '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(o.codigo||'')+'</span>'+
+        (o.docs_prop_confirmados?'':'<div style="font-size:10px;color:var(--gold)">⚠️ Steffi todavía no confirmó el escaneado</div>')+
+        (sinArch?'<div style="font-size:10px;color:var(--st-atrasado)">Sin archivo de contrato en Operativa 1</div>':'')+
+      '</div>'+
+      (leyendo
+        ? '<span style="font-size:11px;color:var(--gray-400)"><span class="spin" style="width:12px;height:12px;margin-right:5px"></span>Leyendo…</span>'
+        : '<button class="btn-primary btn-sm" style="font-size:11px'+(sinArch?';opacity:0.45;cursor:not-allowed':'')+'"'+
+          (sinArch?' disabled':'')+' onclick="_cobLeerContratoObra('+o.id+')">Leer</button>')+
+    '</div>';
+  }).join(''):'<div style="font-size:11px;color:var(--gray-400);padding:6px 0">Todas las obras activas ya tienen su contrato de cobranza.</div>';
+  return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:10px;margin-bottom:14px;background:var(--gray-800)">'+
+    '<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Obras activas sin contrato de cobranza</div>'+
+    filas+'</div>';
+}
+
+async function _cobCargarLeadsGanados(){
+  if(_cobLeadsGanados.length)return;
+  try{
+    const{data}=await sb.from('leads').select('id,nombre').eq('estado','cerrado_ganado').order('nombre');
+    _cobLeadsGanados=data||[];
+  }catch(e){_cobLeadsGanados=[];}
+}
+
+async function _cobLeerContratoObra(obraId){
+  const o=_cobObra(obraId); if(!o){toast('Obra no encontrada','error');return;}
+  if(_cobLeyendo)return;
+  _cobLeyendo=obraId;_cobPintar();
+  let r=null;
+  try{ r=await _cobContratoCall({obra_id:obraId}); }
+  catch(e){ r={error:(e&&e.message)||'sin respuesta'}; }
+  _cobLeyendo=null;_cobPintar();
+  if(!r||!r.ok){
+    toast('No se pudo leer el contrato: '+((r&&(r.error||r.detail))||'error'),'error');
+    return;
+  }
+  const ob=r.obra||{};
+  _cobLeido={
+    extraido:r.extraido||{},
+    avisos:r.avisos||[],
+    archivo:r.archivo||'',
+    obra:{id:obraId,nombre:ob.nombre||o.nombre||'',codigo:ob.codigo||o.codigo||'',
+          docs_confirmados:(ob.docs_confirmados!==undefined&&ob.docs_confirmados!==null)
+            ?!!ob.docs_confirmados:!!o.docs_prop_confirmados}
+  };
+  if(!Array.isArray(_cobLeido.extraido.cuotas))_cobLeido.extraido.cuotas=[];
+  await _cobCargarLeadsGanados();
+  _cobPintarLeido();
+  openModal('modalCobLeerContrato');
+}
+
+/* Todo editable: la IA propone, el CEO corrige antes de que se escriba nada. */
+function _cobPintarLeido(){
+  const cont=document.getElementById('cob-lc-body'); if(!cont||!_cobLeido)return;
+  const x=_cobLeido.extraido,ob=_cobLeido.obra;
+  const qs=Array.isArray(x.cuotas)?x.cuotas:[];
+  const vAttr=function(v){return (v===null||v===undefined)?'':_escPend(v);};
+
+  const htmlAvisos=(_cobLeido.avisos&&_cobLeido.avisos.length)?
+    '<div style="border:1px solid var(--st-atrasado);border-radius:8px;padding:8px;margin-bottom:12px">'+
+      _cobLeido.avisos.map(function(a){
+        return '<div style="color:var(--st-atrasado);font-size:12px;margin:2px 0">⚠️ '+_escPend(a)+'</div>';
+      }).join('')+'</div>':'';
+
+  const nomCli=(x.cliente_nombre||'').toLowerCase();
+  const optLeads=['<option value="">— sin lead asociado —</option>'].concat(
+    _cobLeadsGanados.map(function(l){
+      const sel=(nomCli&&(l.nombre||'').toLowerCase()===nomCli)?' selected':'';
+      return '<option value="'+l.id+'"'+sel+'>'+_escPend(l.nombre||'—')+' (#'+l.id+')</option>';
+    })).join('');
+
+  const htmlCuotas=qs.map(function(q,i){
+    const p='cob-lc-q'+i+'-';
+    return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--gray-900)">'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'+
+        '<span style="font-size:11px;color:var(--gray-400)">N°</span>'+
+        '<input type="number" id="'+p+'num" class="form-control" style="width:70px;padding:4px 6px;font-size:11px" value="'+vAttr(q.numero)+'">'+
+        '<input type="text" id="'+p+'desc" class="form-control" style="flex:1;padding:4px 8px;font-size:11px" placeholder="Descripción" value="'+vAttr(q.descripcion)+'">'+
+        '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_cobLcQuitarCuota('+i+')">✕</button>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+
+        '<div style="flex:1;min-width:100px"><label class="form-label" style="font-size:10px">% del total</label>'+
+          '<input type="number" step="0.01" id="'+p+'pct" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.porcentaje)+'"></div>'+
+        '<div style="flex:1;min-width:120px"><label class="form-label" style="font-size:10px">Monto</label>'+
+          '<input type="number" step="0.01" id="'+p+'monto" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.monto)+'"></div>'+
+        '<div style="flex:1;min-width:130px"><label class="form-label" style="font-size:10px">Fecha prevista</label>'+
+          '<input type="date" id="'+p+'fecha" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.fecha_prevista?String(q.fecha_prevista).slice(0,10):'')+'"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<div style="flex:1;min-width:140px"><label class="form-label" style="font-size:10px">Condición</label>'+
+          '<select id="'+p+'tipo" class="form-control" style="padding:4px 8px;font-size:11px">'+
+            COB_COND.map(function(t){
+              return '<option value="'+t+'"'+(q.condicion_tipo===t?' selected':'')+'>'+t+'</option>';
+            }).join('')+'</select></div>'+
+        '<div style="flex:1;min-width:110px"><label class="form-label" style="font-size:10px">% avance requerido</label>'+
+          '<input type="number" step="0.01" id="'+p+'avpct" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.avance_pct_requerido)+'"></div>'+
+        '<div style="flex:2;min-width:180px"><label class="form-label" style="font-size:10px">Detalle de la condición</label>'+
+          '<input type="text" id="'+p+'det" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.condicion_detalle)+'"></div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  cont.innerHTML=htmlAvisos+
+    '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">'+
+      'Obra <strong>'+_escPend(ob.nombre||'—')+'</strong> ('+_escPend(ob.codigo||'sin código')+') · archivo '+
+      _escPend(_cobLeido.archivo||'—')+'</div>'+
+    '<label class="form-label">Cliente *</label>'+
+    '<input type="text" id="cob-lc-cliente" class="form-control" value="'+vAttr(x.cliente_nombre)+'">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<div style="flex:2;min-width:150px"><label class="form-label">Precio total *</label>'+
+        '<input type="number" step="0.01" id="cob-lc-precio" class="form-control" value="'+vAttr(x.precio_total)+'" oninput="_cobLcRevisarBloqueo()"></div>'+
+      '<div style="flex:1;min-width:90px"><label class="form-label">Moneda</label>'+
+        '<select id="cob-lc-moneda" class="form-control">'+
+          ['BS','USD'].map(function(m){
+            return '<option value="'+m+'"'+(String(x.moneda||'BS').toUpperCase()===m?' selected':'')+'>'+m+'</option>';
+          }).join('')+'</select></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<div style="flex:1;min-width:150px"><label class="form-label">Fecha de firma</label>'+
+        '<input type="date" id="cob-lc-firma" class="form-control" value="'+vAttr(x.fecha_firma?String(x.fecha_firma).slice(0,10):'')+'"></div>'+
+      '<div style="flex:1;min-width:150px"><label class="form-label">Mora por día de atraso</label>'+
+        '<input type="number" step="0.01" id="cob-lc-mora" class="form-control" value="'+vAttr(x.mora_monto_dia)+'"></div>'+
+    '</div>'+
+    '<label class="form-label" style="display:flex;gap:6px;align-items:center;margin-top:10px">'+
+      '<input type="checkbox" id="cob-lc-banco"'+(x.financiamiento_banco?' checked':'')+'> Financiamiento bancario</label>'+
+    '<input type="text" id="cob-lc-bancodet" class="form-control" placeholder="Qué paga el banco y qué el cliente" value="'+vAttr(x.financiamiento_detalle)+'">'+
+    '<label class="form-label">Vincular a lead (opcional)</label>'+
+    '<select id="cob-lc-lead" class="form-control">'+optLeads+'</select>'+
+    '<div class="section-title" style="margin:14px 0 6px">Cuotas del contrato</div>'+
+    (htmlCuotas||'<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">El contrato no trajo cuotas: cargalas a mano.</div>')+
+    '<button class="btn-ghost btn-sm" style="font-size:11px;margin-bottom:12px" onclick="_cobLcAgregarCuota()">＋ Agregar cuota</button>'+
+    '<div id="cob-lc-bloqueo" style="font-size:12px;color:var(--st-atrasado);margin-bottom:8px"></div>'+
+    '<button class="btn-primary" id="cob-lc-guardar" style="width:100%" onclick="_cobGuardarLeido()">Guardar y generar cobranza</button>';
+  _cobLcRevisarBloqueo();
+}
+
+/* DOM → estado. Se llama antes de repintar o guardar para no perder ediciones. */
+function _cobLcSync(){
+  if(!_cobLeido)return;
+  const x=_cobLeido.extraido;
+  const v=function(id){const e=document.getElementById(id);return e?e.value:'';};
+  const num=function(id){const s=v(id);return s===''?null:Number(s);};
+  x.cliente_nombre=v('cob-lc-cliente');
+  x.precio_total=num('cob-lc-precio');
+  x.moneda=v('cob-lc-moneda')||'BS';
+  x.fecha_firma=v('cob-lc-firma')||null;
+  x.mora_monto_dia=num('cob-lc-mora');
+  const bk=document.getElementById('cob-lc-banco');
+  x.financiamiento_banco=!!(bk&&bk.checked);
+  x.financiamiento_detalle=v('cob-lc-bancodet')||null;
+  const qs=Array.isArray(x.cuotas)?x.cuotas:[];
+  qs.forEach(function(q,i){
+    const p='cob-lc-q'+i+'-';
+    if(!document.getElementById(p+'num'))return;
+    q.numero=num(p+'num');
+    q.descripcion=v(p+'desc');
+    q.porcentaje=num(p+'pct');
+    q.monto=num(p+'monto');
+    q.fecha_prevista=v(p+'fecha')||null;
+    q.condicion_tipo=v(p+'tipo');
+    q.avance_pct_requerido=num(p+'avpct');
+    q.condicion_detalle=v(p+'det');
+  });
+  x.cuotas=qs;
+}
+function _cobLcAgregarCuota(){
+  if(!_cobLeido)return;
+  _cobLcSync();
+  const qs=_cobLeido.extraido.cuotas||[];
+  const max=qs.reduce(function(m,q){const n=Number(q.numero);return isFinite(n)&&n>m?n:m;},-1);
+  qs.push({numero:max+1,descripcion:'',porcentaje:null,monto:null,
+           condicion_tipo:'otro',condicion_detalle:'',avance_pct_requerido:null,fecha_prevista:null});
+  _cobLeido.extraido.cuotas=qs;
+  _cobPintarLeido();
+}
+function _cobLcQuitarCuota(i){
+  if(!_cobLeido)return;
+  _cobLcSync();
+  (_cobLeido.extraido.cuotas||[]).splice(i,1);
+  _cobPintarLeido();
+}
+
+/* Motivo por el que NO se puede generar cobranza, o '' si está habilitado */
+function _cobLcBloqueo(){
+  if(!_cobLeido)return 'No hay contrato leído.';
+  if(!_cobLeido.obra.docs_confirmados)
+    return 'Steffi todavía no confirmó el escaneado del contrato de esta obra.';
+  const e=document.getElementById('cob-lc-precio');
+  const p=Number(e?e.value:_cobLeido.extraido.precio_total);
+  if(!(p>0))return 'Falta el precio total del contrato.';
+  return '';
+}
+function _cobLcRevisarBloqueo(){
+  const m=_cobLcBloqueo();
+  const b=document.getElementById('cob-lc-guardar');
+  const d=document.getElementById('cob-lc-bloqueo');
+  if(b){b.disabled=!!m;b.style.opacity=m?'0.45':'';b.style.cursor=m?'not-allowed':'';}
+  if(d)d.innerHTML=m?'🚫 Bloqueado: '+_escPend(m):'';
+  return m;
+}
+
+/* Lo que no tiene columna propia (financiamiento, rarezas de pago) no se pierde:
+   queda en observaciones del contrato. */
+function _cobObsLeido(x){
+  const p=[];
+  if(x.financiamiento_banco)p.push('Financiamiento bancario'+(x.financiamiento_detalle?': '+x.financiamiento_detalle:''));
+  if(x.observaciones_cobranza)p.push(String(x.observaciones_cobranza));
+  return p.length?p.join('\n'):null;
+}
+
+async function _cobGuardarLeido(){
+  if(!_cobLeido){toast('Sin contrato leído','error');return;}
+  _cobLcSync();
+  const m=_cobLcRevisarBloqueo();
+  if(m){toast('Bloqueado: '+m,'error');return;}
+  const x=_cobLeido.extraido;
+  const qs=Array.isArray(x.cuotas)?x.cuotas:[];
+  const cliente=(x.cliente_nombre||'').trim();
+  if(!cliente){toast('Falta el nombre del cliente','error');return;}
+  if(!qs.length){toast('No hay cuotas que generar','error');return;}
+  const nums=qs.map(function(q){return Number(q.numero);});
+  if(nums.some(function(n){return !isFinite(n);})){toast('Toda cuota necesita un número','error');return;}
+  if(new Set(nums).size!==nums.length){toast('Hay dos cuotas con el mismo número','error');return;}
+  const firma=x.fecha_firma||null;
+  /* El % que habilita la cuota por avance es lo que después dispara el 🔔 */
+  const qAv=qs.find(function(q){return q.condicion_tipo==='avance_obra'&&Number(q.avance_pct_requerido)>0;});
+  let ct=null;
+  try{
+    const{data,error}=await sb.from('cobranza_contratos').insert({
+      obra_id:_cobLeido.obra.id,
+      lead_id:Number((document.getElementById('cob-lc-lead')||{}).value)||null,
+      cliente_nombre:cliente,
+      contrato_codigo:_cobLeido.obra.codigo||null,
+      precio_total_bs:Number(x.precio_total)||0,
+      moneda:String(x.moneda||'BS').toUpperCase(),
+      fecha_firma:firma,
+      mora_usd_dia:Number(x.mora_monto_dia)||0,
+      observaciones:_cobObsLeido(x),
+      informe_previo_pct_pactado:qAv?Number(qAv.avance_pct_requerido):null,
+      contrato_validado:true,
+      contrato_validado_por:(cu&&cu.nombre)||null,
+      contrato_validado_fecha:new Date().toISOString()
+    }).select().single();
+    if(error)throw error;
+    ct=data;
+  }catch(e){toast('Error creando el contrato: '+e.message,'error');return;}
+
+  const filas=qs.map(function(q){
+    const det=(q.condicion_detalle||'').trim();
+    const desc=((q.descripcion||'').trim()+(det?' — '+det:'')).slice(0,500);
+    return{contrato_id:ct.id,lead_id:ct.lead_id||null,
+      numero_pago:Number(q.numero),
+      porcentaje:(q.porcentaje===null||q.porcentaje===undefined||q.porcentaje==='')?null:String(q.porcentaje)+'%',
+      descripcion:desc||null,
+      monto_bs:_cobR2(q.monto),
+      fecha_prevista:q.fecha_prevista||((q.condicion_tipo==='reserva'||q.condicion_tipo==='firma')?firma:null),
+      estado:'pendiente',activo:true};
+  });
+  try{
+    const{error}=await sb.from('pagos_cliente').insert(filas);
+    if(error)throw error;
+  }catch(e){
+    /* Un contrato sin cuotas es peor que ningún contrato: se revierte el alta. */
+    try{await sb.from('cobranza_contratos').delete().eq('id',ct.id);}catch(e2){}
+    toast('Error generando las cuotas (se revirtió el contrato): '+e.message,'error');
+    return;
+  }
+  closeModal('modalCobLeerContrato');
+  _cobLeido=null;
+  toast('✅ Contrato dado de alta con '+filas.length+' cuota(s)','ok');
+  try{await registrarAuditoria('alta_contrato_desde_obra','cobranza_contratos',ct.id,
+    {obra_id:ct.obra_id,cuotas:filas.length,total:ct.precio_total_bs});}catch(e){}
+  await renderCobranzas();
 }
 
 /* Hitos que tocan cobrar, para el Parte del Día (solo admin) */
