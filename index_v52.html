@@ -725,6 +725,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
+    <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()">🧾 Cobranzas</div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
@@ -878,6 +879,16 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div id="gerencia-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
+  <!-- ══ SCREEN: COBRANZAS (v173) — PRIVADO del CEO (solo rol admin, ni socios).
+       Cobro por hitos de avance de obra. Montos en Bs, mora en USD.
+       Ninguna vista de equipo muestra estos datos ni las comisiones. ══ -->
+  <section id="screen-cobranzas" class="screen">
+    <div class="screen-title">
+      <h1>🧾 <span class="gold">Cobranzas</span></h1>
+    </div>
+    <div id="cobranzas-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
   <!-- ══ SCREEN: RECLUTAMIENTO (v145) — solo admin, datos vía Edge Function geat-cv-panel ══ -->
   <section id="screen-reclutamiento" class="screen">
     <div class="screen-title">
@@ -928,6 +939,68 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="modal-body" id="modal-lead-body">
       <div class="loading-state"><span class="spin"></span> Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: COBRANZAS — ALTA DE CONTRATO (v173) ══ -->
+<div id="modalCobContrato" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalCobContrato')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="cob-ct-titulo">🧾 Nuevo contrato</h2>
+      <button class="modal-close" onclick="closeModal('modalCobContrato')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="border:1px dashed var(--gray-600);border-radius:8px;padding:10px;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:6px">
+          Subí el .docx del contrato y se pre-llena solo. Si algo no se detecta, queda vacío para completar a mano.
+        </div>
+        <input type="file" id="cob-ct-docx" accept=".docx" onchange="_cobDesdeDocx(this)" style="font-size:11px;color:var(--gray-300)">
+        <div id="cob-ct-docx-msg" style="font-size:11px;margin-top:6px"></div>
+      </div>
+      <label class="form-label">Cliente *</label>
+      <input type="text" id="cob-ct-cliente" class="form-control" placeholder="Nombre del cliente">
+      <label class="form-label">Código de contrato</label>
+      <input type="text" id="cob-ct-codigo" class="form-control" placeholder="GAC0223">
+      <label class="form-label">Precio total (Bs) *</label>
+      <input type="number" id="cob-ct-total" class="form-control" step="0.01" placeholder="380800" oninput="_cobPreviewHitos()">
+      <label class="form-label">Reserva ya cobrada (Bs)</label>
+      <input type="number" id="cob-ct-reserva" class="form-control" step="0.01" placeholder="1400" oninput="_cobPreviewHitos()">
+      <label class="form-label">Fecha de firma</label>
+      <input type="date" id="cob-ct-firma" class="form-control">
+      <label class="form-label">Mora (USD por día de atraso)</label>
+      <input type="number" id="cob-ct-mora" class="form-control" step="0.01" value="10">
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label class="form-label">Aviso 2do pago (días)</label>
+          <input type="number" id="cob-ct-d2" class="form-control" value="60"></div>
+        <div style="flex:1"><label class="form-label">Aviso 3er pago (días)</label>
+          <input type="number" id="cob-ct-d3" class="form-control" value="120"></div>
+      </div>
+      <label class="form-label">Vincular a lead (opcional)</label>
+      <select id="cob-ct-lead" class="form-control"><option value="">— sin lead asociado —</option></select>
+      <div id="cob-ct-preview" style="margin:12px 0"></div>
+      <button class="btn-primary" style="width:100%" onclick="_cobGuardarContrato()">Crear contrato y generar los 4 hitos</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: COBRANZAS — REGISTRAR COBRO (v173) ══ -->
+<div id="modalCobCobro" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalCobCobro')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>✓ Registrar cobro</h2>
+      <button class="modal-close" onclick="closeModal('modalCobCobro')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="cob-co-info" style="font-size:12px;color:var(--gray-300);margin-bottom:10px"></div>
+      <label class="form-label">Monto cobrado (Bs) *</label>
+      <input type="number" id="cob-co-monto" class="form-control" step="0.01" oninput="_cobPreviewComision()">
+      <label class="form-label">Fecha de cobro *</label>
+      <input type="date" id="cob-co-fecha" class="form-control">
+      <label class="form-label">Comprobante (foto o PDF del depósito)</label>
+      <input type="file" id="cob-co-comp" accept="image/*,application/pdf" style="font-size:11px;color:var(--gray-300)">
+      <div id="cob-co-comision" style="font-size:12px;margin:10px 0;color:var(--gold)"></div>
+      <button class="btn-primary" style="width:100%" onclick="_cobConfirmarCobro()">Confirmar cobro</button>
     </div>
   </div>
 </div>
@@ -1559,7 +1632,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='172';
+  var CURRENT_VERSION='173';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2224,6 +2297,9 @@ function startApp(){
     if(tabAdmin)tabAdmin.style.display='';
     const tabRec=document.getElementById('tab-reclutamiento');
     if(tabRec)tabRec.style.display='';
+    /* v173 — Cobranzas: privado del CEO. Ni socios ni el resto del equipo. */
+    const tabCob=document.getElementById('tab-cobranzas');
+    if(tabCob)tabCob.style.display='';
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
     /* v96: recibidor de audio (#uploadAudioBtn) movido al panel ADMIN → sección Registro */
@@ -3324,7 +3400,7 @@ function abrirReasignarCerrador(leadId){
   const opts=_cerradoresActivos();
   if(!opts.length){toast('No hay cerradores activos en colaboradores','error');return;}
   cont.style.display='block';
-  cont.innerHTML='<select class="fselect" id="reasig-sel-'+leadId+'" style="font-size:11px;padding:4px">'+
+  cont.innerHTML='<select class="form-control" id="reasig-sel-'+leadId+'" style="font-size:11px;padding:4px">'+
       opts.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join('')+
     '</select>'+
     '<button class="btn-primary btn-sm" style="font-size:10px;margin-left:6px" onclick="guardarReasignarCerrador('+leadId+')">Guardar</button>'+
@@ -8093,6 +8169,500 @@ let _pdDetalleAbierto=null; // qué lista está desplegada
 
 function _pdEsAdmin(){return !!(cu&&cu.rol==='admin');}
 
+/* ═══════════════════════════════════════════════════════════════════════
+   v173 — PANEL DE COBRANZAS · PRIVADO DEL CEO (solo rol admin, ni socios)
+
+   GEAT cobra por hitos de avance de obra. Todo contrato tiene el mismo esquema:
+     0 · Reserva   — se imputa al 1er pago
+     1 · 1er 30%   — a la firma. ÚNICO hito con fecha fija → único que genera mora.
+     2 · 2do 35%   — por avance físico, previa consulta a Fátima
+     3 · 3er 35%   — avance final
+   El precio total cambia por contrato; los porcentajes no.
+
+   Los avisos por tiempo NO cobran solos: empujan a José Miguel a consultar a
+   Fátima. Montos en Bs (moneda del contrato); la mora en USD, como dice el
+   contrato. Las comisiones son informativas y NUNCA salen de este panel.
+   ═══════════════════════════════════════════════════════════════════════ */
+let _cobContratos=[],_cobPagos=[],_cobCfg={},_cobPagoActual=null,_cobAbierto=null;
+
+function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
+/* 'pagado' es el estado legacy de las filas de abril; se lee como cobrado */
+function _cobEsCobrado(p){return !!p&&(p.estado==='cobrado'||p.estado==='pagado');}
+function _cobR2(n){return Math.round((Number(n)||0)*100)/100;}
+function _cobFechaMas(ymd,dias){
+  if(!ymd)return null;
+  const p=String(ymd).slice(0,10).split('-');
+  const d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  d.setDate(d.getDate()+(Number(dias)||0));
+  return ymdLocal(d);
+}
+/* días que van de `a` hasta `b` (positivo si b es posterior) */
+function _cobDiasEntre(a,b){
+  if(!a||!b)return 0;
+  const pa=String(a).slice(0,10).split('-'),pb=String(b).slice(0,10).split('-');
+  const da=new Date(Number(pa[0]),Number(pa[1])-1,Number(pa[2]));
+  const db=new Date(Number(pb[0]),Number(pb[1])-1,Number(pb[2]));
+  return Math.round((db-da)/86400000);
+}
+function _cobNomHito(n){return ['Reserva','1er pago','2do pago','3er pago'][n]||('Pago '+n);}
+
+/* Fecha en que un hito "debería" cobrarse.
+   Hitos 2 y 3 no tienen fecha fija (dependen del avance): se estima desde el
+   arranque real de la obra — la fecha de cobro del 1er pago, o la firma si aún
+   no se cobró. Así 60/120 días son un cronograma desde el arranque y no plazos
+   encadenados; ambos son editables por contrato (dias_aviso_2do / _3er). */
+function _cobFechaAviso(p,c){
+  if(p.numero_pago!==2&&p.numero_pago!==3)return p.fecha_prevista||null;
+  const primero=_cobPagos.find(function(x){return x.contrato_id===c.id&&x.numero_pago===1;});
+  const base=(primero&&_cobEsCobrado(primero)&&(primero.fecha_cobro||primero.fecha_pago))||c.fecha_firma||null;
+  if(!base)return null;
+  return _cobFechaMas(base,p.numero_pago===2?(c.dias_aviso_2do||60):(c.dias_aviso_3er||120));
+}
+/* Estado visual de un hito + mora acumulada (FUNCIÓN 5, solo informativa) */
+function _cobEstadoHito(p,c){
+  const hoy=ymdLocal(new Date());
+  if(_cobEsCobrado(p))return{cod:'cobrado',icono:'✅',label:'Pagado',aviso:p.fecha_cobro||p.fecha_pago||null,mora:0};
+  const aviso=_cobFechaAviso(p,c);
+  if(p.fecha_prevista){
+    const atraso=_cobDiasEntre(p.fecha_prevista,hoy);
+    if(atraso>0)return{cod:'vencido',icono:'🔴',label:'Vencido hace '+atraso+' día(s)',aviso:aviso,
+                       mora:_cobR2(atraso*(Number(c.mora_usd_dia)||0))};
+    if(atraso===0)return{cod:'toca',icono:'🔔',label:'Vence hoy',aviso:aviso,mora:0};
+    return{cod:'pendiente',icono:'⬜',label:'Vence en '+Math.abs(atraso)+' día(s)',aviso:aviso,mora:0};
+  }
+  if(aviso){
+    const d=_cobDiasEntre(aviso,hoy);
+    if(d>=0)return{cod:'toca',icono:'🔔',label:'Estimado hace '+d+' día(s) — consultar avance',aviso:aviso,mora:0};
+    return{cod:'pendiente',icono:'⬜',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:aviso,mora:0};
+  }
+  return{cod:'pendiente',icono:'⬜',label:'Sin fecha estimada',aviso:null,mora:0};
+}
+/* FUNCIÓN 7 — comisión informativa del cobro. Nunca se expone al equipo. */
+function _cobComision(monto){
+  const pct=Number(_cobCfg.cobranza_comision_pct||1.27)/100;
+  const sc=Number(_cobCfg.cobranza_comision_split_captador||50)/100;
+  const total=(Number(monto)||0)*pct;
+  return{total:total,captador:total*sc,cerrador:total*(1-sc)};
+}
+
+async function renderCobranzas(){
+  const cont=document.getElementById('cobranzas-body'); if(!cont)return;
+  if(!cu||cu.rol!=='admin'){
+    cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Sin acceso.</div>';
+    return;
+  }
+  cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    const{data:cts,error:e1}=await sb.from('cobranza_contratos')
+      .select('*').eq('activo',true).order('created_at',{ascending:false});
+    if(e1)throw e1;
+    _cobContratos=cts||[];
+    const{data:pgs,error:e2}=await sb.from('pagos_cliente')
+      .select('*').not('contrato_id','is',null).eq('activo',true).order('numero_pago');
+    if(e2)throw e2;
+    _cobPagos=pgs||[];
+    const{data:cfg}=await sb.from('app_config').select('key,value').like('key','cobranza%');
+    _cobCfg={};(cfg||[]).forEach(function(r){_cobCfg[r.key]=r.value;});
+    _cobPintar();
+  }catch(e){
+    cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
+  }
+}
+
+function _cobPintar(){
+  const cont=document.getElementById('cobranzas-body'); if(!cont)return;
+  const hoy=ymdLocal(new Date());
+
+  /* ── 1. 🔔 Toca cobrar ─────────────────────────────────────────── */
+  const tocan=[];
+  _cobContratos.forEach(function(c){
+    _cobPagos.filter(function(p){return p.contrato_id===c.id;}).forEach(function(p){
+      const st=_cobEstadoHito(p,c);
+      if(st.cod==='toca'||st.cod==='vencido')tocan.push({c:c,p:p,st:st});
+    });
+  });
+  tocan.sort(function(a,b){return (a.st.aviso||'9999').localeCompare(b.st.aviso||'9999');});
+
+  let htmlTocan='';
+  if(!tocan.length){
+    htmlTocan='<div style="font-size:12px;color:var(--gray-400);padding:8px">Nada por cobrar ahora mismo.</div>';
+  }else{
+    htmlTocan=tocan.map(function(t){
+      const cobrado=_cobPagos.filter(function(p){return p.contrato_id===t.c.id&&_cobEsCobrado(p);})
+        .reduce(function(s,p){return s+Number(p.monto_bs||0);},0);
+      const total=Number(t.c.precio_total_bs)||0;
+      const pct=total?Math.min(100,Math.round(cobrado/total*100)):0;
+      return '<div style="border:1px solid var(--gray-600);border-left:3px solid '+(t.st.cod==='vencido'?'var(--st-atrasado)':'var(--gold)')+';border-radius:8px;padding:10px;margin-bottom:8px;background:var(--gray-800)">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">'+
+          '<strong style="font-size:13px">'+_escPend(t.c.cliente_nombre||'—')+'</strong>'+
+          '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(t.c.contrato_codigo||'sin código')+'</span>'+
+        '</div>'+
+        '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_cobNomHito(t.p.numero_pago)+'</strong> · '+_cobBs(t.p.monto_bs)+
+          ' <span style="color:var(--gray-400)">— '+_escPend(t.st.label)+'</span></div>'+
+        (t.st.mora>0?'<div style="font-size:12px;color:var(--st-atrasado);margin-bottom:4px">⏱️ Mora acumulada: '+_cobUsd(t.st.mora)+' ('+_cobUsd(t.c.mora_usd_dia)+'/día)</div>':'')+
+        '<div style="height:6px;background:var(--gray-900);border-radius:3px;overflow:hidden;margin:6px 0">'+
+          '<div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">Cobrado '+_cobBs(cobrado)+' de '+_cobBs(total)+' ('+pct+'%)</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+          '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobPedirAvanceFatima('+t.c.id+','+t.p.numero_pago+')">📲 Pedir avance a Fátima</button>'+
+          '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirCobro('+t.p.id+')">✓ Registrar cobro</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  /* ── 2. 📋 Cronograma por cliente ──────────────────────────────── */
+  const htmlCron=_cobContratos.length?_cobContratos.map(function(c){
+    const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id;})
+      .sort(function(a,b){return a.numero_pago-b.numero_pago;});
+    const cobrado=pagos.filter(_cobEsCobrado).reduce(function(s,p){return s+Number(p.monto_bs||0);},0);
+    const abierto=_cobAbierto===c.id;
+    const filas=pagos.map(function(p){
+      const st=_cobEstadoHito(p,c);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
+        '<span>'+st.icono+' '+_cobNomHito(p.numero_pago)+
+          ' <span style="color:var(--gray-400);font-size:10px">'+_escPend(p.porcentaje||'')+'</span></span>'+
+        '<span style="display:flex;gap:10px;align-items:baseline">'+
+          '<span style="color:var(--gray-400);font-size:10px">'+_escPend(st.label)+'</span>'+
+          '<strong>'+_cobBs(p.monto_bs)+'</strong>'+
+          (p.comprobante_url?'<button class="btn-ghost btn-sm" style="font-size:10px" onclick="_cobVerComprobante(\''+_escPend(p.comprobante_url)+'\')">📎</button>':'')+
+          (_cobEsCobrado(p)?'':'<button class="btn-ghost btn-sm" style="font-size:10px" onclick="_cobAbrirCobro('+p.id+')">✓</button>')+
+        '</span>'+
+      '</div>';
+    }).join('');
+    return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-800)">'+
+      '<div style="padding:10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="_cobToggle('+c.id+')">'+
+        '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+'</strong>'+
+        '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(c.contrato_codigo||'')+' · '+_cobBs(cobrado)+' / '+_cobBs(c.precio_total_bs)+'</span>'+
+      '</div>'+
+      (abierto?'<div style="padding:0 10px 10px">'+(filas||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+
+        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'+
+          '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_cobArchivarContrato('+c.id+')">🗄️ Archivar contrato</button>'+
+        '</div></div>':'')+
+    '</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px">Todavía no hay contratos cargados.</div>';
+
+  /* ── 3. 💰 Caja ────────────────────────────────────────────────── */
+  let contratado=0,cobradoT=0,porCobrar=0,esteMes=0;
+  const mes=hoy.slice(0,7);
+  _cobContratos.forEach(function(c){
+    contratado+=Number(c.precio_total_bs)||0;
+    _cobPagos.filter(function(p){return p.contrato_id===c.id;}).forEach(function(p){
+      const m=Number(p.monto_bs)||0;
+      if(_cobEsCobrado(p)){cobradoT+=m;return;}
+      porCobrar+=m;
+      const st=_cobEstadoHito(p,c);          /* FUNCIÓN 6 — proyección del mes */
+      if(st.aviso&&String(st.aviso).slice(0,7)===mes)esteMes+=m;
+    });
+  });
+  const celda=function(lbl,val,color){
+    return '<div style="flex:1;min-width:130px"><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase">'+lbl+'</div>'+
+      '<div style="font-size:14px;font-weight:800;color:'+(color||'var(--gray-100)')+'">'+_cobBs(val)+'</div></div>';
+  };
+  const htmlCaja='<div style="display:flex;gap:12px;flex-wrap:wrap;border:1px solid var(--gray-600);border-radius:8px;padding:10px;background:var(--gray-800)">'+
+    celda('Contratado',contratado)+celda('Cobrado',cobradoT,'var(--st-completo)')+
+    celda('Este mes entra',esteMes,'var(--gold)')+celda('Por cobrar',porCobrar)+'</div>';
+
+  const wa=_cobCfg.cobranza_whatsapp_fatima||'';
+  cont.innerHTML=
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirContrato()">➕ Cargar contrato</button>'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="renderCobranzas()">↺ Actualizar</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--gray-400)">'+
+      '<span>📲 WhatsApp de Fátima:</span>'+
+      '<input type="text" id="cob-wa-fatima" class="form-control" style="width:170px;padding:4px 8px;font-size:11px" placeholder="591XXXXXXXX" value="'+_escPend(wa)+'">'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobGuardarWhatsapp()">Guardar</button>'+
+      (wa?'':'<span style="color:var(--gold)">— cargalo para habilitar el botón de avance</span>')+
+    '</div>'+
+    '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
+    '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron+
+    '<div class="section-title" style="margin:16px 0 6px">💰 Caja</div>'+htmlCaja;
+}
+
+function _cobToggle(id){_cobAbierto=(_cobAbierto===id?null:id);_cobPintar();}
+
+/* El número de Fátima queda configurable desde el propio panel (app_config) */
+async function _cobGuardarWhatsapp(){
+  const el=document.getElementById('cob-wa-fatima'); if(!el)return;
+  const num=(el.value||'').replace(/[^0-9]/g,'');
+  try{
+    const{error}=await sb.from('app_config').update({value:num}).eq('key','cobranza_whatsapp_fatima');
+    if(error)throw error;
+    _cobCfg.cobranza_whatsapp_fatima=num;
+    toast('✅ WhatsApp de Fátima guardado','ok');
+    _cobPintar();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* FUNCIÓN 3 — arma el mensaje a Fátima para consultar el avance de obra */
+function _cobPedirAvanceFatima(contratoId,numeroPago){
+  const c=_cobContratos.find(function(x){return x.id===contratoId;}); if(!c)return;
+  const num=(_cobCfg.cobranza_whatsapp_fatima||'').replace(/[^0-9]/g,'');
+  if(!num){toast('Cargá primero el WhatsApp de Fátima arriba','error');return;}
+  const txt='Hola Fátima! Consulta por la obra de '+(c.cliente_nombre||'')+
+    (c.contrato_codigo?' (contrato '+c.contrato_codigo+')':'')+
+    ': ¿ya está en el avance necesario para habilitar el '+_cobNomHito(numeroPago).toLowerCase()+'? Gracias!';
+  window.open('https://wa.me/'+num+'?text='+encodeURIComponent(txt),'_blank');
+}
+
+/* ── Alta de contrato + generación automática de los 4 hitos (FUNCIÓN 1) ── */
+async function _cobAbrirContrato(){
+  ['cob-ct-cliente','cob-ct-codigo','cob-ct-total','cob-ct-reserva','cob-ct-firma'].forEach(function(id){
+    const el=document.getElementById(id); if(el)el.value='';
+  });
+  const m=document.getElementById('cob-ct-mora'); if(m)m.value='10';
+  const d2=document.getElementById('cob-ct-d2'); if(d2)d2.value='60';
+  const d3=document.getElementById('cob-ct-d3'); if(d3)d3.value='120';
+  const msg=document.getElementById('cob-ct-docx-msg'); if(msg)msg.innerHTML='';
+  const dx=document.getElementById('cob-ct-docx'); if(dx)dx.value='';
+  _cobPreviewHitos();
+  /* Leads ganados, para vincular cuando se pueda */
+  const sel=document.getElementById('cob-ct-lead');
+  if(sel&&sel.options.length<=1){
+    try{
+      const{data}=await sb.from('leads').select('id,nombre').eq('estado','cerrado_ganado').order('nombre');
+      (data||[]).forEach(function(l){
+        const o=document.createElement('option');o.value=l.id;o.textContent=(l.nombre||'—')+' (#'+l.id+')';sel.appendChild(o);
+      });
+    }catch(e){}
+  }
+  openModal('modalCobContrato');
+}
+
+function _cobPreviewHitos(){
+  const cont=document.getElementById('cob-ct-preview'); if(!cont)return;
+  const P=Number((document.getElementById('cob-ct-total')||{}).value)||0;
+  const R=Number((document.getElementById('cob-ct-reserva')||{}).value)||0;
+  if(!P){cont.innerHTML='';return;}
+  const h=[['Reserva',R],['1er pago (30% − reserva)',_cobR2(P*0.30-R)],
+           ['2do pago (35%)',_cobR2(P*0.35)],['3er pago (35%)',_cobR2(P*0.35)]];
+  const suma=h.reduce(function(s,x){return s+x[1];},0);
+  cont.innerHTML='<div style="border:1px solid var(--gray-600);border-radius:6px;padding:8px;background:var(--gray-800)">'+
+    '<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Hitos que se van a generar</div>'+
+    h.map(function(x){return '<div style="display:flex;justify-content:space-between;font-size:12px"><span>'+x[0]+'</span><strong>'+_cobBs(x[1])+'</strong></div>';}).join('')+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;border-top:1px solid var(--gray-600);margin-top:4px;padding-top:4px;color:'+
+      (Math.abs(suma-P)<0.01?'var(--st-completo)':'var(--st-atrasado)')+'"><span>Suma</span><strong>'+_cobBs(suma)+'</strong></div></div>';
+}
+
+async function _cobGuardarContrato(){
+  const val=function(id){const e=document.getElementById(id);return e?e.value:'';};
+  const cliente=(val('cob-ct-cliente')||'').trim();
+  const P=Number(val('cob-ct-total'))||0;
+  if(!cliente){toast('Falta el nombre del cliente','error');return;}
+  if(P<=0){toast('Falta el precio total','error');return;}
+  const R=Number(val('cob-ct-reserva'))||0;
+  if(R>P*0.30){toast('La reserva no puede superar el 30% (quedaría un 1er pago negativo)','error');return;}
+  const firma=val('cob-ct-firma')||null;
+  try{
+    const{data:ct,error}=await sb.from('cobranza_contratos').insert({
+      cliente_nombre:cliente,
+      contrato_codigo:(val('cob-ct-codigo')||'').trim()||null,
+      precio_total_bs:P,
+      fecha_firma:firma,
+      mora_usd_dia:Number(val('cob-ct-mora'))||10,
+      dias_aviso_2do:Number(val('cob-ct-d2'))||60,
+      dias_aviso_3er:Number(val('cob-ct-d3'))||120,
+      lead_id:Number(val('cob-ct-lead'))||null
+    }).select().single();
+    if(error)throw error;
+    const ok=await _cobGenerarHitos(ct,R);
+    if(!ok)return;
+    closeModal('modalCobContrato');
+    toast('✅ Contrato creado con sus 4 hitos','ok');
+    try{await registrarAuditoria('crear_contrato_cobranza','cobranza_contratos',ct.id,{total:P});}catch(e){}
+    await renderCobranzas();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* Genera los 4 hitos. Idempotente por el índice único (contrato_id, numero_pago). */
+async function _cobGenerarHitos(c,reservaBs){
+  const P=Number(c.precio_total_bs)||0,R=Number(reservaBs)||0;
+  const filas=[
+    {numero_pago:0,porcentaje:'Reserva',descripcion:'Reserva (se imputa al 1er pago)',
+     monto_bs:_cobR2(R),estado:R>0?'cobrado':'pendiente',
+     fecha_prevista:c.fecha_firma||null,fecha_cobro:R>0?(c.fecha_firma||null):null},
+    {numero_pago:1,porcentaje:'30%',descripcion:'1er pago a la firma (30% menos reserva)',
+     monto_bs:_cobR2(P*0.30-R),estado:'pendiente',fecha_prevista:c.fecha_firma||null,fecha_cobro:null},
+    {numero_pago:2,porcentaje:'35%',descripcion:'2do pago por avance físico',
+     monto_bs:_cobR2(P*0.35),estado:'pendiente',fecha_prevista:null,fecha_cobro:null},
+    {numero_pago:3,porcentaje:'35%',descripcion:'3er pago por avance final',
+     monto_bs:_cobR2(P*0.35),estado:'pendiente',fecha_prevista:null,fecha_cobro:null}
+  ].map(function(f){f.contrato_id=c.id;f.lead_id=c.lead_id||null;f.activo=true;return f;});
+  try{
+    const{error}=await sb.from('pagos_cliente').upsert(filas,{onConflict:'contrato_id,numero_pago'});
+    if(error)throw error;
+    return true;
+  }catch(e){toast('Error generando hitos: '+e.message,'error');return false;}
+}
+
+/* ── Registrar cobro (FUNCIONES 7 y 8) ─────────────────────────────── */
+function _cobAbrirCobro(pagoId){
+  const p=_cobPagos.find(function(x){return x.id===pagoId;}); if(!p)return;
+  const c=_cobContratos.find(function(x){return x.id===p.contrato_id;})||{};
+  _cobPagoActual=p;
+  const inf=document.getElementById('cob-co-info');
+  if(inf)inf.innerHTML='<strong>'+_escPend(c.cliente_nombre||'—')+'</strong> · '+_escPend(c.contrato_codigo||'sin código')+
+    '<br>'+_cobNomHito(p.numero_pago)+' — previsto '+_cobBs(p.monto_bs);
+  const m=document.getElementById('cob-co-monto'); if(m)m.value=Number(p.monto_bs)||0;
+  const f=document.getElementById('cob-co-fecha'); if(f)f.value=ymdLocal(new Date());
+  const cp=document.getElementById('cob-co-comp'); if(cp)cp.value='';
+  _cobPreviewComision();
+  openModal('modalCobCobro');
+}
+function _cobPreviewComision(){
+  const cont=document.getElementById('cob-co-comision'); if(!cont)return;
+  const m=Number((document.getElementById('cob-co-monto')||{}).value)||0;
+  const k=_cobComision(m);
+  cont.innerHTML='Comisión de este cobro: <strong>'+_cobBs(k.total)+'</strong> '+
+    '<span style="color:var(--gray-400);font-size:11px">('+(_cobCfg.cobranza_comision_pct||'1.27')+'% — captador '+
+    _cobBs(k.captador)+' / cerrador '+_cobBs(k.cerrador)+')</span>';
+}
+async function _cobConfirmarCobro(){
+  const p=_cobPagoActual; if(!p){toast('Sin hito seleccionado','error');return;}
+  const monto=Number((document.getElementById('cob-co-monto')||{}).value)||0;
+  const fecha=(document.getElementById('cob-co-fecha')||{}).value||'';
+  if(monto<=0){toast('Cargá el monto cobrado','error');return;}
+  if(!fecha){toast('Cargá la fecha de cobro','error');return;}
+  let comprobante=p.comprobante_url||null;
+  const inp=document.getElementById('cob-co-comp');
+  const arch=inp&&inp.files&&inp.files[0];
+  if(arch){
+    try{
+      const ext=(arch.name.split('.').pop()||'jpg').toLowerCase();
+      const nombre='pago_'+p.id+'_'+Date.now()+'.'+ext;
+      const{error:eu}=await sb.storage.from('comprobantes').upload(nombre,arch,{upsert:true});
+      if(eu)throw eu;
+      comprobante=nombre;
+    }catch(e){toast('⚠️ No se pudo subir el comprobante: '+e.message,'warning');}
+  }
+  try{
+    const{error}=await sb.from('pagos_cliente').update({
+      estado:'cobrado',monto_bs:monto,fecha_cobro:fecha,fecha_pago:fecha,
+      comprobante_url:comprobante,updated_at:new Date().toISOString()
+    }).eq('id',p.id);
+    if(error)throw error;
+    const k=_cobComision(monto);
+    closeModal('modalCobCobro');
+    toast('✅ Cobro registrado · comisión '+_cobBs(k.total),'ok');
+    try{await registrarAuditoria('registrar_cobro','pagos_cliente',p.id,{monto_bs:monto,fecha:fecha});}catch(e){}
+    await renderCobranzas();
+    if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function _cobVerComprobante(nombre){
+  try{
+    const{data,error}=await sb.storage.from('comprobantes').createSignedUrl(nombre,3600);
+    if(error||!data)throw(error||new Error('sin url'));
+    window.open(data.signedUrl,'_blank');
+  }catch(e){toast('No se pudo abrir el comprobante: '+e.message,'error');}
+}
+/* Soft-delete: el contrato sale del panel pero nada se borra */
+async function _cobArchivarContrato(id){
+  if(!confirm('¿Archivar este contrato? Sale del panel pero no se borra nada.'))return;
+  try{
+    const{error}=await sb.from('cobranza_contratos').update({activo:false,updated_at:new Date().toISOString()}).eq('id',id);
+    if(error)throw error;
+    try{await registrarAuditoria('archivar_contrato_cobranza','cobranza_contratos',id,{});}catch(e){}
+    toast('Contrato archivado','ok');
+    await renderCobranzas();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ── FUNCIÓN 2 — carga desde el .docx del contrato ───────────────────
+   Un .docx es un ZIP: se lee el directorio central, se saca word/document.xml
+   y se infla con DecompressionStream (nativo). El texto va al mismo pipeline
+   OpenAI que ya usan las grabaciones. Si algo falla, el formulario queda manual
+   y NO se inventa ningún dato: lo que no aparece, se deja vacío. */
+async function _cobLeerDocx(file){
+  const buf=new Uint8Array(await file.arrayBuffer());
+  const dv=new DataView(buf.buffer);
+  let eocd=-1;
+  for(let i=buf.length-22;i>=0&&i>buf.length-66000;i--){ if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;} }
+  if(eocd<0)throw new Error('no parece un .docx');
+  const nEnt=dv.getUint16(eocd+10,true);
+  let off=dv.getUint32(eocd+16,true);
+  let destino=null;
+  for(let i=0;i<nEnt;i++){
+    if(dv.getUint32(off,true)!==0x02014b50)break;
+    const metodo=dv.getUint16(off+10,true);
+    const compSize=dv.getUint32(off+20,true);
+    const fnLen=dv.getUint16(off+28,true);
+    const exLen=dv.getUint16(off+30,true);
+    const cmLen=dv.getUint16(off+32,true);
+    const locOff=dv.getUint32(off+42,true);
+    const nombre=new TextDecoder().decode(buf.subarray(off+46,off+46+fnLen));
+    if(nombre==='word/document.xml')destino={metodo:metodo,compSize:compSize,locOff:locOff};
+    off+=46+fnLen+exLen+cmLen;
+  }
+  if(!destino)throw new Error('el .docx no tiene word/document.xml');
+  const lFn=dv.getUint16(destino.locOff+26,true),lEx=dv.getUint16(destino.locOff+28,true);
+  const ini=destino.locOff+30+lFn+lEx;
+  const datos=buf.subarray(ini,ini+destino.compSize);
+  let xml;
+  if(destino.metodo===0){
+    xml=new TextDecoder().decode(datos);
+  }else{
+    const ds=new DecompressionStream('deflate-raw');
+    const stream=new Blob([datos]).stream().pipeThrough(ds);
+    xml=new TextDecoder().decode(new Uint8Array(await new Response(stream).arrayBuffer()));
+  }
+  return xml.replace(/<\/w:p>/g,'\n').replace(/<[^>]+>/g,'')
+            .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+            .replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+            .replace(/\n{3,}/g,'\n\n').trim();
+}
+async function _cobDesdeDocx(inp){
+  const f=inp&&inp.files&&inp.files[0]; if(!f)return;
+  const msg=document.getElementById('cob-ct-docx-msg');
+  const poner=function(t,color){if(msg)msg.innerHTML='<span style="color:'+(color||'var(--gray-400)')+'">'+t+'</span>';};
+  poner('<span class="spin" style="width:12px;height:12px;margin-right:5px"></span>Leyendo contrato…');
+  let texto='';
+  try{ texto=await _cobLeerDocx(f); }
+  catch(e){ poner('No se pudo leer el .docx ('+_escPend(e.message||'error')+'). Cargalo a mano.','var(--gold)'); return; }
+  if(!texto||texto.length<40){ poner('El .docx no tiene texto legible. Cargalo a mano.','var(--gold)'); return; }
+  poner('<span class="spin" style="width:12px;height:12px;margin-right:5px"></span>Extrayendo datos con IA…');
+  try{
+    const prompt='Extraé los datos de este contrato de construcción de GEAT. Devolvé SOLO JSON. '+
+      'Usá null en todo campo que NO figure explícitamente en el texto — NUNCA inventes ni estimes.\n'+
+      '{"cliente_nombre":null,"contrato_codigo":null,"precio_total_bs":null,"fecha_firma":null,"reserva_bs":null}\n'+
+      'precio_total_bs y reserva_bs: solo el número, sin separadores de miles ni símbolo. '+
+      'fecha_firma en formato YYYY-MM-DD. contrato_codigo es el código tipo GAC0223.\n\n'+
+      texto.slice(0,12000);
+    const x=JSON.parse(await _gptMiniIA(prompt,600,true));
+    const set=function(id,v){const e=document.getElementById(id);if(e&&v!==null&&v!==undefined&&v!=='')e.value=v;};
+    set('cob-ct-cliente',x.cliente_nombre);
+    set('cob-ct-codigo',x.contrato_codigo);
+    set('cob-ct-total',x.precio_total_bs);
+    set('cob-ct-reserva',x.reserva_bs);
+    set('cob-ct-firma',x.fecha_firma);
+    _cobPreviewHitos();
+    const faltan=['cliente_nombre','contrato_codigo','precio_total_bs','fecha_firma']
+      .filter(function(k){return !x[k];});
+    poner(faltan.length?'✅ Pre-llenado. Completá a mano: '+faltan.join(', '):'✅ Datos extraídos — revisá y confirmá.',
+          faltan.length?'var(--gold)':'var(--st-completo)');
+  }catch(e){ poner('No se pudo extraer con IA ('+_escPend(e.message||'error')+'). Cargalo a mano.','var(--gold)'); }
+}
+
+/* Hitos que tocan cobrar, para el Parte del Día (solo admin) */
+async function _cobPendientesParteDia(){
+  try{
+    const{data:cts}=await sb.from('cobranza_contratos').select('*').eq('activo',true);
+    if(!cts||!cts.length)return[];
+    const{data:pgs}=await sb.from('pagos_cliente').select('*').not('contrato_id','is',null).eq('activo',true);
+    _cobContratos=cts;_cobPagos=pgs||[];
+    const out=[];
+    cts.forEach(function(c){
+      (pgs||[]).filter(function(p){return p.contrato_id===c.id;}).forEach(function(p){
+        const st=_cobEstadoHito(p,c);
+        if(st.cod==='toca'||st.cod==='vencido')out.push({c:c,p:p,st:st});
+      });
+    });
+    return out;
+  }catch(e){return[];}
+}
+
 async function renderParteDia(){
   const wrap=document.getElementById('parte-dia-wrap'); if(!wrap)return;
   if(!_pdEsAdmin()){wrap.style.display='none';wrap.innerHTML='';return;}
@@ -8126,9 +8696,12 @@ async function renderParteDia(){
     /* Foco: los calientes con más días sin gestión (updated_at más viejo) */
     const foco=cal.slice().sort((a,b)=>new Date(a.updated_at||a.created_at||0)-new Date(b.updated_at||b.created_at||0)).slice(0,3);
 
+    /* v173 — cobranzas que tocan cobrar. Solo admin: el parte ya está gateado. */
+    const cobranzas=await _cobPendientesParteDia();
+
     _pdDatos={vencidas,reservas,caliente:cal,foco,
       tareasAtrasadas:rTareas.count||0,nuevos:rNuevos.count||0,cerradosSemana:rCerr.count||0,
-      ceo:rCeo.data||[]};
+      ceo:rCeo.data||[],cobranzas:cobranzas};
     _pdPintar();
   }catch(e){
     wrap.innerHTML='<div class="pd-box"><div class="pd-body"><div style="color:var(--st-atrasado);font-size:12px;padding:6px">No se pudo armar el parte: '+_escPend(e.message||'error')+
@@ -8186,6 +8759,18 @@ function _pdPintar(){
           (D.ceo.length>3?'<div style="font-size:10px;color:var(--gray-400);padding:2px 2px">+'+(D.ceo.length-3)+' más</div>':'')
           :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Nada pendiente de tu lado. 👌</div>')+
         '<button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:7px" onclick="abrirTareasPanel()">✅ Abrir gestor de tareas</button>'+
+      '</div>'+
+      /* 🧾 COBRANZAS (v173) — hitos que tocan cobrar. Solo admin, como todo el parte. */
+      '<div class="pd-sec"><div class="pd-sec-t pd-ama">🧾 Cobranzas</div>'+
+        ((D.cobranzas&&D.cobranzas.length)?D.cobranzas.slice(0,4).map(function(t){
+          return '<div class="pd-det-row" style="background:var(--gray-800);margin-bottom:5px;cursor:pointer" onclick="switchTab(document.getElementById(\'tab-cobranzas\'),\'screen-cobranzas\');renderCobranzas()">'+
+            '<span style="flex:1;min-width:110px;font-weight:700">'+t.st.icono+' '+_escPend(t.c.cliente_nombre||'—')+'</span>'+
+            '<span class="d">'+_cobNomHito(t.p.numero_pago)+' · '+_cobBs(t.p.monto_bs)+
+              (t.st.mora>0?' · ⏱️ '+_cobUsd(t.st.mora):'')+'</span>'+
+          '</div>';
+        }).join('')+
+          ((D.cobranzas.length>4)?'<div style="font-size:10px;color:var(--gray-400);padding:2px">+'+(D.cobranzas.length-4)+' más</div>':'')
+          :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Nada por cobrar hoy. 👌</div>')+
       '</div>'+
       /* 🟢 FOCO DEL DÍA */
       '<div class="pd-sec"><div class="pd-sec-t pd-verde">🟢 Foco del día</div>'+
