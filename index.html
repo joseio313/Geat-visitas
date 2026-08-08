@@ -1632,7 +1632,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='175';
+  var CURRENT_VERSION='176';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8905,21 +8905,37 @@ function _pdStorageHtml(){
       acciones+='<button type="button" class="btn btn-primary btn-sm" style="font-size:11px" onclick="_pdBarridoDrive()">☁️ Mover '+dr.pendientes+' audio(s) a Drive</button>';
     if(dr.listos_para_limpiar>0)
       acciones+='<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_pdLimpiarDrive()">🧹 Limpiar audios ya en Drive ('+dr.listos_para_limpiar+')</button>';
+    /* Lo más probable acá es que el refresh token haya vencido (app OAuth que
+       quedó "en Prueba" → Google lo mata a los 7 días). El motivo viene de
+       Google, así que se muestra tal cual en vez de un mensaje genérico. */
     if(dr.carpeta_ok===false)
-      acciones+='<span style="font-size:11px;color:var(--st-atrasado)">⚠️ La cuenta de servicio no ve la carpeta</span>';
+      acciones+='<span style="font-size:11px;color:var(--st-atrasado)">⚠️ '+_escPend(dr.detalle||'Drive no responde')+'</span>';
     acciones+='<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_pdDriveToggleForm()">⚙️ Credenciales</button>';
   }
 
+  /* v176 — credenciales OAuth de la propia cuenta de Drive. NO se usa Service
+     Account: sube sin cuota propia y Google corta con "Service Accounts do not
+     have storage quota"; sólo andaría contra una Unidad Compartida, que exige
+     Google Workspace. Con OAuth los archivos son de registrograbaciones2026 y
+     consumen sus 15 GB. Los pasos completos están en SETUP_DRIVE_OAUTH.md. */
   const form=_pdDriveForm
     ? '<div style="margin-top:8px;padding:8px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px">'+
-        '<div class="form-group">'+
-          '<label class="form-label" style="font-size:11px">JSON de la cuenta de servicio de Google</label>'+
-          '<textarea id="pd-sa-json" class="form-control" rows="4" style="font-size:11px" placeholder="Pegá acá el contenido completo del archivo .json"></textarea>'+
-          '<div class="form-help">Queda guardado del lado del servidor: la policy de app_config no se lo sirve al navegador.</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-bottom:7px">'+
+          'Se sacan del trámite OAuth (ver SETUP_DRIVE_OAUTH.md en el repo). '+
+          'La carpeta “Grabaciones GEAT” la crea el CRM solo: no hace falta ningún ID.'+
         '</div>'+
         '<div class="form-group">'+
-          '<label class="form-label" style="font-size:11px">ID de la carpeta “Grabaciones GEAT”</label>'+
-          '<input id="pd-folder-id" class="form-control" style="font-size:11px" value="'+_escPend(dr.folder_id||'')+'" placeholder="lo que va después de /folders/ en la URL">'+
+          '<label class="form-label" style="font-size:11px">ID de cliente</label>'+
+          '<input id="pd-cli-id" class="form-control" style="font-size:11px" placeholder="....apps.googleusercontent.com">'+
+        '</div>'+
+        '<div class="form-group">'+
+          '<label class="form-label" style="font-size:11px">Secreto de cliente</label>'+
+          '<input id="pd-cli-secret" type="password" class="form-control" style="font-size:11px" autocomplete="off">'+
+        '</div>'+
+        '<div class="form-group">'+
+          '<label class="form-label" style="font-size:11px">Refresh token</label>'+
+          '<input id="pd-refresh" type="password" class="form-control" style="font-size:11px" autocomplete="off">'+
+          '<div class="form-help">Queda guardado del lado del servidor: la policy de app_config no se lo sirve al navegador.</div>'+
         '</div>'+
         '<button type="button" class="btn btn-primary btn-sm" style="font-size:11px" onclick="_pdGuardarDrive()">Guardar y probar</button>'+
       '</div>'
@@ -8946,17 +8962,18 @@ function _pdStorageHtml(){
 
 function _pdDriveToggleForm(){_pdDriveForm=!_pdDriveForm;_pdPintar();}
 
-/* Carga la credencial. geat-drive la valida contra Google ANTES de guardarla:
-   si el token no sale o la carpeta no se ve, no se guarda nada. */
+/* Carga la credencial OAuth. geat-drive la valida contra Google ANTES de
+   guardarla: si el refresh token no sirve o no se puede crear la carpeta, no
+   guarda nada y devuelve el motivo. */
 async function _pdGuardarDrive(){
-  const ta=document.getElementById('pd-sa-json'), fi=document.getElementById('pd-folder-id');
-  const sa=((ta&&ta.value)||'').trim(), folder=((fi&&fi.value)||'').trim();
-  if(!sa||!folder){toast('Faltan el JSON y el id de la carpeta','error');return;}
+  const ci=document.getElementById('pd-cli-id'), cs=document.getElementById('pd-cli-secret'), rt=document.getElementById('pd-refresh');
+  const client_id=((ci&&ci.value)||'').trim(), client_secret=((cs&&cs.value)||'').trim(), refresh_token=((rt&&rt.value)||'').trim();
+  if(!client_id||!client_secret||!refresh_token){toast('Faltan los tres datos del OAuth','error');return;}
   try{
-    const r=await _driveCall({accion:'config_set',sa_json:sa,folder_id:folder},60000);
+    const r=await _driveCall({accion:'config_set',client_id:client_id,client_secret:client_secret,refresh_token:refresh_token},60000);
     if(!r||!r.ok)throw new Error((r&&r.error)||'no se pudo guardar');
     _pdDriveForm=false;
-    toast('☁️ Drive conectado como '+r.sa_email,'ok');
+    toast('☁️ Drive conectado — carpeta lista','ok');
     _pdDatos=null;await renderParteDia();
   }catch(e){toast('Error: '+e.message,'error');}
 }
