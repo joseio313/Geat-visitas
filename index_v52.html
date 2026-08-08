@@ -1632,7 +1632,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='173';
+  var CURRENT_VERSION='175';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -6968,7 +6968,7 @@ async function renderRegistroGrabaciones(){
   }
   try{
     let q=sb.from('grabaciones')
-      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id,contexto,conservar_audio')
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id,contexto,conservar_audio,audio_drive_url')
       .eq('activo',true).order('created_at',{ascending:false});
     if(_grabModo==='mios') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
@@ -7189,10 +7189,13 @@ function _grabToggle(id){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
       '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
       '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_grabEliminar('+id+')">🗑️ Eliminar</button>'+
-      /* v172 — protege el audio de esta grabación frente al borrado automático */
-      '<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-300);cursor:pointer" title="Si está marcado, el audio NO se borra del storage al transcribir">'+
-        '<input type="checkbox" '+(g.conservar_audio?'checked':'')+' onchange="_grabToggleConservarAudio('+id+',this.checked)">🔒 Conservar audio'+
-      '</label>'+
+      /* v172 puso un checkbox "conservar audio" porque el audio se borraba y se
+         perdía. v175 ya no pierde nada: el audio vive en Drive. Dejar el checkbox
+         sería invitar a volver a llenar el bucket, así que ahora se informa dónde
+         está el audio. La columna y _grabToggleConservarAudio siguen existiendo. */
+      (g.audio_drive_url&&(''+g.audio_drive_url).trim()
+        ? '<a href="'+_escPend(g.audio_drive_url)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--gold)">🔗 Audio en Google Drive</a>'
+        : '<span style="font-size:11px;color:var(--gray-400)">☁️ El audio se archiva en Google Drive al transcribir</span>')+
     '</div>'+
   '</div>';
   _grabCargarAudio(id,g.audio_path);
@@ -7430,31 +7433,61 @@ function _grabCrearLeadEditar(id){
   const dei=document.getElementById('datos-extra-icon');
   if(deb&&deb.style.display==='none'){deb.style.display='';if(dei)dei.textContent='▼';}
 }
-/* v172 — Prevención de saturación del storage. La regla del negocio es que sólo
-   importa la transcripción: una vez guardada, el audio ya cumplió su función y se
-   borra del bucket 'grabaciones' (2,5 GB llegaron a ocupar audios ya transcritos).
+/* ═══════════════════════════════════════════════════════════════════════
+   v175 — EL AUDIO YA NO VIVE EN SUPABASE, VIVE EN GOOGLE DRIVE
+
+   Supabase free son 1 GB y los audios lo llenaron (2,5 GB, casi corta el
+   servicio). Ahora, apenas hay transcripción, el audio se sube a Drive
+   (registrograbaciones2026@gmail.com · carpeta "Grabaciones GEAT") y recién
+   entonces se borra del bucket. En Supabase queda la transcripción, que pesa
+   nada. La v172 borraba el audio y listo; ahora NO se pierde: queda el link.
+
+   Todo pasa por la Edge Function geat-drive porque la clave privada de la
+   Service Account NO puede tocar el navegador (app_config es de lectura
+   pública salvo las claves excluidas por la policy). El orden que garantiza
+   que nunca se pierda un audio es: subir → verificar → guardar link → borrar.
+   ═══════════════════════════════════════════════════════════════════════ */
+const DRIVE_URL=SB_URL+'/functions/v1/geat-drive';
+
+/* El token de sesión sirve para todo el equipo; el PIN sólo lo tiene el CEO
+   en memoria, así que va como respaldo para las acciones del panel. */
+async function _driveCall(payload,timeoutMs){
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const t=ctrl?setTimeout(function(){ctrl.abort();},timeoutMs||120000):null;
+  try{
+    const body=Object.assign({token:localStorage.getItem('geat_session_token')||null},payload||{});
+    if(!body.token&&_cvPin)body.pin=_cvPin;
+    const r=await fetch(DRIVE_URL,{method:'POST',cache:'no-store',signal:ctrl?ctrl.signal:undefined,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+      body:JSON.stringify(body)});
+    return await r.json();
+  }finally{if(t)clearTimeout(t);}
+}
+
+/* Mueve el audio de UNA grabación a Drive y lo borra de Supabase.
    Blindajes, en este orden:
-     1. Re-lee la fila ANTES de borrar — si la transcripción no quedó guardada, no toca nada.
-     2. Respeta conservar_audio=true (ej. Pintudo): esas grabaciones mantienen el audio.
-     3. La policy DELETE del bucket repite ambas condiciones del lado del servidor.
+     1. Re-lee la fila ANTES de mover — si la transcripción no quedó guardada, no toca nada.
+     2. El borrado lo hace geat-drive y SÓLO después de verificar que Drive tiene
+        todos los archivos y de haber guardado audio_drive_url.
+     3. Si Drive falla (o todavía no está configurado), el audio se queda en
+        Supabase: se reintenta con el barrido del panel. Nunca se pierde.
    Nunca lanza: si algo falla, el audio queda y se limpia después. */
 async function _grabLiberarAudio(id){
   try{
     const{data:g,error}=await sb.from('grabaciones')
-      .select('id,estado,transcripcion,conservar_audio').eq('id',id).single();
+      .select('id,estado,transcripcion').eq('id',id).single();
     if(error||!g)return false;
-    if(g.conservar_audio)return false;                          // protegida explícitamente
     if(g.estado!=='completa')return false;                      // no terminó bien
-    if(!(g.transcripcion&&g.transcripcion.trim()))return false; // sin texto guardado → NO borrar
-    const folder=String(id);
-    const{data:objs,error:el}=await sb.storage.from('grabaciones').list(folder,{limit:1000});
-    if(el||!objs||!objs.length)return false;
-    const paths=objs.filter(function(o){return o&&o.name;}).map(function(o){return folder+'/'+o.name;});
-    if(!paths.length)return false;
-    const{error:er}=await sb.storage.from('grabaciones').remove(paths);
-    if(er)return false;
+    if(!(g.transcripcion&&g.transcripcion.trim()))return false; // sin texto guardado → NO mover
+    const r=await _driveCall({accion:'mover',id:id});
+    if(!r||!r.ok||!r.completa){
+      /* Sin Drive el audio queda donde está: es un aviso, no un error del usuario. */
+      if(r&&r.error&&!/no esta configurado/i.test(r.error))
+        toast('⚠️ El audio no se pudo pasar a Drive; queda en el servidor. La transcripción sí se guardó.','warning');
+      return false;
+    }
     try{await sb.from('grabaciones').update({audio_path:null}).eq('id',id);}catch(e){}
-    if(_grabCache[id])_grabCache[id].audio_path=null;
+    if(_grabCache[id]){_grabCache[id].audio_path=null;_grabCache[id].audio_drive_url=r.url||null;}
     return true;
   }catch(e){return false;}
 }
@@ -7469,11 +7502,14 @@ async function _grabToggleConservarAudio(id,val){
 }
 async function _grabCargarAudio(id,audioPath){
   const cont=document.getElementById('grab-audio-'+id); if(!cont)return;
-  /* v172 — si la grabación está transcrita, la ausencia de audio es esperada (se liberó) */
+  /* v175 — el audio no está acá porque está en Drive: mostramos el link, no un
+     mensaje de ausencia. (v172 sólo avisaba que se había liberado.) */
   const _gc=_grabCache[id]||{};
-  const _sinAudio=(_gc.estado==='completa'&&_gc.transcripcion&&_gc.transcripcion.trim())
-    ? '<div style="font-size:11px;color:var(--gray-400)">🗒️ Audio liberado para ahorrar storage — la transcripción está guardada.</div>'
-    : '<div style="font-size:11px;color:var(--gray-400)">Sin audio disponible.</div>';
+  const _sinAudio=(_gc.audio_drive_url&&(''+_gc.audio_drive_url).trim())
+    ? '<a href="'+_escPend(_gc.audio_drive_url)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--gold)">🔗 Escuchar el audio en Google Drive</a>'
+    : ((_gc.estado==='completa'&&_gc.transcripcion&&_gc.transcripcion.trim())
+      ? '<div style="font-size:11px;color:var(--gray-400)">🗒️ Audio liberado para ahorrar storage — la transcripción está guardada.</div>'
+      : '<div style="font-size:11px;color:var(--gray-400)">Sin audio disponible.</div>');
   try{
     const folder=(audioPath||(String(id)+'/')).replace(/\/+$/,'');
     const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
@@ -8167,7 +8203,45 @@ let _pdAbierto=true;        // arranca desplegado para el admin
 let _pdDatos=null;          // último cálculo, para expandir listas sin re-consultar
 let _pdDetalleAbierto=null; // qué lista está desplegada
 
+/* v175 — vigilancia del storage. El plan gratis de Supabase son 1 GB y se llegó
+   a 2,5 GB con audios: el indicador existe para que eso no vuelva a pasar sin
+   que nadie lo vea. El tamaño es el real (suma de storage.objects vía la RPC
+   storage_uso), no una estimación. */
+const PD_STORAGE_LIMITE=1073741824;   // 1 GB del plan gratis
+const PD_STORAGE_ALERTA=80;           // % a partir del cual el parte lo grita
+let _pdDriveForm=false;               // formulario de credenciales desplegado
+let _pdDriveBusy=false;               // evita doble click en barrido/limpieza
+
 function _pdEsAdmin(){return !!(cu&&cu.rol==='admin');}
+
+function _pdMB(bytes){
+  const mb=(Number(bytes)||0)/1048576;
+  return (mb>=1000?(mb/1024).toFixed(2)+' GB':mb.toFixed(1)+' MB');
+}
+/* Verde tranquilo, amarillo atento, rojo hay que actuar. */
+function _pdColorUso(pct){
+  return pct>85?'var(--st-atrasado)':(pct>=70?'var(--gold)':'var(--st-reserva)');
+}
+
+/* Uso real del storage + estado de la conexión con Drive. Nunca lanza: si algo
+   falla, el parte se arma igual y el bloque muestra el error. */
+async function _pdAlmacenamiento(){
+  const out={bytes:0,limite:PD_STORAGE_LIMITE,pct:0,buckets:[],drive:null,error:null};
+  try{
+    const{data,error}=await sb.rpc('storage_uso');
+    if(error)throw error;
+    out.buckets=(data||[]).map(function(b){
+      return {bucket:b.bucket,archivos:Number(b.archivos)||0,bytes:Number(b.bytes)||0};
+    }).sort(function(a,b){return b.bytes-a.bytes;});
+    out.bytes=out.buckets.reduce(function(s,b){return s+b.bytes;},0);
+    out.pct=Math.round(out.bytes*1000/out.limite)/10;
+  }catch(e){out.error=e.message||'error';}
+  try{
+    const r=await _driveCall({accion:'estado'},25000);
+    if(r&&r.ok)out.drive=r;
+  }catch(e){}
+  return out;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    v173 — PANEL DE COBRANZAS · PRIVADO DEL CEO (solo rol admin, ni socios)
@@ -8698,10 +8772,12 @@ async function renderParteDia(){
 
     /* v173 — cobranzas que tocan cobrar. Solo admin: el parte ya está gateado. */
     const cobranzas=await _cobPendientesParteDia();
+    /* v175 — cuánto storage queda antes de que Supabase corte el servicio. */
+    const almacen=await _pdAlmacenamiento();
 
     _pdDatos={vencidas,reservas,caliente:cal,foco,
       tareasAtrasadas:rTareas.count||0,nuevos:rNuevos.count||0,cerradosSemana:rCerr.count||0,
-      ceo:rCeo.data||[],cobranzas:cobranzas};
+      ceo:rCeo.data||[],cobranzas:cobranzas,almacen:almacen};
     _pdPintar();
   }catch(e){
     wrap.innerHTML='<div class="pd-box"><div class="pd-body"><div style="color:var(--st-atrasado);font-size:12px;padding:6px">No se pudo armar el parte: '+_escPend(e.message||'error')+
@@ -8718,7 +8794,8 @@ function _pdDias(iso){
 function _pdPintar(){
   const wrap=document.getElementById('parte-dia-wrap'); if(!wrap||!_pdDatos)return;
   const D=_pdDatos;
-  const urgentes=D.vencidas.length+D.tareasAtrasadas+D.reservas.length;
+  const urgentes=D.vencidas.length+D.tareasAtrasadas+D.reservas.length+
+    ((D.almacen&&!D.almacen.error&&D.almacen.pct>=PD_STORAGE_ALERTA)?1:0);
 
   const linea=(clave,n,cls,tx,sub)=>
     '<div class="pd-line'+(n>0?' click':'')+'"'+(n>0?' onclick="_pdVerDetalle(\''+clave+'\')"':'')+'>'+
@@ -8743,6 +8820,15 @@ function _pdPintar(){
         linea('vencidas',D.vencidas.length,'pd-rojo','Visitas vencidas sin resultado','Pasaron +'+PD_DIAS_VISITA_VENCIDA+' días y nadie registró qué pasó')+
         linea('tareas',D.tareasAtrasadas,'pd-rojo','Tareas atrasadas del equipo','Vencidas y sin completar')+
         linea('reservas',D.reservas.length,'pd-rojo','Reservas sin cerrar','Plata puesta esperando')+
+        /* v175 — el storage lleno corta el servicio entero: cuando pasa el 80%
+           deja de ser un dato del pie y sube a lo urgente del día. */
+        ((D.almacen&&!D.almacen.error&&D.almacen.pct>=PD_STORAGE_ALERTA)
+          ? '<div class="pd-line">'+
+              '<span class="pd-n pd-rojo">'+D.almacen.pct+'%</span>'+
+              '<span class="pd-tx">⚠️ Almacenamiento al '+D.almacen.pct+'% — revisar'+
+                '<div class="pd-sub">'+_pdMB(D.almacen.bytes)+' de 1 GB usados en Supabase</div></span>'+
+            '</div>'
+          : '')+
       '</div>'+
       /* 🟡 DEPENDE DE VOS — ahora un lanzador del gestor de tareas flotante (v167) */
       '<div class="pd-sec"><div class="pd-sec-t pd-ama">🟡 Depende de vos</div>'+
@@ -8781,6 +8867,8 @@ function _pdPintar(){
           '</div>').join('')
           :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Sin leads calientes.</div>')+
       '</div>'+
+      /* 💾 ALMACENAMIENTO (v175) */
+      _pdStorageHtml()+
       /* 📊 PULSO */
       '<div class="pd-sec"><div class="pd-sec-t">📊 Pulso</div>'+
         '<div class="pd-pulso">'+
@@ -8793,6 +8881,128 @@ function _pdPintar(){
       '</div>'+
     '</div>':'')+
   '</div>';
+}
+
+/* ═══ v175 — Bloque de almacenamiento del Parte del Día (solo admin) ═══
+   Muestra el tamaño REAL del storage (suma de storage.objects), no una
+   estimación, y desde acá se opera Drive: conectar, mover lo pendiente y
+   limpiar lo que ya está a salvo. */
+function _pdStorageHtml(){
+  const A=(_pdDatos&&_pdDatos.almacen)||null;
+  if(!A)return '';
+  if(A.error){
+    return '<div class="pd-sec"><div class="pd-sec-t">💾 Almacenamiento</div>'+
+      '<div style="font-size:11px;color:var(--st-atrasado);padding:4px 2px">No se pudo leer el uso real: '+_escPend(A.error)+'</div></div>';
+  }
+  const pct=A.pct, col=_pdColorUso(pct), dr=A.drive||{};
+  const ancho=Math.max(2,Math.min(100,pct));
+
+  let acciones='';
+  if(dr.configurado===false){
+    acciones+='<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_pdDriveToggleForm()">⚙️ Conectar Google Drive</button>';
+  }else if(dr.configurado){
+    if(dr.pendientes>0)
+      acciones+='<button type="button" class="btn btn-primary btn-sm" style="font-size:11px" onclick="_pdBarridoDrive()">☁️ Mover '+dr.pendientes+' audio(s) a Drive</button>';
+    if(dr.listos_para_limpiar>0)
+      acciones+='<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_pdLimpiarDrive()">🧹 Limpiar audios ya en Drive ('+dr.listos_para_limpiar+')</button>';
+    if(dr.carpeta_ok===false)
+      acciones+='<span style="font-size:11px;color:var(--st-atrasado)">⚠️ La cuenta de servicio no ve la carpeta</span>';
+    acciones+='<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_pdDriveToggleForm()">⚙️ Credenciales</button>';
+  }
+
+  const form=_pdDriveForm
+    ? '<div style="margin-top:8px;padding:8px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px">'+
+        '<div class="form-group">'+
+          '<label class="form-label" style="font-size:11px">JSON de la cuenta de servicio de Google</label>'+
+          '<textarea id="pd-sa-json" class="form-control" rows="4" style="font-size:11px" placeholder="Pegá acá el contenido completo del archivo .json"></textarea>'+
+          '<div class="form-help">Queda guardado del lado del servidor: la policy de app_config no se lo sirve al navegador.</div>'+
+        '</div>'+
+        '<div class="form-group">'+
+          '<label class="form-label" style="font-size:11px">ID de la carpeta “Grabaciones GEAT”</label>'+
+          '<input id="pd-folder-id" class="form-control" style="font-size:11px" value="'+_escPend(dr.folder_id||'')+'" placeholder="lo que va después de /folders/ en la URL">'+
+        '</div>'+
+        '<button type="button" class="btn btn-primary btn-sm" style="font-size:11px" onclick="_pdGuardarDrive()">Guardar y probar</button>'+
+      '</div>'
+    : '';
+
+  return '<div class="pd-sec"><div class="pd-sec-t">💾 Almacenamiento</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">'+
+      '<span style="font-size:12px;font-weight:700;color:'+col+'">'+_pdMB(A.bytes)+' / 1 GB ('+pct+'%)</span>'+
+      (dr.configurado?'<span style="font-size:10px;color:var(--gray-400)">☁️ Drive conectado</span>':
+       (dr.configurado===false?'<span style="font-size:10px;color:var(--gold)">☁️ Drive sin conectar</span>':''))+
+    '</div>'+
+    '<div style="height:8px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:5px;overflow:hidden">'+
+      '<div style="height:100%;width:'+ancho+'%;background:'+col+'"></div>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--gray-400);margin-top:5px">'+
+      (A.buckets.length?A.buckets.map(function(b){
+        return _escPend(b.bucket)+': '+_pdMB(b.bytes)+' ('+b.archivos+')';
+      }).join(' · '):'Sin archivos')+
+    '</div>'+
+    (acciones?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">'+acciones+'</div>':'')+
+    form+
+  '</div>';
+}
+
+function _pdDriveToggleForm(){_pdDriveForm=!_pdDriveForm;_pdPintar();}
+
+/* Carga la credencial. geat-drive la valida contra Google ANTES de guardarla:
+   si el token no sale o la carpeta no se ve, no se guarda nada. */
+async function _pdGuardarDrive(){
+  const ta=document.getElementById('pd-sa-json'), fi=document.getElementById('pd-folder-id');
+  const sa=((ta&&ta.value)||'').trim(), folder=((fi&&fi.value)||'').trim();
+  if(!sa||!folder){toast('Faltan el JSON y el id de la carpeta','error');return;}
+  try{
+    const r=await _driveCall({accion:'config_set',sa_json:sa,folder_id:folder},60000);
+    if(!r||!r.ok)throw new Error((r&&r.error)||'no se pudo guardar');
+    _pdDriveForm=false;
+    toast('☁️ Drive conectado como '+r.sa_email,'ok');
+    _pdDatos=null;await renderParteDia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* Barrido de los audios viejos. Va por tandas porque una grabación segmentada
+   puede tener cientos de archivos y la Edge Function corta por tiempo.
+   Si una vuelta no mueve NADA y todavía quedan, se corta: algo está fallando
+   y repetir sería un bucle infinito. */
+async function _pdBarridoDrive(){
+  if(_pdDriveBusy)return;
+  const dr=((_pdDatos&&_pdDatos.almacen)||{}).drive||{};
+  if(!confirm('¿Mover '+(dr.pendientes||0)+' grabación(es) a Google Drive?\n\nEl audio se sube a Drive y recién ahí se borra de Supabase. No se pierde ninguno.'))return;
+  _pdDriveBusy=true;
+  let liberado=0;
+  try{
+    for(let vuelta=0;vuelta<30;vuelta++){
+      const r=await _driveCall({accion:'barrido'},170000);
+      if(!r||!r.ok)throw new Error((r&&r.error)||'falló el barrido');
+      liberado+=Number(r.bytes_liberados)||0;
+      const avance=(r.detalle||[]).reduce(function(s,d){return s+(Number(d.movidos)||0);},0);
+      toast('☁️ '+_pdMB(liberado)+' liberados · quedan '+r.quedan,'ok');
+      if(!r.quedan)break;
+      if(!avance){
+        const err=(r.errores&&r.errores[0]&&r.errores[0].error)||'la última vuelta no movió nada';
+        throw new Error(err);
+      }
+    }
+  }catch(e){toast('Barrido detenido: '+e.message,'error');}
+  _pdDriveBusy=false;
+  _pdDatos=null;await renderParteDia();
+}
+
+/* Red de seguridad: borra de Supabase SÓLO lo que ya tiene audio_drive_url.
+   La condición la vuelve a verificar geat-drive del lado del servidor. */
+async function _pdLimpiarDrive(){
+  if(_pdDriveBusy)return;
+  const dr=((_pdDatos&&_pdDatos.almacen)||{}).drive||{};
+  if(!confirm('¿Borrar de Supabase los audios que YA están en Drive ('+(dr.listos_para_limpiar||0)+')?\n\nSólo se borra lo que tiene el link de Drive guardado.'))return;
+  _pdDriveBusy=true;
+  try{
+    const r=await _driveCall({accion:'limpiar'},120000);
+    if(!r||!r.ok)throw new Error((r&&r.error)||'no se pudo limpiar');
+    toast(r.limpiadas?('🧹 '+r.limpiadas+' grabación(es) · '+_pdMB(r.bytes)+' liberados'):'No había nada para limpiar','ok');
+  }catch(e){toast('Error: '+e.message,'error');}
+  _pdDriveBusy=false;
+  _pdDatos=null;await renderParteDia();
 }
 
 /* Listas desplegables: cada fila abre el lead en modo operativo. */
