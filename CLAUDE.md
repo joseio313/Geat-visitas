@@ -26,10 +26,31 @@ El archivo es **index.html** (SIN tilde/acento). `indice.html` no existe. Confir
 2. NUNCA borrar funciones existentes
 3. NUNCA usar .catch() encadenado a sb.from().insert/update/delete
 4. SIEMPRE usar try/catch o .then() para Supabase
-5. CSS: SOLO usar finput, fselect, ftextarea, btn, btn-primary, btn-ghost, btn-red, btn-sm
+5. CSS: usar SOLO clases que existan de verdad en el bloque `<style>` (líneas 16-650).
+   Las correctas, verificadas en v173:
+   - inputs, selects y textareas → `form-control`  (+ `form-label`, `form-group`, `form-row`, `form-help`)
+   - botones → `btn-primary`, `btn-ghost`, `btn-secondary`
+   - títulos de sección → `section-title`
+   OJO: `finput`, `fselect`, `ftextarea` y `btn-red` **NO existen** (la versión vieja de
+   esta regla las nombraba; un formulario que las use sale sin estilo). `btn-sm` tampoco
+   está definida: se usa 82 veces pero no hace nada — el tamaño chico se logra con
+   `style="font-size:11px"`, que es lo que hace todo el código.
+   Ante la duda, confirmar antes de usar una clase:
+     grep -c '\.nombreclase{' index.html
 
-## DESPUÉS de CADA edición:
-1. node --check <(sed -n '/<script charset/,/<\/script>/p' index.html | sed '1d;$d')
+## DESPUÉS de CADA edición — VALIDAR JS:
+El bloque grande abre con `<script>` pelado (NO `<script charset`), así que el comando
+viejo (`sed -n '/<script charset/,...'`) extraía **0 líneas** y `node --check` daba "OK"
+sobre un archivo vacío: nunca validó nada. Además `<(...)` no funciona en Windows
+(node intenta abrir `C:\proc\<pid>\fd\N`). Usar el rango real + archivo temporal:
+
+    A=$(grep -n '^<script>$' index.html | head -1 | cut -d: -f1)
+    B=$(grep -n '^</script>$' index.html | tail -1 | cut -d: -f1)
+    sed -n "$((A+1)),$((B-1))p" index.html > /tmp/check.js
+    wc -l /tmp/check.js      # DEBE dar miles de líneas — si da 0, la validación es falsa
+    node --check /tmp/check.js
+
+1. El `wc -l` es parte de la validación, no un extra: sin él, un "JS OK" no prueba nada.
 2. Si falla: git checkout index.html y reportar error ANTES de seguir
 
 ## ANTES de commit — VERIFICACIÓN OBLIGATORIA:
