@@ -8428,8 +8428,12 @@ function _cobFechasDeCuota(q,ctx){
     return{fecha_prevista:(q.fecha_prevista?String(q.fecha_prevista).slice(0,10):null),
            fecha_estimada:null,fecha_es_estimada:false};
   if(tipo==='avance_obra'){
-    const pct=Number(q.avance_pct_requerido);
-    const dias=(inicio&&plazo>0&&isFinite(pct))?Math.round(pct/100*plazo):null;
+    /* OJO: Number(null) es 0, no NaN. Sin este chequeo, una cuota por avance
+       cuyo % el contrato no fija se fechaba en el ARRANQUE de la obra — una
+       fecha inventada, que es justo lo que no puede pasar. Sin %, sin fecha. */
+    const bruto=q.avance_pct_requerido;
+    const pct=(bruto===null||bruto===undefined||bruto==='')?NaN:Number(bruto);
+    const dias=(inicio&&plazo>0&&isFinite(pct)&&pct>0)?Math.round(pct/100*plazo):null;
     return{fecha_prevista:null,fecha_estimada:(dias===null?null:_cobFechaMas(inicio,dias)),fecha_es_estimada:true};
   }
   if(tipo==='entrega')
