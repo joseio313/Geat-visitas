@@ -8298,6 +8298,15 @@ function _cobDiasEntre(a,b){
   return Math.round((db-da)/86400000);
 }
 function _cobNomHito(n){return ['Reserva','1er pago','2do pago','3er pago'][n]||('Pago '+n);}
+/* v179 — los contratos leídos del .docx numeran las cuotas desde 1, así que
+   _cobNomHito(numero_pago) les corría el nombre un lugar. Cuando la cuota trae
+   su propia descripción, esa manda; el nombre fijo queda para los contratos
+   generados con el esquema de 4 hitos. La descripción guarda
+   "Segundo pago — <condición>": para el título alcanza con lo de antes del —. */
+function _cobNomCuota(p){
+  const d=(p&&p.descripcion||'').split(' — ')[0].trim();
+  return d||_cobNomHito(p?p.numero_pago:null);
+}
 
 /* Fecha en que un hito "debería" cobrarse.
    Hitos 2 y 3 no tienen fecha fija (dependen del avance): se estima desde el
@@ -8564,7 +8573,7 @@ function _cobHtmlTimeline(){
       '<div style="padding:2px 0 8px 6px">'+b.items.map(function(q){
         return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
           '<span>'+(q.estimada?'🏗️ ':'📅 ')+_escPend(q.c.cliente_nombre||'—')+
-            ' <span style="color:var(--gray-400)">· '+_cobNomHito(q.p.numero_pago)+' · '+_escPend(q.fecha)+'</span></span>'+
+            ' <span style="color:var(--gray-400)">· '+_escPend(_cobNomCuota(q.p))+' · '+_escPend(q.fecha)+'</span></span>'+
           '<strong style="color:'+(q.estimada?'var(--gold)':'var(--gray-100)')+'">'+_cobBs(q.monto)+'</strong>'+
         '</div>';
       }).join('')+'</div>':'';
@@ -8627,7 +8636,7 @@ function _cobHtmlTimelineObras(){
       const st=_cobEstadoHito(p,c);
       const f=_cobFechaHito(p,c);
       return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
-        '<span>'+st.icono+' '+_cobNomHito(p.numero_pago)+
+        '<span>'+st.icono+' '+_escPend(_cobNomCuota(p))+
           '<span style="color:var(--gray-400)"> · '+(f.fecha?(f.estimada?'~':'')+_escPend(f.fecha):'sin fecha')+
           (p.condicion_tipo?' · '+_escPend(p.condicion_tipo):'')+'</span></span>'+
         '<span style="display:flex;gap:10px;align-items:baseline">'+
@@ -8685,7 +8694,7 @@ function _cobPintar(){
           '<strong style="font-size:13px">'+_escPend(t.c.cliente_nombre||'—')+'</strong>'+
           '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(t.c.contrato_codigo||'sin código')+'</span>'+
         '</div>'+
-        '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_cobNomHito(t.p.numero_pago)+'</strong> · '+_cobBs(t.p.monto_bs)+
+        '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_escPend(_cobNomCuota(t.p))+'</strong> · '+_cobBs(t.p.monto_bs)+
           ' <span style="color:var(--gray-400)">— '+_escPend(t.st.label)+'</span></div>'+
         (t.st.mora>0?'<div style="font-size:12px;color:var(--st-atrasado);margin-bottom:4px">⏱️ Mora acumulada: '+_cobUsd(t.st.mora)+' ('+_cobUsd(t.c.mora_usd_dia)+'/día)</div>':'')+
         '<div style="height:6px;background:var(--gray-900);border-radius:3px;overflow:hidden;margin:6px 0">'+
@@ -8713,7 +8722,7 @@ function _cobPintar(){
          '<div style="font-size:12px;margin:4px 0">'+_escPend(t.c.cliente_nombre||'—')+
            ' · obra '+_escPend(t.h.obra.nombre||'—')+' ('+_escPend(t.h.obra.codigo||'sin código')+')</div>'+
          '<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Avance real '+t.h.avance+
-           '% ≥ '+t.h.pactado+'% pactado · '+_cobNomHito(t.h.pago.numero_pago)+' '+_cobBs(t.h.pago.monto_bs)+' pendiente</div>'+
+           '% ≥ '+t.h.pactado+'% pactado · '+_escPend(_cobNomCuota(t.h.pago))+' '+_cobBs(t.h.pago.monto_bs)+' pendiente</div>'+
          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
            '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobPedirAvanceFatima('+t.c.id+','+t.h.pago.numero_pago+')">📲 Pedir avance a Fátima</button>'+
            '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirCobro('+t.h.pago.id+')">✓ Registrar cobro</button>'+
@@ -8730,7 +8739,7 @@ function _cobPintar(){
     const filas=pagos.map(function(p){
       const st=_cobEstadoHito(p,c);
       return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
-        '<span>'+st.icono+' '+_cobNomHito(p.numero_pago)+
+        '<span>'+st.icono+' '+_escPend(_cobNomCuota(p))+
           ' <span style="color:var(--gray-400);font-size:10px">'+_escPend(p.porcentaje||'')+'</span></span>'+
         '<span style="display:flex;gap:10px;align-items:baseline">'+
           '<span style="color:var(--gray-400);font-size:10px">'+_escPend(st.label)+'</span>'+
@@ -8791,10 +8800,16 @@ async function _cobGuardarWhatsapp(){
 function _cobPedirAvanceFatima(contratoId,numeroPago){
   const c=_cobContratos.find(function(x){return x.id===contratoId;}); if(!c)return;
   const num=(_cobCfg.cobranza_whatsapp_fatima||'').replace(/[^0-9]/g,'');
-  if(!num){toast('Cargá primero el WhatsApp de Fátima arriba','error');return;}
+  /* v179 — el input salió del panel; el número se carga en app_config */
+  if(!num){toast('Falta el WhatsApp de Fátima en app_config (cobranza_whatsapp_fatima)','error');return;}
+  const p=_cobPagos.find(function(x){return x.contrato_id===contratoId&&x.numero_pago===numeroPago;});
+  const pct=p&&Number(p.avance_pct_requerido)>0?Number(p.avance_pct_requerido):
+            (Number(c.informe_previo_pct_pactado)>0?Number(c.informe_previo_pct_pactado):null);
   const txt='Hola Fátima! Consulta por la obra de '+(c.cliente_nombre||'')+
     (c.contrato_codigo?' (contrato '+c.contrato_codigo+')':'')+
-    ': ¿ya está en el avance necesario para habilitar el '+_cobNomHito(numeroPago).toLowerCase()+'? Gracias!';
+    ': ¿ya está en el avance necesario para habilitar el '+
+    (p?_cobNomCuota(p):_cobNomHito(numeroPago)).toLowerCase()+
+    (pct!==null?' (necesitamos '+pct+'% de avance)':'')+'? Gracias!';
   window.open('https://wa.me/'+num+'?text='+encodeURIComponent(txt),'_blank');
 }
 
@@ -8901,7 +8916,7 @@ function _cobAbrirCobro(pagoId){
   _cobPagoActual=p;
   const inf=document.getElementById('cob-co-info');
   if(inf)inf.innerHTML='<strong>'+_escPend(c.cliente_nombre||'—')+'</strong> · '+_escPend(c.contrato_codigo||'sin código')+
-    '<br>'+_cobNomHito(p.numero_pago)+' — previsto '+_cobBs(p.monto_bs);
+    '<br>'+_escPend(_cobNomCuota(p))+' — previsto '+_cobBs(p.monto_bs);
   const m=document.getElementById('cob-co-monto'); if(m)m.value=Number(p.monto_bs)||0;
   const f=document.getElementById('cob-co-fecha'); if(f)f.value=ymdLocal(new Date());
   const cp=document.getElementById('cob-co-comp'); if(cp)cp.value='';
@@ -9557,7 +9572,7 @@ function _pdPintar(){
         ((D.cobranzas&&D.cobranzas.length)?D.cobranzas.slice(0,4).map(function(t){
           return '<div class="pd-det-row" style="background:var(--gray-800);margin-bottom:5px;cursor:pointer" onclick="switchTab(document.getElementById(\'tab-cobranzas\'),\'screen-cobranzas\');renderCobranzas()">'+
             '<span style="flex:1;min-width:110px;font-weight:700">'+t.st.icono+' '+_escPend(t.c.cliente_nombre||'—')+'</span>'+
-            '<span class="d">'+_cobNomHito(t.p.numero_pago)+' · '+_cobBs(t.p.monto_bs)+
+            '<span class="d">'+_escPend(_cobNomCuota(t.p))+' · '+_cobBs(t.p.monto_bs)+
               (t.st.mora>0?' · ⏱️ '+_cobUsd(t.st.mora):'')+'</span>'+
           '</div>';
         }).join('')+
