@@ -8330,11 +8330,17 @@ function _cobFechaAviso(p,c){
      1. fecha_prevista con fecha_es_estimada=false → la fechó el contrato
      2. fecha_estimada                            → la proyectó el CRM
      3. fecha_prevista marcada como estimada      → contratos a medio migrar
-     4. _cobFechaAviso                            → contratos v173, 60/120 días */
+     4. _cobFechaAviso                            → contratos v173, 60/120 días
+
+   El paso 4 SOLO corre si la cuota no declara su condición: los 60/120 días
+   asumen el esquema fijo de 4 hitos y se leen del numero_pago, así que sobre
+   un contrato leído del .docx (numerado desde 1) inventarían una fecha. Si la
+   cuota dice de qué depende y no alcanza para calcularla, queda sin fecha. */
 function _cobFechaHito(p,c){
   if(p.fecha_prevista&&!p.fecha_es_estimada)return{fecha:String(p.fecha_prevista).slice(0,10),estimada:false};
   if(p.fecha_estimada)return{fecha:String(p.fecha_estimada).slice(0,10),estimada:true};
   if(p.fecha_prevista)return{fecha:String(p.fecha_prevista).slice(0,10),estimada:true};
+  if(p.condicion_tipo)return{fecha:null,estimada:true};
   const a=_cobFechaAviso(p,c);
   return{fecha:a?String(a).slice(0,10):null,estimada:true};
 }
@@ -8885,9 +8891,12 @@ async function _cobGuardarContrato(){
 /* Genera los 4 hitos. Idempotente por el índice único (contrato_id, numero_pago). */
 async function _cobGenerarHitos(c,reservaBs){
   const P=Number(c.precio_total_bs)||0,R=Number(reservaBs)||0;
-  /* v179 — se marca la condición de cada hito para que la línea de tiempo pueda
-     separar lo cierto de lo estimado. Los hitos 2 y 3 siguen sin fecha: los
-     estima _cobFechaAviso con los 60/120 días del contrato. */
+  /* v179 — se marca la condición de cada hito y los 60/120 días quedan
+     GUARDADOS como fecha_estimada, no recalculados al vuelo: una cuota que
+     declara su condición no puede depender del fallback por numero_pago. */
+  const firma=c.fecha_firma?String(c.fecha_firma).slice(0,10):null;
+  const est2=firma?_cobFechaMas(firma,Number(c.dias_aviso_2do)||60):null;
+  const est3=firma?_cobFechaMas(firma,Number(c.dias_aviso_3er)||120):null;
   const filas=[
     {numero_pago:0,porcentaje:'Reserva',descripcion:'Reserva (se imputa al 1er pago)',
      monto_bs:_cobR2(R),estado:R>0?'cobrado':'pendiente',condicion_tipo:'reserva',
@@ -8897,10 +8906,10 @@ async function _cobGenerarHitos(c,reservaBs){
      fecha_prevista:c.fecha_firma||null,fecha_es_estimada:false,fecha_cobro:null},
     {numero_pago:2,porcentaje:'35%',descripcion:'2do pago por avance físico',
      monto_bs:_cobR2(P*0.35),estado:'pendiente',condicion_tipo:'avance_obra',
-     fecha_prevista:null,fecha_es_estimada:true,fecha_cobro:null},
+     fecha_prevista:null,fecha_estimada:est2,fecha_es_estimada:true,fecha_cobro:null},
     {numero_pago:3,porcentaje:'35%',descripcion:'3er pago por avance final',
      monto_bs:_cobR2(P*0.35),estado:'pendiente',condicion_tipo:'entrega',
-     fecha_prevista:null,fecha_es_estimada:true,fecha_cobro:null}
+     fecha_prevista:null,fecha_estimada:est3,fecha_es_estimada:true,fecha_cobro:null}
   ].map(function(f){f.contrato_id=c.id;f.lead_id=c.lead_id||null;f.activo=true;return f;});
   try{
     const{error}=await sb.from('pagos_cliente').upsert(filas,{onConflict:'contrato_id,numero_pago'});
