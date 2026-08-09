@@ -1646,7 +1646,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='179';
+  var CURRENT_VERSION='180';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8274,8 +8274,9 @@ async function _pdAlmacenamiento(){
 let _cobContratos=[],_cobPagos=[],_cobCfg={},_cobPagoActual=null,_cobAbierto=null;
 /* v178 — alta automática desde el contrato de la obra */
 let _cobObras=[],_cobObrasConContrato=[],_cobPanelObras=false,_cobLeyendo=null,_cobLeido=null,_cobLeadsGanados=[];
-/* v179 — línea de tiempo de flujo. _cobTlRango 0 = "Todo" (hasta la última cuota) */
-let _cobTlGranu='mensual',_cobTlRango=6,_cobTlAbierto=null,_cobObraAbierta=null;
+/* v179 — línea de tiempo de flujo. _cobTlRango 0 = "Todo" (hasta la última cuota)
+   v180 — el eje es horizontal; _cobTlAbierto es el período con el popover abierto */
+let _cobTlGranu='mensual',_cobTlRango=6,_cobTlAbierto=null,_cobMenu=false;
 
 function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -8525,7 +8526,60 @@ function _cobCuotasProyectadas(){
 }
 function _cobTlSetGranu(g){_cobTlGranu=g;_cobTlAbierto=null;_cobPintar();}
 function _cobTlSetRango(r){_cobTlRango=r;_cobTlAbierto=null;_cobPintar();}
-function _cobTlToggle(clave){_cobTlAbierto=(_cobTlAbierto===clave?null:clave);_cobPintar();}
+
+/* ════════════════════════════════════════════════════════════════════
+   v180 — LÍNEA DE TIEMPO HORIZONTAL
+
+   Un solo eje con los períodos de izquierda a derecha y, sobre él, un
+   marcador por período CON PLATA con el total agregado de TODAS las obras.
+   Cierto y estimado son dos marcadores distintos, nunca un número sumado:
+     · cierto   → línea sólida verde + punto relleno
+     · estimado → línea punteada ámbar + punto hueco
+   El detalle vive en un popover anclado al marcador: no hay modal ni salto
+   a otra vista, el ojo no se va del eje.
+   ════════════════════════════════════════════════════════════════════ */
+const COB_TL_ALTO=132;      /* alto útil de las barras, en px */
+const COB_TL_BASE=52;       /* del piso del recuadro al eje */
+const COB_TL_POP=250;       /* alto reservado para el popover abierto */
+
+function _cobBsCorto(n){
+  const v=Math.abs(Number(n)||0);
+  if(v>=1000000)return 'Bs '+(v/1000000).toFixed(1).replace('.',',')+'M';
+  if(v>=1000)return 'Bs '+Math.round(v/1000)+'k';
+  return 'Bs '+Math.round(v);
+}
+/* El popover se cierra con click afuera. Los clicks en OTRO marcador se dejan
+   pasar: los maneja su propio onclick, si no el repintado mataría el elemento
+   antes de que llegue el click y habría que apretar dos veces. */
+let _cobTlPopHandler=null;
+function _cobTlPopBind(){
+  if(_cobTlPopHandler){document.removeEventListener('mousedown',_cobTlPopHandler);_cobTlPopHandler=null;}
+  if(!_cobTlAbierto)return;
+  _cobTlPopHandler=function(ev){
+    const t=ev.target;
+    const pop=document.getElementById('cob-tl-pop');
+    if(pop&&t&&pop.contains(t))return;
+    if(t&&t.closest&&t.closest('[data-cobtl]'))return;
+    _cobTlAbierto=null;_cobPintar();_cobTlPopBind();
+  };
+  setTimeout(function(){if(_cobTlPopHandler)document.addEventListener('mousedown',_cobTlPopHandler);},0);
+}
+function _cobTlToggle(clave){
+  _cobTlAbierto=(_cobTlAbierto===clave?null:clave);
+  _cobPintar();_cobTlPopBind();
+}
+function _cobTlCerrar(){_cobTlAbierto=null;_cobPintar();_cobTlPopBind();}
+
+/* Cómo se lee la fecha de una cuota en el detalle: si depende del avance, el
+   dato útil NO es la fecha proyectada sino el % que hay que alcanzar. */
+function _cobTlCuando(q){
+  if(q.p.condicion_tipo==='avance_obra'&&Number(q.p.avance_pct_requerido)>0){
+    const av=_cobAvanceVsCalendario(q.c);
+    return 'al '+Number(q.p.avance_pct_requerido)+'% de obra'+
+           (av?' <span style="color:'+(av.atrasada?'var(--st-atrasado)':'var(--gray-400)')+'">(hoy '+av.real+'%)</span>':'');
+  }
+  return (q.estimada?'~':'')+_escPend(q.fecha);
+}
 
 function _cobHtmlTimeline(){
   const hoy=ymdLocal(new Date());
@@ -8547,16 +8601,18 @@ function _cobHtmlTimeline(){
     return controles+'<div style="font-size:12px;color:var(--gray-400);padding:8px">No hay cuotas pendientes con fecha para proyectar.</div>';
 
   /* El rango arranca en el período de hoy o antes, si hay cuotas atrasadas.
-     "Todo" se auto-extiende hasta la última cuota del contrato más largo. */
+     "Todo" se auto-extiende hasta la última cuota del contrato más largo.
+     Hoy SIEMPRE entra en el eje, aunque todo lo pendiente ya haya pasado. */
+  const pHoy=_cobPeriodo(hoy);
   const ini=_cobPeriodo(cuotas[0].fecha<hoy?cuotas[0].fecha:hoy);
-  const ultima=cuotas[cuotas.length-1].fecha;
   let fin;
-  if(_cobTlRango===0){fin=_cobPeriodo(ultima);}
+  if(_cobTlRango===0){fin=_cobPeriodo(cuotas[cuotas.length-1].fecha);}
   else{
     const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+_cobTlRango);
     fin=_cobPeriodo(ymdLocal(d));
-    if(fin<ini)fin=ini;
   }
+  if(fin<ini)fin=ini;
+  if(fin<pHoy)fin=pHoy;
   const claves=[];
   for(let k=ini;k<=fin&&claves.length<400;k=_cobPeriodoSig(k))claves.push(k);
 
@@ -8569,108 +8625,116 @@ function _cobHtmlTimeline(){
     buckets[k][q.estimada?'estimado':'cierto']+=q.monto;
     buckets[k].items.push(q);
   });
-  const max=claves.reduce(function(m,k){return Math.max(m,buckets[k].cierto+buckets[k].estimado);},0)||1;
+  /* La altura se mide contra el marcador más alto, no contra la suma del
+     período: cierto y estimado se comparan entre sí en la misma escala. */
+  const max=claves.reduce(function(m,k){
+    return Math.max(m,buckets[k].cierto,buckets[k].estimado);},0)||1;
 
-  const filas=claves.map(function(k){
-    const b=buckets[k],tot=b.cierto+b.estimado,abierto=(_cobTlAbierto===k);
-    const esHoy=(k===_cobPeriodo(hoy));
-    const wC=Math.round(b.cierto/max*100),wE=Math.round(b.estimado/max*100);
-    const detalle=abierto&&b.items.length?
-      '<div style="padding:2px 0 8px 6px">'+b.items.map(function(q){
-        return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
-          '<span>'+(q.estimada?'🏗️ ':'📅 ')+_escPend(q.c.cliente_nombre||'—')+
-            ' <span style="color:var(--gray-400)">· '+_escPend(_cobNomCuota(q.p))+' · '+_escPend(q.fecha)+'</span></span>'+
-          '<strong style="color:'+(q.estimada?'var(--gold)':'var(--gray-100)')+'">'+_cobBs(q.monto)+'</strong>'+
-        '</div>';
-      }).join('')+'</div>':'';
-    return '<div style="margin-bottom:6px">'+
-      '<div style="cursor:pointer;display:flex;gap:8px;align-items:center" onclick="_cobTlToggle(\''+k+'\')">'+
-        '<span style="width:62px;flex:none;font-size:11px;color:'+(esHoy?'var(--gold)':'var(--gray-400)')+';font-weight:'+(esHoy?'800':'400')+'">'+
-          (abierto?'▾ ':'')+_cobPeriodoLbl(k)+'</span>'+
-        '<div style="flex:1;height:14px;background:var(--gray-900);border-radius:3px;overflow:hidden;display:flex">'+
-          '<div style="width:'+wC+'%;background:var(--st-completo)"></div>'+
-          '<div style="width:'+wE+'%;background:repeating-linear-gradient(45deg,var(--gold),var(--gold) 4px,var(--gray-800) 4px,var(--gray-800) 8px)"></div>'+
+  const colW=(_cobTlGranu==='semanal'?46:58);
+  const ancho=Math.max(claves.length*colW,260);
+  const alto=COB_TL_BASE+COB_TL_ALTO+18+(_cobTlAbierto?COB_TL_POP:0);
+  const xDe=function(i){return i*colW+colW/2;};
+
+  let marcas='';
+  claves.forEach(function(k,i){
+    const b=buckets[k],x=xDe(i),abierto=(_cobTlAbierto===k);
+    const esHoy=(k===pHoy);
+    /* Tick + etiqueta del período, tenga plata o no: el eje es un calendario */
+    marcas+='<div style="position:absolute;left:'+(x-0.5)+'px;bottom:'+(COB_TL_BASE-4)+'px;width:1px;height:4px;background:var(--gray-600)"></div>'+
+      '<div style="position:absolute;left:'+(x-colW/2)+'px;width:'+colW+'px;bottom:'+(COB_TL_BASE-20)+'px;text-align:center;'+
+        'font-size:9px;color:'+(esHoy?'var(--st-atrasado)':'var(--gray-400)')+';font-weight:'+(esHoy?'800':'400')+'">'+
+        _cobPeriodoLbl(k)+'</div>';
+    if(!b.items.length)return;
+    const par=(b.cierto>0&&b.estimado>0);
+    const dibujar=function(monto,cierto){
+      if(!(monto>0))return '';
+      const h=Math.max(8,Math.round(monto/max*COB_TL_ALTO));
+      const dx=par?(cierto?-6:6):0;
+      const cx=x+dx;
+      return (cierto
+        ? '<div style="position:absolute;left:'+(cx-1)+'px;bottom:'+COB_TL_BASE+'px;width:2px;height:'+h+'px;background:var(--st-completo)"></div>'+
+          '<div style="position:absolute;left:'+(cx-4.5)+'px;bottom:'+(COB_TL_BASE+h-4)+'px;width:9px;height:9px;border-radius:50%;background:var(--st-completo)"></div>'
+        : '<div style="position:absolute;left:'+(cx-1)+'px;bottom:'+COB_TL_BASE+'px;width:0;height:'+h+'px;border-left:2px dashed var(--gold)"></div>'+
+          '<div style="position:absolute;left:'+(cx-4.5)+'px;bottom:'+(COB_TL_BASE+h-4)+'px;width:9px;height:9px;border-radius:50%;'+
+            'border:2px solid var(--gold);background:var(--gray-900);box-sizing:border-box"></div>')+
+        '<div style="position:absolute;left:'+(cx-30)+'px;width:60px;bottom:'+(COB_TL_BASE+h+7)+'px;text-align:center;'+
+          'font-size:9px;color:'+(cierto?'var(--st-completo)':'var(--gold)')+'">'+_cobBsCorto(monto)+'</div>';
+    };
+    marcas+=dibujar(b.cierto,true)+dibujar(b.estimado,false);
+    /* Zona clickeable de la columna entera: apuntarle a una línea de 2px es
+       imposible en un celular. */
+    marcas+='<div data-cobtl="1" title="Ver cuotas de '+_cobPeriodoLbl(k)+'" onclick="_cobTlToggle(\''+k+'\')" '+
+      'style="position:absolute;left:'+(x-colW/2)+'px;width:'+colW+'px;bottom:'+(COB_TL_BASE-6)+'px;height:'+(COB_TL_ALTO+26)+'px;'+
+      'cursor:pointer;border-radius:6px;background:'+(abierto?'rgba(242,197,0,0.10)':'transparent')+'"></div>';
+  });
+
+  /* Hoy: punteada roja cruzando el eje, con etiqueta */
+  const iHoy=claves.indexOf(pHoy);
+  const hoyHtml=(iHoy<0)?'':
+    '<div style="position:absolute;left:'+(xDe(iHoy)-1)+'px;bottom:'+(COB_TL_BASE-12)+'px;width:0;height:'+(COB_TL_ALTO+24)+'px;'+
+      'border-left:2px dashed var(--st-atrasado);pointer-events:none"></div>'+
+    '<div style="position:absolute;left:'+(xDe(iHoy)+4)+'px;bottom:'+(COB_TL_BASE+COB_TL_ALTO+10)+'px;'+
+      'font-size:9px;color:var(--st-atrasado);font-weight:800;pointer-events:none">hoy</div>';
+
+  /* Popover anclado al marcador, debajo del eje. Va DENTRO del lienzo (que
+     crece a lo alto cuando está abierto) para que el scroll horizontal no lo
+     recorte ni haya que medir posiciones a mano. */
+  let popHtml='';
+  if(_cobTlAbierto&&buckets[_cobTlAbierto]){
+    const i=claves.indexOf(_cobTlAbierto);
+    const b=buckets[_cobTlAbierto];
+    const px=Math.max(0,Math.min(ancho-320,xDe(i)-160));
+    const filas=b.items.map(function(q){
+      const st=_cobEstadoHito(q.p,q.c);
+      return '<div style="padding:5px 0;border-bottom:1px solid var(--gray-700)">'+
+        '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline">'+
+          '<strong style="font-size:11px">'+(q.estimada?'🏗️ ':'📅 ')+_escPend(q.c.cliente_nombre||'—')+'</strong>'+
+          '<strong style="font-size:11px;color:'+(q.estimada?'var(--gold)':'var(--st-completo)')+'">'+_cobBs(q.monto)+'</strong>'+
         '</div>'+
-        '<span style="width:130px;flex:none;text-align:right;font-size:11px">'+
-          (tot?'<strong>'+_cobBs(tot)+'</strong>':'<span style="color:var(--gray-600)">—</span>')+
-          (b.items.length?'<span style="color:var(--gray-400)"> · '+b.items.length+'</span>':'')+'</span>'+
-      '</div>'+detalle+
+        '<div style="font-size:10px;color:var(--gray-400)">'+_escPend(_cobNomCuota(q.p))+' · '+_cobTlCuando(q)+'</div>'+
+        '<div style="font-size:10px;color:'+(st.cod==='vencido'?'var(--st-atrasado)':'var(--gray-400)')+'">'+
+          st.icono+' '+_escPend(st.label)+'</div>'+
+      '</div>';
+    }).join('');
+    popHtml='<div id="cob-tl-pop" style="position:absolute;left:'+px+'px;top:'+(COB_TL_BASE+COB_TL_ALTO+18+8)+'px;'+
+      'width:320px;max-width:320px;background:var(--gray-900);border:1px solid var(--gold);border-radius:10px;'+
+      'padding:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);z-index:5">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+        '<strong style="font-size:12px">'+_cobPeriodoLbl(_cobTlAbierto)+' · '+b.items.length+' cuota(s)</strong>'+
+        '<button class="btn-ghost btn-sm" style="font-size:12px;padding:0 6px" onclick="_cobTlCerrar()">✕</button>'+
+      '</div>'+
+      '<div style="max-height:200px;overflow-y:auto">'+filas+'</div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:10px;padding-top:6px;color:var(--gray-400)">'+
+        '<span>📅 '+_cobBs(b.cierto)+'</span><span>🏗️ '+_cobBs(b.estimado)+'</span></div>'+
     '</div>';
-  }).join('');
+  }
 
   const totC=claves.reduce(function(s,k){return s+buckets[k].cierto;},0);
   const totE=claves.reduce(function(s,k){return s+buckets[k].estimado;},0);
-  const nC=claves.reduce(function(s,k){return s+buckets[k].items.filter(function(q){return !q.estimada;}).length;},0);
-  const nE=claves.reduce(function(s,k){return s+buckets[k].items.filter(function(q){return q.estimada;}).length;},0);
 
   return controles+
-    '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray-400);margin-bottom:8px">'+
-      '<span><span style="display:inline-block;width:10px;height:10px;background:var(--st-completo);border-radius:2px;vertical-align:-1px"></span> 📅 Cierto — fecha del contrato</span>'+
-      '<span><span style="display:inline-block;width:10px;height:10px;background:repeating-linear-gradient(45deg,var(--gold),var(--gold) 3px,var(--gray-800) 3px,var(--gray-800) 6px);border-radius:2px;vertical-align:-1px"></span> 🏗️ Estimado — depende del avance</span>'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray-400);margin-bottom:6px">'+
+      '<span><span style="display:inline-block;width:14px;border-top:2px solid var(--st-completo);vertical-align:3px"></span>'+
+        ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--st-completo);vertical-align:0"></span>'+
+        ' 📅 Cierto — fecha del contrato</span>'+
+      '<span><span style="display:inline-block;width:14px;border-top:2px dashed var(--gold);vertical-align:3px"></span>'+
+        ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;border:2px solid var(--gold);box-sizing:border-box;vertical-align:0"></span>'+
+        ' 🏗️ Estimado — depende del avance</span>'+
     '</div>'+
-    filas+
-    '<div style="border-top:1px solid var(--gray-600);margin-top:8px;padding-top:8px">'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">'+
-        '<span>📅 Cierto <span style="color:var(--gray-400)">('+nC+' cuota/s)</span></span>'+
-        '<strong style="color:var(--st-completo)">'+_cobBs(totC)+'</strong></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">'+
-        '<span>🏗️ Estimado <span style="color:var(--gray-400)">('+nE+' cuota/s)</span></span>'+
-        '<strong style="color:var(--gold)">'+_cobBs(totE)+'</strong></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-top:1px solid var(--gray-700);margin-top:4px">'+
-        '<strong>Total del rango</strong><strong>'+_cobBs(totC+totE)+'</strong></div>'+
-      (fuera?'<div style="font-size:10px;color:var(--gray-400);margin-top:4px">+'+fuera+' cuota(s) por '+_cobBs(fueraBs)+
-             ' fuera del rango elegido — ampliá a "Todo" para verlas.</div>':'')+
-    '</div>';
-}
-
-/* ── v179 · línea de tiempo por obra ────────────────────────────────── */
-function _cobToggleObra(id){_cobObraAbierta=(_cobObraAbierta===id?null:id);_cobPintar();}
-function _cobHtmlTimelineObras(){
-  if(!_cobContratos.length)
-    return '<div style="font-size:12px;color:var(--gray-400);padding:8px">Sin contratos para mostrar.</div>';
-  return _cobContratos.map(function(c){
-    const abierto=(_cobObraAbierta===c.id);
-    const av=_cobAvanceVsCalendario(c);
-    const o=c.obra_id?_cobObra(c.obra_id):null;
-    const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id;})
-      .sort(function(a,b){return a.numero_pago-b.numero_pago;});
-    const resumen=av?
-      '<span style="font-size:11px;color:'+(av.atrasada?'var(--st-atrasado)':'var(--st-completo)')+'">'+
-        (av.atrasada?'🔴 ':'🟢 ')+'avance '+av.real+'% vs '+av.esperado+'% esperado</span>':
-      '<span style="font-size:11px;color:var(--gray-400)">sin calendario de obra</span>';
-    const hitos=pagos.map(function(p){
-      const st=_cobEstadoHito(p,c);
-      const f=_cobFechaHito(p,c);
-      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
-        '<span>'+st.icono+' '+_escPend(_cobNomCuota(p))+
-          '<span style="color:var(--gray-400)"> · '+(f.fecha?(f.estimada?'~':'')+_escPend(f.fecha):'sin fecha')+
-          (p.condicion_tipo?' · '+_escPend(p.condicion_tipo):'')+'</span></span>'+
-        '<span style="display:flex;gap:10px;align-items:baseline">'+
-          '<span style="color:var(--gray-400)">'+_escPend(st.label)+'</span>'+
-          '<strong style="color:'+(f.estimada&&!_cobEsCobrado(p)?'var(--gold)':'var(--gray-100)')+'">'+_cobBs(p.monto_bs)+'</strong>'+
-        '</span></div>';
-    }).join('');
-    const barra=av?
-      '<div style="margin:8px 0 4px">'+
-        '<div style="height:8px;background:var(--gray-900);border-radius:4px;position:relative;overflow:hidden">'+
-          '<div style="height:100%;width:'+av.real+'%;background:'+(av.atrasada?'var(--st-atrasado)':'var(--st-completo)')+'"></div>'+
-          '<div style="position:absolute;top:-2px;left:'+av.esperado+'%;width:2px;height:12px;background:var(--gold)"></div>'+
-        '</div>'+
-        '<div style="font-size:10px;color:var(--gray-400);margin-top:3px">'+
-          'Inicio '+_escPend(av.inicio)+(o&&o.fecha_inicio_real?' (real)':' (estimado)')+
-          ' · plazo '+av.plazo+' días · día '+av.dias+
-          (av.atrasada?' · <span style="color:var(--st-atrasado)">'+av.brecha+' puntos por debajo: la obra atrasada retrasa el cobro</span>':'')+
-        '</div></div>':'';
-    return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-800)">'+
-      '<div style="padding:10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="_cobToggleObra('+c.id+')">'+
-        '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+
-          '<span style="font-weight:400;color:var(--gray-400);font-size:11px"> · '+_escPend((o&&o.nombre)||'sin obra vinculada')+'</span></strong>'+
-        resumen+
+    '<div style="overflow-x:auto;overflow-y:visible;padding-bottom:4px">'+
+      '<div style="position:relative;min-width:'+ancho+'px;height:'+alto+'px">'+
+        '<div style="position:absolute;left:0;right:0;bottom:'+COB_TL_BASE+'px;height:1px;background:var(--gray-600)"></div>'+
+        marcas+hoyHtml+popHtml+
       '</div>'+
-      (abierto?'<div style="padding:0 10px 10px">'+barra+
-        (hitos||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+'</div>':'')+
-    '</div>';
-  }).join('');
+    '</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:baseline;'+
+      'border-top:1px solid var(--gray-600);margin-top:6px;padding-top:8px;font-size:12px">'+
+      '<span>📅 Cierto <strong style="color:var(--st-completo)">'+_cobBs(totC)+'</strong></span>'+
+      '<span>🏗️ Estimado <strong style="color:var(--gold)">'+_cobBs(totE)+'</strong></span>'+
+      '<span>Total <strong>'+_cobBs(totC+totE)+'</strong></span>'+
+    '</div>'+
+    (fuera?'<div style="font-size:10px;color:var(--gray-400);margin-top:4px">+'+fuera+' cuota(s) por '+_cobBs(fueraBs)+
+           ' fuera del rango elegido — ampliá a "Todo" para verlas.</div>':'');
 }
 
 function _cobPintar(){
@@ -8696,9 +8760,10 @@ function _cobPintar(){
       const total=Number(t.c.precio_total_bs)||0;
       const pct=total?Math.min(100,Math.round(cobrado/total*100)):0;
       return '<div style="border:1px solid var(--gray-600);border-left:3px solid '+(t.st.cod==='vencido'?'var(--st-atrasado)':'var(--gold)')+';border-radius:8px;padding:10px;margin-bottom:8px;background:var(--gray-800)">'+
+        /* v180 — el código de obra salió de la tarjeta: el cliente alcanza para
+           identificarla y el código era ruido en lo único accionable del panel. */
         '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">'+
           '<strong style="font-size:13px">'+_escPend(t.c.cliente_nombre||'—')+'</strong>'+
-          '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(t.c.contrato_codigo||'sin código')+'</span>'+
         '</div>'+
         '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_escPend(_cobNomCuota(t.p))+'</strong> · '+_cobBs(t.p.monto_bs)+
           ' <span style="color:var(--gray-400)">— '+_escPend(t.st.label)+'</span></div>'+
@@ -8769,20 +8834,44 @@ function _cobPintar(){
   }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px">Todavía no hay contratos cargados.</div>';
 
   /* v179 — el input de WhatsApp salió de la vista: el número sigue vivo en
-     app_config y lo usan los botones de "Pedir avance a Fátima". Los 4
-     recuadros de Caja los reemplaza la línea de tiempo de flujo. */
+     app_config y lo usan los botones de "Pedir avance a Fátima".
+     v180 — el alta de contratos se fue al menú ⋯: se usa una vez por obra y no
+     merece lugar fijo arriba de lo que hay que cobrar hoy. */
   cont.innerHTML=
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
-      '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirContrato()">➕ Cargar contrato</button>'+
-      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobTogglePanelObras()">📄 Leer contratos de obras</button>'+
-      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="renderCobranzas()">↺ Actualizar</button>'+
+    '<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px;position:relative">'+
+      '<button class="btn-ghost btn-sm" style="font-size:11px" title="Actualizar" onclick="renderCobranzas()">↺</button>'+
+      '<button class="btn-ghost btn-sm" id="cob-menu-btn" style="font-size:13px;padding:0 10px" title="Más acciones" onclick="_cobToggleMenu()">⋯</button>'+
+      (_cobMenu?'<div id="cob-menu" style="position:absolute;top:30px;right:0;z-index:20;background:var(--gray-900);'+
+        'border:1px solid var(--gold);border-radius:10px;padding:6px;min-width:210px;box-shadow:0 10px 30px rgba(0,0,0,0.5)">'+
+        '<button class="btn-ghost btn-sm" style="font-size:11px;width:100%;text-align:left" onclick="_cobMenuAccion(\'contrato\')">➕ Cargar contrato</button>'+
+        '<button class="btn-ghost btn-sm" style="font-size:11px;width:100%;text-align:left" onclick="_cobMenuAccion(\'obras\')">📄 Leer contratos de obras</button>'+
+      '</div>':'')+
     '</div>'+
     _cobHtmlPanelObras()+
     '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
     htmlHitosObra+
     '<div class="section-title" style="margin:16px 0 6px">📈 Línea de tiempo de flujo</div>'+_cobHtmlTimeline()+
-    '<div class="section-title" style="margin:16px 0 6px">🏗️ Línea de tiempo por obra</div>'+_cobHtmlTimelineObras()+
     '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron;
+}
+
+/* ── v180 · menú ⋯ ──────────────────────────────────────────────────── */
+let _cobMenuHandler=null;
+function _cobMenuBind(){
+  if(_cobMenuHandler){document.removeEventListener('mousedown',_cobMenuHandler);_cobMenuHandler=null;}
+  if(!_cobMenu)return;
+  _cobMenuHandler=function(ev){
+    const t=ev.target;
+    const m=document.getElementById('cob-menu'),b=document.getElementById('cob-menu-btn');
+    if(t&&((m&&m.contains(t))||(b&&b.contains(t))))return;
+    _cobMenu=false;_cobPintar();_cobMenuBind();
+  };
+  setTimeout(function(){if(_cobMenuHandler)document.addEventListener('mousedown',_cobMenuHandler);},0);
+}
+function _cobToggleMenu(){_cobMenu=!_cobMenu;_cobPintar();_cobMenuBind();}
+function _cobMenuAccion(a){
+  _cobMenu=false;_cobMenuBind();
+  if(a==='contrato'){_cobPintar();_cobAbrirContrato();return;}
+  _cobPanelObras=true;_cobPintar();
 }
 
 function _cobToggle(id){_cobAbierto=(_cobAbierto===id?null:id);_cobPintar();}
