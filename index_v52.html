@@ -8822,9 +8822,16 @@ function _cobHtmlTimeline(){
     const o=c.obra_id?_cobObra(c.obra_id):null;
     const obraPct=o&&o.avance_pct!==null&&o.avance_pct!==undefined?Math.round(Number(o.avance_pct)):null;
     const sinFecha=f.qs.filter(function(q){return !q.fecha;});
+    /* Dos cuotas en la misma fecha (reserva y primer pago, casi siempre) caen
+       en el mismo x y se tapan. Se corren a la derecha lo justo para no
+       pisarse: la fecha exacta la dice el popover, la barra sólo tiene que
+       poder leerse. */
+    let ultimoX=-1e9;
     const bloques=f.qs.filter(function(q){return q.fecha;}).map(function(q){
       const cierto=(q.cobrada||!q.estimada);
-      const x=Math.max(0,Math.min(W-COB_TL_BLOQUE,X(q.fecha)-COB_TL_BLOQUE/2));
+      let x=Math.max(0,Math.min(W-COB_TL_BLOQUE,X(q.fecha)-COB_TL_BLOQUE/2));
+      if(x<ultimoX+COB_TL_BLOQUE+2)x=Math.min(W-COB_TL_BLOQUE,ultimoX+COB_TL_BLOQUE+2);
+      ultimoX=x;
       const abierto=(_cobTlAbierto==='c:'+q.p.id);
       return '<div data-cobtl="1" onclick="_cobTlToggle(\'c:'+q.p.id+'\')" '+
         'title="'+_escPend(_cobNomCuota(q.p))+' · '+_escPend(q.fecha)+'" '+
