@@ -1012,7 +1012,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <div id="modalCobLeerContrato" class="modal-backdrop" onclick="if(event.target===this)closeModal('modalCobLeerContrato')">
   <div class="modal">
     <div class="modal-header">
-      <h2>📄 Contrato leído</h2>
+      <h2 id="cob-lc-titulo">📄 Contrato leído</h2>
       <button class="modal-close" onclick="closeModal('modalCobLeerContrato')">×</button>
     </div>
     <div class="modal-body" id="cob-lc-body"></div>
@@ -1646,7 +1646,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='180';
+  var CURRENT_VERSION='181';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8272,11 +8272,14 @@ async function _pdAlmacenamiento(){
    contrato. Las comisiones son informativas y NUNCA salen de este panel.
    ═══════════════════════════════════════════════════════════════════════ */
 let _cobContratos=[],_cobPagos=[],_cobCfg={},_cobPagoActual=null,_cobAbierto=null;
-/* v178 — alta automática desde el contrato de la obra */
-let _cobObras=[],_cobObrasConContrato=[],_cobPanelObras=false,_cobLeyendo=null,_cobLeido=null,_cobLeadsGanados=[];
-/* v179 — línea de tiempo de flujo. _cobTlRango 0 = "Todo" (hasta la última cuota)
-   v180 — el eje es horizontal; _cobTlAbierto es el período con el popover abierto */
-let _cobTlGranu='mensual',_cobTlRango=6,_cobTlAbierto=null,_cobMenu=false;
+/* v178 — alta desde el contrato de la obra. v181: ya no hay botones de carga */
+let _cobObras=[],_cobObrasConContrato=[],_cobLeido=null,_cobLeadsGanados=[];
+/* v181 — el eje es horizontal y el rango se autocalcula; _cobTlAbierto es la
+   clave del bloque con el popover abierto ('c:<idPago>' o 'p:<período>') */
+let _cobTlGranu='mensual',_cobTlAbierto=null;
+/* v181 — alta automática en background: corre UNA vez por carga del panel */
+let _cobAltaHecha=false,_cobAltaEstado=null;
+const COB_MAX_INTENTOS=3;
 
 function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -8449,6 +8452,31 @@ function _cobAvanceVsCalendario(c){
          atrasada:real<esperado,brecha:Math.round(esperado-real)};
 }
 
+/* Los datos van aparte del render porque el alta automática recarga y repinta
+   sin volver a dispararse a sí misma. */
+async function _cobCargarDatos(){
+  const{data:cts,error:e1}=await sb.from('cobranza_contratos')
+    .select('*').eq('activo',true).order('created_at',{ascending:false});
+  if(e1)throw e1;
+  _cobContratos=cts||[];
+  const{data:pgs,error:e2}=await sb.from('pagos_cliente')
+    .select('*').not('contrato_id','is',null).eq('activo',true).order('numero_pago');
+  if(e2)throw e2;
+  _cobPagos=pgs||[];
+  const{data:cfg}=await sb.from('app_config').select('key,value').like('key','cobranza%');
+  _cobCfg={};(cfg||[]).forEach(function(r){_cobCfg[r.key]=r.value;});
+  /* v178 — obras activas: alimentan el alta automática y el 🔔 de hito de avance.
+     Los obra_id ya usados se leen SIN filtrar por activo: un contrato archivado
+     sigue siendo un contrato, la obra no debe volver a la cola de alta. */
+  const{data:obs}=await sb.from('rec_obras')
+    .select('id,nombre,codigo,avance_pct,docs_prop_confirmados,contrato_propietario_nombre,'+
+            'dias_ejecucion,fecha_inicio,fecha_inicio_real,cobranza_intentos,cobranza_ultimo_error')
+    .eq('activo',true).order('nombre');
+  _cobObras=obs||[];
+  const{data:occ}=await sb.from('cobranza_contratos').select('obra_id').not('obra_id','is',null);
+  _cobObrasConContrato=(occ||[]).map(function(r){return r.obra_id;});
+}
+
 async function renderCobranzas(){
   const cont=document.getElementById('cobranzas-body'); if(!cont)return;
   if(!cu||cu.rol!=='admin'){
@@ -8457,30 +8485,168 @@ async function renderCobranzas(){
   }
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
-    const{data:cts,error:e1}=await sb.from('cobranza_contratos')
-      .select('*').eq('activo',true).order('created_at',{ascending:false});
-    if(e1)throw e1;
-    _cobContratos=cts||[];
-    const{data:pgs,error:e2}=await sb.from('pagos_cliente')
-      .select('*').not('contrato_id','is',null).eq('activo',true).order('numero_pago');
-    if(e2)throw e2;
-    _cobPagos=pgs||[];
-    const{data:cfg}=await sb.from('app_config').select('key,value').like('key','cobranza%');
-    _cobCfg={};(cfg||[]).forEach(function(r){_cobCfg[r.key]=r.value;});
-    /* v178 — obras activas: alimentan el alta automática y el 🔔 de hito de avance.
-       Los obra_id ya usados se leen SIN filtrar por activo: un contrato archivado
-       sigue siendo un contrato, la obra no debe volver a la lista de pendientes. */
-    const{data:obs}=await sb.from('rec_obras')
-      .select('id,nombre,codigo,avance_pct,docs_prop_confirmados,contrato_propietario_nombre,'+
-              'dias_ejecucion,fecha_inicio,fecha_inicio_real')
-      .eq('activo',true).order('nombre');
-    _cobObras=obs||[];
-    const{data:occ}=await sb.from('cobranza_contratos').select('obra_id').not('obra_id','is',null);
-    _cobObrasConContrato=(occ||[]).map(function(r){return r.obra_id;});
+    await _cobCargarDatos();
     _cobPintar();
   }catch(e){
     cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
+    return;
   }
+  /* Una sola pasada por carga de página: si una obra falla se le suma un
+     intento, y sin este candado el repintado la volvería a intentar en el acto
+     hasta quemar los 3 y la cuota de la API. */
+  if(!_cobAltaHecha){_cobAltaHecha=true;_cobAltaAutomatica();}
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   v181 — ALTA AUTOMÁTICA DE CONTRATOS
+
+   Josemiguel no carga nada: al abrir el panel, toda obra activa con contrato
+   escaneado y sin fila en cobranza_contratos se lee sola y queda dada de alta
+   con origen='auto' y revisado=false. El badge "sin revisar" es un aviso, no
+   un freno: la plata se cobra igual, lo que falta es la confirmación humana de
+   lo que leyó la IA.
+
+   Ya NO se exige docs_prop_confirmados: esperar la confirmación de Steffi
+   dejaba obras firmadas sin cronograma de cobro durante semanas.
+
+   Tres intentos y se para. Cada fallo queda escrito en la obra
+   (cobranza_ultimo_error), así el problema se ve en vez de repetirse.
+   ════════════════════════════════════════════════════════════════════ */
+async function _cobMarcarErrorObra(o,msg){
+  const n=(Number(o.cobranza_intentos)||0)+1;
+  o.cobranza_intentos=n;o.cobranza_ultimo_error=msg;
+  try{
+    const{error}=await sb.from('rec_obras')
+      .update({cobranza_intentos:n,cobranza_ultimo_error:String(msg).slice(0,500)}).eq('id',o.id);
+    if(error)throw error;
+  }catch(e){}
+}
+
+/* Filas de pagos_cliente a partir de las cuotas extraídas. Lo comparten el alta
+   automática y la ficha de revisión: una sola definición de cómo se fecha una cuota. */
+function _cobFilasCuotas(contratoId,leadId,qs,ctx){
+  return qs.map(function(q){
+    const det=(q.condicion_detalle||'').trim();
+    const desc=((q.descripcion||'').trim()+(det?' — '+det:'')).slice(0,500);
+    const f=_cobFechasDeCuota(q,ctx);
+    return{contrato_id:contratoId,lead_id:leadId||null,
+      numero_pago:Number(q.numero),
+      porcentaje:(q.porcentaje===null||q.porcentaje===undefined||q.porcentaje==='')?null:String(q.porcentaje)+'%',
+      descripcion:desc||null,
+      monto_bs:_cobR2(q.monto),
+      condicion_tipo:q.condicion_tipo||'otro',
+      condicion_detalle:det||null,
+      avance_pct_requerido:(q.avance_pct_requerido===null||q.avance_pct_requerido===undefined||q.avance_pct_requerido==='')
+        ?null:Number(q.avance_pct_requerido),
+      fecha_prevista:f.fecha_prevista,
+      fecha_estimada:f.fecha_estimada,
+      fecha_es_estimada:!!f.fecha_es_estimada,
+      estado:'pendiente',activo:true};
+  });
+}
+
+async function _cobCrearContratoAuto(o,r){
+  const x=r.extraido||{};
+  const qs=Array.isArray(x.cuotas)?x.cuotas:[];
+  if(!qs.length)return{ok:false,error:'la lectura no devolvió ninguna cuota'};
+  const nums=qs.map(function(q){return Number(q.numero);});
+  if(nums.some(function(n){return !isFinite(n);})||new Set(nums).size!==nums.length)
+    return{ok:false,error:'las cuotas leídas no tienen números únicos'};
+  const firma=x.fecha_firma?String(x.fecha_firma).slice(0,10):null;
+  const dias=(x.dias_hasta_inicio==null?10:Number(x.dias_hasta_inicio))||0;
+  const plazo=Number(x.plazo_obra_dias)||Number(o.dias_ejecucion)||0;
+  const inicio=o.fecha_inicio_real?String(o.fecha_inicio_real).slice(0,10)
+                                  :(firma?_cobFechaMas(firma,dias):null);
+  const ctx={fecha_firma:firma,inicio:inicio,plazo:plazo};
+  const qAv=qs.find(function(q){return q.condicion_tipo==='avance_obra'&&Number(q.avance_pct_requerido)>0;});
+  let ct=null;
+  try{
+    const{data,error}=await sb.from('cobranza_contratos').insert({
+      obra_id:o.id,
+      cliente_nombre:(x.cliente_nombre||'').trim()||o.nombre||('Obra '+o.id),
+      contrato_codigo:o.codigo||null,
+      precio_total_bs:Number(x.precio_total)||0,
+      moneda:String(x.moneda||'BS').toUpperCase(),
+      fecha_firma:firma,
+      mora_usd_dia:Number(x.mora_monto_dia)||0,
+      dias_hasta_inicio:dias,
+      plazo_obra_dias:plazo||null,
+      observaciones:_cobObsLeido(x),
+      informe_previo_pct_pactado:qAv?Number(qAv.avance_pct_requerido):null,
+      origen:'auto',revisado:false,contrato_validado:false,
+      /* Los avisos de la lectura quedan a la vista de quien después revise */
+      lectura_error:(r.avisos&&r.avisos.length)?r.avisos.join(' | ').slice(0,1000):null
+    }).select().single();
+    if(error)throw error;
+    ct=data;
+  }catch(e){return{ok:false,error:'no se pudo crear el contrato: '+(e.message||'error')};}
+  try{
+    const{error}=await sb.from('pagos_cliente').insert(_cobFilasCuotas(ct.id,null,qs,ctx));
+    if(error)throw error;
+  }catch(e){
+    /* Un contrato sin cuotas es peor que ningún contrato: se revierte el alta. */
+    try{await sb.from('cobranza_contratos').delete().eq('id',ct.id);}catch(e2){}
+    return{ok:false,error:'no se pudieron generar las cuotas: '+(e.message||'error')};
+  }
+  try{await registrarAuditoria('alta_auto_contrato','cobranza_contratos',ct.id,
+    {obra_id:o.id,cuotas:qs.length,total:ct.precio_total_bs});}catch(e){}
+  return{ok:true,id:ct.id};
+}
+
+async function _cobAltaAutomatica(){
+  if(_cobAltaEstado&&_cobAltaEstado.corriendo)return;
+  const pend=_cobObras.filter(function(o){
+    return o.contrato_propietario_nombre&&_cobObrasConContrato.indexOf(o.id)<0&&
+           (Number(o.cobranza_intentos)||0)<COB_MAX_INTENTOS;
+  });
+  if(!pend.length){_cobAltaEstado=null;return;}
+  _cobAltaEstado={corriendo:true,hechas:0,total:pend.length,obra:'',ok:0,errores:[]};
+  _cobPintar();
+  for(let i=0;i<pend.length;i++){
+    const o=pend[i];
+    _cobAltaEstado.obra=o.nombre||('obra '+o.id);
+    _cobPintar();
+    let r=null;
+    try{ r=await _cobContratoCall({obra_id:o.id}); }
+    catch(e){ r={error:(e&&e.message)||'sin respuesta'}; }
+    if(r&&r.ok){
+      const res=await _cobCrearContratoAuto(o,r);
+      if(res.ok){_cobAltaEstado.ok++;}
+      else{
+        await _cobMarcarErrorObra(o,res.error);
+        _cobAltaEstado.errores.push({obra:o.nombre||('obra '+o.id),msg:res.error,intentos:o.cobranza_intentos});
+      }
+    }else{
+      const msg=String((r&&(r.error||r.detail))||'no se pudo leer el contrato').slice(0,300);
+      await _cobMarcarErrorObra(o,msg);
+      _cobAltaEstado.errores.push({obra:o.nombre||('obra '+o.id),msg:msg,intentos:o.cobranza_intentos});
+    }
+    _cobAltaEstado.hechas++;
+  }
+  const res={corriendo:false,ok:_cobAltaEstado.ok,errores:_cobAltaEstado.errores};
+  _cobAltaEstado=res;
+  try{ await _cobCargarDatos(); }catch(e){}
+  _cobPintar();
+  if(res.ok)toast('✅ '+res.ok+' contrato(s) dados de alta automáticamente','ok');
+}
+
+/* Aviso del alta automática: mientras corre y, si algo falló, después */
+function _cobHtmlAlta(){
+  const a=_cobAltaEstado; if(!a)return '';
+  if(a.corriendo){
+    return '<div style="border:1px solid '+COB_C.sep+';border-radius:8px;padding:8px;margin-bottom:12px;'+
+      'font-size:11px;color:'+COB_C.txt2+'">'+
+      '<span class="spin" style="width:12px;height:12px;margin-right:6px"></span>'+
+      'Leyendo contratos de obra ('+(a.hechas+1)+' de '+a.total+'): '+_escPend(a.obra||'')+'</div>';
+  }
+  if(!a.errores||!a.errores.length)return '';
+  return '<div style="border:1px solid '+COB_C.oro+';border-radius:8px;padding:8px;margin-bottom:12px;font-size:11px">'+
+    '<strong style="color:'+COB_C.oro+'">No se pudo leer '+a.errores.length+' contrato(s)</strong>'+
+    a.errores.map(function(e){
+      return '<div style="color:'+COB_C.txt2+';margin-top:3px">'+_escPend(e.obra)+' — '+_escPend(e.msg)+
+        ((Number(e.intentos)||0)>=COB_MAX_INTENTOS?' <span style="color:'+COB_C.oro+'">(no se reintenta más)</span>':'')+
+      '</div>';
+    }).join('')+'</div>';
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -8491,70 +8657,77 @@ async function renderCobranzas(){
    en el mismo total es lo que hace que un flujo de caja mienta.
    ════════════════════════════════════════════════════════════════════ */
 const COB_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-function _cobLunes(ymd){
-  const p=String(ymd).slice(0,10).split('-');
-  const d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
-  d.setDate(d.getDate()-((d.getDay()+6)%7));
-  return ymdLocal(d);
-}
-function _cobPeriodo(ymd){
-  return _cobTlGranu==='semanal'?_cobLunes(ymd):String(ymd).slice(0,7);
-}
-function _cobPeriodoSig(clave){
-  if(_cobTlGranu==='semanal')return _cobFechaMas(clave,7);
-  const a=Number(clave.slice(0,4)),m=Number(clave.slice(5,7));
-  return (m===12?(a+1)+'-01':a+'-'+String(m+1).padStart(2,'0'));
-}
-function _cobPeriodoLbl(clave){
-  if(_cobTlGranu==='semanal'){
-    const p=clave.split('-');
-    return 'sem '+p[2]+'/'+COB_MESES[Number(p[1])-1];
-  }
-  return COB_MESES[Number(clave.slice(5,7))-1]+' '+clave.slice(2,4);
-}
-/* Todas las cuotas pendientes con fecha, ya clasificadas en cierto/estimado */
-function _cobCuotasProyectadas(){
-  const out=[];
-  _cobContratos.forEach(function(c){
-    _cobPagos.filter(function(p){return p.contrato_id===c.id&&!_cobEsCobrado(p);}).forEach(function(p){
-      const f=_cobFechaHito(p,c);
-      if(!f.fecha)return;
-      out.push({c:c,p:p,fecha:f.fecha,estimada:f.estimada,monto:Number(p.monto_bs)||0});
-    });
-  });
-  return out.sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
-}
-function _cobTlSetGranu(g){_cobTlGranu=g;_cobTlAbierto=null;_cobPintar();}
-function _cobTlSetRango(r){_cobTlRango=r;_cobTlAbierto=null;_cobPintar();}
 
 /* ════════════════════════════════════════════════════════════════════
-   v180 — LÍNEA DE TIEMPO HORIZONTAL
+   v181 — LÍNEA DE TIEMPO: UNA FILA POR OBRA SOBRE UN EJE COMÚN
 
-   Un solo eje con los períodos de izquierda a derecha y, sobre él, un
-   marcador por período CON PLATA con el total agregado de TODAS las obras.
-   Cierto y estimado son dos marcadores distintos, nunca un número sumado:
-     · cierto   → línea sólida verde + punto relleno
-     · estimado → línea punteada ámbar + punto hueco
-   El detalle vive en un popover anclado al marcador: no hay modal ni salto
-   a otra vista, el ojo no se va del eje.
+   El eje es continuo (días reales), no columnas: cada cuota se planta en su
+   fecha. Todas las filas comparten el mismo eje, así la línea de hoy las cruza
+   a todas y se puede leer de un vistazo qué obra está adelante y cuál atrás.
+
+   Paleta cerrada — el dorado NUNCA como fondo pleno, sólo rayado o acento, y
+   el rojo existe una sola vez en el panel: la línea de hoy.
    ════════════════════════════════════════════════════════════════════ */
-const COB_TL_ALTO=132;      /* alto útil de las barras, en px */
-const COB_TL_TOPE=22;       /* aire arriba de la barra más alta (etiqueta + "hoy") */
-const COB_TL_EJE=COB_TL_TOPE+COB_TL_ALTO;  /* y del eje, medido DESDE ARRIBA */
-const COB_TL_POP=250;       /* alto reservado para el popover abierto */
-/* Todo se posiciona con `top` contra COB_TL_EJE y no con `bottom`: cuando se
-   abre el popover el lienzo crece a lo alto, y con `bottom` el eje entero se
-   corría hacia abajo y quedaba tapado por el propio popover. */
+const COB_C={verde:'#1D9E75',verdeTxt:'#04342C',oro:'#FAC305',oroFondo:'#3A3526',
+             rojo:'#E24B4A',barra:'#232320',sep:'#33332F',txt2:'#8A8880',resto:'#3A3A36'};
+const COB_RAYADO='repeating-linear-gradient(45deg,#3A3526 0,#3A3526 5px,#FAC305 5px,#FAC305 7.5px)';
+const COB_TL_BLOQUE=48;     /* ancho del bloque de una cuota */
+const COB_TL_MINPER={mensual:62,trimestral:88,anual:114};
 
 function _cobBsCorto(n){
   const v=Math.abs(Number(n)||0);
-  if(v>=1000000)return 'Bs '+(v/1000000).toFixed(1).replace('.',',')+'M';
-  if(v>=1000)return 'Bs '+Math.round(v/1000)+'k';
-  return 'Bs '+Math.round(v);
+  if(v>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
+  if(v>=1000)return Math.round(v/1000)+'k';
+  return String(Math.round(v));
 }
-/* El popover se cierra con click afuera. Los clicks en OTRO marcador se dejan
-   pasar: los maneja su propio onclick, si no el repintado mataría el elemento
-   antes de que llegue el click y habría que apretar dos veces. */
+
+/* ── períodos ────────────────────────────────────────────────────────
+   Tres granularidades y un solo rango: de la cuota más temprana a la más
+   tardía. No hay botones de rango porque no hay nada que elegir — el
+   cronograma de cobro dura lo que dura. */
+function _cobPerClave(ymd){
+  const y=String(ymd).slice(0,4),m=Number(String(ymd).slice(5,7));
+  if(_cobTlGranu==='anual')return y;
+  if(_cobTlGranu==='trimestral')return y+'-T'+(Math.floor((m-1)/3)+1);
+  return String(ymd).slice(0,7);
+}
+function _cobPerIni(clave){
+  if(_cobTlGranu==='anual')return clave+'-01-01';
+  if(_cobTlGranu==='trimestral')
+    return clave.slice(0,4)+'-'+String((Number(clave.slice(6))-1)*3+1).padStart(2,'0')+'-01';
+  return clave+'-01';
+}
+function _cobPerSig(clave){
+  if(_cobTlGranu==='anual')return String(Number(clave)+1);
+  if(_cobTlGranu==='trimestral'){
+    const y=Number(clave.slice(0,4)),t=Number(clave.slice(6));
+    return t===4?(y+1)+'-T1':y+'-T'+(t+1);
+  }
+  const a=Number(clave.slice(0,4)),m=Number(clave.slice(5,7));
+  return m===12?(a+1)+'-01':a+'-'+String(m+1).padStart(2,'0');
+}
+function _cobPerLbl(clave){
+  if(_cobTlGranu==='anual')return clave;
+  if(_cobTlGranu==='trimestral')return 'T'+clave.slice(6)+' '+clave.slice(2,4);
+  return COB_MESES[Number(clave.slice(5,7))-1]+' '+clave.slice(2,4);
+}
+
+function _cobTlSetGranu(g){_cobTlGranu=g;_cobTlAbierto=null;_cobPintar();}
+
+/* Todas las cuotas de un contrato, cobradas incluidas: la barra muestra el
+   plan completo, no sólo lo que falta. */
+function _cobCuotasDeContrato(c){
+  return _cobPagos.filter(function(p){return p.contrato_id===c.id;}).map(function(p){
+    const f=_cobFechaHito(p,c);
+    return{c:c,p:p,fecha:f.fecha,estimada:f.estimada,monto:Number(p.monto_bs)||0,
+           cobrada:_cobEsCobrado(p)};
+  }).sort(function(a,b){return (a.fecha||'9999').localeCompare(b.fecha||'9999');});
+}
+
+/* ── popover ─────────────────────────────────────────────────────────
+   Clave 'c:<idPago>' para un bloque de cuota, 'p:<período>' para la fila
+   total. Se cierra con la X o con un click afuera; los clicks en otro bloque
+   se dejan pasar para no tener que apretar dos veces. */
 let _cobTlPopHandler=null;
 function _cobTlPopBind(){
   if(_cobTlPopHandler){document.removeEventListener('mousedown',_cobTlPopHandler);_cobTlPopHandler=null;}
@@ -8580,165 +8753,214 @@ function _cobTlCuando(q){
   if(q.p.condicion_tipo==='avance_obra'&&Number(q.p.avance_pct_requerido)>0){
     const av=_cobAvanceVsCalendario(q.c);
     return 'al '+Number(q.p.avance_pct_requerido)+'% de obra'+
-           (av?' <span style="color:'+(av.atrasada?'var(--st-atrasado)':'var(--gray-400)')+'">(hoy '+av.real+'%)</span>':'');
+           (av?' <span style="color:'+(av.atrasada?COB_C.oro:COB_C.txt2)+'">(hoy '+av.real+'%)</span>':'');
   }
-  return (q.estimada?'~':'')+_escPend(q.fecha);
+  return (q.estimada?'~':'')+_escPend(q.fecha||'sin fecha');
+}
+function _cobBadgeRevisar(c){
+  if(c.revisado)return '';
+  return ' <span style="font-size:9px;font-weight:700;color:'+COB_C.oro+';border:1px solid '+COB_C.oro+
+    ';border-radius:4px;padding:0 4px;vertical-align:1px">sin revisar</span>'+
+    ' <button class="btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" '+
+    'onclick="event.stopPropagation();_cobRevisarContrato('+c.id+')">Revisar</button>';
 }
 
 function _cobHtmlTimeline(){
   const hoy=ymdLocal(new Date());
-  const cuotas=_cobCuotasProyectadas();
-  const btn=function(txt,activo,fn){
-    return '<button class="btn-'+(activo?'primary':'ghost')+' btn-sm" style="font-size:11px" onclick="'+fn+'">'+txt+'</button>';
-  };
-  const controles='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">'+
-    '<div style="display:flex;gap:6px">'+
-      btn('Mensual',_cobTlGranu==='mensual',"_cobTlSetGranu('mensual')")+
-      btn('Semanal',_cobTlGranu==='semanal',"_cobTlSetGranu('semanal')")+
-    '</div>'+
-    '<div style="display:flex;gap:6px">'+
-      btn('3m',_cobTlRango===3,'_cobTlSetRango(3)')+btn('6m',_cobTlRango===6,'_cobTlSetRango(6)')+
-      btn('12m',_cobTlRango===12,'_cobTlSetRango(12)')+btn('Todo',_cobTlRango===0,'_cobTlSetRango(0)')+
-    '</div></div>';
+  const sel='<select class="form-control" style="width:160px;padding:5px 8px;font-size:11px" '+
+    'onchange="_cobTlSetGranu(this.value)">'+
+    [['mensual','Mensual'],['trimestral','Trimestral'],['anual','Anual']].map(function(o){
+      return '<option value="'+o[0]+'"'+(_cobTlGranu===o[0]?' selected':'')+'>'+o[1]+'</option>';
+    }).join('')+'</select>';
+  const leyenda='<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:'+COB_C.txt2+';margin:8px 0 10px">'+
+    '<span><span style="display:inline-block;width:12px;height:9px;border-radius:2px;background:'+COB_C.verde+';vertical-align:-1px"></span>'+
+      ' Cierto — fecha del contrato</span>'+
+    '<span><span style="display:inline-block;width:12px;height:9px;border-radius:2px;background:'+COB_RAYADO+';vertical-align:-1px"></span>'+
+      ' Estimado — depende del avance</span>'+
+    '<span><span style="display:inline-block;width:12px;border-top:2px dashed '+COB_C.rojo+';vertical-align:3px"></span> Hoy</span>'+
+  '</div>';
+  const controles='<div>'+sel+'</div>'+leyenda;
 
-  if(!cuotas.length)
-    return controles+'<div style="font-size:12px;color:var(--gray-400);padding:8px">No hay cuotas pendientes con fecha para proyectar.</div>';
+  const filas=_cobContratos.map(function(c){return{c:c,qs:_cobCuotasDeContrato(c)};});
+  const todas=[];
+  filas.forEach(function(f){f.qs.forEach(function(q){if(q.fecha)todas.push(q);});});
+  if(!todas.length)
+    return controles+'<div style="font-size:12px;color:'+COB_C.txt2+';padding:8px">No hay cuotas con fecha para proyectar.</div>';
 
-  /* El rango arranca en el período de hoy o antes, si hay cuotas atrasadas.
-     "Todo" se auto-extiende hasta la última cuota del contrato más largo.
-     Hoy SIEMPRE entra en el eje, aunque todo lo pendiente ya haya pasado. */
-  const pHoy=_cobPeriodo(hoy);
-  const ini=_cobPeriodo(cuotas[0].fecha<hoy?cuotas[0].fecha:hoy);
-  let fin;
-  if(_cobTlRango===0){fin=_cobPeriodo(cuotas[cuotas.length-1].fecha);}
-  else{
-    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+_cobTlRango);
-    fin=_cobPeriodo(ymdLocal(d));
-  }
-  if(fin<ini)fin=ini;
-  if(fin<pHoy)fin=pHoy;
-  const claves=[];
-  for(let k=ini;k<=fin&&claves.length<400;k=_cobPeriodoSig(k))claves.push(k);
+  /* Rango automático. Hoy siempre queda adentro para que la línea roja exista. */
+  let min=todas[0].fecha,max=todas[0].fecha;
+  todas.forEach(function(q){if(q.fecha<min)min=q.fecha;if(q.fecha>max)max=q.fecha;});
+  if(hoy<min)min=hoy;
+  if(hoy>max)max=hoy;
+  const per=[];
+  const kMax=_cobPerClave(max);
+  for(let k=_cobPerClave(min),g=0;g<600;g++){per.push(k);if(k===kMax)break;k=_cobPerSig(k);}
+  const t0=_cobPerIni(per[0]);
+  const t1=_cobPerIni(_cobPerSig(per[per.length-1]));
+  const dias=Math.max(1,_cobDiasEntre(t0,t1));
+  const W=Math.max(per.length*(COB_TL_MINPER[_cobTlGranu]||62),320);
+  const X=function(ymd){return Math.round(_cobDiasEntre(t0,ymd)/dias*W);};
 
-  const buckets={};
-  claves.forEach(function(k){buckets[k]={cierto:0,estimado:0,items:[]};});
-  let fuera=0,fueraBs=0;
-  cuotas.forEach(function(q){
-    const k=_cobPeriodo(q.fecha);
-    if(!buckets[k]){fuera++;fueraBs+=q.monto;return;}
-    buckets[k][q.estimada?'estimado':'cierto']+=q.monto;
-    buckets[k].items.push(q);
-  });
-  /* La altura se mide contra el marcador más alto, no contra la suma del
-     período: cierto y estimado se comparan entre sí en la misma escala. */
-  const max=claves.reduce(function(m,k){
-    return Math.max(m,buckets[k].cierto,buckets[k].estimado);},0)||1;
+  /* 1 · eje de períodos */
+  const ejes=per.map(function(k){
+    const x0=X(_cobPerIni(k)),x1=X(_cobPerIni(_cobPerSig(k)));
+    return '<div style="position:absolute;left:'+x0+'px;width:'+(x1-x0)+'px;top:0;text-align:center;'+
+      'font-size:9px;color:'+COB_C.txt2+'">'+_cobPerLbl(k)+'</div>'+
+      '<div style="position:absolute;left:'+x0+'px;top:14px;width:1px;height:5px;background:'+COB_C.sep+'"></div>';
+  }).join('');
 
-  const colW=(_cobTlGranu==='semanal'?46:58);
-  const ancho=Math.max(claves.length*colW,260);
-  const alto=COB_TL_EJE+22+(_cobTlAbierto?COB_TL_POP:0);
-  const xDe=function(i){return i*colW+colW/2;};
-
-  let marcas='';
-  claves.forEach(function(k,i){
-    const b=buckets[k],x=xDe(i),abierto=(_cobTlAbierto===k);
-    const esHoy=(k===pHoy);
-    /* Tick + etiqueta del período, tenga plata o no: el eje es un calendario */
-    marcas+='<div style="position:absolute;left:'+(x-0.5)+'px;top:'+COB_TL_EJE+'px;width:1px;height:4px;background:var(--gray-600)"></div>'+
-      '<div style="position:absolute;left:'+(x-colW/2)+'px;width:'+colW+'px;top:'+(COB_TL_EJE+6)+'px;text-align:center;'+
-        'font-size:9px;color:'+(esHoy?'var(--st-atrasado)':'var(--gray-400)')+';font-weight:'+(esHoy?'800':'400')+'">'+
-        _cobPeriodoLbl(k)+'</div>';
-    if(!b.items.length)return;
-    const par=(b.cierto>0&&b.estimado>0);
-    const dibujar=function(monto,cierto){
-      if(!(monto>0))return '';
-      const h=Math.max(8,Math.round(monto/max*COB_TL_ALTO));
-      const dx=par?(cierto?-6:6):0;
-      const cx=x+dx;
-      return (cierto
-        ? '<div style="position:absolute;left:'+(cx-1)+'px;top:'+(COB_TL_EJE-h)+'px;width:2px;height:'+h+'px;background:var(--st-completo)"></div>'+
-          '<div style="position:absolute;left:'+(cx-4.5)+'px;top:'+(COB_TL_EJE-h-4.5)+'px;width:9px;height:9px;border-radius:50%;background:var(--st-completo)"></div>'
-        : '<div style="position:absolute;left:'+(cx-1)+'px;top:'+(COB_TL_EJE-h)+'px;width:0;height:'+h+'px;border-left:2px dashed var(--gold)"></div>'+
-          '<div style="position:absolute;left:'+(cx-4.5)+'px;top:'+(COB_TL_EJE-h-4.5)+'px;width:9px;height:9px;border-radius:50%;'+
-            'border:2px solid var(--gold);background:var(--gray-900);box-sizing:border-box"></div>')+
-        '<div style="position:absolute;left:'+(cx-30)+'px;width:60px;top:'+(COB_TL_EJE-h-20)+'px;text-align:center;'+
-          'font-size:9px;color:'+(cierto?'var(--st-completo)':'var(--gold)')+'">'+_cobBsCorto(monto)+'</div>';
-    };
-    marcas+=dibujar(b.cierto,true)+dibujar(b.estimado,false);
-    /* Zona clickeable de la columna entera: apuntarle a una línea de 2px es
-       imposible en un celular. */
-    marcas+='<div data-cobtl="1" title="Ver cuotas de '+_cobPeriodoLbl(k)+'" onclick="_cobTlToggle(\''+k+'\')" '+
-      'style="position:absolute;left:'+(x-colW/2)+'px;width:'+colW+'px;top:'+(COB_TL_TOPE-4)+'px;height:'+(COB_TL_ALTO+22)+'px;'+
-      'cursor:pointer;border-radius:6px;background:'+(abierto?'rgba(242,197,0,0.10)':'transparent')+'"></div>';
-  });
-
-  /* Hoy: punteada roja cruzando el eje, con etiqueta */
-  const iHoy=claves.indexOf(pHoy);
-  const hoyHtml=(iHoy<0)?'':
-    '<div style="position:absolute;left:'+(xDe(iHoy)-1)+'px;top:'+(COB_TL_TOPE-6)+'px;width:0;height:'+(COB_TL_ALTO+18)+'px;'+
-      'border-left:2px dashed var(--st-atrasado);pointer-events:none"></div>'+
-    '<div style="position:absolute;left:'+(xDe(iHoy)+4)+'px;top:'+(COB_TL_TOPE-18)+'px;'+
-      'font-size:9px;color:var(--st-atrasado);font-weight:800;pointer-events:none">hoy</div>';
-
-  /* Popover anclado al marcador, debajo del eje. Va DENTRO del lienzo (que
-     crece a lo alto cuando está abierto) para que el scroll horizontal no lo
-     recorte ni haya que medir posiciones a mano. */
-  let popHtml='';
-  if(_cobTlAbierto&&buckets[_cobTlAbierto]){
-    const i=claves.indexOf(_cobTlAbierto);
-    const b=buckets[_cobTlAbierto];
-    const px=Math.max(0,Math.min(ancho-320,xDe(i)-160));
-    const filas=b.items.map(function(q){
-      const st=_cobEstadoHito(q.p,q.c);
-      return '<div style="padding:5px 0;border-bottom:1px solid var(--gray-700)">'+
-        '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline">'+
-          '<strong style="font-size:11px">'+(q.estimada?'🏗️ ':'📅 ')+_escPend(q.c.cliente_nombre||'—')+'</strong>'+
-          '<strong style="font-size:11px;color:'+(q.estimada?'var(--gold)':'var(--st-completo)')+'">'+_cobBs(q.monto)+'</strong>'+
-        '</div>'+
-        '<div style="font-size:10px;color:var(--gray-400)">'+_escPend(_cobNomCuota(q.p))+' · '+_cobTlCuando(q)+'</div>'+
-        '<div style="font-size:10px;color:'+(st.cod==='vencido'?'var(--st-atrasado)':'var(--gray-400)')+'">'+
-          st.icono+' '+_escPend(st.label)+'</div>'+
+  /* 3 · una fila por obra */
+  const htmlFilas=filas.map(function(f){
+    const c=f.c;
+    const total=Number(c.precio_total_bs)||0;
+    const cobrado=f.qs.filter(function(q){return q.cobrada;}).reduce(function(s,q){return s+q.monto;},0);
+    const pctCob=total?Math.min(100,Math.round(cobrado/total*100)):0;
+    const o=c.obra_id?_cobObra(c.obra_id):null;
+    const obraPct=o&&o.avance_pct!==null&&o.avance_pct!==undefined?Math.round(Number(o.avance_pct)):null;
+    const sinFecha=f.qs.filter(function(q){return !q.fecha;});
+    const bloques=f.qs.filter(function(q){return q.fecha;}).map(function(q){
+      const cierto=(q.cobrada||!q.estimada);
+      const x=Math.max(0,Math.min(W-COB_TL_BLOQUE,X(q.fecha)-COB_TL_BLOQUE/2));
+      const abierto=(_cobTlAbierto==='c:'+q.p.id);
+      return '<div data-cobtl="1" onclick="_cobTlToggle(\'c:'+q.p.id+'\')" '+
+        'title="'+_escPend(_cobNomCuota(q.p))+' · '+_escPend(q.fecha)+'" '+
+        'style="position:absolute;left:'+x+'px;top:3px;width:'+COB_TL_BLOQUE+'px;height:24px;border-radius:4px;'+
+        'cursor:pointer;display:flex;align-items:center;justify-content:center;'+
+        (cierto?('background:'+COB_C.verde):('background:'+COB_RAYADO))+
+        (abierto?';outline:2px solid '+COB_C.oro:'')+'">'+
+        (cierto
+          ? '<span style="font-size:10px;font-weight:800;color:'+COB_C.verdeTxt+'">'+_cobBsCorto(q.monto)+'</span>'
+          : '<span style="font-size:10px;font-weight:800;color:'+COB_C.oro+';background:'+COB_C.oroFondo+
+            ';padding:0 3px;border-radius:2px">'+_cobBsCorto(q.monto)+'</span>')+
       '</div>';
     }).join('');
-    popHtml='<div id="cob-tl-pop" style="position:absolute;left:'+px+'px;top:'+(COB_TL_EJE+24)+'px;'+
-      'width:320px;max-width:320px;background:var(--gray-900);border:1px solid var(--gold);border-radius:10px;'+
-      'padding:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);z-index:5">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
-        '<strong style="font-size:12px">'+_cobPeriodoLbl(_cobTlAbierto)+' · '+b.items.length+' cuota(s)</strong>'+
-        '<button class="btn-ghost btn-sm" style="font-size:12px;padding:0 6px" onclick="_cobTlCerrar()">✕</button>'+
+    return '<div style="margin-bottom:12px">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:3px">'+
+        '<span style="font-size:11px;font-weight:700">'+_escPend(c.cliente_nombre||'—')+_cobBadgeRevisar(c)+'</span>'+
+        '<span style="font-size:11px;color:'+COB_C.txt2+'">'+_cobBs(total)+'</span>'+
       '</div>'+
-      '<div style="max-height:200px;overflow-y:auto">'+filas+'</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:10px;padding-top:6px;color:var(--gray-400)">'+
-        '<span>📅 '+_cobBs(b.cierto)+'</span><span>🏗️ '+_cobBs(b.estimado)+'</span></div>'+
+      '<div style="position:relative;height:30px;background:'+COB_C.barra+';border-radius:5px">'+bloques+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
+        '<div style="flex:1;height:5px;border-radius:3px;background:'+COB_C.resto+';overflow:hidden">'+
+          '<div style="height:100%;width:'+pctCob+'%;background:'+COB_C.verde+'"></div></div>'+
+        '<span style="font-size:10px;color:'+COB_C.txt2+';white-space:nowrap">'+pctCob+'% cobrado'+
+          (obraPct!==null?' · obra '+obraPct+'%':'')+'</span>'+
+      '</div>'+
+      (sinFecha.length?'<div style="font-size:9px;color:'+COB_C.txt2+';margin-top:2px">'+sinFecha.length+
+        ' cuota(s) sin fecha, fuera del eje</div>':'')+
     '</div>';
+  }).join('');
+
+  /* 4 · fila total — agrega todas las obras por período */
+  const porPer={};
+  per.forEach(function(k){porPer[k]={cierto:0,estimado:0,items:[]};});
+  todas.forEach(function(q){
+    const k=_cobPerClave(q.fecha);
+    if(!porPer[k])return;
+    porPer[k][(q.cobrada||!q.estimada)?'cierto':'estimado']+=q.monto;
+    porPer[k].items.push(q);
+  });
+  let totC=0,totE=0,totCobrado=0,totContratado=0;
+  per.forEach(function(k){totC+=porPer[k].cierto;totE+=porPer[k].estimado;});
+  _cobContratos.forEach(function(c){totContratado+=Number(c.precio_total_bs)||0;});
+  todas.forEach(function(q){if(q.cobrada)totCobrado+=q.monto;});
+  const pctTot=totContratado?Math.min(100,Math.round(totCobrado/totContratado*100)):0;
+
+  const bloquesTot=per.map(function(k){
+    const b=porPer[k];
+    if(!b.items.length)return '';
+    const x0=X(_cobPerIni(k)),x1=X(_cobPerIni(_cobPerSig(k)));
+    const w=Math.max(30,x1-x0-4);
+    const t=b.cierto+b.estimado;
+    const wC=t?Math.round(b.cierto/t*100):0;
+    const abierto=(_cobTlAbierto==='p:'+k);
+    return '<div data-cobtl="1" onclick="_cobTlToggle(\'p:'+k+'\')" title="'+_cobPerLbl(k)+'" '+
+      'style="position:absolute;left:'+(x0+2)+'px;top:3px;width:'+w+'px;height:32px;border-radius:4px;'+
+      'overflow:hidden;display:flex;cursor:pointer'+(abierto?';outline:2px solid '+COB_C.oro:'')+'">'+
+      (b.cierto>0?'<div style="width:'+(b.estimado>0?wC+'%':'100%')+';background:'+COB_C.verde+';display:flex;'+
+        'align-items:center;justify-content:center;font-size:10px;font-weight:800;color:'+COB_C.verdeTxt+'">'+
+        _cobBsCorto(b.cierto)+'</div>':'')+
+      (b.estimado>0?'<div style="flex:1;background:'+COB_RAYADO+';display:flex;align-items:center;justify-content:center">'+
+        '<span style="font-size:10px;font-weight:800;color:'+COB_C.oro+';background:'+COB_C.oroFondo+
+        ';padding:0 3px;border-radius:2px">'+_cobBsCorto(b.estimado)+'</span></div>':'')+
+    '</div>';
+  }).join('');
+
+  const filaTotal='<div style="border-top:1px solid '+COB_C.sep+';padding-top:10px">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:3px">'+
+      '<span style="font-size:12px;font-weight:800;color:'+COB_C.oro+'">TOTAL</span>'+
+      '<span style="font-size:11px;color:'+COB_C.txt2+'">cierto <strong style="color:'+COB_C.verde+'">'+
+        _cobBs(totC)+'</strong> · estimado <strong style="color:'+COB_C.oro+'">'+_cobBs(totE)+'</strong></span>'+
+    '</div>'+
+    '<div style="position:relative;height:38px;background:'+COB_C.barra+';border-radius:5px">'+bloquesTot+'</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
+      '<div style="flex:1;height:5px;border-radius:3px;background:'+COB_C.resto+';overflow:hidden">'+
+        '<div style="height:100%;width:'+pctTot+'%;background:'+COB_C.verde+'"></div></div>'+
+      '<span style="font-size:10px;color:'+COB_C.txt2+';white-space:nowrap">'+pctTot+'% cobrado</span>'+
+    '</div>'+
+  '</div>';
+
+  /* 2 · hoy — la única marca roja del panel, cruzando todas las barras */
+  const xh=X(hoy);
+  const hoyHtml='<div style="position:absolute;left:'+(xh-1)+'px;top:20px;bottom:14px;width:0;'+
+      'border-left:2px dashed '+COB_C.rojo+';z-index:3;pointer-events:none"></div>'+
+    '<div style="position:absolute;left:'+Math.min(xh+3,W-24)+'px;bottom:0;font-size:9px;font-weight:800;'+
+      'color:'+COB_C.rojo+';z-index:3;pointer-events:none">hoy</div>';
+
+  /* Popover: en flujo normal debajo del eje, corrido hasta el bloque que lo
+     abrió. Fuera del contenedor relativo, así no hay que reservarle alto ni
+     pelearse con el scroll horizontal. */
+  let popHtml='';
+  if(_cobTlAbierto){
+    let items=[],titulo='',ancla=0;
+    if(_cobTlAbierto.slice(0,2)==='p:'){
+      const k=_cobTlAbierto.slice(2);
+      if(porPer[k]){items=porPer[k].items;titulo=_cobPerLbl(k);ancla=X(_cobPerIni(k));}
+    }else{
+      const pid=Number(_cobTlAbierto.slice(2));
+      todas.forEach(function(q){if(q.p.id===pid){items=[q];titulo=_escPend(q.c.cliente_nombre||'—');ancla=X(q.fecha);}});
+    }
+    if(items.length){
+      const px=Math.max(0,Math.min(W-320,ancla-160));
+      const cierto=items.filter(function(q){return q.cobrada||!q.estimada;}).reduce(function(s,q){return s+q.monto;},0);
+      const estim=items.filter(function(q){return !(q.cobrada||!q.estimada);}).reduce(function(s,q){return s+q.monto;},0);
+      popHtml='<div id="cob-tl-pop" style="width:320px;max-width:320px;margin:8px 0 0 '+px+'px;'+
+        'background:var(--gray-900);border:1px solid '+COB_C.sep+';border-radius:10px;padding:10px;'+
+        'box-shadow:0 10px 30px rgba(0,0,0,0.5)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+          '<strong style="font-size:12px">'+titulo+' · '+items.length+' cuota(s)</strong>'+
+          '<button class="btn-ghost btn-sm" style="font-size:12px;padding:0 6px" onclick="_cobTlCerrar()">✕</button>'+
+        '</div>'+
+        '<div style="max-height:200px;overflow-y:auto">'+items.map(function(q){
+          const st=_cobEstadoHito(q.p,q.c);
+          const cierto1=(q.cobrada||!q.estimada);
+          return '<div style="padding:5px 0;border-bottom:1px solid '+COB_C.sep+'">'+
+            '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline">'+
+              '<strong style="font-size:11px">'+_escPend(q.c.cliente_nombre||'—')+'</strong>'+
+              '<strong style="font-size:11px;color:'+(cierto1?COB_C.verde:COB_C.oro)+'">'+_cobBs(q.monto)+'</strong>'+
+            '</div>'+
+            '<div style="font-size:10px;color:'+COB_C.txt2+'">'+_escPend(_cobNomCuota(q.p))+' · '+_cobTlCuando(q)+'</div>'+
+            '<div style="font-size:10px;color:'+COB_C.txt2+'">'+st.icono+' '+_escPend(st.label)+'</div>'+
+          '</div>';
+        }).join('')+'</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:10px;padding-top:6px;color:'+COB_C.txt2+'">'+
+          '<span>Cierto <strong style="color:'+COB_C.verde+'">'+_cobBs(cierto)+'</strong></span>'+
+          '<span>Estimado <strong style="color:'+COB_C.oro+'">'+_cobBs(estim)+'</strong></span></div>'+
+      '</div>';
+    }
   }
 
-  const totC=claves.reduce(function(s,k){return s+buckets[k].cierto;},0);
-  const totE=claves.reduce(function(s,k){return s+buckets[k].estimado;},0);
-
   return controles+
-    '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray-400);margin-bottom:6px">'+
-      '<span><span style="display:inline-block;width:14px;border-top:2px solid var(--st-completo);vertical-align:3px"></span>'+
-        ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--st-completo);vertical-align:0"></span>'+
-        ' 📅 Cierto — fecha del contrato</span>'+
-      '<span><span style="display:inline-block;width:14px;border-top:2px dashed var(--gold);vertical-align:3px"></span>'+
-        ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;border:2px solid var(--gold);box-sizing:border-box;vertical-align:0"></span>'+
-        ' 🏗️ Estimado — depende del avance</span>'+
-    '</div>'+
-    '<div style="overflow-x:auto;overflow-y:visible;padding-bottom:4px">'+
-      '<div style="position:relative;min-width:'+ancho+'px;height:'+alto+'px">'+
-        '<div style="position:absolute;left:0;right:0;top:'+COB_TL_EJE+'px;height:1px;background:var(--gray-600)"></div>'+
-        marcas+hoyHtml+popHtml+
+    '<div style="overflow-x:auto;padding-bottom:4px">'+
+      '<div style="min-width:'+W+'px">'+
+        '<div style="position:relative;padding-bottom:16px">'+
+          '<div style="position:relative;height:20px">'+ejes+'</div>'+
+          '<div style="height:1px;background:'+COB_C.sep+';margin-bottom:10px"></div>'+
+          htmlFilas+filaTotal+hoyHtml+
+        '</div>'+
+        popHtml+
       '</div>'+
-    '</div>'+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:baseline;'+
-      'border-top:1px solid var(--gray-600);margin-top:6px;padding-top:8px;font-size:12px">'+
-      '<span>📅 Cierto <strong style="color:var(--st-completo)">'+_cobBs(totC)+'</strong></span>'+
-      '<span>🏗️ Estimado <strong style="color:var(--gold)">'+_cobBs(totE)+'</strong></span>'+
-      '<span>Total <strong>'+_cobBs(totC+totE)+'</strong></span>'+
-    '</div>'+
-    (fuera?'<div style="font-size:10px;color:var(--gray-400);margin-top:4px">+'+fuera+' cuota(s) por '+_cobBs(fueraBs)+
-           ' fuera del rango elegido — ampliá a "Todo" para verlas.</div>':'');
+    '</div>';
 }
 
 function _cobPintar(){
@@ -8827,7 +9049,8 @@ function _cobPintar(){
     return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-800)">'+
       '<div style="padding:10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="_cobToggle('+c.id+')">'+
         '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+
-          (_cobHitoObraCumplido(c)?' <span style="color:var(--gold)" title="Hito cumplido — cobrar">🔔</span>':'')+'</strong>'+
+          (_cobHitoObraCumplido(c)?' <span style="color:var(--gold)" title="Hito cumplido — cobrar">🔔</span>':'')+
+          _cobBadgeRevisar(c)+'</strong>'+
         '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(c.contrato_codigo||'')+' · '+_cobBs(cobrado)+' / '+_cobBs(c.precio_total_bs)+'</span>'+
       '</div>'+
       (abierto?'<div style="padding:0 10px 10px">'+(filas||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+
@@ -8839,43 +9062,17 @@ function _cobPintar(){
 
   /* v179 — el input de WhatsApp salió de la vista: el número sigue vivo en
      app_config y lo usan los botones de "Pedir avance a Fátima".
-     v180 — el alta de contratos se fue al menú ⋯: se usa una vez por obra y no
-     merece lugar fijo arriba de lo que hay que cobrar hoy. */
+     v181 — no hay botones de carga ni menú ⋯: los contratos se dan de alta
+     solos. Lo único que queda arriba es refrescar. */
   cont.innerHTML=
-    '<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px;position:relative">'+
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">'+
       '<button class="btn-ghost btn-sm" style="font-size:11px" title="Actualizar" onclick="renderCobranzas()">↺</button>'+
-      '<button class="btn-ghost btn-sm" id="cob-menu-btn" style="font-size:13px;padding:0 10px" title="Más acciones" onclick="_cobToggleMenu()">⋯</button>'+
-      (_cobMenu?'<div id="cob-menu" style="position:absolute;top:30px;right:0;z-index:20;background:var(--gray-900);'+
-        'border:1px solid var(--gold);border-radius:10px;padding:6px;min-width:210px;box-shadow:0 10px 30px rgba(0,0,0,0.5)">'+
-        '<button class="btn-ghost btn-sm" style="font-size:11px;width:100%;text-align:left" onclick="_cobMenuAccion(\'contrato\')">➕ Cargar contrato</button>'+
-        '<button class="btn-ghost btn-sm" style="font-size:11px;width:100%;text-align:left" onclick="_cobMenuAccion(\'obras\')">📄 Leer contratos de obras</button>'+
-      '</div>':'')+
     '</div>'+
-    _cobHtmlPanelObras()+
+    _cobHtmlAlta()+
     '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
     htmlHitosObra+
     '<div class="section-title" style="margin:16px 0 6px">📈 Línea de tiempo de flujo</div>'+_cobHtmlTimeline()+
     '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron;
-}
-
-/* ── v180 · menú ⋯ ──────────────────────────────────────────────────── */
-let _cobMenuHandler=null;
-function _cobMenuBind(){
-  if(_cobMenuHandler){document.removeEventListener('mousedown',_cobMenuHandler);_cobMenuHandler=null;}
-  if(!_cobMenu)return;
-  _cobMenuHandler=function(ev){
-    const t=ev.target;
-    const m=document.getElementById('cob-menu'),b=document.getElementById('cob-menu-btn');
-    if(t&&((m&&m.contains(t))||(b&&b.contains(t))))return;
-    _cobMenu=false;_cobPintar();_cobMenuBind();
-  };
-  setTimeout(function(){if(_cobMenuHandler)document.addEventListener('mousedown',_cobMenuHandler);},0);
-}
-function _cobToggleMenu(){_cobMenu=!_cobMenu;_cobPintar();_cobMenuBind();}
-function _cobMenuAccion(a){
-  _cobMenu=false;_cobMenuBind();
-  if(a==='contrato'){_cobPintar();_cobAbrirContrato();return;}
-  _cobPanelObras=true;_cobPintar();
 }
 
 function _cobToggle(id){_cobAbierto=(_cobAbierto===id?null:id);_cobPintar();}
@@ -9190,33 +9387,6 @@ async function _cobContratoCall(payload,timeoutMs){
   }finally{if(t)clearTimeout(t);}
 }
 
-function _cobTogglePanelObras(){_cobPanelObras=!_cobPanelObras;_cobPintar();}
-
-/* Obras activas que todavía NO tienen contrato de cobranza */
-function _cobHtmlPanelObras(){
-  if(!_cobPanelObras)return '';
-  const pend=_cobObras.filter(function(o){return _cobObrasConContrato.indexOf(o.id)<0;});
-  const filas=pend.length?pend.map(function(o){
-    const sinArch=!o.contrato_propietario_nombre;
-    const leyendo=(_cobLeyendo===o.id);
-    return '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--gray-700)">'+
-      '<div style="min-width:180px">'+
-        '<strong style="font-size:12px">'+_escPend(o.nombre||'—')+'</strong> '+
-        '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(o.codigo||'')+'</span>'+
-        (o.docs_prop_confirmados?'':'<div style="font-size:10px;color:var(--gold)">⚠️ Steffi todavía no confirmó el escaneado</div>')+
-        (sinArch?'<div style="font-size:10px;color:var(--st-atrasado)">Sin archivo de contrato en Operativa 1</div>':'')+
-      '</div>'+
-      (leyendo
-        ? '<span style="font-size:11px;color:var(--gray-400)"><span class="spin" style="width:12px;height:12px;margin-right:5px"></span>Leyendo…</span>'
-        : '<button class="btn-primary btn-sm" style="font-size:11px'+(sinArch?';opacity:0.45;cursor:not-allowed':'')+'"'+
-          (sinArch?' disabled':'')+' onclick="_cobLeerContratoObra('+o.id+')">Leer</button>')+
-    '</div>';
-  }).join(''):'<div style="font-size:11px;color:var(--gray-400);padding:6px 0">Todas las obras activas ya tienen su contrato de cobranza.</div>';
-  return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:10px;margin-bottom:14px;background:var(--gray-800)">'+
-    '<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Obras activas sin contrato de cobranza</div>'+
-    filas+'</div>';
-}
-
 async function _cobCargarLeadsGanados(){
   if(_cobLeadsGanados.length)return;
   try{
@@ -9225,35 +9395,51 @@ async function _cobCargarLeadsGanados(){
   }catch(e){_cobLeadsGanados=[];}
 }
 
-async function _cobLeerContratoObra(obraId){
-  const o=_cobObra(obraId); if(!o){toast('Obra no encontrada','error');return;}
-  if(_cobLeyendo)return;
-  _cobLeyendo=obraId;_cobPintar();
-  let r=null;
-  try{ r=await _cobContratoCall({obra_id:obraId}); }
-  catch(e){ r={error:(e&&e.message)||'sin respuesta'}; }
-  _cobLeyendo=null;_cobPintar();
-  if(!r||!r.ok){
-    toast('No se pudo leer el contrato: '+((r&&(r.error||r.detail))||'error'),'error');
-    return;
-  }
-  const ob=r.obra||{};
+/* ── v181 · REVISAR un contrato que se dio de alta solo ─────────────────
+   Abre la MISMA ficha editable, pero cargada desde lo que ya está en la base
+   en vez de una lectura nueva: revisar no debe costar otra llamada a la IA.
+   Cada cuota se lleva su pago_id para que al confirmar se actualice la fila
+   existente y no se pierdan los cobros ya registrados. */
+async function _cobRevisarContrato(id){
+  const c=_cobContratos.find(function(x){return x.id===id;});
+  if(!c){toast('Contrato no encontrado','error');return;}
+  const o=c.obra_id?_cobObra(c.obra_id):null;
+  const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id;})
+    .sort(function(a,b){return a.numero_pago-b.numero_pago;});
   _cobLeido={
-    extraido:r.extraido||{},
-    avisos:r.avisos||[],
-    archivo:r.archivo||'',
-    /* v179 — el calendario de obra sale de rec_obras: la edge function no lo
-       devuelve y es lo que después define las fechas estimadas. */
-    obra:{id:obraId,nombre:ob.nombre||o.nombre||'',codigo:ob.codigo||o.codigo||'',
-          dias_ejecucion:o.dias_ejecucion||null,fecha_inicio_real:o.fecha_inicio_real||null,
-          docs_confirmados:(ob.docs_confirmados!==undefined&&ob.docs_confirmados!==null)
-            ?!!ob.docs_confirmados:!!o.docs_prop_confirmados}
+    contrato_id:c.id,
+    avisos:c.lectura_error?String(c.lectura_error).split(' | '):[],
+    archivo:(o&&o.contrato_propietario_nombre)||'',
+    obra:{id:c.obra_id||null,nombre:(o&&o.nombre)||'',codigo:c.contrato_codigo||(o&&o.codigo)||'',
+          dias_ejecucion:(o&&o.dias_ejecucion)||null,
+          fecha_inicio_real:(o&&o.fecha_inicio_real)||null,
+          docs_confirmados:!!(o&&o.docs_prop_confirmados)},
+    extraido:{
+      cliente_nombre:c.cliente_nombre||'',
+      precio_total:(c.precio_total_bs===null||c.precio_total_bs===undefined)?null:Number(c.precio_total_bs),
+      moneda:c.moneda||'BS',
+      fecha_firma:c.fecha_firma?String(c.fecha_firma).slice(0,10):null,
+      mora_monto_dia:(c.mora_usd_dia===null||c.mora_usd_dia===undefined)?null:Number(c.mora_usd_dia),
+      dias_hasta_inicio:(c.dias_hasta_inicio===null||c.dias_hasta_inicio===undefined)?10:Number(c.dias_hasta_inicio),
+      plazo_obra_dias:c.plazo_obra_dias||(o&&o.dias_ejecucion)||null,
+      financiamiento_banco:/financiamiento bancario/i.test(c.observaciones||''),
+      financiamiento_detalle:null,
+      observaciones_cobranza:c.observaciones||null,
+      cuotas:pagos.map(function(p){
+        const partes=String(p.descripcion||'').split(' — ');
+        return{pago_id:p.id,cobrada:_cobEsCobrado(p),
+          numero:p.numero_pago,
+          descripcion:partes[0]||'',
+          porcentaje:p.porcentaje?(Number(String(p.porcentaje).replace('%',''))||null):null,
+          monto:(p.monto_bs===null||p.monto_bs===undefined)?null:Number(p.monto_bs),
+          condicion_tipo:p.condicion_tipo||'otro',
+          condicion_detalle:p.condicion_detalle||partes.slice(1).join(' — ')||'',
+          avance_pct_requerido:(p.avance_pct_requerido===null||p.avance_pct_requerido===undefined)
+            ?null:Number(p.avance_pct_requerido),
+          fecha_prevista:p.fecha_prevista?String(p.fecha_prevista).slice(0,10):null};
+      })
+    }
   };
-  if(!Array.isArray(_cobLeido.extraido.cuotas))_cobLeido.extraido.cuotas=[];
-  /* Defaults del formulario: 10 días de firma a inicio, plazo el de la obra */
-  if(_cobLeido.extraido.dias_hasta_inicio==null)_cobLeido.extraido.dias_hasta_inicio=10;
-  if(_cobLeido.extraido.plazo_obra_dias==null)
-    _cobLeido.extraido.plazo_obra_dias=o.dias_ejecucion||_cobLeido.extraido.plazo_obra_dias||null;
   await _cobCargarLeadsGanados();
   _cobPintarLeido();
   openModal('modalCobLeerContrato');
@@ -9350,7 +9536,12 @@ function _cobPintarLeido(){
     (htmlCuotas||'<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">El contrato no trajo cuotas: cargalas a mano.</div>')+
     '<button class="btn-ghost btn-sm" style="font-size:11px;margin-bottom:12px" onclick="_cobLcAgregarCuota()">＋ Agregar cuota</button>'+
     '<div id="cob-lc-bloqueo" style="font-size:12px;color:var(--st-atrasado);margin-bottom:8px"></div>'+
-    '<button class="btn-primary" id="cob-lc-guardar" style="width:100%" onclick="_cobGuardarLeido()">Guardar y generar cobranza</button>';
+    '<button class="btn-primary" id="cob-lc-guardar" style="width:100%" onclick="_cobGuardarLeido()">'+
+      (_cobLeido.contrato_id?'Confirmar revisión':'Guardar y generar cobranza')+'</button>';
+  /* v181 — la misma ficha sirve para dar de alta y para revisar un alta
+     automática; el título dice cuál de las dos cosas está pasando. */
+  const tit=document.getElementById('cob-lc-titulo');
+  if(tit)tit.textContent=_cobLeido.contrato_id?'📝 Revisar contrato':'📄 Contrato leído';
   _cobLcRevisarBloqueo();
   _cobLcPreviewFechas();
 }
@@ -9438,10 +9629,11 @@ function _cobLcQuitarCuota(i){
 }
 
 /* Motivo por el que NO se puede generar cobranza, o '' si está habilitado */
+/* v181 — ya NO se exige docs_prop_confirmados: la confirmación de Steffi dejaba
+   obras firmadas sin cronograma de cobro por semanas. Lo único que sigue siendo
+   condición es el precio: sin precio no hay cuotas que valgan. */
 function _cobLcBloqueo(){
   if(!_cobLeido)return 'No hay contrato leído.';
-  if(!_cobLeido.obra.docs_confirmados)
-    return 'Steffi todavía no confirmó el escaneado del contrato de esta obra.';
   const e=document.getElementById('cob-lc-precio');
   const p=Number(e?e.value:_cobLeido.extraido.precio_total);
   if(!(p>0))return 'Falta el precio total del contrato.';
@@ -9479,54 +9671,88 @@ async function _cobGuardarLeido(){
   if(nums.some(function(n){return !isFinite(n);})){toast('Toda cuota necesita un número','error');return;}
   if(new Set(nums).size!==nums.length){toast('Hay dos cuotas con el mismo número','error');return;}
   const ctx=_cobLcCtx();
-  const firma=ctx.fecha_firma;
+  const ahora=new Date().toISOString();
+  const quien=(cu&&cu.nombre)||null;
+  const leadId=Number((document.getElementById('cob-lc-lead')||{}).value)||null;
   /* El % que habilita la cuota por avance es lo que después dispara el 🔔 */
   const qAv=qs.find(function(q){return q.condicion_tipo==='avance_obra'&&Number(q.avance_pct_requerido)>0;});
+  const campos={
+    cliente_nombre:cliente,
+    precio_total_bs:Number(x.precio_total)||0,
+    moneda:String(x.moneda||'BS').toUpperCase(),
+    fecha_firma:ctx.fecha_firma,
+    mora_usd_dia:Number(x.mora_monto_dia)||0,
+    dias_hasta_inicio:(ctx.dias_hasta_inicio===null?10:ctx.dias_hasta_inicio),
+    plazo_obra_dias:ctx.plazo_obra_dias,
+    observaciones:_cobObsLeido(x),
+    informe_previo_pct_pactado:qAv?Number(qAv.avance_pct_requerido):null,
+    lead_id:leadId,
+    /* Confirmar la ficha ES revisarla: las dos marcas van juntas para que no
+       queden dos verdades sobre lo mismo. */
+    revisado:true,revisado_por:quien,revisado_fecha:ahora,
+    contrato_validado:true,contrato_validado_por:quien,contrato_validado_fecha:ahora
+  };
+
+  /* ── Revisión de un contrato que ya existe ─────────────────────────── */
+  if(_cobLeido.contrato_id){
+    const id=_cobLeido.contrato_id;
+    try{
+      const{error}=await sb.from('cobranza_contratos')
+        .update(Object.assign({updated_at:ahora},campos)).eq('id',id);
+      if(error)throw error;
+    }catch(e){toast('Error guardando el contrato: '+e.message,'error');return;}
+    const filas=_cobFilasCuotas(id,leadId,qs,ctx);
+    const previas=_cobPagos.filter(function(p){return p.contrato_id===id;});
+    const vistos=[];
+    let fallos=0;
+    for(let i=0;i<qs.length;i++){
+      const pid=qs[i].pago_id;
+      if(pid){
+        vistos.push(pid);
+        /* estado/activo NO se tocan: una cuota ya cobrada sigue cobrada */
+        const upd=Object.assign({},filas[i]);
+        delete upd.contrato_id;delete upd.estado;delete upd.activo;
+        upd.updated_at=ahora;
+        try{
+          const{error}=await sb.from('pagos_cliente').update(upd).eq('id',pid);
+          if(error)throw error;
+        }catch(e){fallos++;}
+      }else{
+        try{
+          const{error}=await sb.from('pagos_cliente').insert(filas[i]);
+          if(error)throw error;
+        }catch(e){fallos++;}
+      }
+    }
+    /* Las que el CEO borró de la ficha se dan de baja, salvo que estén cobradas */
+    const bajas=previas.filter(function(p){
+      return vistos.indexOf(p.id)<0&&!_cobEsCobrado(p);
+    }).map(function(p){return p.id;});
+    if(bajas.length){
+      try{await sb.from('pagos_cliente').update({activo:false,updated_at:ahora}).in('id',bajas);}catch(e){}
+    }
+    closeModal('modalCobLeerContrato');
+    _cobLeido=null;
+    toast(fallos?('⚠️ Contrato revisado, pero '+fallos+' cuota(s) fallaron'):'✅ Contrato revisado','ok');
+    try{await registrarAuditoria('revisar_contrato','cobranza_contratos',id,
+      {cuotas:qs.length,bajas:bajas.length});}catch(e){}
+    await renderCobranzas();
+    return;
+  }
+
+  /* ── Alta manual (la ficha abierta sin contrato detrás) ────────────── */
   let ct=null;
   try{
-    const{data,error}=await sb.from('cobranza_contratos').insert({
+    const{data,error}=await sb.from('cobranza_contratos').insert(Object.assign({
       obra_id:_cobLeido.obra.id,
-      lead_id:Number((document.getElementById('cob-lc-lead')||{}).value)||null,
-      cliente_nombre:cliente,
       contrato_codigo:_cobLeido.obra.codigo||null,
-      precio_total_bs:Number(x.precio_total)||0,
-      moneda:String(x.moneda||'BS').toUpperCase(),
-      fecha_firma:firma,
-      mora_usd_dia:Number(x.mora_monto_dia)||0,
-      dias_hasta_inicio:(ctx.dias_hasta_inicio===null?10:ctx.dias_hasta_inicio),
-      plazo_obra_dias:ctx.plazo_obra_dias,
-      observaciones:_cobObsLeido(x),
-      informe_previo_pct_pactado:qAv?Number(qAv.avance_pct_requerido):null,
-      contrato_validado:true,
-      contrato_validado_por:(cu&&cu.nombre)||null,
-      contrato_validado_fecha:new Date().toISOString()
-    }).select().single();
+      origen:'manual'
+    },campos)).select().single();
     if(error)throw error;
     ct=data;
   }catch(e){toast('Error creando el contrato: '+e.message,'error');return;}
-
-  /* v179 — cada cuota se lleva su condición Y su fecha calculada según ella.
-     Antes heredaban todas la fecha de firma y nacían vencidas. */
-  const filas=qs.map(function(q){
-    const det=(q.condicion_detalle||'').trim();
-    const desc=((q.descripcion||'').trim()+(det?' — '+det:'')).slice(0,500);
-    const f=_cobFechasDeCuota(q,ctx);
-    return{contrato_id:ct.id,lead_id:ct.lead_id||null,
-      numero_pago:Number(q.numero),
-      porcentaje:(q.porcentaje===null||q.porcentaje===undefined||q.porcentaje==='')?null:String(q.porcentaje)+'%',
-      descripcion:desc||null,
-      monto_bs:_cobR2(q.monto),
-      condicion_tipo:q.condicion_tipo||'otro',
-      condicion_detalle:det||null,
-      avance_pct_requerido:(q.avance_pct_requerido===null||q.avance_pct_requerido===undefined||q.avance_pct_requerido==='')
-        ?null:Number(q.avance_pct_requerido),
-      fecha_prevista:f.fecha_prevista,
-      fecha_estimada:f.fecha_estimada,
-      fecha_es_estimada:!!f.fecha_es_estimada,
-      estado:'pendiente',activo:true};
-  });
   try{
-    const{error}=await sb.from('pagos_cliente').insert(filas);
+    const{error}=await sb.from('pagos_cliente').insert(_cobFilasCuotas(ct.id,leadId,qs,ctx));
     if(error)throw error;
   }catch(e){
     /* Un contrato sin cuotas es peor que ningún contrato: se revierte el alta. */
@@ -9536,9 +9762,9 @@ async function _cobGuardarLeido(){
   }
   closeModal('modalCobLeerContrato');
   _cobLeido=null;
-  toast('✅ Contrato dado de alta con '+filas.length+' cuota(s)','ok');
+  toast('✅ Contrato dado de alta con '+qs.length+' cuota(s)','ok');
   try{await registrarAuditoria('alta_contrato_desde_obra','cobranza_contratos',ct.id,
-    {obra_id:ct.obra_id,cuotas:filas.length,total:ct.precio_total_bs});}catch(e){}
+    {obra_id:ct.obra_id,cuotas:qs.length,total:ct.precio_total_bs});}catch(e){}
   await renderCobranzas();
 }
 
