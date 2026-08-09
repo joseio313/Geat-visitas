@@ -1646,7 +1646,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='178';
+  var CURRENT_VERSION='179';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8274,6 +8274,8 @@ async function _pdAlmacenamiento(){
 let _cobContratos=[],_cobPagos=[],_cobCfg={},_cobPagoActual=null,_cobAbierto=null;
 /* v178 — alta automática desde el contrato de la obra */
 let _cobObras=[],_cobObrasConContrato=[],_cobPanelObras=false,_cobLeyendo=null,_cobLeido=null,_cobLeadsGanados=[];
+/* v179 — línea de tiempo de flujo. _cobTlRango 0 = "Todo" (hasta la última cuota) */
+let _cobTlGranu='mensual',_cobTlRango=6,_cobTlAbierto=null,_cobObraAbierta=null;
 
 function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -8309,24 +8311,42 @@ function _cobFechaAviso(p,c){
   if(!base)return null;
   return _cobFechaMas(base,p.numero_pago===2?(c.dias_aviso_2do||60):(c.dias_aviso_3er||120));
 }
+/* ── v179 · FECHA CIERTA vs FECHA ESTIMADA ──────────────────────────────
+   El bug que esto arregla: todas las cuotas heredaban la fecha de firma y
+   salían "vencidas" al día siguiente. Una cuota que se cobra por avance de
+   obra NO tiene fecha cierta — tiene una proyección. La proyección no vence
+   y NUNCA genera mora: la mora sólo corre sobre lo que el contrato fechó.
+
+   Devuelve {fecha, estimada}. El orden de preferencia importa:
+     1. fecha_prevista con fecha_es_estimada=false → la fechó el contrato
+     2. fecha_estimada                            → la proyectó el CRM
+     3. fecha_prevista marcada como estimada      → contratos a medio migrar
+     4. _cobFechaAviso                            → contratos v173, 60/120 días */
+function _cobFechaHito(p,c){
+  if(p.fecha_prevista&&!p.fecha_es_estimada)return{fecha:String(p.fecha_prevista).slice(0,10),estimada:false};
+  if(p.fecha_estimada)return{fecha:String(p.fecha_estimada).slice(0,10),estimada:true};
+  if(p.fecha_prevista)return{fecha:String(p.fecha_prevista).slice(0,10),estimada:true};
+  const a=_cobFechaAviso(p,c);
+  return{fecha:a?String(a).slice(0,10):null,estimada:true};
+}
 /* Estado visual de un hito + mora acumulada (FUNCIÓN 5, solo informativa) */
 function _cobEstadoHito(p,c){
   const hoy=ymdLocal(new Date());
-  if(_cobEsCobrado(p))return{cod:'cobrado',icono:'✅',label:'Pagado',aviso:p.fecha_cobro||p.fecha_pago||null,mora:0};
-  const aviso=_cobFechaAviso(p,c);
-  if(p.fecha_prevista){
-    const atraso=_cobDiasEntre(p.fecha_prevista,hoy);
-    if(atraso>0)return{cod:'vencido',icono:'🔴',label:'Vencido hace '+atraso+' día(s)',aviso:aviso,
-                       mora:_cobR2(atraso*(Number(c.mora_usd_dia)||0))};
-    if(atraso===0)return{cod:'toca',icono:'🔔',label:'Vence hoy',aviso:aviso,mora:0};
-    return{cod:'pendiente',icono:'⬜',label:'Vence en '+Math.abs(atraso)+' día(s)',aviso:aviso,mora:0};
+  if(_cobEsCobrado(p))return{cod:'cobrado',icono:'✅',label:'Pagado',aviso:p.fecha_cobro||p.fecha_pago||null,
+                             mora:0,estimada:false};
+  const f=_cobFechaHito(p,c);
+  if(!f.fecha)return{cod:'pendiente',icono:'⬜',label:'Sin fecha estimada',aviso:null,mora:0,estimada:true};
+  const d=_cobDiasEntre(f.fecha,hoy);
+  if(!f.estimada){
+    if(d>0)return{cod:'vencido',icono:'🔴',label:'Vencido hace '+d+' día(s)',aviso:f.fecha,
+                  mora:_cobR2(d*(Number(c.mora_usd_dia)||0)),estimada:false};
+    if(d===0)return{cod:'toca',icono:'🔔',label:'Vence hoy',aviso:f.fecha,mora:0,estimada:false};
+    return{cod:'pendiente',icono:'⬜',label:'Vence en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,estimada:false};
   }
-  if(aviso){
-    const d=_cobDiasEntre(aviso,hoy);
-    if(d>=0)return{cod:'toca',icono:'🔔',label:'Estimado hace '+d+' día(s) — consultar avance',aviso:aviso,mora:0};
-    return{cod:'pendiente',icono:'⬜',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:aviso,mora:0};
-  }
-  return{cod:'pendiente',icono:'⬜',label:'Sin fecha estimada',aviso:null,mora:0};
+  /* Estimada: nunca vencida, nunca mora. Empuja a consultar el avance. */
+  if(d>=0)return{cod:'toca',icono:'🏗️',label:'Estimado hace '+d+' día(s) — consultar avance',
+                 aviso:f.fecha,mora:0,estimada:true};
+  return{cod:'pendiente',icono:'🏗️',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,estimada:true};
 }
 /* FUNCIÓN 7 — comisión informativa del cobro. Nunca se expone al equipo. */
 function _cobComision(monto){
@@ -8342,12 +8362,13 @@ function _cobComision(monto){
    llega a ese %, esa cuota deja de ser una estimación por días y pasa a ser
    plata cobrable HOY. */
 function _cobObra(id){return _cobObras.find(function(o){return o.id===id;})||null;}
-/* pagos_cliente no guarda la condición del contrato: la cuota atada al avance
-   se identifica por su descripción (ahí queda el condicion_detalle) y, si no
-   aparece, por el 2do hito — el que va por avance en el esquema de GEAT. */
+/* v179: pagos_cliente YA guarda condicion_tipo, así que la cuota por avance se
+   identifica sola. Los respaldos (descripción, 2do hito) quedan para los
+   contratos cargados antes de que existiera la columna. */
 function _cobCuotaAvance(c){
   const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id&&!_cobEsCobrado(p);});
-  return pagos.find(function(p){return /avance/i.test(p.descripcion||'');})||
+  return pagos.find(function(p){return p.condicion_tipo==='avance_obra';})||
+         pagos.find(function(p){return /avance/i.test(p.descripcion||'');})||
          pagos.find(function(p){return p.numero_pago===2;})||null;
 }
 function _cobHitoObraCumplido(c){
@@ -8359,6 +8380,57 @@ function _cobHitoObraCumplido(c){
   if(!isFinite(av)||av<pact)return null;
   const p=_cobCuotaAvance(c); if(!p)return null;
   return{obra:o,pago:p,avance:av,pactado:pact};
+}
+
+/* ── v179 · CALENDARIO DE OBRA ────────────────────────────────────────
+   Todo lo que se proyecta cuelga de dos números: cuándo arranca la obra y
+   cuánto dura. El arranque real lo carga Fátima (rec_obras.fecha_inicio_real);
+   mientras no esté, se estima como firma + dias_hasta_inicio. */
+function _cobInicioObra(c,o){
+  const ob=o||(c&&c.obra_id?_cobObra(c.obra_id):null);
+  if(ob&&ob.fecha_inicio_real)return String(ob.fecha_inicio_real).slice(0,10);
+  if(!c||!c.fecha_firma)return null;
+  return _cobFechaMas(String(c.fecha_firma).slice(0,10),Number(c.dias_hasta_inicio)||0);
+}
+function _cobPlazoObra(c,o){
+  const ob=o||(c&&c.obra_id?_cobObra(c.obra_id):null);
+  return Number((c&&c.plazo_obra_dias)||(ob&&ob.dias_ejecucion)||0)||0;
+}
+/* Fechas de UNA cuota según su condición. `ctx` es lo que se sabe del contrato
+   al momento de generarla: {fecha_firma, inicio, plazo}. */
+function _cobFechasDeCuota(q,ctx){
+  const tipo=q.condicion_tipo||'otro';
+  const firma=ctx.fecha_firma||null;
+  const inicio=ctx.inicio||null;
+  const plazo=Number(ctx.plazo)||0;
+  if(tipo==='reserva'||tipo==='firma')
+    return{fecha_prevista:firma,fecha_estimada:null,fecha_es_estimada:false};
+  if(tipo==='fecha_fija')
+    return{fecha_prevista:(q.fecha_prevista?String(q.fecha_prevista).slice(0,10):null),
+           fecha_estimada:null,fecha_es_estimada:false};
+  if(tipo==='avance_obra'){
+    const pct=Number(q.avance_pct_requerido);
+    const dias=(inicio&&plazo>0&&isFinite(pct))?Math.round(pct/100*plazo):null;
+    return{fecha_prevista:null,fecha_estimada:(dias===null?null:_cobFechaMas(inicio,dias)),fecha_es_estimada:true};
+  }
+  if(tipo==='entrega')
+    return{fecha_prevista:null,fecha_estimada:((inicio&&plazo>0)?_cobFechaMas(inicio,plazo):null),fecha_es_estimada:true};
+  /* desembolso_banco / otro: si el contrato puso fecha es cierta; si no, no se
+     inventa ninguna — la cuota queda sin fecha y fuera de la proyección. */
+  return{fecha_prevista:(q.fecha_prevista?String(q.fecha_prevista).slice(0,10):null),
+         fecha_estimada:null,fecha_es_estimada:false};
+}
+/* Avance que la obra DEBERÍA tener hoy según el calendario, contra el real.
+   Si el real va por debajo, la obra atrasada retrasa el cobro. */
+function _cobAvanceVsCalendario(c){
+  const o=c&&c.obra_id?_cobObra(c.obra_id):null;
+  const inicio=_cobInicioObra(c,o),plazo=_cobPlazoObra(c,o);
+  if(!o||!inicio||plazo<=0)return null;
+  const corridos=_cobDiasEntre(inicio,ymdLocal(new Date()));
+  const esperado=Math.max(0,Math.min(100,Math.round(corridos/plazo*100)));
+  const real=Number(o.avance_pct)||0;
+  return{obra:o,inicio:inicio,plazo:plazo,dias:corridos,esperado:esperado,real:real,
+         atrasada:real<esperado,brecha:Math.round(esperado-real)};
 }
 
 async function renderCobranzas(){
@@ -8383,7 +8455,8 @@ async function renderCobranzas(){
        Los obra_id ya usados se leen SIN filtrar por activo: un contrato archivado
        sigue siendo un contrato, la obra no debe volver a la lista de pendientes. */
     const{data:obs}=await sb.from('rec_obras')
-      .select('id,nombre,codigo,avance_pct,docs_prop_confirmados,contrato_propietario_nombre')
+      .select('id,nombre,codigo,avance_pct,docs_prop_confirmados,contrato_propietario_nombre,'+
+              'dias_ejecucion,fecha_inicio,fecha_inicio_real')
       .eq('activo',true).order('nombre');
     _cobObras=obs||[];
     const{data:occ}=await sb.from('cobranza_contratos').select('obra_id').not('obra_id','is',null);
@@ -8394,9 +8467,199 @@ async function renderCobranzas(){
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   v179 — LÍNEA DE TIEMPO DE FLUJO (reemplaza los recuadros de Caja)
+
+   Cierto y estimado NUNCA se suman en un solo número: la plata con fecha de
+   contrato y la que depende de que la obra avance no son lo mismo, y meterlas
+   en el mismo total es lo que hace que un flujo de caja mienta.
+   ════════════════════════════════════════════════════════════════════ */
+const COB_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function _cobLunes(ymd){
+  const p=String(ymd).slice(0,10).split('-');
+  const d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return ymdLocal(d);
+}
+function _cobPeriodo(ymd){
+  return _cobTlGranu==='semanal'?_cobLunes(ymd):String(ymd).slice(0,7);
+}
+function _cobPeriodoSig(clave){
+  if(_cobTlGranu==='semanal')return _cobFechaMas(clave,7);
+  const a=Number(clave.slice(0,4)),m=Number(clave.slice(5,7));
+  return (m===12?(a+1)+'-01':a+'-'+String(m+1).padStart(2,'0'));
+}
+function _cobPeriodoLbl(clave){
+  if(_cobTlGranu==='semanal'){
+    const p=clave.split('-');
+    return 'sem '+p[2]+'/'+COB_MESES[Number(p[1])-1];
+  }
+  return COB_MESES[Number(clave.slice(5,7))-1]+' '+clave.slice(2,4);
+}
+/* Todas las cuotas pendientes con fecha, ya clasificadas en cierto/estimado */
+function _cobCuotasProyectadas(){
+  const out=[];
+  _cobContratos.forEach(function(c){
+    _cobPagos.filter(function(p){return p.contrato_id===c.id&&!_cobEsCobrado(p);}).forEach(function(p){
+      const f=_cobFechaHito(p,c);
+      if(!f.fecha)return;
+      out.push({c:c,p:p,fecha:f.fecha,estimada:f.estimada,monto:Number(p.monto_bs)||0});
+    });
+  });
+  return out.sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
+}
+function _cobTlSetGranu(g){_cobTlGranu=g;_cobTlAbierto=null;_cobPintar();}
+function _cobTlSetRango(r){_cobTlRango=r;_cobTlAbierto=null;_cobPintar();}
+function _cobTlToggle(clave){_cobTlAbierto=(_cobTlAbierto===clave?null:clave);_cobPintar();}
+
+function _cobHtmlTimeline(){
+  const hoy=ymdLocal(new Date());
+  const cuotas=_cobCuotasProyectadas();
+  const btn=function(txt,activo,fn){
+    return '<button class="btn-'+(activo?'primary':'ghost')+' btn-sm" style="font-size:11px" onclick="'+fn+'">'+txt+'</button>';
+  };
+  const controles='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">'+
+    '<div style="display:flex;gap:6px">'+
+      btn('Mensual',_cobTlGranu==='mensual',"_cobTlSetGranu('mensual')")+
+      btn('Semanal',_cobTlGranu==='semanal',"_cobTlSetGranu('semanal')")+
+    '</div>'+
+    '<div style="display:flex;gap:6px">'+
+      btn('3m',_cobTlRango===3,'_cobTlSetRango(3)')+btn('6m',_cobTlRango===6,'_cobTlSetRango(6)')+
+      btn('12m',_cobTlRango===12,'_cobTlSetRango(12)')+btn('Todo',_cobTlRango===0,'_cobTlSetRango(0)')+
+    '</div></div>';
+
+  if(!cuotas.length)
+    return controles+'<div style="font-size:12px;color:var(--gray-400);padding:8px">No hay cuotas pendientes con fecha para proyectar.</div>';
+
+  /* El rango arranca en el período de hoy o antes, si hay cuotas atrasadas.
+     "Todo" se auto-extiende hasta la última cuota del contrato más largo. */
+  const ini=_cobPeriodo(cuotas[0].fecha<hoy?cuotas[0].fecha:hoy);
+  const ultima=cuotas[cuotas.length-1].fecha;
+  let fin;
+  if(_cobTlRango===0){fin=_cobPeriodo(ultima);}
+  else{
+    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+_cobTlRango);
+    fin=_cobPeriodo(ymdLocal(d));
+    if(fin<ini)fin=ini;
+  }
+  const claves=[];
+  for(let k=ini;k<=fin&&claves.length<400;k=_cobPeriodoSig(k))claves.push(k);
+
+  const buckets={};
+  claves.forEach(function(k){buckets[k]={cierto:0,estimado:0,items:[]};});
+  let fuera=0,fueraBs=0;
+  cuotas.forEach(function(q){
+    const k=_cobPeriodo(q.fecha);
+    if(!buckets[k]){fuera++;fueraBs+=q.monto;return;}
+    buckets[k][q.estimada?'estimado':'cierto']+=q.monto;
+    buckets[k].items.push(q);
+  });
+  const max=claves.reduce(function(m,k){return Math.max(m,buckets[k].cierto+buckets[k].estimado);},0)||1;
+
+  const filas=claves.map(function(k){
+    const b=buckets[k],tot=b.cierto+b.estimado,abierto=(_cobTlAbierto===k);
+    const esHoy=(k===_cobPeriodo(hoy));
+    const wC=Math.round(b.cierto/max*100),wE=Math.round(b.estimado/max*100);
+    const detalle=abierto&&b.items.length?
+      '<div style="padding:2px 0 8px 6px">'+b.items.map(function(q){
+        return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
+          '<span>'+(q.estimada?'🏗️ ':'📅 ')+_escPend(q.c.cliente_nombre||'—')+
+            ' <span style="color:var(--gray-400)">· '+_cobNomHito(q.p.numero_pago)+' · '+_escPend(q.fecha)+'</span></span>'+
+          '<strong style="color:'+(q.estimada?'var(--gold)':'var(--gray-100)')+'">'+_cobBs(q.monto)+'</strong>'+
+        '</div>';
+      }).join('')+'</div>':'';
+    return '<div style="margin-bottom:6px">'+
+      '<div style="cursor:pointer;display:flex;gap:8px;align-items:center" onclick="_cobTlToggle(\''+k+'\')">'+
+        '<span style="width:62px;flex:none;font-size:11px;color:'+(esHoy?'var(--gold)':'var(--gray-400)')+';font-weight:'+(esHoy?'800':'400')+'">'+
+          (abierto?'▾ ':'')+_cobPeriodoLbl(k)+'</span>'+
+        '<div style="flex:1;height:14px;background:var(--gray-900);border-radius:3px;overflow:hidden;display:flex">'+
+          '<div style="width:'+wC+'%;background:var(--st-completo)"></div>'+
+          '<div style="width:'+wE+'%;background:repeating-linear-gradient(45deg,var(--gold),var(--gold) 4px,var(--gray-800) 4px,var(--gray-800) 8px)"></div>'+
+        '</div>'+
+        '<span style="width:130px;flex:none;text-align:right;font-size:11px">'+
+          (tot?'<strong>'+_cobBs(tot)+'</strong>':'<span style="color:var(--gray-600)">—</span>')+
+          (b.items.length?'<span style="color:var(--gray-400)"> · '+b.items.length+'</span>':'')+'</span>'+
+      '</div>'+detalle+
+    '</div>';
+  }).join('');
+
+  const totC=claves.reduce(function(s,k){return s+buckets[k].cierto;},0);
+  const totE=claves.reduce(function(s,k){return s+buckets[k].estimado;},0);
+  const nC=claves.reduce(function(s,k){return s+buckets[k].items.filter(function(q){return !q.estimada;}).length;},0);
+  const nE=claves.reduce(function(s,k){return s+buckets[k].items.filter(function(q){return q.estimada;}).length;},0);
+
+  return controles+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray-400);margin-bottom:8px">'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:var(--st-completo);border-radius:2px;vertical-align:-1px"></span> 📅 Cierto — fecha del contrato</span>'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:repeating-linear-gradient(45deg,var(--gold),var(--gold) 3px,var(--gray-800) 3px,var(--gray-800) 6px);border-radius:2px;vertical-align:-1px"></span> 🏗️ Estimado — depende del avance</span>'+
+    '</div>'+
+    filas+
+    '<div style="border-top:1px solid var(--gray-600);margin-top:8px;padding-top:8px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">'+
+        '<span>📅 Cierto <span style="color:var(--gray-400)">('+nC+' cuota/s)</span></span>'+
+        '<strong style="color:var(--st-completo)">'+_cobBs(totC)+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">'+
+        '<span>🏗️ Estimado <span style="color:var(--gray-400)">('+nE+' cuota/s)</span></span>'+
+        '<strong style="color:var(--gold)">'+_cobBs(totE)+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-top:1px solid var(--gray-700);margin-top:4px">'+
+        '<strong>Total del rango</strong><strong>'+_cobBs(totC+totE)+'</strong></div>'+
+      (fuera?'<div style="font-size:10px;color:var(--gray-400);margin-top:4px">+'+fuera+' cuota(s) por '+_cobBs(fueraBs)+
+             ' fuera del rango elegido — ampliá a "Todo" para verlas.</div>':'')+
+    '</div>';
+}
+
+/* ── v179 · línea de tiempo por obra ────────────────────────────────── */
+function _cobToggleObra(id){_cobObraAbierta=(_cobObraAbierta===id?null:id);_cobPintar();}
+function _cobHtmlTimelineObras(){
+  if(!_cobContratos.length)
+    return '<div style="font-size:12px;color:var(--gray-400);padding:8px">Sin contratos para mostrar.</div>';
+  return _cobContratos.map(function(c){
+    const abierto=(_cobObraAbierta===c.id);
+    const av=_cobAvanceVsCalendario(c);
+    const o=c.obra_id?_cobObra(c.obra_id):null;
+    const pagos=_cobPagos.filter(function(p){return p.contrato_id===c.id;})
+      .sort(function(a,b){return a.numero_pago-b.numero_pago;});
+    const resumen=av?
+      '<span style="font-size:11px;color:'+(av.atrasada?'var(--st-atrasado)':'var(--st-completo)')+'">'+
+        (av.atrasada?'🔴 ':'🟢 ')+'avance '+av.real+'% vs '+av.esperado+'% esperado</span>':
+      '<span style="font-size:11px;color:var(--gray-400)">sin calendario de obra</span>';
+    const hitos=pagos.map(function(p){
+      const st=_cobEstadoHito(p,c);
+      const f=_cobFechaHito(p,c);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid var(--gray-700);flex-wrap:wrap">'+
+        '<span>'+st.icono+' '+_cobNomHito(p.numero_pago)+
+          '<span style="color:var(--gray-400)"> · '+(f.fecha?(f.estimada?'~':'')+_escPend(f.fecha):'sin fecha')+
+          (p.condicion_tipo?' · '+_escPend(p.condicion_tipo):'')+'</span></span>'+
+        '<span style="display:flex;gap:10px;align-items:baseline">'+
+          '<span style="color:var(--gray-400)">'+_escPend(st.label)+'</span>'+
+          '<strong style="color:'+(f.estimada&&!_cobEsCobrado(p)?'var(--gold)':'var(--gray-100)')+'">'+_cobBs(p.monto_bs)+'</strong>'+
+        '</span></div>';
+    }).join('');
+    const barra=av?
+      '<div style="margin:8px 0 4px">'+
+        '<div style="height:8px;background:var(--gray-900);border-radius:4px;position:relative;overflow:hidden">'+
+          '<div style="height:100%;width:'+av.real+'%;background:'+(av.atrasada?'var(--st-atrasado)':'var(--st-completo)')+'"></div>'+
+          '<div style="position:absolute;top:-2px;left:'+av.esperado+'%;width:2px;height:12px;background:var(--gold)"></div>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-top:3px">'+
+          'Inicio '+_escPend(av.inicio)+(o&&o.fecha_inicio_real?' (real)':' (estimado)')+
+          ' · plazo '+av.plazo+' días · día '+av.dias+
+          (av.atrasada?' · <span style="color:var(--st-atrasado)">'+av.brecha+' puntos por debajo: la obra atrasada retrasa el cobro</span>':'')+
+        '</div></div>':'';
+    return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-800)">'+
+      '<div style="padding:10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="_cobToggleObra('+c.id+')">'+
+        '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+
+          '<span style="font-weight:400;color:var(--gray-400);font-size:11px"> · '+_escPend((o&&o.nombre)||'sin obra vinculada')+'</span></strong>'+
+        resumen+
+      '</div>'+
+      (abierto?'<div style="padding:0 10px 10px">'+barra+
+        (hitos||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+'</div>':'')+
+    '</div>';
+  }).join('');
+}
+
 function _cobPintar(){
   const cont=document.getElementById('cobranzas-body'); if(!cont)return;
-  const hoy=ymdLocal(new Date());
 
   /* ── 1. 🔔 Toca cobrar ─────────────────────────────────────────── */
   const tocan=[];
@@ -8490,28 +8753,9 @@ function _cobPintar(){
     '</div>';
   }).join(''):'<div style="font-size:12px;color:var(--gray-400);padding:8px">Todavía no hay contratos cargados.</div>';
 
-  /* ── 3. 💰 Caja ────────────────────────────────────────────────── */
-  let contratado=0,cobradoT=0,porCobrar=0,esteMes=0;
-  const mes=hoy.slice(0,7);
-  _cobContratos.forEach(function(c){
-    contratado+=Number(c.precio_total_bs)||0;
-    _cobPagos.filter(function(p){return p.contrato_id===c.id;}).forEach(function(p){
-      const m=Number(p.monto_bs)||0;
-      if(_cobEsCobrado(p)){cobradoT+=m;return;}
-      porCobrar+=m;
-      const st=_cobEstadoHito(p,c);          /* FUNCIÓN 6 — proyección del mes */
-      if(st.aviso&&String(st.aviso).slice(0,7)===mes)esteMes+=m;
-    });
-  });
-  const celda=function(lbl,val,color){
-    return '<div style="flex:1;min-width:130px"><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase">'+lbl+'</div>'+
-      '<div style="font-size:14px;font-weight:800;color:'+(color||'var(--gray-100)')+'">'+_cobBs(val)+'</div></div>';
-  };
-  const htmlCaja='<div style="display:flex;gap:12px;flex-wrap:wrap;border:1px solid var(--gray-600);border-radius:8px;padding:10px;background:var(--gray-800)">'+
-    celda('Contratado',contratado)+celda('Cobrado',cobradoT,'var(--st-completo)')+
-    celda('Este mes entra',esteMes,'var(--gold)')+celda('Por cobrar',porCobrar)+'</div>';
-
-  const wa=_cobCfg.cobranza_whatsapp_fatima||'';
+  /* v179 — el input de WhatsApp salió de la vista: el número sigue vivo en
+     app_config y lo usan los botones de "Pedir avance a Fátima". Los 4
+     recuadros de Caja los reemplaza la línea de tiempo de flujo. */
   cont.innerHTML=
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
       '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirContrato()">➕ Cargar contrato</button>'+
@@ -8519,21 +8763,18 @@ function _cobPintar(){
       '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="renderCobranzas()">↺ Actualizar</button>'+
     '</div>'+
     _cobHtmlPanelObras()+
-    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--gray-400)">'+
-      '<span>📲 WhatsApp de Fátima:</span>'+
-      '<input type="text" id="cob-wa-fatima" class="form-control" style="width:170px;padding:4px 8px;font-size:11px" placeholder="591XXXXXXXX" value="'+_escPend(wa)+'">'+
-      '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobGuardarWhatsapp()">Guardar</button>'+
-      (wa?'':'<span style="color:var(--gold)">— cargalo para habilitar el botón de avance</span>')+
-    '</div>'+
     '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
     htmlHitosObra+
-    '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron+
-    '<div class="section-title" style="margin:16px 0 6px">💰 Caja</div>'+htmlCaja;
+    '<div class="section-title" style="margin:16px 0 6px">📈 Línea de tiempo de flujo</div>'+_cobHtmlTimeline()+
+    '<div class="section-title" style="margin:16px 0 6px">🏗️ Línea de tiempo por obra</div>'+_cobHtmlTimelineObras()+
+    '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron;
 }
 
 function _cobToggle(id){_cobAbierto=(_cobAbierto===id?null:id);_cobPintar();}
 
-/* El número de Fátima queda configurable desde el propio panel (app_config) */
+/* El número de Fátima vive en app_config. v179 sacó el input del panel (el
+   número ya está cargado y ensuciaba la vista); esta función queda disponible
+   por si hay que volver a exponerlo, y sale sin hacer nada si el input no está. */
 async function _cobGuardarWhatsapp(){
   const el=document.getElementById('cob-wa-fatima'); if(!el)return;
   const num=(el.value||'').replace(/[^0-9]/g,'');
@@ -8629,16 +8870,22 @@ async function _cobGuardarContrato(){
 /* Genera los 4 hitos. Idempotente por el índice único (contrato_id, numero_pago). */
 async function _cobGenerarHitos(c,reservaBs){
   const P=Number(c.precio_total_bs)||0,R=Number(reservaBs)||0;
+  /* v179 — se marca la condición de cada hito para que la línea de tiempo pueda
+     separar lo cierto de lo estimado. Los hitos 2 y 3 siguen sin fecha: los
+     estima _cobFechaAviso con los 60/120 días del contrato. */
   const filas=[
     {numero_pago:0,porcentaje:'Reserva',descripcion:'Reserva (se imputa al 1er pago)',
-     monto_bs:_cobR2(R),estado:R>0?'cobrado':'pendiente',
-     fecha_prevista:c.fecha_firma||null,fecha_cobro:R>0?(c.fecha_firma||null):null},
+     monto_bs:_cobR2(R),estado:R>0?'cobrado':'pendiente',condicion_tipo:'reserva',
+     fecha_prevista:c.fecha_firma||null,fecha_es_estimada:false,fecha_cobro:R>0?(c.fecha_firma||null):null},
     {numero_pago:1,porcentaje:'30%',descripcion:'1er pago a la firma (30% menos reserva)',
-     monto_bs:_cobR2(P*0.30-R),estado:'pendiente',fecha_prevista:c.fecha_firma||null,fecha_cobro:null},
+     monto_bs:_cobR2(P*0.30-R),estado:'pendiente',condicion_tipo:'firma',
+     fecha_prevista:c.fecha_firma||null,fecha_es_estimada:false,fecha_cobro:null},
     {numero_pago:2,porcentaje:'35%',descripcion:'2do pago por avance físico',
-     monto_bs:_cobR2(P*0.35),estado:'pendiente',fecha_prevista:null,fecha_cobro:null},
+     monto_bs:_cobR2(P*0.35),estado:'pendiente',condicion_tipo:'avance_obra',
+     fecha_prevista:null,fecha_es_estimada:true,fecha_cobro:null},
     {numero_pago:3,porcentaje:'35%',descripcion:'3er pago por avance final',
-     monto_bs:_cobR2(P*0.35),estado:'pendiente',fecha_prevista:null,fecha_cobro:null}
+     monto_bs:_cobR2(P*0.35),estado:'pendiente',condicion_tipo:'entrega',
+     fecha_prevista:null,fecha_es_estimada:true,fecha_cobro:null}
   ].map(function(f){f.contrato_id=c.id;f.lead_id=c.lead_id||null;f.activo=true;return f;});
   try{
     const{error}=await sb.from('pagos_cliente').upsert(filas,{onConflict:'contrato_id,numero_pago'});
@@ -8878,11 +9125,18 @@ async function _cobLeerContratoObra(obraId){
     extraido:r.extraido||{},
     avisos:r.avisos||[],
     archivo:r.archivo||'',
+    /* v179 — el calendario de obra sale de rec_obras: la edge function no lo
+       devuelve y es lo que después define las fechas estimadas. */
     obra:{id:obraId,nombre:ob.nombre||o.nombre||'',codigo:ob.codigo||o.codigo||'',
+          dias_ejecucion:o.dias_ejecucion||null,fecha_inicio_real:o.fecha_inicio_real||null,
           docs_confirmados:(ob.docs_confirmados!==undefined&&ob.docs_confirmados!==null)
             ?!!ob.docs_confirmados:!!o.docs_prop_confirmados}
   };
   if(!Array.isArray(_cobLeido.extraido.cuotas))_cobLeido.extraido.cuotas=[];
+  /* Defaults del formulario: 10 días de firma a inicio, plazo el de la obra */
+  if(_cobLeido.extraido.dias_hasta_inicio==null)_cobLeido.extraido.dias_hasta_inicio=10;
+  if(_cobLeido.extraido.plazo_obra_dias==null)
+    _cobLeido.extraido.plazo_obra_dias=o.dias_ejecucion||_cobLeido.extraido.plazo_obra_dias||null;
   await _cobCargarLeadsGanados();
   _cobPintarLeido();
   openModal('modalCobLeerContrato');
@@ -8927,15 +9181,16 @@ function _cobPintarLeido(){
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
         '<div style="flex:1;min-width:140px"><label class="form-label" style="font-size:10px">Condición</label>'+
-          '<select id="'+p+'tipo" class="form-control" style="padding:4px 8px;font-size:11px">'+
+          '<select id="'+p+'tipo" class="form-control" style="padding:4px 8px;font-size:11px" onchange="_cobLcPreviewFechas()">'+
             COB_COND.map(function(t){
               return '<option value="'+t+'"'+(q.condicion_tipo===t?' selected':'')+'>'+t+'</option>';
             }).join('')+'</select></div>'+
         '<div style="flex:1;min-width:110px"><label class="form-label" style="font-size:10px">% avance requerido</label>'+
-          '<input type="number" step="0.01" id="'+p+'avpct" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.avance_pct_requerido)+'"></div>'+
+          '<input type="number" step="0.01" id="'+p+'avpct" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.avance_pct_requerido)+'" oninput="_cobLcPreviewFechas()"></div>'+
         '<div style="flex:2;min-width:180px"><label class="form-label" style="font-size:10px">Detalle de la condición</label>'+
           '<input type="text" id="'+p+'det" class="form-control" style="padding:4px 8px;font-size:11px" value="'+vAttr(q.condicion_detalle)+'"></div>'+
       '</div>'+
+      '<div id="'+p+'calc" style="font-size:10px;color:var(--gray-400);margin-top:5px"></div>'+
     '</div>';
   }).join('');
 
@@ -8956,10 +9211,19 @@ function _cobPintarLeido(){
     '</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<div style="flex:1;min-width:150px"><label class="form-label">Fecha de firma</label>'+
-        '<input type="date" id="cob-lc-firma" class="form-control" value="'+vAttr(x.fecha_firma?String(x.fecha_firma).slice(0,10):'')+'"></div>'+
+        '<input type="date" id="cob-lc-firma" class="form-control" value="'+vAttr(x.fecha_firma?String(x.fecha_firma).slice(0,10):'')+'" oninput="_cobLcPreviewFechas()"></div>'+
       '<div style="flex:1;min-width:150px"><label class="form-label">Mora por día de atraso</label>'+
         '<input type="number" step="0.01" id="cob-lc-mora" class="form-control" value="'+vAttr(x.mora_monto_dia)+'"></div>'+
     '</div>'+
+    /* v179 — el calendario de obra: sin estos dos números las cuotas por avance
+       no tienen fecha estimada y quedan fuera de la proyección de flujo. */
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<div style="flex:1;min-width:150px"><label class="form-label">Días entre firma e inicio de obra</label>'+
+        '<input type="number" id="cob-lc-dias-inicio" class="form-control" value="'+vAttr(x.dias_hasta_inicio)+'" oninput="_cobLcPreviewFechas()"></div>'+
+      '<div style="flex:1;min-width:150px"><label class="form-label">Plazo de obra (días)</label>'+
+        '<input type="number" id="cob-lc-plazo" class="form-control" value="'+vAttr(x.plazo_obra_dias)+'" oninput="_cobLcPreviewFechas()"></div>'+
+    '</div>'+
+    '<div id="cob-lc-inicio-msg" style="font-size:11px;color:var(--gray-400);margin-top:4px"></div>'+
     '<label class="form-label" style="display:flex;gap:6px;align-items:center;margin-top:10px">'+
       '<input type="checkbox" id="cob-lc-banco"'+(x.financiamiento_banco?' checked':'')+'> Financiamiento bancario</label>'+
     '<input type="text" id="cob-lc-bancodet" class="form-control" placeholder="Qué paga el banco y qué el cliente" value="'+vAttr(x.financiamiento_detalle)+'">'+
@@ -8971,6 +9235,41 @@ function _cobPintarLeido(){
     '<div id="cob-lc-bloqueo" style="font-size:12px;color:var(--st-atrasado);margin-bottom:8px"></div>'+
     '<button class="btn-primary" id="cob-lc-guardar" style="width:100%" onclick="_cobGuardarLeido()">Guardar y generar cobranza</button>';
   _cobLcRevisarBloqueo();
+  _cobLcPreviewFechas();
+}
+
+/* Contexto de calendario que se usa para fechar las cuotas del alta */
+function _cobLcCtx(){
+  const v=function(id){const e=document.getElementById(id);return e?e.value:'';};
+  const firma=v('cob-lc-firma')||_cobLeido.extraido.fecha_firma||null;
+  const dias=Number(v('cob-lc-dias-inicio'));
+  const plazo=Number(v('cob-lc-plazo'));
+  const real=_cobLeido.obra.fecha_inicio_real?String(_cobLeido.obra.fecha_inicio_real).slice(0,10):null;
+  const inicio=real||(firma?_cobFechaMas(firma,isFinite(dias)?dias:0):null);
+  return{fecha_firma:firma,inicio:inicio,plazo:isFinite(plazo)?plazo:0,inicio_real:!!real,
+         dias_hasta_inicio:isFinite(dias)?dias:null,plazo_obra_dias:isFinite(plazo)&&plazo>0?plazo:null};
+}
+/* Muestra en vivo qué fecha va a quedar en cada cuota. Es el chequeo visual de
+   que ya no heredan todas la fecha de firma. */
+function _cobLcPreviewFechas(){
+  if(!_cobLeido)return;
+  _cobLcSync();
+  const ctx=_cobLcCtx();
+  const msg=document.getElementById('cob-lc-inicio-msg');
+  if(msg){
+    msg.innerHTML=ctx.inicio
+      ?('Inicio de obra '+(ctx.inicio_real?'<strong>real</strong>':'estimado')+': '+_escPend(ctx.inicio)+
+        (ctx.plazo>0?' · entrega estimada '+_escPend(_cobFechaMas(ctx.inicio,ctx.plazo)):
+         ' · <span style="color:var(--gold)">sin plazo, las cuotas por avance quedan sin fecha</span>'))
+      :'<span style="color:var(--gold)">Sin fecha de firma no se puede estimar el inicio de obra.</span>';
+  }
+  (_cobLeido.extraido.cuotas||[]).forEach(function(q,i){
+    const el=document.getElementById('cob-lc-q'+i+'-calc'); if(!el)return;
+    const f=_cobFechasDeCuota(q,ctx);
+    el.innerHTML=f.fecha_prevista?('📅 Fecha cierta: <strong>'+_escPend(f.fecha_prevista)+'</strong> — genera mora si se atrasa')
+      :(f.fecha_estimada?('🏗️ Fecha estimada: <strong>'+_escPend(f.fecha_estimada)+'</strong> — sin mora, depende del avance')
+      :'<span style="color:var(--gold)">Sin fecha: no entra en la proyección de flujo</span>');
+  });
 }
 
 /* DOM → estado. Se llama antes de repintar o guardar para no perder ediciones. */
@@ -8984,6 +9283,8 @@ function _cobLcSync(){
   x.moneda=v('cob-lc-moneda')||'BS';
   x.fecha_firma=v('cob-lc-firma')||null;
   x.mora_monto_dia=num('cob-lc-mora');
+  x.dias_hasta_inicio=num('cob-lc-dias-inicio');
+  x.plazo_obra_dias=num('cob-lc-plazo');
   const bk=document.getElementById('cob-lc-banco');
   x.financiamiento_banco=!!(bk&&bk.checked);
   x.financiamiento_detalle=v('cob-lc-bancodet')||null;
@@ -9060,7 +9361,8 @@ async function _cobGuardarLeido(){
   const nums=qs.map(function(q){return Number(q.numero);});
   if(nums.some(function(n){return !isFinite(n);})){toast('Toda cuota necesita un número','error');return;}
   if(new Set(nums).size!==nums.length){toast('Hay dos cuotas con el mismo número','error');return;}
-  const firma=x.fecha_firma||null;
+  const ctx=_cobLcCtx();
+  const firma=ctx.fecha_firma;
   /* El % que habilita la cuota por avance es lo que después dispara el 🔔 */
   const qAv=qs.find(function(q){return q.condicion_tipo==='avance_obra'&&Number(q.avance_pct_requerido)>0;});
   let ct=null;
@@ -9074,6 +9376,8 @@ async function _cobGuardarLeido(){
       moneda:String(x.moneda||'BS').toUpperCase(),
       fecha_firma:firma,
       mora_usd_dia:Number(x.mora_monto_dia)||0,
+      dias_hasta_inicio:(ctx.dias_hasta_inicio===null?10:ctx.dias_hasta_inicio),
+      plazo_obra_dias:ctx.plazo_obra_dias,
       observaciones:_cobObsLeido(x),
       informe_previo_pct_pactado:qAv?Number(qAv.avance_pct_requerido):null,
       contrato_validado:true,
@@ -9084,15 +9388,24 @@ async function _cobGuardarLeido(){
     ct=data;
   }catch(e){toast('Error creando el contrato: '+e.message,'error');return;}
 
+  /* v179 — cada cuota se lleva su condición Y su fecha calculada según ella.
+     Antes heredaban todas la fecha de firma y nacían vencidas. */
   const filas=qs.map(function(q){
     const det=(q.condicion_detalle||'').trim();
     const desc=((q.descripcion||'').trim()+(det?' — '+det:'')).slice(0,500);
+    const f=_cobFechasDeCuota(q,ctx);
     return{contrato_id:ct.id,lead_id:ct.lead_id||null,
       numero_pago:Number(q.numero),
       porcentaje:(q.porcentaje===null||q.porcentaje===undefined||q.porcentaje==='')?null:String(q.porcentaje)+'%',
       descripcion:desc||null,
       monto_bs:_cobR2(q.monto),
-      fecha_prevista:q.fecha_prevista||((q.condicion_tipo==='reserva'||q.condicion_tipo==='firma')?firma:null),
+      condicion_tipo:q.condicion_tipo||'otro',
+      condicion_detalle:det||null,
+      avance_pct_requerido:(q.avance_pct_requerido===null||q.avance_pct_requerido===undefined||q.avance_pct_requerido==='')
+        ?null:Number(q.avance_pct_requerido),
+      fecha_prevista:f.fecha_prevista,
+      fecha_estimada:f.fecha_estimada,
+      fecha_es_estimada:!!f.fecha_es_estimada,
       estado:'pendiente',activo:true};
   });
   try{
