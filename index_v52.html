@@ -1279,10 +1279,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           </div>
         </div>
         <div class="form-group">
+          <label class="form-label">📆 ¿Cuándo te contactó?</label>
+          <input class="form-control" type="date" id="nl-fecha-contacto">
+          <div class="form-help">Día real del primer contacto del cliente. Si te escribió el sábado y lo cargás el lunes, poné el sábado — de ahí salen el CPL y las alertas de lead frío. No se puede poner una fecha futura.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Nota inicial (opcional)</label>
           <textarea class="form-control" id="nl-nota" rows="2" placeholder="Lo que sepas del cliente..."></textarea>
         </div>
-        <div class="form-help system">🔒 Fecha y hora: se registran automáticamente al guardar</div>
+        <div class="form-help system">🔒 Fecha y hora de carga: se registran automáticamente al guardar</div>
         <div id="section-cliente-mujer" style="display:none;margin-top:10px">
           <label style="display:flex;align-items:center;gap:10px;background:var(--gray-900);padding:9px 13px;border-radius:8px;border:1px solid var(--gray-600);cursor:pointer;font-size:12px">
             <input type="checkbox" id="nl-cliente-mujer" style="accent-color:var(--gold);width:16px;height:16px">
@@ -1646,7 +1651,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='181';
+  var CURRENT_VERSION='182';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1800,6 +1805,58 @@ function ymdLocal(d){
 function ymdBolivia(d){
   const dt=(d instanceof Date)?d:new Date(d);
   return new Intl.DateTimeFormat('en-CA',{timeZone:'America/La_Paz',year:'numeric',month:'2-digit',day:'2-digit'}).format(dt);
+}
+/* ── v182 · FECHA REAL DE CONTACTO ────────────────────────────────────────
+   created_at es la fecha de CARGA, no la de contacto: los leads que llegan por
+   WhatsApp el fin de semana se cargan el lunes, así que created_at atrasa el
+   CPL, el tiempo de respuesta y las alertas de lead frío. leads.fecha_contacto_real
+   guarda cuándo contactó el cliente de verdad; created_at queda de respaldo
+   para los leads viejos que no la tienen. */
+function leadFechaContacto(l){
+  if(!l)return null;
+  if(l.fecha_contacto_real)return new Date(l.fecha_contacto_real+'T00:00:00-04:00');
+  return l.created_at?new Date(l.created_at):null;
+}
+/* Días sin gestionar el lead. Cuenta desde la última gestión registrada y, si
+   nunca se lo gestionó, desde que el cliente contactó — no desde la carga. */
+function leadDiasSinGestion(l){
+  const ref=(l&&l.ultima_gestion)?new Date(l.ultima_gestion+'T00:00:00-04:00'):leadFechaContacto(l);
+  if(!ref||isNaN(ref.getTime()))return null;
+  return Math.max(0,Math.floor((Date.now()-ref.getTime())/86400000));
+}
+/* Campo "¿Cuándo te contactó?" del alta: hoy por defecto, editable hacia atrás.
+   El max lo pone el navegador; el tope duro va igual en el guardado porque el
+   input date acepta tipeo manual. */
+function _nlResetFechaContacto(){
+  const el=document.getElementById('nl-fecha-contacto');
+  if(!el)return;
+  const hoy=ymdBolivia(new Date());
+  el.max=hoy; el.value=hoy;
+}
+/* Días entre el contacto real del cliente y la carga del lead en el CRM.
+   0 (o null si falta el dato) cuando se cargó el mismo día. */
+function _leadDemoraCarga(l){
+  if(!l||!l.fecha_contacto_real||!l.created_at)return null;
+  const carga=ymdBolivia(new Date(l.created_at));
+  if(l.fecha_contacto_real===carga)return 0;
+  const d=Math.round((new Date(carga+'T00:00:00-04:00')-new Date(l.fecha_contacto_real+'T00:00:00-04:00'))/86400000);
+  return isNaN(d)?null:d;
+}
+/* Fila "Te contactó" de la ficha. Solo aparece cuando el cliente contactó un día
+   distinto al de la carga — si coinciden no aporta nada y ensucia la ficha. */
+function _leadContactoRealHtml(l){
+  const d=_leadDemoraCarga(l);
+  if(d==null||d<=0)return'';
+  return '<dt>📆 Te contactó</dt><dd>'+fmt(l.fecha_contacto_real+'T00:00:00-04:00')+
+    ' <span style="font-size:10px;color:var(--gold)">cargado '+d+' día'+(d===1?'':'s')+' después</span></dd>';
+}
+/* Devuelve {fecha,error}: la fecha elegida, o hoy si el campo está vacío. */
+function _nlFechaContacto(){
+  const hoy=ymdBolivia(new Date());
+  const v=(document.getElementById('nl-fecha-contacto')?.value||'').trim();
+  if(!v)return{fecha:hoy,error:null};
+  if(v>hoy)return{fecha:hoy,error:'La fecha de contacto no puede ser futura'};
+  return{fecha:v,error:null};
 }
 function getMonday(d){
   const dt=new Date(d);
@@ -2436,6 +2493,7 @@ function populateCatalogSelects(){
   ).join('');
   // Fecha hoy default para crear lead
   document.getElementById('nl-fecha').value=ymdLocal(new Date());
+  _nlResetFechaContacto();
   document.getElementById('won-fecha-firma').value=ymdLocal(new Date());
   // Inicializar selectores de reportes al mes/año actual
   const _now=new Date();
@@ -3317,6 +3375,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${cu&&lead.cerrador===cu.nombre?' <span style="font-size:10px;color:var(--st-completo);font-weight:700">(sos vos)</span>':''}${_soyCerrador()&&_leadTomable(lead)&&lead.cerrador!==cu.nombre?` <button class="btn-primary" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="tomarComoCerrador(${lead.id})">🤝 ${lead.cerrador?'Tomarlo yo':'Tomar como cerrador'}</button>`:''}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Cambiar cerrador':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
           <dt>Visitó oficina</dt><dd><label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="lead-visito-oficina" ${lead.visito_oficina?'checked':''} ${_leadBloqueado||lead.estado==='cerrado_ganado'?'disabled':''} onchange="toggleVisitoOficina(${lead.id},this)"> <span>✅ Visitó oficina</span></label>${_leadBloqueado||lead.estado==='cerrado_ganado'?'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Lead cerrado o archivado — no editable</div>':'<div style="font-size:10px;color:var(--gray-400);margin-top:2px">Se marca solo al completar la tarea "Visita oficina"; tildalo a mano solo si la visita ocurrió fuera del CRM</div>'}</dd>
           <dt>Fecha registro</dt><dd>${fmt(lead.created_at)} <span class="badge-auto">🔒 sistema</span></dd>
+          ${_leadContactoRealHtml(lead)}
         </dl>
       </div>
       ${renderFichaCompleta(lead,_refsLeadActual)}
@@ -3347,6 +3406,11 @@ async function openLeadDetail(leadId,agendaId,mode){
       <div class="section">
         <div class="section-title">Línea de tiempo completa</div>
         <div class="timeline">
+          ${_leadDemoraCarga(lead)>0?`<div class="timeline-item creation">
+            <div class="timeline-date">${fmt(lead.fecha_contacto_real+'T00:00:00-04:00')}</div>
+            <div class="timeline-text">📆 El cliente contactó</div>
+            <div class="timeline-note">Cargado en el CRM ${_leadDemoraCarga(lead)} día${_leadDemoraCarga(lead)===1?'':'s'} después</div>
+          </div>`:''}
           <div class="timeline-item creation">
             <div class="timeline-date">${fmtDT(lead.created_at)}</div>
             <div class="timeline-text">🆕 Lead creado</div>
@@ -3561,7 +3625,9 @@ function switchLeadTab(tab){
 }
 
 function renderViajeCliente(lead,segs,history){
-  const diasEnPipeline=Math.round((Date.now()-new Date(lead.created_at))/86400000);
+  /* v182 — el pipeline arranca cuando el cliente contactó, no cuando se cargó. */
+  const _iniPipe=leadFechaContacto(lead);
+  const diasEnPipeline=_iniPipe?Math.max(0,Math.round((Date.now()-_iniPipe.getTime())/86400000)):0;
   const indCampos=[
     {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
@@ -5701,7 +5767,10 @@ async function saveSeguimiento(){
          'nuevo'. Así el lead 7046 llegó a "Visita terreno" con estado='nuevo' y
          cerrador=null: asignar_cerrador_alternancia solo asigna cuando el estado
          pasa a algo ILIKE '%visita%', y ese cambio nunca ocurría. */
-      const _updLead={etapa:nextEstado,proximo_contacto:nextFecha,updated_at:now};
+      /* v182 — ultima_gestion es la base de "días sin gestión": si solo se
+         escribiera en el alta, todo lead trabajado seguiría contando desde su
+         primer contacto. Se sella acá, que es donde el seguimiento se completa. */
+      const _updLead={etapa:nextEstado,proximo_contacto:nextFecha,ultima_gestion:ymdBolivia(new Date()),updated_at:now};
       const _esFaseVisita=/^visita\s/i.test((nextEstado||'').trim());
       if(_esFaseVisita&&!['visita_agendada','visita_realizada','reservado','cerrado_ganado','cerrado_perdido'].includes(lead2Estado)){
         _updLead.estado='visita_agendada';
@@ -5886,7 +5955,16 @@ async function saveLead(){
   const hora=document.getElementById('nl-hora').value||'10:00';
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   const now=new Date().toISOString();
+  const hoyBo=ymdBolivia(new Date());
   const clienteMujer=esCaptadora&&document.getElementById('nl-cliente-mujer')?.checked||false;
+
+  const _fc=_nlFechaContacto();
+  if(_fc.error){
+    toast(_fc.error,'error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+    _modalBodyLock('modalNewLead',false);
+    return;
+  }
 
   if(correoRaw&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correoRaw)){
     toast('Correo electrónico con formato inválido','error');
@@ -5910,6 +5988,16 @@ async function saveLead(){
       grado_interes:gradoInteres,correo:correoRaw||null,
       metodo_pago:metodoPagoExtra,banco_preferido:bancoExtra,
       ocupacion:ocupacionExtra,fecha_nacimiento:fnacExtra,
+      /* v182 — el alta dejaba proximo_contacto en NULL y "Para hoy" filtra por
+         esa columna: NULL nunca cumple <= hoy, así que el lead se guardaba bien
+         pero no se mostraba (71 leads de Genoveva en un solo día). Se usa la
+         fecha del 1er intento y, si no hay, hoy: un lead nuevo se trabaja hoy. */
+      proximo_contacto:fecha||hoyBo,
+      /* ultima_gestion arranca en la fecha REAL de contacto, no en la de carga:
+         un lead que escribió el sábado y se carga el lunes ya lleva 2 días
+         esperando, y así lo cuenta leadDiasSinGestion(). */
+      ultima_gestion:_fc.fecha,
+      fecha_contacto_real:_fc.fecha,
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -5962,9 +6050,13 @@ async function saveLead(){
     setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
     ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    _nlResetFechaContacto();
     document.getElementById('dupWarning').classList.remove('show');
     _modalBodyLock('modalNewLead',false);
     renderWeek();
+    /* v182 — el lead ya nace con proximo_contacto, así que entra a "Para hoy":
+       refrescar el panel para que se vea sin recargar la pantalla. */
+    try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
   }catch(e){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
     _modalBodyLock('modalNewLead',false);
@@ -5996,12 +6088,19 @@ async function saveLeadPerdido(){
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:(document.getElementById('nl-captador-sel')?.value||cu.nombre);
   const now=new Date().toISOString();
+  const _fcp=_nlFechaContacto();
+  if(_fcp.error){toast(_fcp.error,'error');return;}
   try{
     const{data:dup}=await sb.from('leads').select('id').eq('celular',celular).or('archivado.is.null,archivado.eq.false').limit(1);
     if(dup&&dup.length){toast('Número ya registrado','error');return;}
     const{data:newLead,error}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
       estado:'cerrado_perdido',motivo_perdida:motivo,
+      /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
+         trabaja), pero la fecha real de contacto y la gestión sí se registran
+         para que el CPL y el tiempo de respuesta lo cuenten. */
+      ultima_gestion:ymdBolivia(new Date()),
+      fecha_contacto_real:_fcp.fecha,
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id').single();
     if(error)throw error;
@@ -6046,6 +6145,7 @@ function openModal(id){
     /* restaurar defaults del 1er intento (la limpieza generica los vacia) */
     var _f=document.getElementById('nl-fecha'); if(_f)_f.value=ymdLocal(new Date());
     var _h=document.getElementById('nl-hora'); if(_h)_h.value='10:00';
+    _nlResetFechaContacto();
   }
   document.getElementById(id).classList.add('show');
 }
@@ -6291,7 +6391,8 @@ async function confirmarReactivar(leadId,nombre){
   const fp=new Date(`${fecha}T${hora}:00`).toISOString();
   try{
     await sb.from('leads').update({
-      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fecha,archivado:false,updated_at:now
+      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fecha,archivado:false,
+      ultima_gestion:ymdBolivia(new Date()),updated_at:now
     }).eq('id',leadId);
     const{error}=await sb.from('agenda_personal').insert({
       colaborador:asignado,lead_id:leadId,tipo:etapa,
@@ -6343,7 +6444,8 @@ async function reactivarLeadDesdePerfil(leadId){
   try{
     const{data:l}=await sb.from('leads').select('nombre,etapa').eq('id',leadId).single();
     const{error}=await sb.from('leads').update({
-      archivado:false,estado:'nuevo',proximo_contacto:hoy,updated_at:now
+      archivado:false,estado:'nuevo',proximo_contacto:hoy,
+      ultima_gestion:ymdBolivia(new Date()),updated_at:now
     }).eq('id',leadId);
     if(error)throw error;
     try{
@@ -7382,6 +7484,13 @@ async function _grabCrearLeadDirecto(id){
       captador,medio_difusion:null,notas:nota,
       estado:'nuevo',etapa:'1er intento',
       grado_interes:grado,
+      /* v182 — mismo fix que el alta manual: sin proximo_contacto el lead no
+         entra a "Para hoy". Acá el 1er intento se agenda hoy 10:00, así que el
+         próximo contacto es hoy. La fecha real de contacto es la de la
+         grabación: el registro puede cargarse días después de la llamada. */
+      proximo_contacto:ymdBolivia(new Date()),
+      ultima_gestion:ymdBolivia(g.created_at||new Date()),
+      fecha_contacto_real:ymdBolivia(g.created_at||new Date()),
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -7834,7 +7943,11 @@ async function _avisarInterrumpidasPendientes(){
 }
 
 /* ════════════════════════════════════════
-   PARA HOY — leads con proximo_contacto <= hoy
+   PARA HOY — leads con proximo_contacto <= hoy (o sin fecha)
+   v182: antes filtraba solo con .lte('proximo_contacto',hoy). Un lead con la
+   columna en NULL nunca cumple esa comparación, así que se guardaba bien pero
+   quedaba invisible. El alta ya no deja NULL, pero el panel además los toma
+   igual: un lead abierto sin próximo contacto hay que trabajarlo, no esconderlo.
 ════════════════════════════════════════ */
 let _paraHoyTodos=false;
 async function renderParaHoy(){
@@ -7843,19 +7956,26 @@ async function renderParaHoy(){
   const cont=document.getElementById('para-hoy-body'); if(!cont)return;
   cont.innerHTML='<div class="loading-state"><span class="spin"></span></div>';
   try{
-    const hoy=ymdLocal(new Date());
+    const hoy=ymdBolivia(new Date());
     let q=sb.from('leads')
-      .select('id,nombre,celular,grado_interes,proximo_contacto,captador')
-      .lte('proximo_contacto',hoy)
+      .select('id,nombre,celular,grado_interes,proximo_contacto,captador,created_at,fecha_contacto_real,ultima_gestion')
+      /* archivado con .not(...is.true) en vez de un segundo .or(): así queda un
+         solo `or` en la query y el filtro de proximo_contacto puede usarlo. */
+      .not('archivado','is',true)
       .not('estado','in','(cerrado_perdido,cerrado_ganado,visita_agendada,visita_realizada,reservado)')
-      .or('archivado.is.null,archivado.eq.false')
+      .or('proximo_contacto.lte.'+hoy+',proximo_contacto.is.null')
       .limit(_paraHoyTodos?200:100);
     if(cu.rol==='field_capturer') q=q.eq('captador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
     try{_renderEnCierre();}catch(e){}
     const orden={'alto':0,'medio':1,'bajo':2};
-    const todos=(data||[]).slice().sort(function(a,b){return(orden[a.grado_interes]||3)-(orden[b.grado_interes]||3);});
+    /* A igual grado de interés, primero el que lleva más tiempo esperando. */
+    const todos=(data||[]).slice().sort(function(a,b){
+      const g=(orden[a.grado_interes]||3)-(orden[b.grado_interes]||3);
+      if(g!==0)return g;
+      return (leadDiasSinGestion(b)||0)-(leadDiasSinGestion(a)||0);
+    });
     const mostrar=_paraHoyTodos?todos:todos.slice(0,20);
     if(!mostrar.length){
       cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:6px 0">Sin pendientes para hoy. 🎉</div>';
@@ -7882,10 +8002,16 @@ function _paraHoyCard(l,actCount){
     'Hola '+nombre+', último intento de nuestra parte. ¿Podemos hablar hoy?'
   ];
   const waMsg=encodeURIComponent(waMsgs[Math.min(actCount,2)]);
+  /* v182 — días esperando desde el contacto REAL del cliente, no desde la carga:
+     el lead del sábado cargado el lunes ya llega con 2 días encima. */
+  const _dias=leadDiasSinGestion(l);
+  const _espera=(_dias!=null&&_dias>=2)
+    ? ' · <span style="color:'+(_dias>=5?'var(--st-atrasado)':'var(--gold)')+'">⏳ '+_dias+' días esperando</span>'
+    : '';
   return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:10px 12px;margin-bottom:6px;background:var(--gray-900);display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<div style="flex:1;min-width:140px">'+
       '<div style="font-weight:700;font-size:13px">'+_escPend(nombre)+'</div>'+
-      '<div style="font-size:11px;color:var(--gray-400)">'+_escPend(l.celular||'—')+(grado?' · <span style="color:'+gradoCol[grado]+'">'+grado+'</span>':'')+(actCount?' · intento #'+(actCount+1):'')+'</div>'+
+      '<div style="font-size:11px;color:var(--gray-400)">'+_escPend(l.celular||'—')+(grado?' · <span style="color:'+gradoCol[grado]+'">'+grado+'</span>':'')+(actCount?' · intento #'+(actCount+1):'')+_espera+'</div>'+
     '</div>'+
     (cel?'<a href="tel:+591'+cel+'" class="btn btn-ghost btn-sm" style="text-decoration:none;font-size:12px" onclick="event.stopPropagation()">📞 Llamar</a>':'')+
     (cel?'<a href="https://wa.me/591'+cel+'?text='+waMsg+'" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;font-size:12px" onclick="event.stopPropagation()">💬 WhatsApp</a>':'')+
@@ -9809,7 +9935,7 @@ async function renderParteDia(){
     const hace7=new Date(Date.now()-7*24*3600000);
 
     const[rCal,rNuevos,rCerr,rTareas,rCeo]=await Promise.all([
-      sb.from('leads').select('id,nombre,estado,captador,cerrador,visita_fecha,resultado_reunion,updated_at,created_at')
+      sb.from('leads').select('id,nombre,estado,captador,cerrador,visita_fecha,resultado_reunion,updated_at,created_at,fecha_contacto_real,ultima_gestion')
         .in('estado',PD_ESTADOS_CALIENTES).or('archivado.is.null,archivado.eq.false'),
       sb.from('leads').select('id',{count:'exact',head:true})
         .eq('estado','nuevo').or('archivado.is.null,archivado.eq.false'),
@@ -9827,8 +9953,11 @@ async function renderParteDia(){
     const vencidas=cal.filter(l=>l.estado==='visita_agendada'&&l.visita_fecha&&
       l.visita_fecha<corteVisita&&!(l.resultado_reunion&&(''+l.resultado_reunion).trim()));
     const reservas=cal.filter(l=>l.estado==='reservado');
-    /* Foco: los calientes con más días sin gestión (updated_at más viejo) */
-    const foco=cal.slice().sort((a,b)=>new Date(a.updated_at||a.created_at||0)-new Date(b.updated_at||b.created_at||0)).slice(0,3);
+    /* Foco: los calientes con más días sin gestión. v182 — se cuenta desde la
+       última gestión registrada y, si no hay, desde que el cliente contactó de
+       verdad (fecha_contacto_real, con created_at de respaldo). updated_at no
+       servía: cualquier retoque del lead lo hacía parecer recién trabajado. */
+    const foco=cal.slice().sort((a,b)=>(leadDiasSinGestion(b)||0)-(leadDiasSinGestion(a)||0)).slice(0,3);
 
     /* v173 — cobranzas que tocan cobrar. Solo admin: el parte ya está gateado. */
     const cobranzas=await _cobPendientesParteDia();
@@ -9849,6 +9978,11 @@ function _pdDias(iso){
   if(!iso)return'—';
   const d=Math.floor((Date.now()-new Date(iso).getTime())/86400000);
   return d<=0?'hoy':(d+'d');
+}
+/* v182 — días sin gestión del lead, ya anclados a la fecha real de contacto. */
+function _pdDiasGestion(l){
+  const d=leadDiasSinGestion(l);
+  return d==null?'—':(d<=0?'hoy':(d+'d'));
 }
 
 function _pdPintar(){
@@ -9923,7 +10057,7 @@ function _pdPintar(){
         (D.foco.length?D.foco.map(l=>
           '<div class="pd-det-row" style="background:var(--gray-800);margin-bottom:5px" onclick="openLeadDetail('+l.id+',null,\'normal\')">'+
             '<span style="flex:1;min-width:110px;font-weight:700">'+_escPend(l.nombre||('Lead #'+l.id))+'</span>'+
-            '<span class="d">'+_escPend(l.estado||'')+' · '+_pdDias(l.updated_at||l.created_at)+' sin gestión</span>'+
+            '<span class="d">'+_escPend(l.estado||'')+' · '+_pdDiasGestion(l)+' sin gestión</span>'+
           '</div>').join('')
           :'<div style="font-size:11px;color:var(--gray-400);padding:4px 2px">Sin leads calientes.</div>')+
       '</div>'+
