@@ -1657,7 +1657,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='183';
+  var CURRENT_VERSION='184';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2613,9 +2613,10 @@ async function renderWeek(){
   const filtP=document.getElementById('filtro-persona').value;
   const filtE=document.getElementById('filtro-estado').value;
 
+  /* v184 — criterio unificado con la vista mensual: activo=true y SIN filtrar por
+     lead_id (las actividades tipo 'evento' no tienen lead y también ocupan la jornada). */
   let query=sb.from('agenda_personal')
     .select('id,colaborador,lead_id,tipo,titulo,nota,fecha_programada,completada,completada_en,nota_resultado')
-    .not('lead_id','is',null)
     .eq('activo',true)
     .gte('fecha_programada',currentWeekStart.toISOString())
     .lt('fecha_programada',weekEnd.toISOString())
@@ -2625,7 +2626,8 @@ async function renderWeek(){
   if(cu.rol==='field_capturer'){
     const{data:misLeads}=await sb.from('leads').select('id').eq('captador',cu.nombre).or('archivado.is.null,archivado.eq.false');
     const ids=(misLeads||[]).map(function(l){return l.id;});
-    query=ids.length?query.in('lead_id',ids):query.in('lead_id',[-1]);
+    /* v184 — sus leads O actividades sin lead; siempre acotado a sus propias tareas */
+    query=ids.length?query.or('lead_id.is.null,lead_id.in.('+ids.join(',')+')'):query.is('lead_id',null);
     query=query.eq('colaborador',cu.nombre);
   } else if(!isJefe){
     query=_filtrarPorColaborador(query);
@@ -2685,7 +2687,17 @@ function renderCard(a,now){
   const tagBg=isDone?'rgba(0,0,0,0.25)':isLate?'rgba(0,0,0,0.25)':'rgba(0,0,0,0.22)';
   const lateLabel=isLate?'⚠️ ATRASADO · ':'';
 
-  if(!a.lead_id) return '';
+  /* v184 — actividad sin lead (tipo 'evento'): antes se descartaba y por eso la
+     semanal no la contaba. Se muestra igual, sin click a ficha porque no hay lead. */
+  if(!a.lead_id) return `<div class="activity-card ${cls}" style="cursor:default">
+    <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
+    <div class="activity-client">${a.titulo||'—'}</div>
+    <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
+    <div class="activity-times">
+      <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
+      ${isDone?`<div class="ok"><span style="font-weight:700;font-size:8px">Realizado:</span> ${fmtTime(a.completada_en)} ✓</div>`:'<div><span style="font-weight:700;font-size:8px">Realizado:</span> —</div>'}
+    </div>
+  </div>`;
 
   const _xMode='';
   const _bd=estadoBorderColor(_estadoLeadMap[a.lead_id]);
@@ -2734,14 +2746,19 @@ async function renderMonth(){
   const end=new Date(y,m+1,1);
   const filtP=document.getElementById('filtro-mes-persona').value;
 
+  /* v184 — criterio unificado con la vista semanal: activo=true (antes la mensual
+     contaba también las actividades dadas de baja, por eso un mismo día daba 48 acá
+     y 39 en la semanal) + mismo alcance por rol. */
   let q=sb.from('agenda_personal').select('id,colaborador,lead_id,tipo,titulo,fecha_programada,completada')
+    .eq('activo',true)
     .gte('fecha_programada',start.toISOString())
     .lt('fecha_programada',end.toISOString());
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
   if(cu.rol==='field_capturer'){
     const{data:misLeadsM}=await sb.from('leads').select('id').eq('captador',cu.nombre).or('archivado.is.null,archivado.eq.false');
     const idsM=(misLeadsM||[]).map(function(l){return l.id;});
-    q=idsM.length?q.in('lead_id',idsM):q.in('lead_id',[-1]);
+    q=idsM.length?q.or('lead_id.is.null,lead_id.in.('+idsM.join(',')+')'):q.is('lead_id',null);
+    q=q.eq('colaborador',cu.nombre);
   } else if(!isJefe){
     q=_filtrarPorColaborador(q);
   } else if(filtP){
