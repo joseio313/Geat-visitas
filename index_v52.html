@@ -1296,8 +1296,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         </div>
         <div class="form-group">
           <label class="form-label">📆 ¿Cuándo te contactó?</label>
-          <input class="form-control" type="date" id="nl-fecha-contacto">
-          <div class="form-help">Día real del primer contacto del cliente. Si te escribió el sábado y lo cargás el lunes, poné el sábado — de ahí salen el CPL y las alertas de lead frío. No se puede poner una fecha futura.</div>
+          <input class="form-control" type="datetime-local" id="nl-fecha-contacto">
+          <div class="form-help">Día y HORA reales del primer contacto del cliente. Si te escribió el sábado a las 21:00 y lo cargás el lunes, poné sábado 21:00 — de ahí salen el CPL, el tiempo de respuesta y las alertas de lead frío. No se puede poner una fecha ni una hora futura.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Nota inicial (opcional)</label>
@@ -1667,7 +1667,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='185';
+  var CURRENT_VERSION='186';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1834,16 +1834,37 @@ function ymdBolivia(d){
    CPL, el tiempo de respuesta y las alertas de lead frío. leads.fecha_contacto_real
    guarda cuándo contactó el cliente de verdad; created_at queda de respaldo
    para los leads viejos que no la tienen. */
+/* v186 — fecha_contacto_real pasó de `date` a `timestamptz`: los captadores
+   atienden sábado y domingo por WhatsApp y cargan todo el lunes, y sin hora no
+   se puede medir el tiempo de respuesta real ni ordenar dos leads del mismo
+   día. Se guarda en UTC y se muestra en America/La_Paz.
+   El fallback con 'T12:00:00-04:00' es para el caso raro de una fila que aún
+   llegue como 'YYYY-MM-DD' pelado (misma hora que usó la migración). */
+function _tsContacto(v){
+  if(!v)return null;
+  const s=String(v);
+  const d=/^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T12:00:00-04:00'):new Date(s);
+  return isNaN(d.getTime())?null:d;
+}
 function leadFechaContacto(l){
   if(!l)return null;
-  if(l.fecha_contacto_real)return new Date(l.fecha_contacto_real+'T00:00:00-04:00');
+  if(l.fecha_contacto_real)return _tsContacto(l.fecha_contacto_real);
   return l.created_at?new Date(l.created_at):null;
 }
 /* Días sin gestionar el lead. Cuenta desde la última gestión registrada y, si
    nunca se lo gestionó, desde que el cliente contactó — no desde la carga. */
+/* v186 — se toma el instante MÁS RECIENTE entre la última gestión y el contacto
+   real, en vez de mirar solo ultima_gestion. En el alta las dos apuntan al mismo
+   día, pero ultima_gestion es `date` (queda en 00:00) y fecha_contacto_real ya
+   es timestamptz: un lead que escribió el sábado 21:00 contaba desde las 00:00 y
+   aparecía con casi un día más de espera del que tenía. Si la gestión es
+   posterior, gana la gestión, que es lo correcto. */
 function leadDiasSinGestion(l){
-  const ref=(l&&l.ultima_gestion)?new Date(l.ultima_gestion+'T00:00:00-04:00'):leadFechaContacto(l);
-  if(!ref||isNaN(ref.getTime()))return null;
+  const gest=(l&&l.ultima_gestion)?new Date(l.ultima_gestion+'T00:00:00-04:00'):null;
+  const cont=leadFechaContacto(l);
+  const cands=[gest,cont].filter(d=>d&&!isNaN(d.getTime()));
+  if(!cands.length)return null;
+  const ref=new Date(Math.max.apply(null,cands.map(d=>d.getTime())));
   return Math.max(0,Math.floor((Date.now()-ref.getTime())/86400000));
 }
 /* ── v185 · CAMPAÑA DE ORIGEN ─────────────────────────────────────────────
@@ -1916,19 +1937,41 @@ function _nlCampanaId(){
 /* Campo "¿Cuándo te contactó?" del alta: hoy por defecto, editable hacia atrás.
    El max lo pone el navegador; el tope duro va igual en el guardado porque el
    input date acepta tipeo manual. */
+/* v186 — 'YYYY-MM-DDTHH:mm' en hora de Bolivia, que es el formato que pide
+   datetime-local. No se puede usar toISOString() acá: eso da UTC y el campo
+   quedaría 4 horas adelantado. */
+function _dtLocalBolivia(d){
+  const dt=(d instanceof Date)?d:new Date(d);
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/La_Paz',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(dt);
+  const g=t=>(p.find(x=>x.type===t)||{}).value;
+  return g('year')+'-'+g('month')+'-'+g('day')+'T'+(g('hour')==='24'?'00':g('hour'))+':'+g('minute');
+}
+/* Convierte lo tipeado en el datetime-local (hora boliviana) al instante UTC
+   que va a la base. */
+function _dtBoliviaToIso(v){
+  if(!v)return null;
+  const d=new Date(String(v).length===16?v+':00-04:00':v);
+  return isNaN(d.getTime())?null:d.toISOString();
+}
 function _nlResetFechaContacto(){
   const el=document.getElementById('nl-fecha-contacto');
   if(!el)return;
-  const hoy=ymdBolivia(new Date());
-  el.max=hoy; el.value=hoy;
+  const ahora=_dtLocalBolivia(new Date());
+  el.max=ahora; el.value=ahora;
 }
 /* Días entre el contacto real del cliente y la carga del lead en el CRM.
    0 (o null si falta el dato) cuando se cargó el mismo día. */
 function _leadDemoraCarga(l){
   if(!l||!l.fecha_contacto_real||!l.created_at)return null;
+  const ts=_tsContacto(l.fecha_contacto_real);
+  if(!ts)return null;
+  /* v186 — la demora se sigue midiendo en DÍAS calendario bolivianos, no en
+     horas: un contacto del sábado 23:00 cargado el domingo 01:00 son 2 horas
+     pero 1 día de demora, y lo que importa acá es el día. */
   const carga=ymdBolivia(new Date(l.created_at));
-  if(l.fecha_contacto_real===carga)return 0;
-  const d=Math.round((new Date(carga+'T00:00:00-04:00')-new Date(l.fecha_contacto_real+'T00:00:00-04:00'))/86400000);
+  const contacto=ymdBolivia(ts);
+  if(contacto===carga)return 0;
+  const d=Math.round((new Date(carga+'T00:00:00-04:00')-new Date(contacto+'T00:00:00-04:00'))/86400000);
   return isNaN(d)?null:d;
 }
 /* Fila "Te contactó" de la ficha. Solo aparece cuando el cliente contactó un día
@@ -1936,16 +1979,23 @@ function _leadDemoraCarga(l){
 function _leadContactoRealHtml(l){
   const d=_leadDemoraCarga(l);
   if(d==null||d<=0)return'';
-  return '<dt>📆 Te contactó</dt><dd>'+fmt(l.fecha_contacto_real+'T00:00:00-04:00')+
+  // v186 — con hora: es el dato que permite medir el tiempo de respuesta real
+  return '<dt>📆 Te contactó</dt><dd>'+fmtDT(_tsContacto(l.fecha_contacto_real))+
     ' <span style="font-size:10px;color:var(--gold)">cargado '+d+' día'+(d===1?'':'s')+' después</span></dd>';
 }
 /* Devuelve {fecha,error}: la fecha elegida, o hoy si el campo está vacío. */
+/* Devuelve {ts,ymd,error}. `ts` es el instante UTC que va a fecha_contacto_real
+   (timestamptz) y `ymd` el día boliviano, que es lo que sigue esperando
+   ultima_gestion — esa columna quedó como `date` a propósito.
+   v186: el tope contra futuro compara el instante completo, no solo el día: sin
+   eso alcanzaba con tipear la hora de esta noche para pasar el control. */
 function _nlFechaContacto(){
-  const hoy=ymdBolivia(new Date());
+  const ahoraLocal=_dtLocalBolivia(new Date());
   const v=(document.getElementById('nl-fecha-contacto')?.value||'').trim();
-  if(!v)return{fecha:hoy,error:null};
-  if(v>hoy)return{fecha:hoy,error:'La fecha de contacto no puede ser futura'};
-  return{fecha:v,error:null};
+  const _ret=(loc)=>({ts:_dtBoliviaToIso(loc),ymd:loc.slice(0,10),error:null});
+  if(!v)return _ret(ahoraLocal);
+  if(v>ahoraLocal)return Object.assign(_ret(ahoraLocal),{error:'La fecha y hora de contacto no pueden ser futuras'});
+  return _ret(v);
 }
 function getMonday(d){
   const dt=new Date(d);
@@ -3572,7 +3622,7 @@ async function openLeadDetail(leadId,agendaId,mode){
         <div class="section-title">Línea de tiempo completa</div>
         <div class="timeline">
           ${_leadDemoraCarga(lead)>0?`<div class="timeline-item creation">
-            <div class="timeline-date">${fmt(lead.fecha_contacto_real+'T00:00:00-04:00')}</div>
+            <div class="timeline-date">${fmtDT(_tsContacto(lead.fecha_contacto_real))}</div>
             <div class="timeline-text">📆 El cliente contactó</div>
             <div class="timeline-note">Cargado en el CRM ${_leadDemoraCarga(lead)} día${_leadDemoraCarga(lead)===1?'':'s'} después</div>
           </div>`:''}
@@ -6163,8 +6213,8 @@ async function saveLead(){
       /* ultima_gestion arranca en la fecha REAL de contacto, no en la de carga:
          un lead que escribió el sábado y se carga el lunes ya lleva 2 días
          esperando, y así lo cuenta leadDiasSinGestion(). */
-      ultima_gestion:_fc.fecha,
-      fecha_contacto_real:_fc.fecha,
+      ultima_gestion:_fc.ymd,      // columna `date`: va el día boliviano
+      fecha_contacto_real:_fc.ts,  // v186 timestamptz: instante UTC
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -6268,7 +6318,7 @@ async function saveLeadPerdido(){
          trabaja), pero la fecha real de contacto y la gestión sí se registran
          para que el CPL y el tiempo de respuesta lo cuenten. */
       ultima_gestion:ymdBolivia(new Date()),
-      fecha_contacto_real:_fcp.fecha,
+      fecha_contacto_real:_fcp.ts, // v186 timestamptz
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id').single();
     if(error)throw error;
@@ -7782,7 +7832,9 @@ async function _grabCrearLeadDirecto(id){
          grabación: el registro puede cargarse días después de la llamada. */
       proximo_contacto:ymdBolivia(new Date()),
       ultima_gestion:ymdBolivia(g.created_at||new Date()),
-      fecha_contacto_real:ymdBolivia(g.created_at||new Date()),
+      /* v186 — timestamptz: se guarda el instante exacto de la grabación, no
+         su día pelado, que es lo que permite medir el tiempo de respuesta. */
+      fecha_contacto_real:new Date(g.created_at||new Date()).toISOString(),
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
