@@ -211,6 +211,12 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .week-day.today .week-day-num{color:var(--gold)}
 .week-day.today .week-day-header{background:rgba(242,197,0,0.08)}
 .day-count{font-size:9px;color:var(--gold);margin-top:2px;font-weight:700}
+/* v183 — contador de carga por día (umbral 20 = tope de una jornada) */
+.day-count-pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:11px;margin-top:2px}
+.day-count-ok{color:#1D9E75;background:rgba(29,158,117,.14)}
+.day-count-over{color:#E24B4A;background:rgba(226,75,74,.14)}
+.day-count-none{display:inline-block;font-size:11px;font-weight:700;color:#5F5E58;margin-top:2px}
+.day-count-warn{color:#E24B4A;font-size:10px;font-weight:700;letter-spacing:.3px;margin-top:2px}
 .week-day-body{padding:6px 5px;flex:1;display:flex;flex-direction:column;gap:5px;overflow-y:auto}
 .week-day-empty{display:flex;align-items:center;justify-content:center;flex:1;color:var(--gray-600);font-size:11px}
 
@@ -1651,7 +1657,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='182';
+  var CURRENT_VERSION='183';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2588,6 +2594,15 @@ function estadoBorderColor(estado){
     default: return '';
   }
 }
+/* v183 — píldora de carga por día. Verde 1-20, rojo >20 (+SOBRECARGADO), gris si 0.
+   20 es el máximo de actividades que puede trabajar una persona en una jornada. */
+const DAY_LOAD_MAX=20;
+function dayCountPill(n){
+  if(!n) return '<div class="day-count-none">Sin actividades</div>';
+  const over=n>DAY_LOAD_MAX;
+  return '<div class="day-count-pill '+(over?'day-count-over':'day-count-ok')+'">'+n+' actividad'+(n!==1?'es':'')+'</div>'+
+         (over?'<div class="day-count-warn">SOBRECARGADO</div>':'');
+}
 async function renderWeek(){
   const weekEnd=addDays(currentWeekStart,7);
   const lbl=document.getElementById('week-label');
@@ -2648,7 +2663,7 @@ async function renderWeek(){
       <div class="week-day-header">
         <div class="week-day-name">${days[i]}${isToday?' · HOY':''}</div>
         <div class="week-day-num">${day.getDate()}</div>
-        <div class="day-count">${dayItems.length} actividad${dayItems.length!==1?'es':''}</div>
+        ${dayCountPill(dayItems.length)}
       </div>
       <div class="week-day-body">
         ${dayItems.length===0?'<div class="week-day-empty">—</div>':dayItems.map(a=>renderCard(a,now)).join('')}
@@ -2769,7 +2784,9 @@ async function renderMonth(){
     const dateStr=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dayActs=byDay[dateStr]||[];
     const isToday=dateStr===today;
-    const countBadge=dayActs.length?`<span class="month-cell-count">${dayActs.length}</span>`:'';
+    /* v183 — misma semántica de carga que la vista semanal */
+    const countBadge=dayActs.length?`<span class="day-count-pill ${dayActs.length>DAY_LOAD_MAX?'day-count-over':'day-count-ok'}">${dayActs.length}</span>`:'';
+    const overBadge=dayActs.length>DAY_LOAD_MAX?'<div class="day-count-warn">SOBRECARGADO</div>':'';
     const preview=dayActs.slice(0,2).map(a=>{
       const cls=estadoClass(a.tipo);
       const col=itemsSeg.find(s=>s.nombre===a.tipo);
@@ -2780,6 +2797,7 @@ async function renderMonth(){
     }).join('');
     html+=`<div class="month-cell${isToday?' today':''}" onclick="navWeekToDay('${dateStr}')">
       <div class="month-cell-num">${d}${countBadge}</div>
+      ${overBadge}
       ${preview}
     </div>`;
   }
