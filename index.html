@@ -1261,12 +1261,22 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Medio de difusión</label>
-            <select class="form-control" id="nl-medio"></select>
+            <select class="form-control" id="nl-medio" onchange="_nlCampanaToggle()"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Captador</label>
             <input class="form-control readonly" type="text" id="nl-captador" readonly>
             <select class="form-control" id="nl-captador-sel" style="display:none"></select>
+          </div>
+        </div>
+        <!-- v185 — solo aparece con medios pagos/redes. Select cerrado a propósito:
+             con texto libre se llena de "plaza paraiso"/"Plaza Paraíso"/"paraiso"
+             y el conteo por campaña vuelve a ser inservible. -->
+        <div class="form-row" id="nl-campana-row" style="display:none">
+          <div class="form-group">
+            <label class="form-label">📣 Campaña</label>
+            <select class="form-control" id="nl-campana"></select>
+            <div class="form-help">El nombre es el mismo que figura en Meta. Si la campaña no está en la lista, pedile al admin que la cargue — no la anotes en la nota.</div>
           </div>
         </div>
         <div class="form-row">
@@ -1657,7 +1667,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='184';
+  var CURRENT_VERSION='185';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1743,6 +1753,12 @@ let itemsSeg=[];
 let motivosPerdida=[];
 let motivosGanado=[];
 let mediosDifusion=[];
+/* v185 — CAMPAÑA DE ORIGEN. 316 de 329 leads del último mes cayeron en
+   medio_difusion='Facebook GEAT': un solo balde donde no se puede saber qué
+   pauta trajo qué. El nombre debe coincidir EXACTO con el de Meta para poder
+   comparar CRM vs Meta lado a lado, por eso el alta usa <select> cerrado y el
+   alta libre de nombres vive solo en el panel de Admin. */
+let campanas=[];
 let departamentos=[];
 let agendaData=[];
 let currentWeekStart=getMonday(new Date());
@@ -1829,6 +1845,73 @@ function leadDiasSinGestion(l){
   const ref=(l&&l.ultima_gestion)?new Date(l.ultima_gestion+'T00:00:00-04:00'):leadFechaContacto(l);
   if(!ref||isNaN(ref.getTime()))return null;
   return Math.max(0,Math.floor((Date.now()-ref.getTime())/86400000));
+}
+/* ── v185 · CAMPAÑA DE ORIGEN ─────────────────────────────────────────────
+   Nombre de campaña -> id, resolviendo contra el catálogo cacheado. */
+function campanaNombre(id){
+  if(!id)return null;
+  const c=(campanas||[]).find(x=>String(x.id)===String(id));
+  return c?c.nombre:null;
+}
+/* ¿El medio elegido es pauta/red social? Solo ahí tiene sentido pedir campaña:
+   un referido o un barrido no vienen de una pauta. Se decide por el `grupo` del
+   catálogo medios_difusion ('Facebook' y 'Redes sociales'), no por el nombre,
+   así una cuenta nueva ("Facebook Steffi") queda incluida sin tocar código. */
+function _medioEsCampana(nombreMedio){
+  if(!nombreMedio)return false;
+  const m=(mediosDifusion||[]).find(x=>x.nombre===nombreMedio);
+  const g=(m&&m.grupo||'').toLowerCase();
+  return g==='facebook'||g==='redes sociales';
+}
+/* Muestra u oculta el select de campaña según el medio. Al ocultarlo limpia el
+   valor: si no, un cambio de medio dejaba pegada la campaña anterior. */
+function _nlCampanaToggle(){
+  const row=document.getElementById('nl-campana-row');
+  const sel=document.getElementById('nl-campana');
+  if(!row||!sel)return;
+  const medio=document.getElementById('nl-medio')?.value||'';
+  const mostrar=_medioEsCampana(medio);
+  row.style.display=mostrar?'':'none';
+  if(!mostrar)sel.value='';
+}
+/* Opciones del alta: SOLO activas. Las inactivas siguen existiendo para los
+   leads históricos, pero no se ofrecen para cargar nuevos. */
+function _poblarCampanaSelect(){
+  const sel=document.getElementById('nl-campana');
+  if(!sel)return;
+  const activas=(campanas||[]).filter(c=>c.activa);
+  sel.innerHTML='<option value="">— Sin campaña —</option>'+
+    activas.map(c=>'<option value="'+c.id+'">'+_escPend(c.nombre)+'</option>').join('');
+  if(!activas.length){
+    sel.innerHTML='<option value="">— No hay campañas cargadas —</option>';
+  }
+}
+/* Fila "Campaña" de la ficha. No se muestra si el lead no tiene campaña: la
+   enorme mayoría de los históricos no la tiene y una fila con "—" en cada ficha
+   solo ensucia. Si la campaña quedó inactiva se sigue mostrando, aclarándolo. */
+/* ¿El lead llegó a la fase de visita? Se mira el estado y, como respaldo, la
+   etapa: un lead que visitó y después se perdió queda en estado cerrado_perdido
+   pero conserva la etapa 'Visita ...'. Sin ese respaldo, toda campaña que
+   generó visitas y no cerró aparecería con 0 visitas. */
+function _leadLlegoAVisita(l){
+  if(!l)return false;
+  if(['visita_agendada','visita_realizada','reservado','cerrado_ganado'].includes(l.estado))return true;
+  return /visita/i.test(l.etapa||'');
+}
+function _leadCampanaHtml(l){
+  const nom=campanaNombre(l&&l.campana_id);
+  if(!nom)return'';
+  const c=(campanas||[]).find(x=>String(x.id)===String(l.campana_id));
+  const off=(c&&!c.activa)?' <span style="font-size:10px;color:var(--gray-400)">(pausada)</span>':'';
+  return '<dt>📣 Campaña</dt><dd>'+_escPend(nom)+off+'</dd>';
+}
+/* Campaña elegida en el alta. Devuelve null si el campo está oculto (medio que
+   no es pauta) o si no se eligió ninguna: campana_id es opcional siempre. */
+function _nlCampanaId(){
+  const medio=document.getElementById('nl-medio')?.value||'';
+  if(!_medioEsCampana(medio))return null;
+  const v=(document.getElementById('nl-campana')?.value||'').trim();
+  return v?parseInt(v,10):null;
 }
 /* Campo "¿Cuándo te contactó?" del alta: hoy por defecto, editable hacia atrás.
    El max lo pone el navegador; el tope duro va igual en el guardado porque el
@@ -2442,18 +2525,23 @@ function attachPickerListeners(){
 
 async function loadCatalogs(){
   try{
-    const[seg,mPerd,mGan,medios,deptos]=await Promise.all([
+    const[seg,mPerd,mGan,medios,deptos,camp]=await Promise.all([
       sb.from('items_seguimiento').select('*').order('orden'),
       sb.from('motivos_perdida').select('*').order('nombre'),
       sb.from('motivos_ganado').select('*').order('nombre'),
       sb.from('medios_difusion').select('*').order('grupo,nombre'),
-      sb.from('departamentos_bolivia').select('*').order('grupo,nombre')
+      sb.from('departamentos_bolivia').select('*').order('grupo,nombre'),
+      /* v185 — se traen TODAS (activas e inactivas): el alta ofrece solo las
+         activas, pero la ficha y los reportes tienen que poder nombrar la
+         campaña de un lead histórico aunque la pauta ya se haya cortado. */
+      sb.from('campanas').select('id,nombre,plataforma,activa').order('nombre')
     ]);
     itemsSeg=seg.data||[];
     motivosPerdida=mPerd.data||[];
     motivosGanado=mGan.data||[];
     mediosDifusion=medios.data||[];
     departamentos=deptos.data||[];
+    campanas=camp.data||[];
     populateCatalogSelects();
   }catch(e){console.error('catalogs:',e);}
 }
@@ -2490,6 +2578,9 @@ function populateCatalogSelects(){
   // Medios difusion en crear lead
   const nlMedio=document.getElementById('nl-medio');
   nlMedio.innerHTML='<option value="">— Seleccionar —</option>'+mediosDifusion.map(m=>`<option value="${m.nombre}">${m.nombre}</option>`).join('');
+  // v185 — campañas del alta (solo activas) + estado inicial oculto del campo
+  _poblarCampanaSelect();
+  _nlCampanaToggle();
   // Departamentos en crear lead
   const nlCiudad=document.getElementById('nl-ciudad');
   let groups={};
@@ -2938,8 +3029,8 @@ async function renderReports(){
   const _trendDesde=new Date(_hoy.getFullYear(),_hoy.getMonth()-5,1).toISOString();
   // monto_contrato solo lo fetcha admin (campo no se usa en UI de commercial_lead)
   const _leadsSelect=esAdmin
-    ?'id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at'
-    :'id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,motivo_perdida,created_at';
+    ?'id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,created_at'
+    :'id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,created_at';
   const[rLeads,rActs,rTrend,rVentas]=await Promise.all([
     sb.from('leads').select(_leadsSelect).gte('created_at',rng.desde).lt('created_at',rng.hasta),
     sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta),
@@ -3010,6 +3101,24 @@ async function renderReports(){
   });
   const topMedios=Object.entries(byMedio).sort((a,b)=>b[1]-a[1]).slice(0,6);
 
+  /* v185 — desglose por campaña. El conteo solo no alcanza: una campaña puede
+     traer volumen y cero calidad, así que se muestra cuántos de esos leads
+     llegaron a VISITA y cuántos a CIERRE, con su tasa. */
+  const byCamp={};
+  leads.forEach(l=>{
+    const key=l.campana_id||'__sin__';
+    if(!byCamp[key])byCamp[key]={n:0,visitas:0,cierres:0};
+    byCamp[key].n++;
+    if(_leadLlegoAVisita(l))byCamp[key].visitas++;
+    if(l.estado==='cerrado_ganado')byCamp[key].cierres++;
+  });
+  const campRows=Object.entries(byCamp).map(([k,v])=>({
+    nombre:k==='__sin__'?'— Sin campaña —':(campanaNombre(k)||'Campaña #'+k),
+    sinCampana:k==='__sin__',
+    ...v,
+    pct:leads.length?Math.round(v.n/leads.length*100):0
+  })).sort((a,b)=>b.n-a.n);
+
   body.innerHTML=`
     <div class="reports-grid">
       <div class="section">
@@ -3073,6 +3182,26 @@ async function renderReports(){
           <button class="btn-ghost" style="font-size:11px" onclick="verReporteMedio()">🔍 Ver Reporte por Medio</button>
         </div>
       </div>
+    </div>
+    <!-- v185 — Campaña de origen. Va a ancho completo y no dentro de la grilla
+         porque son 5 columnas: sin esto no hay CPL por campaña ni forma de
+         decidir qué pauta escalar o cortar. -->
+    <div class="section" style="margin-top:14px">
+      <div class="section-title">📣 Campaña de origen</div>
+      ${campRows.length===0?'<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin leads en el período.</div>':`
+      <table class="team-table">
+        <thead><tr><th>Campaña</th><th class="num">Leads</th><th class="num">% del total</th><th class="num">Visitas</th><th class="num">Cierres</th></tr></thead>
+        <tbody>
+          ${campRows.map(r=>`<tr${r.sinCampana?' style="color:var(--gray-400)"':''}>
+            <td>${r.sinCampana?r.nombre:'<strong>'+_escPend(r.nombre)+'</strong>'}</td>
+            <td class="num">${r.n}</td>
+            <td class="num">${r.pct}%</td>
+            <td class="num">${r.visitas}${r.n?' <span style="font-size:10px;color:var(--gray-400)">('+Math.round(r.visitas/r.n*100)+'%)</span>':''}</td>
+            <td class="num">${r.cierres}${r.n?' <span style="font-size:10px;color:var(--gray-400)">('+Math.round(r.cierres/r.n*100)+'%)</span>':''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+      <div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los nombres son los mismos que en Meta, para poder comparar lado a lado. Los leads cargados antes de v185 no tienen campaña: caen en “Sin campaña”.</div>
     </div>
     <div class="section" style="margin-top:14px">
       <div class="section-title">📈 Tendencia mensual de leads (últimos 6 meses)</div>
@@ -3405,6 +3534,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
           <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
+          ${_leadCampanaHtml(lead)}
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
           <dt>Correo</dt><dd>${lead.correo?`${lead.correo} <a class="btn-ghost" style="text-decoration:none;font-size:10px;padding:2px 8px;margin-left:4px" href="mailto:${lead.correo}">📧 Enviar email</a>`:'—'}</dd>
           <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${cu&&lead.cerrador===cu.nombre?' <span style="font-size:10px;color:var(--st-completo);font-weight:700">(sos vos)</span>':''}${_soyCerrador()&&_leadTomable(lead)&&lead.cerrador!==cu.nombre?` <button class="btn-primary" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="tomarComoCerrador(${lead.id})">🤝 ${lead.cerrador?'Tomarlo yo':'Tomar como cerrador'}</button>`:''}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Cambiar cerrador':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
@@ -3449,7 +3579,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <div class="timeline-item creation">
             <div class="timeline-date">${fmtDT(lead.created_at)}</div>
             <div class="timeline-text">🆕 Lead creado</div>
-            <div class="timeline-note">Medio: ${lead.medio_difusion||lead.canal||'—'}</div>
+            <div class="timeline-note">Medio: ${lead.medio_difusion||lead.canal||'—'}${campanaNombre(lead.campana_id)?' · 📣 '+_escPend(campanaNombre(lead.campana_id)):''}</div>
           </div>
           ${history.map(h=>{
             const isNext=h.id===agendaId&&!h.completada;
@@ -3712,6 +3842,7 @@ function renderViajeCliente(lead,segs,history){
       <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
       <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
       <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
+      ${_leadCampanaHtml(lead)}
       <dt>Registrado</dt><dd>${fmt(lead.created_at)} por ${lead.captador||'—'}</dd>
       <dt>Etapa actual</dt><dd><span class="badge-fase">${lead.etapa||'—'}</span></dd>
       <dt>Días en pipeline</dt><dd>${diasEnPipeline} día${diasEnPipeline!==1?'s':''}</dd>
@@ -6019,6 +6150,7 @@ async function saveLead(){
   try{
     const{data:newLead,error:e1}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
+      campana_id:_nlCampanaId(), // v185
       notas:nota,estado:'nuevo',etapa:'1er intento',cliente_mujer:clienteMujer,
       grado_interes:gradoInteres,correo:correoRaw||null,
       metodo_pago:metodoPagoExtra,banco_preferido:bancoExtra,
@@ -6130,6 +6262,7 @@ async function saveLeadPerdido(){
     if(dup&&dup.length){toast('Número ya registrado','error');return;}
     const{data:newLead,error}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
+      campana_id:_nlCampanaId(), // v185
       estado:'cerrado_perdido',motivo_perdida:motivo,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
@@ -6283,9 +6416,13 @@ async function execSearch(q){
     `notas.ilike.%${query}%`
   ];
   if(esAdmin) orParts.push(`captador.ilike.%${query}%`);
+  /* v185 — buscar por campaña. El nombre vive en otra tabla, así que se resuelve
+     contra el catálogo cacheado y se filtra por id: exacto y sin join. */
+  const _campIds=(campanas||[]).filter(c=>(c.nombre||'').toLowerCase().includes(query.toLowerCase())).map(c=>c.id);
+  if(_campIds.length) orParts.push(`campana_id.in.(${_campIds.join(',')})`);
 
   let dbQuery=sb.from('leads')
-    .select('id,nombre,celular,ciudad,captador,estado,etapa,medio_difusion,notas')
+    .select('id,nombre,celular,ciudad,captador,estado,etapa,medio_difusion,notas,campana_id')
     .or(orParts.join(','))
     .order('created_at',{ascending:false})
     .limit(30);
@@ -6327,6 +6464,7 @@ async function execSearch(q){
     if(l.celular?.includes(query))matches.push('celular');
     if(l.ciudad?.toLowerCase().includes(q_lc))matches.push('ciudad');
     if(l.medio_difusion?.toLowerCase().includes(q_lc))matches.push('medio');
+    if(campanaNombre(l.campana_id)?.toLowerCase().includes(q_lc))matches.push('campaña');
     if(l.captador?.toLowerCase().includes(q_lc))matches.push('captador');
     if(l.notas?.toLowerCase().includes(q_lc))matches.push('nota');
     const matchTag=matches.length?`<span class="match-tag">por: ${matches.join(', ')}</span>`:'';
@@ -6337,7 +6475,7 @@ async function execSearch(q){
     return `<div class="search-result-item" ${action}>
       <div>
         <div class="sr-name">${l.nombre||'—'}${matchTag}</div>
-        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${l.ciudad||'—'}</div>
+        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${l.ciudad||'—'}${campanaNombre(l.campana_id)?' · 📣 '+_escPend(campanaNombre(l.campana_id)):''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;white-space:nowrap">
         <span class="sr-status ${cls}">${lbl}</span>
@@ -6894,6 +7032,35 @@ async function renderAdmin(){
       <div id="motivos-ia-resultados" style="margin-top:10px"></div>
     </div>
 
+    <!-- 📣 Campañas (v185) — ABM solo admin. El nombre se escribe UNA vez acá,
+         copiado de Meta; las captadoras solo eligen de la lista. -->
+    <div class="admin-section">
+      <div class="admin-section-title">📣 Campañas de origen (<span id="camp-count">${(campanas||[]).length}</span>)</div>
+      <div style="background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div id="camp-form-title" style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">➕ Nueva campaña</div>
+        <input type="hidden" id="camp-edit-id" value="">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+          <div style="flex:2;min-width:200px">
+            <label class="form-label" style="font-size:10px">Nombre EXACTO como figura en Meta</label>
+            <input id="camp-nombre" class="form-control" type="text" placeholder="Ej: SCZ_Plaza_Paraiso" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:130px">
+            <label class="form-label" style="font-size:10px">Plataforma</label>
+            <select id="camp-plataforma" class="form-control">
+              <option>Facebook Ads</option>
+              <option>Instagram Ads</option>
+              <option>TikTok Ads</option>
+              <option>Orgánico</option>
+            </select>
+          </div>
+          <button type="button" class="btn-primary" style="font-size:11px" onclick="guardarCampana()">💾 Guardar</button>
+          <button type="button" class="btn-ghost" style="font-size:11px" onclick="cancelarEdicionCampana()">Cancelar</button>
+        </div>
+        <div class="form-help" style="margin-top:8px">Copiá y pegá el nombre desde Meta sin cambiarle nada. Si no coincide carácter por carácter no vas a poder comparar CRM contra Meta.</div>
+      </div>
+      <div id="camp-lista"></div>
+    </div>
+
     <!-- 👥 Gestión de Usuarios -->
     <div class="admin-section">
       <div class="admin-section-title">👥 Gestión de Usuarios (${usuarios.length})</div>
@@ -7010,10 +7177,100 @@ async function renderAdmin(){
 
     _pendTab(_pendTabActiva);
     renderRegistroGrabaciones();
+    renderCampanasLista(); // v185
 
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';
   }
+}
+
+/* ════════════════════════════════════════
+   CAMPAÑAS DE ORIGEN (v185) — ABM solo admin
+   Desactivar NO borra: la campaña deja de ofrecerse en el alta pero los leads
+   históricos conservan la suya, si no se perdería el CPL del período pasado.
+════════════════════════════════════════ */
+async function recargarCampanas(){
+  const{data,error}=await sb.from('campanas').select('id,nombre,plataforma,activa').order('nombre');
+  if(error){toast('Error cargando campañas: '+error.message,'error');return;}
+  campanas=data||[];
+  _poblarCampanaSelect();
+  _nlCampanaToggle();
+}
+function renderCampanasLista(){
+  const cont=document.getElementById('camp-lista');
+  if(!cont)return;
+  const cnt=document.getElementById('camp-count');
+  if(cnt)cnt.textContent=(campanas||[]).length;
+  if(!(campanas||[]).length){
+    cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Todavía no hay campañas cargadas. Copiá los nombres desde Meta y agregalas arriba — hasta que exista al menos una, el campo "Campaña" del alta aparece vacío.</div>';
+    return;
+  }
+  /* activas primero, después las pausadas en gris — mismo criterio que usuarios */
+  const ord=campanas.slice().sort((a,b)=>((b.activa?1:0)-(a.activa?1:0))||String(a.nombre||'').localeCompare(String(b.nombre||'')));
+  cont.innerHTML='<table class="team-table"><thead><tr><th>Campaña</th><th>Plataforma</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    ord.map(c=>'<tr'+(c.activa?'':' style="opacity:.5"')+'>'+
+      '<td><strong>'+_escPend(c.nombre)+'</strong></td>'+
+      '<td style="font-size:11px">'+_escPend(c.plataforma||'—')+'</td>'+
+      '<td style="font-size:11px">'+(c.activa?'<span style="color:var(--st-completo);font-weight:700">Activa</span>':'<span style="color:var(--gray-400)">Pausada</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn-ghost" style="font-size:10px;padding:2px 8px" onclick="editarCampana('+c.id+')">✏️ Renombrar</button> '+
+        '<button class="btn-ghost" style="font-size:10px;padding:2px 8px" onclick="toggleCampana('+c.id+')">'+(c.activa?'⏸️ Pausar':'▶️ Activar')+'</button>'+
+      '</td></tr>').join('')+
+    '</tbody></table>';
+}
+function editarCampana(id){
+  const c=(campanas||[]).find(x=>String(x.id)===String(id));
+  if(!c)return;
+  document.getElementById('camp-edit-id').value=c.id;
+  document.getElementById('camp-nombre').value=c.nombre||'';
+  document.getElementById('camp-plataforma').value=c.plataforma||'Facebook Ads';
+  document.getElementById('camp-form-title').textContent='✏️ Renombrar campaña';
+  document.getElementById('camp-nombre').focus();
+}
+function cancelarEdicionCampana(){
+  document.getElementById('camp-edit-id').value='';
+  document.getElementById('camp-nombre').value='';
+  document.getElementById('camp-form-title').textContent='➕ Nueva campaña';
+}
+async function guardarCampana(){
+  if(!cu||cu.rol!=='admin'){toast('Solo el admin puede administrar campañas','error');return;}
+  const nombre=(document.getElementById('camp-nombre')?.value||'').trim();
+  const plataforma=document.getElementById('camp-plataforma')?.value||'Facebook Ads';
+  const id=(document.getElementById('camp-edit-id')?.value||'').trim();
+  if(!nombre){toast('Escribí el nombre de la campaña','error');return;}
+  try{
+    if(id){
+      const{error}=await sb.from('campanas').update({nombre,plataforma}).eq('id',id);
+      if(error)throw error;
+      toast('✅ Campaña actualizada','ok');
+    }else{
+      const{error}=await sb.from('campanas').insert({nombre,plataforma,activa:true});
+      if(error)throw error;
+      toast('✅ Campaña creada','ok');
+    }
+    cancelarEdicionCampana();
+    await recargarCampanas();
+    renderCampanasLista();
+    try{registrarAuditoria(id?'editar_campana':'crear_campana','campanas',id?parseInt(id,10):null,{nombre});}catch(e){}
+  }catch(e){
+    /* 23505 = choca con el índice único lower(trim(nombre)): es justamente lo que
+       evita que "Plaza Paraiso" y "plaza paraiso" convivan como dos campañas. */
+    if(e.code==='23505'){toast('Ya existe una campaña con ese nombre','error');}
+    else toast('Error: '+e.message,'error');
+  }
+}
+async function toggleCampana(id){
+  if(!cu||cu.rol!=='admin'){toast('Solo el admin puede administrar campañas','error');return;}
+  const c=(campanas||[]).find(x=>String(x.id)===String(id));
+  if(!c)return;
+  try{
+    const{error}=await sb.from('campanas').update({activa:!c.activa}).eq('id',id);
+    if(error)throw error;
+    await recargarCampanas();
+    renderCampanasLista();
+    toast(c.activa?'Campaña pausada — no se ofrece más en el alta':'Campaña activada','ok');
+    try{registrarAuditoria('toggle_campana','campanas',parseInt(id,10),{activa:!c.activa});}catch(e){}
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* ════════════════════════════════════════
