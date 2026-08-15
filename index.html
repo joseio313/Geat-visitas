@@ -1670,7 +1670,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='191';
+  var CURRENT_VERSION='192';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3417,13 +3417,18 @@ async function renderReports(){
 const _CIUDADES_PLENA=['santa cruz','santa cruz de la sierra','scz','montero',
   'warnes','cotoca','la guardia','el torno','porongo','mineros','minero',
   'portachuelo','okinawa','general saavedra','saavedra','buena vista','san carlos'];
-const _CIUDADES_CONDICIONAL=['yapacani','pailon','san julian','san ignacio',
-  'san jose','san jose de chiquitos','ascension de guarayos','camiri','vallegrande',
-  'concepcion','puerto suarez','moro moro'];
+/* v192 — corregida por el CEO: solo estas tres son condicionales. Las otras 8
+   que había puesto yo (San Ignacio, San José, Puerto Suárez, Camiri,
+   Vallegrande, Concepción, Ascensión de Guarayos, Moro Moro) NO se construyen y
+   pasaron a _CIUDADES_FUERA. */
+const _CIUDADES_CONDICIONAL=['yapacani','pailon','san julian'];
 const _CIUDADES_FUERA=['la paz','el alto','cochabamba','sucre','oruro','potosi',
   'tarija','trinidad','beni','pando','cobija','yacuiba','bermejo','tupiza',
   'llallagua','villa tunari','ivirgazama','bulo bulo','entre rios','sacaba',
-  'quillacollo','vinto','sinahota','el paso'];
+  'quillacollo','vinto','sinahota','el paso',
+  /* v192 — bajadas de condicional: no se construye */
+  'san ignacio','san jose','san jose de chiquitos','puerto suarez','camiri',
+  'vallegrande','concepcion','ascension de guarayos','moro moro'];
 /* Normaliza la ciudad para comparar. _cvNorm baja a minúsculas y saca acentos
    pero NO colapsa los espacios internos: sin ese collapse, "Santa  Cruz" (con
    doble espacio, 1.481 leads en la base) no matcheaba y caía en fuera de
