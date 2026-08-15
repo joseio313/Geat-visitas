@@ -1670,7 +1670,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='190';
+  var CURRENT_VERSION='191';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3406,20 +3406,61 @@ async function renderReports(){
   _renderCiudades();
 }
 
-/* ── v190 · CIUDAD EN REPORTES ────────────────────────────────────────────
-   Entran leads de Cochabamba y Tarija que no se atienden y se pagan igual, y
-   hasta ahora no había forma de verlo ni de cruzarlo con la campaña que los
-   trajo. Cobertura = Santa Cruz y alrededores.
-   La lista está en un solo lugar y a propósito: corregirla no toca la lógica.
-   Ciudad vacía queda "sin dato", que NO es lo mismo que fuera de cobertura —
-   hoy son 103 de 151 leads del mes y meterlos en "fuera" sería inventar. */
-const _CIUDADES_COBERTURA=['santa cruz','santa cruz de la sierra','scz','montero',
-  'warnes','cotoca','la guardia','el torno','porongo','mineros','portachuelo',
-  'okinawa','general saavedra','buena vista','san carlos','yapacani','pailon'];
+/* ── v191 · ZONAS DE COBERTURA ────────────────────────────────────────────
+   Tres zonas, no dos. La binaria de v190 no reflejaba el negocio: Yapacaní y
+   Pailón se atienden, pero SOLO en proyectos grandes y de precio alto. En
+   "plena" hacían parecer normal un lead que casi nunca lo es; en "fuera"
+   descartaban proyectos que sí interesan.
+   Las tres listas van separadas y a la vista para corregirlas sin tocar lógica.
+   Ciudad vacía queda "sin dato", que NO es lo mismo que fuera de cobertura:
+   es un dato que falta, no un lead descartable. */
+const _CIUDADES_PLENA=['santa cruz','santa cruz de la sierra','scz','montero',
+  'warnes','cotoca','la guardia','el torno','porongo','mineros','minero',
+  'portachuelo','okinawa','general saavedra','saavedra','buena vista','san carlos'];
+const _CIUDADES_CONDICIONAL=['yapacani','pailon','san julian','san ignacio',
+  'san jose','san jose de chiquitos','ascension de guarayos','camiri','vallegrande',
+  'concepcion','puerto suarez','moro moro'];
+const _CIUDADES_FUERA=['la paz','el alto','cochabamba','sucre','oruro','potosi',
+  'tarija','trinidad','beni','pando','cobija','yacuiba','bermejo','tupiza',
+  'llallagua','villa tunari','ivirgazama','bulo bulo','entre rios','sacaba',
+  'quillacollo','vinto','sinahota','el paso'];
+/* Normaliza la ciudad para comparar. _cvNorm baja a minúsculas y saca acentos
+   pero NO colapsa los espacios internos: sin ese collapse, "Santa  Cruz" (con
+   doble espacio, 1.481 leads en la base) no matcheaba y caía en fuera de
+   cobertura. También parte el formato "Departamento - Ciudad" (88 leads), que
+   se compara por la parte más específica primero. */
+function _ciudadNorm(c){
+  return _cvNorm(c||'').replace(/\s+/g,' ').trim();
+}
+function _ciudadPartes(c){
+  const s=_ciudadNorm(c);
+  if(!s)return[];
+  const p=s.split(/\s*-\s*/).map(function(x){return x.trim();}).filter(Boolean);
+  /* la parte más específica manda: "santa cruz - yacuiba" es Yacuiba, no Santa Cruz */
+  return p.length>1?p.slice(1).concat(p[0],s):[s];
+}
 function _zonaCiudad(c){
-  const s=_cvNorm(c||'').trim();
-  if(!s)return 'sin_dato';
-  return _CIUDADES_COBERTURA.indexOf(s)>=0?'dentro':'fuera';
+  const partes=_ciudadPartes(c);
+  if(!partes.length)return 'sin_dato';
+  for(let i=0;i<partes.length;i++){
+    const p=partes[i];
+    if(_CIUDADES_CONDICIONAL.indexOf(p)>=0)return 'condicional';
+    if(_CIUDADES_FUERA.indexOf(p)>=0)return 'fuera';
+    if(_CIUDADES_PLENA.indexOf(p)>=0)return 'plena';
+  }
+  return 'fuera';
+}
+const _ZONA_INFO={
+  plena      :{label:'Cobertura plena',      color:'var(--st-completo)',marca:''},
+  condicional:{label:'Cobertura condicional',color:'var(--gold)',       marca:' <span style="font-size:10px">◆ solo proyectos grandes</span>'},
+  fuera      :{label:'Fuera de cobertura',   color:'var(--st-atrasado)',marca:' <span style="font-size:10px">⚠ fuera de cobertura</span>'},
+  sin_dato   :{label:'Sin ciudad cargada',   color:'var(--gray-600)',   marca:''}
+};
+/* v191 — Aviso en la ficha para la zona condicional. No bloquea: avisa. */
+function _avisoZonaCondicional(lead){
+  if(!lead||_zonaCiudad(lead.ciudad)!=='condicional')return'';
+  return '<div class="mobile-note" style="border-color:var(--gold)">◆ <strong>Zona condicional — solo proyectos grandes.</strong> '+
+    _escPend((''+(lead.ciudad||'')).trim())+' se atiende únicamente en proyectos grandes y de precio más alto. Verificá el presupuesto antes de avanzar.</div>';
 }
 let _repLeadsCiudad=[];
 function _renderCiudades(){
@@ -3443,29 +3484,42 @@ function _renderCiudades(){
     const c=colDe(l);
     f.cols[c]=(f.cols[c]||0)+1;
   });
-  const orden=Object.values(filas).sort(function(a,b){return b.total-a.total;});
-  const totFuera=orden.filter(function(f){return f.zona==='fuera';}).reduce(function(s,f){return s+f.total;},0);
-  const totDentro=orden.filter(function(f){return f.zona==='dentro';}).reduce(function(s,f){return s+f.total;},0);
-  const totSin=orden.filter(function(f){return f.zona==='sin_dato';}).reduce(function(s,f){return s+f.total;},0);
+  /* v191 — orden por zona (plena → condicional → fuera → sin dato) y dentro de
+     cada zona por volumen: así se lee de un vistazo dónde está el desperdicio. */
+  const _ordZona={plena:0,condicional:1,fuera:2,sin_dato:3};
+  const orden=Object.values(filas).sort(function(a,b){
+    return (_ordZona[a.zona]-_ordZona[b.zona])||(b.total-a.total);
+  });
+  const tot=function(z){return orden.filter(function(f){return f.zona===z;}).reduce(function(s,f){return s+f.total;},0);};
   const cabec=cols.concat(hayOtras?['Otras']:[]);
+  const kpi=function(z){
+    const i=_ZONA_INFO[z];
+    return '<div><div style="font-size:22px;font-weight:800;color:'+i.color+';line-height:1">'+tot(z)+'</div>'+
+      '<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">'+i.label+'</div></div>';
+  };
   cont.innerHTML=
     '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">'+
-      '<div><div style="font-size:22px;font-weight:800;color:var(--st-completo);line-height:1">'+totDentro+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">en cobertura</div></div>'+
-      '<div><div style="font-size:22px;font-weight:800;color:var(--st-atrasado);line-height:1">'+totFuera+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">fuera de cobertura</div></div>'+
-      '<div><div style="font-size:22px;font-weight:800;color:var(--gray-600);line-height:1">'+totSin+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">sin ciudad cargada</div></div>'+
+      kpi('plena')+kpi('condicional')+kpi('fuera')+kpi('sin_dato')+
     '</div>'+
     '<div style="overflow-x:auto"><table class="team-table" style="min-width:520px"><thead><tr><th>Ciudad</th>'+
       cabec.map(function(c){return'<th class="num">'+_escPend(c)+'</th>';}).join('')+
       '<th class="num">Total</th></tr></thead><tbody>'+
     orden.map(function(f){
-      const est=f.zona==='fuera'?' style="color:var(--st-atrasado)"':(f.zona==='sin_dato'?' style="color:var(--gray-600)"':'');
-      const marca=f.zona==='fuera'?' <span style="font-size:10px">⚠ fuera de cobertura</span>':'';
-      return '<tr'+est+'><td>'+(f.zona==='fuera'?'<strong>'+_escPend(f.nombre)+'</strong>':_escPend(f.nombre))+marca+'</td>'+
+      const i=_ZONA_INFO[f.zona]||_ZONA_INFO.sin_dato;
+      const destaca=f.zona==='fuera'||f.zona==='condicional';
+      const nom=destaca?'<strong>'+_escPend(f.nombre)+'</strong>':_escPend(f.nombre);
+      return '<tr style="color:'+i.color+'"><td>'+nom+i.marca+'</td>'+
         cabec.map(function(c){return'<td class="num">'+(f.cols[c]||0)+'</td>';}).join('')+
         '<td class="num"><strong>'+f.total+'</strong></td></tr>';
     }).join('')+
     '</tbody></table></div>'+
-    '<div style="font-size:10px;color:var(--gray-600);margin-top:8px">Cobertura = Santa Cruz y alrededores ('+_CIUDADES_COBERTURA.length+' localidades en <code style="font-size:10px">_CIUDADES_COBERTURA</code>). “Sin ciudad” no cuenta como fuera de cobertura: es un dato que falta, no un lead descartable.</div>';
+    '<div style="font-size:10px;color:var(--gray-600);margin-top:8px">'+
+      '<span style="color:var(--st-completo)">■</span> Plena: se atiende todo ('+_CIUDADES_PLENA.length+' localidades). '+
+      '<span style="color:var(--gold)">■</span> Condicional: solo proyectos grandes y de precio alto ('+_CIUDADES_CONDICIONAL.length+'). '+
+      '<span style="color:var(--st-atrasado)">■</span> Fuera: no se construye ('+_CIUDADES_FUERA.length+'). '+
+      'Las tres listas están en <code style="font-size:10px">_CIUDADES_PLENA</code> / <code style="font-size:10px">_CIUDADES_CONDICIONAL</code> / <code style="font-size:10px">_CIUDADES_FUERA</code>. '+
+      '“Sin ciudad” no cuenta como fuera de cobertura: es un dato que falta, no un lead descartable.'+
+    '</div>';
 }
 
 /* ── v190 · MOTIVOS DE PÉRDIDA EN REPORTES ────────────────────────────────
@@ -3824,6 +3878,7 @@ async function openLeadDetail(leadId,agendaId,mode){
     ${currentLeadMode!=='reactivar'&&_soyCerrador()&&_leadTomable(lead)&&!lead.cerrador?`<div class="mobile-note" style="border-color:#1565C0">🤝 <strong>Este lead todavía no tiene cerrador.</strong> Si lo estás trabajando vos, tocá <strong>“Tomar como cerrador”</strong> arriba: queda a tu nombre con su tarea, aparece en “En cierre” de ${lead.captador||'el captador'} y el captador conserva su captación.</div>`:''}
     ${currentLeadMode!=='readonly'&&!_leadBloqueado&&lead.estado==='visita_realizada'?`<div class="mobile-note" style="border-color:#43A047">✅ <strong>Este lead ya tuvo visita</strong> → registrá el resultado o la reserva con los botones de arriba.</div>`:''}
     ${_avisoFaltaCiudad(lead)}
+    ${_avisoZonaCondicional(lead)}
     <div id="lead-tab-detalle">
       <div class="section">
         <div class="section-title">Oportunidad</div>
