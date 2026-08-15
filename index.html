@@ -1667,7 +1667,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='186';
+  var CURRENT_VERSION='187';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4844,8 +4844,14 @@ window.addEventListener('beforeunload',function(e){
 async function _gptMiniIA(userMsg,maxTokens,jsonMode){
   const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
   if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
+  /* v187 — El prompt no decía qué día es hoy, así que el modelo inventaba fechas
+     en 2023; esas fechas alimentaban _tarea.fecha y compromisos[].fecha_sugerida
+     y terminaban creando tareas de agenda en el pasado. */
+  const _hoyTxt=new Date().toLocaleDateString('es-BO',{timeZone:'America/La_Paz',year:'numeric',month:'2-digit',day:'2-digit'});
+  const _sys='Hoy es '+_hoyTxt+' (zona horaria America/La_Paz). Calcula TODAS las fechas (fecha_sugerida y _tarea.fecha) a partir de hoy. NUNCA uses anios anteriores al actual. Si no hay una fecha acordada explicita, devolve null; no inventes fechas.\n'+
+    'Sos asistente comercial de GEAT Construcción.';
   const body={model:'gpt-4o-mini',max_tokens:maxTokens||1024,
-    messages:[{role:'system',content:'Sos asistente comercial de GEAT Construcción.'},
+    messages:[{role:'system',content:_sys},
               {role:'user',content:userMsg}]};
   if(jsonMode)body.response_format={type:'json_object'};
   const resp=await fetch('https://api.openai.com/v1/chat/completions',{
@@ -4934,6 +4940,17 @@ function _fechaHoraLaPaz(fecha,hora){
   const d=new Date(fecha+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00-04:00');
   return isNaN(d.getTime())?null:d.toISOString();
 }
+/* v187 — Guardarrail contra fechas inventadas por la IA (bug 2023). Toda fecha
+   que la extracción devuelva ANTES de hoy se descarta (null) para no agendar con
+   fecha muerta. Se compara por día calendario boliviano con ymdBolivia y no con
+   new Date(f)<hoy: 'YYYY-MM-DD' parsea a medianoche UTC y ese comparador tiraría
+   también las fechas de HOY. */
+function _limpiarFechaIA(f){
+  if(!f)return null;
+  const s=(''+f).slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+  return s<ymdBolivia(new Date())?null:f;
+}
 /* Clasifica el contexto de la conversación. Ante cualquier fallo devuelve
    'venta' para conservar el comportamiento histórico del pipeline. */
 async function _grabClasificarIA(transcript){
@@ -5021,16 +5038,23 @@ async function _grabCrearTareaAuto(g,contexto,ext){
   if(!d)return{creada:false,motivo:'Sin extracción para generar la tarea'};
   const persona=d.persona||'';
   let fp=null,teniaFecha=false;
-  if(d.cita&&d.cita.fecha){
+  /* v187: _limpiarFechaIA descarta la cita si la IA la ubicó en el pasado */
+  if(d.cita&&_limpiarFechaIA(d.cita.fecha)){
     fp=_fechaHoraLaPaz(d.cita.fecha,d.cita.hora);
     teniaFecha=!!fp;
   }
   if(!fp){
-    /* Próximo paso sin fecha → día siguiente a la grabación, 09:00 Bolivia */
+    /* Próximo paso sin fecha → día siguiente a la grabación, 09:00 Bolivia.
+       v187: si la grabación es vieja (re-análisis) ese día ya pasó → mañana. */
     if(!d.proximo_paso)return{creada:false,motivo:'La conversación no dejó cita ni próximo paso'};
     const base=new Date(g.created_at||new Date().toISOString());
     base.setTime(base.getTime()+24*60*60*1000);
-    fp=_fechaHoraLaPaz(ymdBolivia(base),'09:00');
+    let ymdBase=ymdBolivia(base);
+    if(!_limpiarFechaIA(ymdBase)){
+      const man=new Date(); man.setTime(man.getTime()+24*60*60*1000);
+      ymdBase=ymdBolivia(man);
+    }
+    fp=_fechaHoraLaPaz(ymdBase,'09:00');
   }
   if(!fp)return{creada:false,motivo:'No se pudo interpretar la fecha de la cita'};
   const tit=('🎯 ['+contexto+'] '+(persona||'seguimiento')).slice(0,120);
@@ -5086,6 +5110,12 @@ async function _grabExtraerYGuardar(grabId,transcript){
                                     :await _extraerProspectoIA(transcript);
   }catch(e){ext=null;}
   if(ext&&typeof ext==='object'){
+    /* v187 — Guardarrail post-parseo: limpiar fechas pasadas ANTES de crear la
+       tarea de agenda y antes de guardar la extracción. */
+    (ext.compromisos||[]).forEach(function(c){
+      if(c&&c.fecha_sugerida)c.fecha_sugerida=_limpiarFechaIA(c.fecha_sugerida);
+    });
+    if(ext.cita&&ext.cita.fecha&&!_limpiarFechaIA(ext.cita.fecha))ext.cita=null;
     ext._contexto=contexto;
     if(contexto==='reclutamiento'){
       ext._postulacion=await _grabVincularPostulacion(grabId,ext,fechaRef);
