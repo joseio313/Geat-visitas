@@ -1667,7 +1667,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='189';
+  var CURRENT_VERSION='190';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3194,6 +3194,7 @@ async function renderReports(){
   /* v190 — el desglose de motivos se arma aparte, en _renderMotivosPerdida(),
      porque se filtra por campaña sin recargar el reporte entero. */
   _repLeadsPerdidos=leads.filter(l=>l.estado==='cerrado_perdido');
+  _repLeadsCiudad=leads;   // v190 bloque 3
 
   // Medios de difusión
   const byMedio={};
@@ -3325,6 +3326,12 @@ async function renderReports(){
       </table></div>`}
       <div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los escalones son acumulativos: un lead que llegó a visita cuenta también en Indagación y Envío info, aunque después se haya perdido. <strong style="color:var(--st-atrasado)">En rojo</strong>, el primer escalón que quedó en cero: ahí se corta el embudo. Las filas marcadas “(medio)” son leads sin campaña asignada, agrupados por medio de difusión.</div>
     </div>
+    <!-- v190 bloque 3 — Ciudad cruzada con campaña. Ancho completo: es una
+         matriz y adentro de la grilla queda ilegible. -->
+    <div class="section" style="margin-top:14px">
+      <div class="section-title">📍 Ciudad por campaña</div>
+      <div id="rep-ciudades-body"></div>
+    </div>
     <div class="section" style="margin-top:14px">
       <div class="section-title">📈 Tendencia mensual de leads (últimos 6 meses)</div>
       <div style="display:flex;align-items:flex-end;gap:10px;height:170px;padding:8px 4px 0">
@@ -3346,7 +3353,70 @@ async function renderReports(){
         <div style="font-size:11px;color:var(--gray-400)">Resumen de leads y seguimientos del período seleccionado</div>
       </div>
     </div>`;
-  _renderMotivosPerdida();   // v190 — depende del DOM recién pintado
+  _renderMotivosPerdida();   // v190 — dependen del DOM recién pintado
+  _renderCiudades();
+}
+
+/* ── v190 · CIUDAD EN REPORTES ────────────────────────────────────────────
+   Entran leads de Cochabamba y Tarija que no se atienden y se pagan igual, y
+   hasta ahora no había forma de verlo ni de cruzarlo con la campaña que los
+   trajo. Cobertura = Santa Cruz y alrededores.
+   La lista está en un solo lugar y a propósito: corregirla no toca la lógica.
+   Ciudad vacía queda "sin dato", que NO es lo mismo que fuera de cobertura —
+   hoy son 103 de 151 leads del mes y meterlos en "fuera" sería inventar. */
+const _CIUDADES_COBERTURA=['santa cruz','santa cruz de la sierra','scz','montero',
+  'warnes','cotoca','la guardia','el torno','porongo','mineros','portachuelo',
+  'okinawa','general saavedra','buena vista','san carlos','yapacani','pailon'];
+function _zonaCiudad(c){
+  const s=_cvNorm(c||'').trim();
+  if(!s)return 'sin_dato';
+  return _CIUDADES_COBERTURA.indexOf(s)>=0?'dentro':'fuera';
+}
+let _repLeadsCiudad=[];
+function _renderCiudades(){
+  const cont=document.getElementById('rep-ciudades-body');
+  if(!cont)return;
+  const leads=_repLeadsCiudad||[];
+  if(!leads.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin leads en el período.</div>';return;}
+  /* columnas = campañas con más volumen; el resto se junta en "Otras" para que
+     la tabla no se vuelva ilegible cuando haya muchas campañas activas */
+  const vol={};
+  leads.forEach(function(l){const k=_campLabel(l);vol[k]=(vol[k]||0)+1;});
+  const cols=Object.entries(vol).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return e[0];});
+  const hayOtras=Object.keys(vol).length>cols.length;
+  const colDe=function(l){const k=_campLabel(l);return cols.indexOf(k)>=0?k:'Otras';};
+  const filas={};
+  leads.forEach(function(l){
+    const nom=(l.ciudad||'').trim()||'— sin ciudad —';
+    if(!filas[nom])filas[nom]={nombre:nom,zona:_zonaCiudad(l.ciudad),total:0,cols:{}};
+    const f=filas[nom];
+    f.total++;
+    const c=colDe(l);
+    f.cols[c]=(f.cols[c]||0)+1;
+  });
+  const orden=Object.values(filas).sort(function(a,b){return b.total-a.total;});
+  const totFuera=orden.filter(function(f){return f.zona==='fuera';}).reduce(function(s,f){return s+f.total;},0);
+  const totDentro=orden.filter(function(f){return f.zona==='dentro';}).reduce(function(s,f){return s+f.total;},0);
+  const totSin=orden.filter(function(f){return f.zona==='sin_dato';}).reduce(function(s,f){return s+f.total;},0);
+  const cabec=cols.concat(hayOtras?['Otras']:[]);
+  cont.innerHTML=
+    '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">'+
+      '<div><div style="font-size:22px;font-weight:800;color:var(--st-completo);line-height:1">'+totDentro+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">en cobertura</div></div>'+
+      '<div><div style="font-size:22px;font-weight:800;color:var(--st-atrasado);line-height:1">'+totFuera+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">fuera de cobertura</div></div>'+
+      '<div><div style="font-size:22px;font-weight:800;color:var(--gray-600);line-height:1">'+totSin+'</div><div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">sin ciudad cargada</div></div>'+
+    '</div>'+
+    '<div style="overflow-x:auto"><table class="team-table" style="min-width:520px"><thead><tr><th>Ciudad</th>'+
+      cabec.map(function(c){return'<th class="num">'+_escPend(c)+'</th>';}).join('')+
+      '<th class="num">Total</th></tr></thead><tbody>'+
+    orden.map(function(f){
+      const est=f.zona==='fuera'?' style="color:var(--st-atrasado)"':(f.zona==='sin_dato'?' style="color:var(--gray-600)"':'');
+      const marca=f.zona==='fuera'?' <span style="font-size:10px">⚠ fuera de cobertura</span>':'';
+      return '<tr'+est+'><td>'+(f.zona==='fuera'?'<strong>'+_escPend(f.nombre)+'</strong>':_escPend(f.nombre))+marca+'</td>'+
+        cabec.map(function(c){return'<td class="num">'+(f.cols[c]||0)+'</td>';}).join('')+
+        '<td class="num"><strong>'+f.total+'</strong></td></tr>';
+    }).join('')+
+    '</tbody></table></div>'+
+    '<div style="font-size:10px;color:var(--gray-600);margin-top:8px">Cobertura = Santa Cruz y alrededores ('+_CIUDADES_COBERTURA.length+' localidades en <code style="font-size:10px">_CIUDADES_COBERTURA</code>). “Sin ciudad” no cuenta como fuera de cobertura: es un dato que falta, no un lead descartable.</div>';
 }
 
 /* ── v190 · MOTIVOS DE PÉRDIDA EN REPORTES ────────────────────────────────
