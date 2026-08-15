@@ -1667,7 +1667,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='188';
+  var CURRENT_VERSION='189';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4876,7 +4876,7 @@ async function _resumirReunionIA(transcript){
    Mismo patrón que _resumirReunionIA (OpenAI gpt-4o-mini vía _gptMiniIA). */
 async function _extraerProspectoIA(transcript,fechaRef){
   const userMsg='Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
-    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null}]}\n'+
+    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null}]}\n'+
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha calendario explícita.\n'+
     _promptFechas(fechaRef)+'\n'+transcript;
   return JSON.parse(await _gptMiniIA(userMsg,1500,true));
@@ -4983,10 +4983,31 @@ function _resolverDiaSemana(fechaRef,dia,semana){
   if(isNaN(base.getTime()))return null;
   const hoyDow=DIAS[norm(new Intl.DateTimeFormat('es-BO',{timeZone:'America/La_Paz',weekday:'long'}).format(base))];
   if(hoyDow===undefined)return null;
+  const DIA=24*60*60*1000;
+  if(norm(semana).indexOf('prox')>=0){
+    /* "el jueves DE LA SEMANA QUE VIENE" = ese día dentro de la semana calendario
+       siguiente (lunes a domingo), no "el próximo jueves + 7": dicho un sábado,
+       el jueves de la semana que viene es el de 5 días después, no el de 12. */
+    const dowLun=(hoyDow+6)%7;                            /* 0 = lunes */
+    const lunesProx=base.getTime()+(7-dowLun)*DIA;
+    return ymdBolivia(new Date(lunesProx+((DIAS[k]+6)%7)*DIA));
+  }
   let delta=(DIAS[k]-hoyDow+7)%7;
   if(delta===0)delta=7;                                   /* "el martes" dicho un martes = el que viene */
-  if(norm(semana).indexOf('prox')>=0&&delta<7)delta+=7;   /* "el martes de la semana que viene" */
-  return ymdBolivia(new Date(base.getTime()+delta*24*60*60*1000));
+  return ymdBolivia(new Date(base.getTime()+delta*DIA));
+}
+/* v189 — El modelo a veces ignora dia_semana y devuelve una fecha calculada por
+   él, que vuelve a caer en el día equivocado ("el jueves de la semana que viene"
+   → 2026-08-25, un martes). Por eso le pedimos además que copie textual la frase
+   de fecha del audio: acá le sacamos el día de la semana con un regex y lo
+   resolvemos igual que arriba. Citar es lo único que el modelo hace confiable. */
+function _fechaDesdeFrase(fechaRef,frase){
+  const s=_cvNorm(frase||'');
+  if(!s)return null;
+  const m=s.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if(!m)return null;
+  const prox=/(que viene|proxim|siguiente|entrante)/.test(s);
+  return _resolverDiaSemana(fechaRef,m[1],prox?'proxima':'esta');
 }
 /* v188 — Bloque de fechas compartido por las DOS extracciones (venta y
    reclutamiento): antes solo reclutamiento resolvía días de la semana y prospecto
@@ -4997,7 +5018,8 @@ function _promptFechas(fechaRef){
     'REGLA DE FECHAS — no calcules fechas, transcribí lo que se dijo:\n'+
     '- Si dijeron un día de la semana ("el martes", "el próximo jueves", "el viernes que viene"): dejá fecha_sugerida en null y completá dia_semana con ese día tal cual (lunes/martes/miercoles/jueves/viernes/sabado/domingo), y semana="proxima" SOLO si dijeron "de la semana que viene"/"la próxima semana"; si no, semana="esta". La fecha exacta la calcula el sistema.\n'+
     '- Si dijeron una fecha calendario explícita ("el 20 de agosto"): completá fecha_sugerida en YYYY-MM-DD usando el calendario de arriba, y dejá dia_semana en null.\n'+
-    '- Si no se acordó ninguna fecha: fecha_sugerida y dia_semana en null. No inventes.\n'+
+    '- Si no se acordó ninguna fecha: fecha_sugerida, dia_semana y frase_fecha en null. No inventes.\n'+
+    'frase_fecha=SIEMPRE que se hable de una fecha, copiá TEXTUAL el pedacito del audio que la menciona (ej: "el jueves de la semana que viene"), sin interpretarlo ni calcular nada. Es lo que usa el sistema para verificar.\n'+
     'NUNCA devuelvas una fecha anterior al día de la conversación.\n';
 }
 /* Clasifica el contexto de la conversación. Ante cualquier fallo devuelve
@@ -5018,7 +5040,7 @@ async function _grabClasificarIA(transcript){
    (YYYY-MM-DD Bolivia) para que la IA resuelva "el miércoles" a fecha real. */
 async function _extraerReclutamientoIA(transcript,fechaRef){
   const userMsg='Analizá esta transcripción de una entrevista o llamada de reclutamiento de GEAT Construcción y extraé los datos del candidato. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
-    '{"titulo":null,"candidato":null,"telefono":null,"pretension_bs":null,"ciudad":null,"experiencia_clave":["..."],"cita":{"fecha":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"hora":"HH:MM","lugar":null},"alertas":["..."],"proximo_paso":null}\n'+
+    '{"titulo":null,"candidato":null,"telefono":null,"pretension_bs":null,"ciudad":null,"experiencia_clave":["..."],"cita":{"fecha":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null,"hora":"HH:MM","lugar":null},"alertas":["..."],"proximo_paso":null}\n'+
     'titulo=título corto de 3 a 6 palabras que describa la conversación (ej: "Entrevista arquitecta de obra"); siempre completalo. '+
     'candidato=nombre completo del postulante. telefono=su celular. pretension_bs=pretensión salarial mensual en bolivianos (solo el número). '+
     'ciudad=ciudad del candidato. experiencia_clave=puntos fuertes de su experiencia. '+
@@ -5163,16 +5185,20 @@ async function _grabExtraerYGuardar(grabId,transcript){
        de guardar la extracción: primero resolvemos acá el día de la semana que
        dictó el audio (el modelo no sabe hacer esa cuenta) y después descartamos
        cualquier fecha que igual haya quedado en el pasado. */
+    /* Precedencia: día estructurado → día citado en la frase → fecha del modelo.
+       La fecha del modelo queda última porque es la única que demostró fallar. */
+    const _fechaDe=function(o,campoFecha){
+      return _resolverDiaSemana(fechaRef,o.dia_semana,o.semana)
+          || _fechaDesdeFrase(fechaRef,o.frase_fecha)
+          || o[campoFecha] || null;
+    };
     (ext.compromisos||[]).forEach(function(c){
       if(!c)return;
-      const ds=_resolverDiaSemana(fechaRef,c.dia_semana,c.semana);
-      if(ds)c.fecha_sugerida=ds;
-      if(c.fecha_sugerida)c.fecha_sugerida=_limpiarFechaIA(c.fecha_sugerida);
+      c.fecha_sugerida=_limpiarFechaIA(_fechaDe(c,'fecha_sugerida'));
     });
     if(ext.cita){
-      const dsc=_resolverDiaSemana(fechaRef,ext.cita.dia_semana,ext.cita.semana);
-      if(dsc)ext.cita.fecha=dsc;
-      if(ext.cita.fecha&&!_limpiarFechaIA(ext.cita.fecha))ext.cita=null;
+      ext.cita.fecha=_limpiarFechaIA(_fechaDe(ext.cita,'fecha'));
+      if(!ext.cita.fecha)ext.cita=null;
     }
     ext._contexto=contexto;
     if(contexto==='reclutamiento'){
