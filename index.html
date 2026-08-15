@@ -1936,6 +1936,14 @@ function _leadRank(l){
   if(!l)return 0;
   return Math.max(_ETAPA_RANK[_cvNorm(l.etapa||'')]||0,_ESTADO_RANK[_cvNorm(l.estado||'')]||0);
 }
+/* Etiqueta de campaña de un lead. Cae a medio_difusion cuando no hay campana_id
+   (hoy es el 100% de los leads del mes). Se usa en el embudo, en el desglose de
+   motivos y en el de ciudades, para que las tres tablas crucen por lo mismo. */
+function _campLabel(l){
+  const cid=l&&l.campana_id;
+  if(cid)return campanaNombre(cid)||('Campaña #'+cid);
+  return ((l&&l.medio_difusion)||'').trim()||'Sin campaña ni medio';
+}
 /* Escalones del embudo. visito_oficina e indagacion_completa son la verdad
    guardada y mandan sobre el rank; nunca se infiere una visita de una fecha
    vencida (v168: eso metió 52 falsos positivos). */
@@ -2627,12 +2635,28 @@ async function loadCatalogs(){
   }catch(e){console.error('catalogs:',e);}
 }
 
-const _MOTIVOS_PERDIDA_BASE=['Otro departamento','Crédito directo','FAP','No califica'];
+/* ── v190 · MOTIVO DE PÉRDIDA: LISTA CERRADA ──────────────────────────────
+   Hasta v189 el select era base fija + tabla motivos_perdida + sugerencias de
+   la IA + "Otro" con texto libre que se guardaba TAL CUAL en motivo_perdida.
+   Resultado medido en la base: ~190 variantes distintas para lo mismo
+   ("no construimos en cbba" / "No construimos en cbba" / "no cosntruimos en
+   cbba"), más basura tipo "3 dic", "pendiente", "confirmar". Con eso no se
+   puede agrupar nada, así que la lista pasa a ser cerrada de verdad: estas 7
+   más "Otro". Cambiar esta constante es el ÚNICO modo de agregar un motivo. */
+const _MOTIVOS_PERDIDA_BASE=[
+  'Fuera de zona de cobertura',
+  'No tiene terreno',
+  'No califica para financiamiento',
+  'Presupuesto insuficiente',
+  'No respondió (3 intentos)',
+  'Solo pedía información / curioso',
+  'Eligió otra empresa'
+];
 function _populateLostMotivos(){
-  const dbExtras=(motivosPerdida||[]).map(function(m){return m.nombre;}).filter(function(n){
-    return n!=='Otro'&&!_MOTIVOS_PERDIDA_BASE.includes(n);
-  });
-  const todas=_MOTIVOS_PERDIDA_BASE.concat(dbExtras).concat(['Otro']);
+  /* Cerrada a propósito: NO se concatenan motivosPerdida (tabla) ni las
+     sugerencias de la IA. Si volvieran a entrar acá, en un mes tenemos otra vez
+     190 variantes y los reportes dejan de servir. */
+  const todas=_MOTIVOS_PERDIDA_BASE.concat(['Otro']);
   const html='<option value="">— Motivo —</option>'+todas.map(function(m){return'<option value="'+_escPend(m)+'">'+_escPend(m)+'</option>';}).join('');
   const s1=document.getElementById('lost-motivo');if(s1)s1.innerHTML=html;
   const s2=document.getElementById('nl-perdido-motivo');if(s2)s2.innerHTML=html;
@@ -3167,12 +3191,9 @@ async function renderReports(){
     if(a.completada)actsByPerson[co].completadas++;
   });
 
-  // Motivos de pérdida
-  const perdidosConMotivo={};
-  leads.filter(l=>l.estado==='cerrado_perdido'&&l.motivo_perdida).forEach(l=>{
-    perdidosConMotivo[l.motivo_perdida]=(perdidosConMotivo[l.motivo_perdida]||0)+1;
-  });
-  const topMotivos=Object.entries(perdidosConMotivo).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  /* v190 — el desglose de motivos se arma aparte, en _renderMotivosPerdida(),
+     porque se filtra por campaña sin recargar el reporte entero. */
+  _repLeadsPerdidos=leads.filter(l=>l.estado==='cerrado_perdido');
 
   // Medios de difusión
   const byMedio={};
@@ -3197,7 +3218,7 @@ async function renderReports(){
     const medio=(l.medio_difusion||'').trim();
     const key=cid?('c:'+cid):('m:'+(medio||'—'));
     if(!byCamp[key])byCamp[key]={
-      nombre:cid?(campanaNombre(cid)||'Campaña #'+cid):(medio||'Sin campaña ni medio'),
+      nombre:_campLabel(l),
       esMedio:!cid,
       n:0,indagacion:0,envio:0,vAgendada:0,vHecha:0,cerrado:0,perdido:0};
     const b=byCamp[key],e=_leadEmbudo(l);
@@ -3256,12 +3277,12 @@ async function renderReports(){
         ${renderFunnel(leads)}
       </div>
       <div class="section">
-        <div class="section-title">Motivos de pérdida (Top 5)</div>
-        ${topMotivos.length===0?'<div style="color:var(--gray-400);font-size:12px">Sin datos en este período</div>':
-          topMotivos.map(([m,n])=>`<div class="funnel-bar">
-            <div class="funnel-label" style="font-size:10px">${m}</div>
-            <div class="funnel-track"><div class="funnel-fill" style="width:${Math.max(8,Math.round(n/(topMotivos[0][1]||1)*100))}%">${n}</div></div>
-          </div>`).join('')}
+        <div class="section-title">Motivos de pérdida</div>
+        <select class="form-control" id="rep-motivo-camp" style="font-size:11px;padding:5px 8px;margin-bottom:8px" onchange="_renderMotivosPerdida()">
+          <option value="">Todas las campañas</option>
+          ${campRows.map(r=>`<option value="${_escPend(r.nombre)}">${_escPend(r.nombre)}</option>`).join('')}
+        </select>
+        <div id="rep-motivos-body"></div>
         <div style="margin-top:10px">
           <button class="btn-ghost" style="font-size:11px" onclick="verReportePerdidos()">🔍 Ver Reporte Perdidos</button>
         </div>
@@ -3325,6 +3346,64 @@ async function renderReports(){
         <div style="font-size:11px;color:var(--gray-400)">Resumen de leads y seguimientos del período seleccionado</div>
       </div>
     </div>`;
+  _renderMotivosPerdida();   // v190 — depende del DOM recién pintado
+}
+
+/* ── v190 · MOTIVOS DE PÉRDIDA EN REPORTES ────────────────────────────────
+   Se agrupa al vuelo contra la lista cerrada. La base NO se toca: los ~190
+   textos libres históricos quedan tal cual y solo se normalizan para mostrar.
+   Lo que no matchea cae en "Sin clasificar" a propósito — es preferible verlo
+   antes que forzarlo dentro de una categoría que no le corresponde. */
+let _repLeadsPerdidos=[];
+const _MOTIVO_REGLAS=[
+  /* servicio que GEAT no presta: no hay categoría para esto, se ve como "Sin clasificar" */
+  [/obra (fina|bruta|gruesa)|mano de obra|remodel|refaccion|ampliacion|solo.*plano|cielo falso|electricidad/,null],
+  [/no construimos|no costruimos|no cosntruimos|no constrimos|otro departamento|cochabamba|cbba|la ?paz|lpz|oruro|potosi|sucre|tarija|beni|trinidad|cobija|yacuiba|bermejo|tupiza|el alto|mizque|puerto suarez|pando|su departamento|otra ciudad|no construimos en su zona|es de /,'Fuera de zona de cobertura'],
+  [/no tiene terreno|sin terreno|no tiene aun|quiere terreno|pedia terreno|busca(ba|ndo)? terreno|compra de lote|terreno y casa|papeles al dia/,'No tiene terreno'],
+  [/no califica|financia|credito directo|fap|banco|prestamo|no le financiar|deudas/,'No califica para financiamiento'],
+  [/presupuesto|caro|economico|barato|precio|no se pudo prestar|gasto grande|dolar/,'Presupuesto insuficiente'],
+  [/no respond|no contest|nunca contest|dejo de contestar|sin respuesta|no accede|numero (fuera|apagado|no existe|invalido)|no responde/,'No respondió (3 intentos)'],
+  [/solo (queria|quiere|pedia) informacion|solo informacion|curioso|pensaba que|creia que|solo el plano/,'Solo pedía información / curioso'],
+  [/otra empresa|otra opcion|competencia|ya esta construyendo|constructora de|ofrec/,'Eligió otra empresa']
+];
+function _motivoNormalizado(raw){
+  const s=_cvNorm(raw||'').trim();
+  if(!s)return 'Sin motivo registrado';
+  if(s==='otro')return 'Otro';
+  /* devolver la constante y NO el crudo: si no, "no tiene terreno" y "No tiene
+     terreno" abren dos filas distintas del mismo motivo */
+  const _exacto=_MOTIVOS_PERDIDA_BASE.filter(function(m){return _cvNorm(m)===s;})[0];
+  if(_exacto)return _exacto;
+  for(let i=0;i<_MOTIVO_REGLAS.length;i++){
+    if(_MOTIVO_REGLAS[i][0].test(s))return _MOTIVO_REGLAS[i][1]||'Sin clasificar';
+  }
+  return 'Sin clasificar';
+}
+function _renderMotivosPerdida(){
+  const cont=document.getElementById('rep-motivos-body');
+  if(!cont)return;
+  const filtro=(document.getElementById('rep-motivo-camp')||{}).value||'';
+  const rows=(_repLeadsPerdidos||[]).filter(function(l){return!filtro||_campLabel(l)===filtro;});
+  if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px">Sin pérdidas en este período</div>';return;}
+  const acum={};
+  rows.forEach(function(l){const m=_motivoNormalizado(l.motivo_perdida);acum[m]=(acum[m]||0)+1;});
+  /* "Sin clasificar" y "Sin motivo registrado" van último aunque sean grandes:
+     son ruido histórico, no un motivo de negocio. */
+  const cola=['Sin clasificar','Sin motivo registrado'];
+  const ord=Object.entries(acum).sort(function(a,b){
+    const ca=cola.indexOf(a[0]),cb=cola.indexOf(b[0]);
+    if(ca>=0||cb>=0)return (ca<0?-1:ca)-(cb<0?-1:cb);
+    return b[1]-a[1];
+  });
+  const max=Math.max.apply(null,ord.map(function(e){return e[1];}));
+  cont.innerHTML=ord.map(function(e){
+    const gris=cola.indexOf(e[0])>=0;
+    return '<div class="funnel-bar">'+
+      '<div class="funnel-label" style="font-size:10px'+(gris?';color:var(--gray-600)':'')+'">'+_escPend(e[0])+'</div>'+
+      '<div class="funnel-track"><div class="funnel-fill" style="width:'+Math.max(8,Math.round(e[1]/max*100))+'%'+(gris?';background:var(--gray-600)':'')+'">'+e[1]+'</div></div>'+
+    '</div>';
+  }).join('')+
+  '<div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los motivos viejos en texto libre se agrupan al mostrar; en la base quedan tal cual se escribieron.</div>';
 }
 
 function renderFunnel(leads){
@@ -6202,14 +6281,18 @@ async function saveSeguimiento(){
     } else if(outcomeMode==='lost'){
       let motivo=document.getElementById('lost-motivo').value;
       if(!motivo){toast('Seleccioná un motivo de pérdida','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
+      let _otroTxt='';
       if(motivo==='Otro'){
-        const _otrTxt=(document.getElementById('lost-otro-texto')?.value||'').trim();
-        if(!_otrTxt){toast('Escribí el motivo en el campo de texto','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
-        motivo=_otrTxt;
+        _otroTxt=(document.getElementById('lost-otro-texto')?.value||'').trim();
+        if(!_otroTxt){toast('Escribí el motivo en el campo de texto','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
       }
+      /* v190 — con "Otro", motivo_perdida queda en 'Otro' y el texto libre va al
+         detalle. Antes el texto se escribía en motivo_perdida y por ahí entraron
+         las ~190 variantes que hacen inagrupable el reporte. */
       const notaLost=document.getElementById('lost-nota').value;
+      const _detLost=[_otroTxt,notaLost].filter(function(s){return(s||'').trim();}).join(' — ');
       const{error:e4}=await sb.from('leads').update({
-        estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:notaLost,updated_at:now
+        estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:_detLost,updated_at:now
       }).eq('id',currentLeadId);
       if(e4)throw e4;
       registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo,nota:notaLost});
@@ -6460,10 +6543,12 @@ async function saveLeadPerdido(){
   if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
   let motivo=document.getElementById('nl-perdido-motivo')?.value;
   if(!motivo){toast('Elegí un motivo','error');return;}
+  /* v190 — igual que en finalizar: con "Otro" el motivo queda en 'Otro' y el
+     texto libre va a motivo_perdida_detalle, para no reabrir el texto libre. */
+  let _otroTxtNl='';
   if(motivo==='Otro'){
-    const _otrTxt=(document.getElementById('nl-perdido-otro-texto')?.value||'').trim();
-    if(!_otrTxt){toast('Escribí el motivo en el campo de texto','error');return;}
-    motivo=_otrTxt;
+    _otroTxtNl=(document.getElementById('nl-perdido-otro-texto')?.value||'').trim();
+    if(!_otroTxtNl){toast('Escribí el motivo en el campo de texto','error');return;}
   }
   const ciudad=document.getElementById('nl-ciudad')?.value||null;
   const medio=document.getElementById('nl-medio')?.value||null;
@@ -6478,7 +6563,7 @@ async function saveLeadPerdido(){
     const{data:newLead,error}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
       campana_id:_nlCampanaId(), // v185
-      estado:'cerrado_perdido',motivo_perdida:motivo,
+      estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:_otroTxtNl||null,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
          para que el CPL y el tiempo de respuesta lo cuenten. */
@@ -7238,13 +7323,17 @@ async function renderAdmin(){
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
 
-    <!-- 📊 Motivos de pérdida IA -->
+    <!-- 📊 Motivos de pérdida — v190: lista cerrada, sin ABM -->
     <div class="admin-section">
-      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
-        <div class="admin-section-title" style="margin:0">📊 Motivos de pérdida</div>
-        <button id="motivos-ia-btn" type="button" class="btn btn-ghost btn-sm" onclick="_analizarMotivosPerdida()" style="font-size:11px">🧠 Analizar motivos de pérdida</button>
+      <div class="admin-section-title" style="margin:0">📊 Motivos de pérdida</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:8px;line-height:1.5">
+        La lista es <strong>cerrada</strong> desde v190. El selector ya no se puede ampliar desde acá ni con sugerencias de la IA: así se juntaron ~190 variantes del mismo motivo
+        (<span style="color:var(--gray-600)">“no construimos en cbba” / “No construimos en cbba” / “no cosntruimos en cbba”</span>) y los reportes dejaron de poder agrupar nada.
+        Para agregar o cambiar un motivo hay que tocar <code style="font-size:11px">_MOTIVOS_PERDIDA_BASE</code> en el código.
       </div>
-      <div id="motivos-ia-resultados" style="margin-top:10px"></div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+        ${_MOTIVOS_PERDIDA_BASE.concat(['Otro']).map(function(m){return'<span style="font-size:11px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:11px;padding:3px 10px">'+_escPend(m)+'</span>';}).join('')}
+      </div>
     </div>
 
     <!-- 📣 Campañas (v185) — ABM solo admin. El nombre se escribe UNA vez acá,
@@ -7491,6 +7580,10 @@ async function toggleCampana(id){
 /* ════════════════════════════════════════
    MOTIVOS DE PÉRDIDA — análisis IA (solo admin)
 ════════════════════════════════════════ */
+/* v190 — SIN USO: el botón que la llamaba se quitó de Admin al cerrar la lista
+   de motivos. Se conserva por si se decide reabrir el ABM; si se reactiva, hay
+   que volver a concatenar los extras en _populateLostMotivos(), que hoy los
+   ignora a propósito. */
 async function _analizarMotivosPerdida(){
   const btn=document.getElementById('motivos-ia-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analizando...';}
