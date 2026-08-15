@@ -1919,6 +1919,37 @@ function _leadLlegoAVisita(l){
   if(['visita_agendada','visita_realizada','reservado','cerrado_ganado'].includes(l.estado))return true;
   return /visita/i.test(l.etapa||'');
 }
+/* ── v190 · AVANCE DEL LEAD EN EL EMBUDO ──────────────────────────────────
+   Para saber DÓNDE se corta el embudo no sirve el estado actual: un lead que
+   llegó a visita y después se perdió queda en cerrado_perdido y desaparece de
+   todos los escalones que sí recorrió. Se usa el MÁXIMO entre etapa y estado
+   porque van desacoplados (estado='visita_agendada' con etapa='Indagación' es
+   normal), y la etapa sobrevive a la pérdida: es justo lo que hace falta.
+   La escala es acumulativa: rank>=N significa "llegó al menos hasta N". */
+const _ETAPA_RANK={'lead':1,'1er intento':1,'2do intento':1,'3er intento':1,
+  'indagacion':2,'envio de informacion':3,
+  'visita':4,'visita oficina':4,'visita terreno':4,
+  'cotizacion':6,'presentando propuesta':6,'reserva':7};
+const _ESTADO_RANK={'nuevo':1,'en_seguimiento':1,'visita_agendada':4,
+  'visita_realizada':5,'reservado':7,'cerrado_ganado':8};
+function _leadRank(l){
+  if(!l)return 0;
+  return Math.max(_ETAPA_RANK[_cvNorm(l.etapa||'')]||0,_ESTADO_RANK[_cvNorm(l.estado||'')]||0);
+}
+/* Escalones del embudo. visito_oficina e indagacion_completa son la verdad
+   guardada y mandan sobre el rank; nunca se infiere una visita de una fecha
+   vencida (v168: eso metió 52 falsos positivos). */
+function _leadEmbudo(l){
+  const r=_leadRank(l);
+  return{
+    indagacion : r>=2||l.indagacion_completa===true,
+    envio      : r>=3,
+    vAgendada  : r>=4,
+    vHecha     : r>=5||l.visito_oficina===true,
+    cerrado    : l.estado==='cerrado_ganado',
+    perdido    : l.estado==='cerrado_perdido'
+  };
+}
 function _leadCampanaHtml(l){
   const nom=campanaNombre(l&&l.campana_id);
   if(!nom)return'';
@@ -3079,8 +3110,8 @@ async function renderReports(){
   const _trendDesde=new Date(_hoy.getFullYear(),_hoy.getMonth()-5,1).toISOString();
   // monto_contrato solo lo fetcha admin (campo no se usa en UI de commercial_lead)
   const _leadsSelect=esAdmin
-    ?'id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,created_at'
-    :'id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,created_at';
+    ?'id,captador,cerrador,estado,etapa,monto_contrato,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,visito_oficina,indagacion_completa,created_at'
+    :'id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,visito_oficina,indagacion_completa,created_at';
   const[rLeads,rActs,rTrend,rVentas]=await Promise.all([
     sb.from('leads').select(_leadsSelect).gte('created_at',rng.desde).lt('created_at',rng.hasta),
     sb.from('agenda_personal').select('id,colaborador,completada').gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta),
@@ -3154,19 +3185,32 @@ async function renderReports(){
   /* v185 — desglose por campaña. El conteo solo no alcanza: una campaña puede
      traer volumen y cero calidad, así que se muestra cuántos de esos leads
      llegaron a VISITA y cuántos a CIERRE, con su tasa. */
+  /* v190 — el conteo por campaña ya no alcanza: hace falta ver en QUÉ escalón se
+     corta. Si nadie pasa de "Envío info", el problema es la invitación; si se
+     caen en Indagación, el problema es la calidad del lead.
+     Los leads sin campana_id se agrupan por medio_difusion en vez de caer todos
+     en un balde "Sin campaña": hoy el 100% de los leads del mes están así, y con
+     la clave vieja la tabla entera era una sola fila inútil. */
   const byCamp={};
   leads.forEach(l=>{
-    const key=l.campana_id||'__sin__';
-    if(!byCamp[key])byCamp[key]={n:0,visitas:0,cierres:0};
-    byCamp[key].n++;
-    if(_leadLlegoAVisita(l))byCamp[key].visitas++;
-    if(l.estado==='cerrado_ganado')byCamp[key].cierres++;
+    const cid=l.campana_id;
+    const medio=(l.medio_difusion||'').trim();
+    const key=cid?('c:'+cid):('m:'+(medio||'—'));
+    if(!byCamp[key])byCamp[key]={
+      nombre:cid?(campanaNombre(cid)||'Campaña #'+cid):(medio||'Sin campaña ni medio'),
+      esMedio:!cid,
+      n:0,indagacion:0,envio:0,vAgendada:0,vHecha:0,cerrado:0,perdido:0};
+    const b=byCamp[key],e=_leadEmbudo(l);
+    b.n++;
+    if(e.indagacion)b.indagacion++;
+    if(e.envio)b.envio++;
+    if(e.vAgendada)b.vAgendada++;
+    if(e.vHecha)b.vHecha++;
+    if(e.cerrado)b.cerrado++;
+    if(e.perdido)b.perdido++;
   });
-  const campRows=Object.entries(byCamp).map(([k,v])=>({
-    nombre:k==='__sin__'?'— Sin campaña —':(campanaNombre(k)||'Campaña #'+k),
-    sinCampana:k==='__sin__',
-    ...v,
-    pct:leads.length?Math.round(v.n/leads.length*100):0
+  const campRows=Object.values(byCamp).map(v=>Object.assign({},v,{
+    pctVisita:v.n?Math.round(v.vHecha/v.n*100):0
   })).sort((a,b)=>b.n-a.n);
 
   body.innerHTML=`
@@ -3237,21 +3281,28 @@ async function renderReports(){
          porque son 5 columnas: sin esto no hay CPL por campaña ni forma de
          decidir qué pauta escalar o cortar. -->
     <div class="section" style="margin-top:14px">
-      <div class="section-title">📣 Campaña de origen</div>
+      <div class="section-title">📣 Embudo por campaña</div>
       ${campRows.length===0?'<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin leads en el período.</div>':`
-      <table class="team-table">
-        <thead><tr><th>Campaña</th><th class="num">Leads</th><th class="num">% del total</th><th class="num">Visitas</th><th class="num">Cierres</th></tr></thead>
+      <div style="overflow-x:auto">
+      <table class="team-table" style="min-width:760px">
+        <thead><tr><th>Campaña</th><th class="num">Leads</th><th class="num">Indagación</th><th class="num">Envío info</th><th class="num">Visita agendada</th><th class="num">Visita hecha</th><th class="num">Cerrado</th><th class="num">Perdidos</th><th class="num">% a visita</th></tr></thead>
         <tbody>
-          ${campRows.map(r=>`<tr${r.sinCampana?' style="color:var(--gray-400)"':''}>
-            <td>${r.sinCampana?r.nombre:'<strong>'+_escPend(r.nombre)+'</strong>'}</td>
-            <td class="num">${r.n}</td>
-            <td class="num">${r.pct}%</td>
-            <td class="num">${r.visitas}${r.n?' <span style="font-size:10px;color:var(--gray-400)">('+Math.round(r.visitas/r.n*100)+'%)</span>':''}</td>
-            <td class="num">${r.cierres}${r.n?' <span style="font-size:10px;color:var(--gray-400)">('+Math.round(r.cierres/r.n*100)+'%)</span>':''}</td>
-          </tr>`).join('')}
+          ${campRows.map(r=>{
+            /* el escalón donde se corta: primero que queda en cero teniendo leads arriba */
+            const _pasos=[r.indagacion,r.envio,r.vAgendada,r.vHecha];
+            const _corte=_pasos.findIndex((v,i)=>v===0&&(i===0?r.n:_pasos[i-1])>0);
+            const _cel=(v,i)=>`<td class="num"${i===_corte?' style="color:var(--st-atrasado);font-weight:700"':''}>${v}</td>`;
+            return `<tr>
+            <td>${r.esMedio?_escPend(r.nombre)+' <span style="font-size:10px;color:var(--gray-400)">(medio)</span>':'<strong>'+_escPend(r.nombre)+'</strong>'}</td>
+            <td class="num"><strong>${r.n}</strong></td>
+            ${_cel(r.indagacion,0)}${_cel(r.envio,1)}${_cel(r.vAgendada,2)}${_cel(r.vHecha,3)}
+            <td class="num">${r.cerrado}</td>
+            <td class="num" style="color:var(--st-atrasado)">${r.perdido}</td>
+            <td class="num"><strong>${r.pctVisita}%</strong></td>
+          </tr>`;}).join('')}
         </tbody>
-      </table>`}
-      <div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los nombres son los mismos que en Meta, para poder comparar lado a lado. Los leads cargados antes de v185 no tienen campaña: caen en “Sin campaña”.</div>
+      </table></div>`}
+      <div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los escalones son acumulativos: un lead que llegó a visita cuenta también en Indagación y Envío info, aunque después se haya perdido. <strong style="color:var(--st-atrasado)">En rojo</strong>, el primer escalón que quedó en cero: ahí se corta el embudo. Las filas marcadas “(medio)” son leads sin campaña asignada, agrupados por medio de difusión.</div>
     </div>
     <div class="section" style="margin-top:14px">
       <div class="section-title">📈 Tendencia mensual de leads (últimos 6 meses)</div>
