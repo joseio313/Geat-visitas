@@ -1254,7 +1254,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Departamento</label>
+            <label class="form-label">Departamento <span style="color:var(--st-atrasado)">*</span></label>
             <select class="form-control" id="nl-ciudad"></select>
           </div>
         </div>
@@ -1461,8 +1461,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <input class="form-control" type="tel" id="edit-celular" placeholder="78912345">
         </div>
         <div class="form-group">
+          <!-- v191: era input libre. El alta siempre fue un select limpio contra
+               departamentos_bolivia; esta edición era la puerta por donde entraban
+               "si constesto", "Chile" y las 60 variantes de la base. -->
           <label class="form-label">Ciudad / Departamento</label>
-          <input class="form-control" type="text" id="edit-ciudad" placeholder="Santa Cruz">
+          <select class="form-control" id="edit-ciudad"></select>
         </div>
       </div>
       <div class="form-group">
@@ -2661,6 +2664,57 @@ function _populateLostMotivos(){
   const s1=document.getElementById('lost-motivo');if(s1)s1.innerHTML=html;
   const s2=document.getElementById('nl-perdido-motivo');if(s2)s2.innerHTML=html;
 }
+/* ── v191 · SELECT DE CIUDAD COMPARTIDO ───────────────────────────────────
+   El alta ya usaba un select limpio contra departamentos_bolivia (25 entradas,
+   sin variantes); la edición era un input libre y por ahí entraron las ~60
+   variantes de leads.ciudad. Ahora los dos usan esto.
+   Un valorActual que no esté en el catálogo se conserva como opción aparte: sin
+   eso, abrir un lead viejo y guardar le borraría la ciudad que ya tenía. */
+function _ciudadOptionsHtml(valorActual){
+  const groups={};
+  (departamentos||[]).forEach(function(d){(groups[d.grupo]=groups[d.grupo]||[]).push(d);});
+  let html='<option value="">— Seleccionar —</option>'+Object.keys(groups).map(function(g){
+    return'<optgroup label="'+_escPend(g)+'">'+groups[g].map(function(d){
+      return'<option value="'+_escPend(d.nombre)+'">'+_escPend(d.nombre)+'</option>';
+    }).join('')+'</optgroup>';
+  }).join('');
+  const v=(''+(valorActual||'')).trim();
+  if(v&&!(departamentos||[]).some(function(d){return d.nombre===v;})){
+    html+='<optgroup label="Valor actual"><option value="'+_escPend(v)+'">'+_escPend(v)+' (fuera de catálogo)</option></optgroup>';
+  }
+  return html;
+}
+function _poblarCiudadSelect(sel,valorActual){
+  if(!sel)return;
+  sel.innerHTML=_ciudadOptionsHtml(valorActual);
+  sel.value=(''+(valorActual||'')).trim();
+}
+/* v191 — Aviso discreto en la ficha cuando falta la ciudad. NO bloquea nada: el
+   lead viejo se sigue gestionando igual, solo queda el campo a mano para
+   completarlo. Son 1.198 leads históricos sin ciudad; obligarlos de golpe
+   trabaría el trabajo del equipo sin arreglar el dato. */
+function _avisoFaltaCiudad(lead){
+  if(!lead||currentLeadMode==='readonly')return'';
+  if((''+(lead.ciudad||'')).trim())return'';
+  return '<div class="mobile-note" style="border-color:var(--gold)">📍 <strong>Falta la ciudad</strong> — sin este dato el lead no entra en el análisis de cobertura. Se puede seguir gestionando igual.'+
+    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">'+
+      '<select class="form-control" id="ficha-ciudad" style="flex:1;min-width:170px;font-size:12px">'+_ciudadOptionsHtml('')+'</select>'+
+      '<button class="btn-primary" style="font-size:11px" onclick="_guardarCiudadFicha('+lead.id+')">Guardar ciudad</button>'+
+    '</div></div>';
+}
+async function _guardarCiudadFicha(leadId){
+  const sel=document.getElementById('ficha-ciudad');
+  const v=((sel&&sel.value)||'').trim();
+  if(!v){toast('Elegí una ciudad','error');return;}
+  try{
+    const{error}=await sb.from('leads').update({ciudad:v,updated_at:new Date().toISOString()}).eq('id',leadId);
+    if(error)throw error;
+    try{await registrarAuditoria('completar_ciudad','leads',leadId,{ciudad:v});}catch(e){}
+    toast('✅ Ciudad guardada: '+v,'ok');
+    /* repintar la ficha para que el aviso desaparezca y la zona quede al día */
+    try{await openLeadDetail(leadId,currentAgendaId,currentLeadMode);}catch(e){}
+  }catch(e){toast('Error al guardar la ciudad: '+e.message,'error');}
+}
 function _lostMotivoChange(sel,wrapId){
   const w=document.getElementById(wrapId);
   if(!w)return;
@@ -2686,13 +2740,8 @@ function populateCatalogSelects(){
   // v185 — campañas del alta (solo activas) + estado inicial oculto del campo
   _poblarCampanaSelect();
   _nlCampanaToggle();
-  // Departamentos en crear lead
-  const nlCiudad=document.getElementById('nl-ciudad');
-  let groups={};
-  departamentos.forEach(d=>{if(!groups[d.grupo])groups[d.grupo]=[];groups[d.grupo].push(d);});
-  nlCiudad.innerHTML='<option value="">— Seleccionar —</option>'+Object.entries(groups).map(([g,ds])=>
-    `<optgroup label="${g}">${ds.map(d=>`<option value="${d.nombre}">${d.nombre}</option>`).join('')}</optgroup>`
-  ).join('');
+  // Departamentos en crear lead (v191: poblado compartido con la edición)
+  _poblarCiudadSelect(document.getElementById('nl-ciudad'),'');
   // Fecha hoy default para crear lead
   document.getElementById('nl-fecha').value=ymdLocal(new Date());
   _nlResetFechaContacto();
@@ -3774,6 +3823,7 @@ async function openLeadDetail(leadId,agendaId,mode){
     </div>
     ${currentLeadMode!=='reactivar'&&_soyCerrador()&&_leadTomable(lead)&&!lead.cerrador?`<div class="mobile-note" style="border-color:#1565C0">🤝 <strong>Este lead todavía no tiene cerrador.</strong> Si lo estás trabajando vos, tocá <strong>“Tomar como cerrador”</strong> arriba: queda a tu nombre con su tarea, aparece en “En cierre” de ${lead.captador||'el captador'} y el captador conserva su captación.</div>`:''}
     ${currentLeadMode!=='readonly'&&!_leadBloqueado&&lead.estado==='visita_realizada'?`<div class="mobile-note" style="border-color:#43A047">✅ <strong>Este lead ya tuvo visita</strong> → registrá el resultado o la reserva con los botones de arriba.</div>`:''}
+    ${_avisoFaltaCiudad(lead)}
     <div id="lead-tab-detalle">
       <div class="section">
         <div class="section-title">Oportunidad</div>
@@ -6457,6 +6507,13 @@ async function saveLead(){
   const nombre=document.getElementById('nl-nombre').value.trim();
   const celular=document.getElementById('nl-celular').value.trim();
   if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
+  /* v191 — ciudad obligatoria: es el principal motivo de pérdida (50% "fuera de
+     zona de cobertura") y sin el dato no se puede dimensionar cuánta pauta se
+     desperdicia. Se valida ACÁ, antes del anti-dup lock: si se validara después,
+     un error de validación dejaría el lock tomado y el usuario tendría que
+     esperar sus 10 s de TTL para reintentar. */
+  const ciudad=(document.getElementById('nl-ciudad').value||'').trim();
+  if(!ciudad){toast('Elegí la ciudad del cliente','error');return;}
 
   // CAMBIO 1.A — Deshabilitar botón
   const btn=document.getElementById('btn-guardar-lead');
@@ -6476,7 +6533,6 @@ async function saveLead(){
 
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:document.getElementById('nl-captador-sel').value;
-  const ciudad=document.getElementById('nl-ciudad').value;
   const medio=document.getElementById('nl-medio').value;
   const nota=document.getElementById('nl-nota').value;
   const gradoInteres=document.getElementById('nl-grado-interes')?.value||null;
@@ -6620,7 +6676,10 @@ async function saveLeadPerdido(){
     _otroTxtNl=(document.getElementById('nl-perdido-otro-texto')?.value||'').trim();
     if(!_otroTxtNl){toast('Escribí el motivo en el campo de texto','error');return;}
   }
-  const ciudad=document.getElementById('nl-ciudad')?.value||null;
+  /* v191 — ciudad obligatoria también en el alta como perdido: es justamente el
+     caso donde más importa saber de dónde era el lead. */
+  const ciudad=(document.getElementById('nl-ciudad')?.value||'').trim();
+  if(!ciudad){toast('Elegí la ciudad del cliente','error');return;}
   const medio=document.getElementById('nl-medio')?.value||null;
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:(document.getElementById('nl-captador-sel')?.value||cu.nombre);
@@ -7060,7 +7119,7 @@ async function abrirEditarLead(leadId,nombre,celular,ciudad,medio){
   document.getElementById('edit-lead-id').value=leadId;
   document.getElementById('edit-nombre').value=decodeURIComponent(nombre||'');
   document.getElementById('edit-celular').value=celular||'';
-  document.getElementById('edit-ciudad').value=ciudad||'';
+  _poblarCiudadSelect(document.getElementById('edit-ciudad'),ciudad);
   document.getElementById('edit-medio').value=medio||'';
   document.getElementById('edit-correo').value='';
   document.getElementById('edit-grado-interes').value='';
@@ -7070,7 +7129,7 @@ async function abrirEditarLead(leadId,nombre,celular,ciudad,medio){
     if(data){
       if(!nombre)document.getElementById('edit-nombre').value=data.nombre||'';
       if(!celular)document.getElementById('edit-celular').value=data.celular||'';
-      if(!ciudad)document.getElementById('edit-ciudad').value=data.ciudad||'';
+      if(!ciudad)_poblarCiudadSelect(document.getElementById('edit-ciudad'),data.ciudad);
       if(!medio)document.getElementById('edit-medio').value=data.medio_difusion||'';
       document.getElementById('edit-correo').value=data.correo||'';
       document.getElementById('edit-grado-interes').value=data.grado_interes||'';
