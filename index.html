@@ -1670,7 +1670,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='192';
+  var CURRENT_VERSION='193';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2670,16 +2670,33 @@ function _populateLostMotivos(){
    variantes de leads.ciudad. Ahora los dos usan esto.
    Un valorActual que no esté en el catálogo se conserva como opción aparte: sin
    eso, abrir un lead viejo y guardar le borraría la ciudad que ya tenía. */
+/* v193 — "No indica" como respuesta válida. Obligar a elegir ciudad estaba
+   bloqueando el alta de prospectos que escriben sin decir de dónde son: la
+   captadora terminaba inventando el dato, que es peor que no tenerlo. Es un
+   valor explícito y a conciencia (nunca queda seleccionado por defecto: el
+   placeholder sigue primero), y NO significa fuera de cobertura — ver
+   _zonaCiudad, donde cae en "sin_dato". */
+const _CIUDAD_NO_INDICA='no_indica';
+const _CIUDAD_NO_INDICA_LABEL='— No indica —';
+/* Etiqueta para MOSTRAR. Devuelve '' si no hay ciudad, para que siga
+   funcionando el encadenado `_ciudadLabel(x)||lead.ind_ciudad||'—'`. */
+function _ciudadLabel(c){
+  const v=(''+(c==null?'':c)).trim();
+  return v===_CIUDAD_NO_INDICA?_CIUDAD_NO_INDICA_LABEL:v;
+}
+function _esCiudadNoIndica(c){return (''+(c==null?'':c)).trim()===_CIUDAD_NO_INDICA;}
 function _ciudadOptionsHtml(valorActual){
   const groups={};
   (departamentos||[]).forEach(function(d){(groups[d.grupo]=groups[d.grupo]||[]).push(d);});
-  let html='<option value="">— Seleccionar —</option>'+Object.keys(groups).map(function(g){
+  let html='<option value="">— Seleccionar —</option>'+
+    '<option value="'+_CIUDAD_NO_INDICA+'">'+_escPend(_CIUDAD_NO_INDICA_LABEL)+'</option>'+
+    Object.keys(groups).map(function(g){
     return'<optgroup label="'+_escPend(g)+'">'+groups[g].map(function(d){
       return'<option value="'+_escPend(d.nombre)+'">'+_escPend(d.nombre)+'</option>';
     }).join('')+'</optgroup>';
   }).join('');
   const v=(''+(valorActual||'')).trim();
-  if(v&&!(departamentos||[]).some(function(d){return d.nombre===v;})){
+  if(v&&v!==_CIUDAD_NO_INDICA&&!(departamentos||[]).some(function(d){return d.nombre===v;})){
     html+='<optgroup label="Valor actual"><option value="'+_escPend(v)+'">'+_escPend(v)+' (fuera de catálogo)</option></optgroup>';
   }
   return html;
@@ -2695,8 +2712,14 @@ function _poblarCiudadSelect(sel,valorActual){
    trabaría el trabajo del equipo sin arreglar el dato. */
 function _avisoFaltaCiudad(lead){
   if(!lead||currentLeadMode==='readonly')return'';
-  if((''+(lead.ciudad||'')).trim())return'';
-  return '<div class="mobile-note" style="border-color:var(--gold)">📍 <strong>Falta la ciudad</strong> — sin este dato el lead no entra en el análisis de cobertura. Se puede seguir gestionando igual.'+
+  const _noInd=_esCiudadNoIndica(lead.ciudad);
+  /* v193 — 'no_indica' es un dato PENDIENTE, no un dato cerrado: el aviso sigue
+     a la vista con el select listo para cuando el prospecto conteste. */
+  if(!_noInd&&(''+(lead.ciudad||'')).trim())return'';
+  const _txt=_noInd
+    ? '📍 <strong>Falta confirmar ciudad</strong> — el prospecto todavía no dijo de dónde es. Cuando conteste, completala acá.'
+    : '📍 <strong>Falta la ciudad</strong> — sin este dato el lead no entra en el análisis de cobertura. Se puede seguir gestionando igual.';
+  return '<div class="mobile-note" style="border-color:var(--gold)">'+_txt+
     '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">'+
       '<select class="form-control" id="ficha-ciudad" style="flex:1;min-width:170px;font-size:12px">'+_ciudadOptionsHtml('')+'</select>'+
       '<button class="btn-primary" style="font-size:11px" onclick="_guardarCiudadFicha('+lead.id+')">Guardar ciudad</button>'+
@@ -2710,7 +2733,7 @@ async function _guardarCiudadFicha(leadId){
     const{error}=await sb.from('leads').update({ciudad:v,updated_at:new Date().toISOString()}).eq('id',leadId);
     if(error)throw error;
     try{await registrarAuditoria('completar_ciudad','leads',leadId,{ciudad:v});}catch(e){}
-    toast('✅ Ciudad guardada: '+v,'ok');
+    toast('✅ Ciudad guardada: '+_ciudadLabel(v),'ok');
     /* repintar la ficha para que el aviso desaparezca y la zona quede al día */
     try{await openLeadDetail(leadId,currentAgendaId,currentLeadMode);}catch(e){}
   }catch(e){toast('Error al guardar la ciudad: '+e.message,'error');}
@@ -3445,6 +3468,9 @@ function _ciudadPartes(c){
   return p.length>1?p.slice(1).concat(p[0],s):[s];
 }
 function _zonaCiudad(c){
+  /* v193 — "No indica" NO es fuera de cobertura: que el prospecto no haya dicho
+     de dónde es no lo saca de Santa Cruz. Es dato faltante, igual que vacío. */
+  if(_esCiudadNoIndica(c))return 'sin_dato';
   const partes=_ciudadPartes(c);
   if(!partes.length)return 'sin_dato';
   for(let i=0;i<partes.length;i++){
@@ -3459,7 +3485,7 @@ const _ZONA_INFO={
   plena      :{label:'Cobertura plena',      color:'var(--st-completo)',marca:''},
   condicional:{label:'Cobertura condicional',color:'var(--gold)',       marca:' <span style="font-size:10px">◆ solo proyectos grandes</span>'},
   fuera      :{label:'Fuera de cobertura',   color:'var(--st-atrasado)',marca:' <span style="font-size:10px">⚠ fuera de cobertura</span>'},
-  sin_dato   :{label:'Sin ciudad cargada',   color:'var(--gray-600)',   marca:''}
+  sin_dato   :{label:'Sin ciudad / No indica',color:'var(--gray-600)',  marca:''}
 };
 /* v191 — Aviso en la ficha para la zona condicional. No bloquea: avisa. */
 function _avisoZonaCondicional(lead){
@@ -3482,7 +3508,9 @@ function _renderCiudades(){
   const colDe=function(l){const k=_campLabel(l);return cols.indexOf(k)>=0?k:'Otras';};
   const filas={};
   leads.forEach(function(l){
-    const nom=(l.ciudad||'').trim()||'— sin ciudad —';
+    /* v193 — "No indica" es su propia fila (gris, junto a las sin ciudad): no se
+       mezcla con ninguna de las tres zonas ni se cuenta como fuera. */
+    const nom=_ciudadLabel(l.ciudad)||'— sin ciudad —';
     if(!filas[nom])filas[nom]={nombre:nom,zona:_zonaCiudad(l.ciudad),total:0,cols:{}};
     const f=filas[nom];
     f.total++;
@@ -3523,7 +3551,7 @@ function _renderCiudades(){
       '<span style="color:var(--gold)">■</span> Condicional: solo proyectos grandes y de precio alto ('+_CIUDADES_CONDICIONAL.length+'). '+
       '<span style="color:var(--st-atrasado)">■</span> Fuera: no se construye ('+_CIUDADES_FUERA.length+'). '+
       'Las tres listas están en <code style="font-size:10px">_CIUDADES_PLENA</code> / <code style="font-size:10px">_CIUDADES_CONDICIONAL</code> / <code style="font-size:10px">_CIUDADES_FUERA</code>. '+
-      '“Sin ciudad” no cuenta como fuera de cobertura: es un dato que falta, no un lead descartable.'+
+      '<span style="color:var(--gray-600)">■</span> “Sin ciudad” y “No indica” no cuentan como fuera de cobertura: es un dato que falta, no un lead descartable.'+
     '</div>';
 }
 
@@ -3609,7 +3637,7 @@ async function exportarPorVendedor(){
     const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta);
     const rows=(leads||[]).map(l=>({
       'Captador':l.captador||'—','Nombre':l.nombre,'Celular':l.celular,
-      'Ciudad':l.ciudad||'—','Medio':l.medio_difusion||'—',
+      'Ciudad':_ciudadLabel(l.ciudad)||'—','Medio':l.medio_difusion||'—',
       'Estado':l.estado,'Etapa':l.etapa||'—',
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
     }));
@@ -3624,7 +3652,7 @@ async function exportarPerdidos(){
   try{
     const{data:leads}=await sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,motivo_perdida,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
     const rows=(leads||[]).map(l=>({
-      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':_ciudadLabel(l.ciudad)||'—',
       'Captador':l.captador||'—','Medio':l.medio_difusion||'—',
       'Motivo pérdida':l.motivo_perdida||'—','Detalle':l.motivo_perdida_detalle||'—',
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
@@ -3641,7 +3669,7 @@ async function exportarPorMedio(){
     const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta).order('medio_difusion');
     const rows=(leads||[]).map(l=>({
       'Medio difusión':l.medio_difusion||'—','Nombre':l.nombre,
-      'Celular':l.celular,'Ciudad':l.ciudad||'—','Captador':l.captador||'—',
+      'Celular':l.celular,'Ciudad':_ciudadLabel(l.ciudad)||'—','Captador':l.captador||'—',
       'Estado':l.estado,'Etapa':l.etapa||'—',
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
     }));
@@ -3659,7 +3687,7 @@ async function exportarTodo(){
       sb.from('seguimientos').select('lead_id,colaborador,etapa,nota_previa,nota_resultado,fecha_seguimiento,completado_en,estado').gte('fecha_seguimiento',rng.desde).lt('fecha_seguimiento',rng.hasta).order('lead_id').order('fecha_seguimiento')
     ]);
     const leadRows=(rLeads.data||[]).map(l=>({
-      'ID':l.id,'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'ID':l.id,'Nombre':l.nombre,'Celular':l.celular,'Ciudad':_ciudadLabel(l.ciudad)||'—',
       'Medio':l.medio_difusion||'—','Captador':l.captador||'—',
       'Estado':l.estado,'Etapa':l.etapa||'—',
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
@@ -3749,7 +3777,7 @@ async function verReportePerdidos(){
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(leads||[]).length} leads perdidos en el período</div>
     <table class="team-table" style="width:100%">
       <thead><tr><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Captador</th><th>Motivo pérdida</th><th>Detalle</th><th>Fecha</th></tr></thead>
-      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.captador||'—'}</td><td style="color:var(--st-atrasado)">${l.motivo_perdida||'—'}</td><td style="font-size:10px;color:var(--gray-400)">${l.motivo_perdida_detalle||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.captador||'—'}</td><td style="color:var(--st-atrasado)">${l.motivo_perdida||'—'}</td><td style="font-size:10px;color:var(--gray-400)">${l.motivo_perdida_detalle||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Reporte Perdidos · '+rng.label,html,'perdidos');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -3762,7 +3790,7 @@ async function verReporteMedio(){
     const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta).order('medio_difusion');
     const html=`<table class="team-table" style="width:100%">
       <thead><tr><th>Medio</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Captador</th><th>Estado</th><th>Fecha</th></tr></thead>
-      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.medio_difusion||'—'}</strong></td><td>${l.nombre||'—'}</td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.medio_difusion||'—'}</strong></td><td>${l.nombre||'—'}</td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Reporte por Medio · '+rng.label,html,'por_medio');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -3779,7 +3807,7 @@ async function verReporteCompleto(){
     const html=`<div class="section-title" style="margin-bottom:12px">Leads (${(rLeads.data||[]).length})</div>
     <table class="team-table" style="width:100%;margin-bottom:20px">
       <thead><tr><th>ID</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Captador</th><th>Estado</th><th>Fecha</th></tr></thead>
-      <tbody>${(rLeads.data||[]).map(l=>`<tr><td style="font-size:10px">${l.id}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(rLeads.data||[]).map(l=>`<tr><td style="font-size:10px">${l.id}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
     </table>
     <div class="section-title" style="margin-bottom:12px">Seguimientos (${(rSegs.data||[]).length})</div>
     <table class="team-table" style="width:100%">
@@ -3801,7 +3829,7 @@ async function verReporteLeadsRango(){
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads en el período ${desde} → ${hasta}</div>
     <table class="team-table" style="width:100%">
       <thead><tr><th>Fecha</th><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Captador</th><th>Estado</th></tr></thead>
-      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.medio_difusion||'—'}</td><td>${l.captador||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Leads por Rango · '+desde+' → '+hasta,html,'leads_rango');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -3821,7 +3849,7 @@ async function verReporteBusqueda(){
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(data||[]).length} leads — ${desde} → ${hasta}</div>
     <table class="team-table" style="width:100%">
       <thead><tr><th>Fecha/Hora</th><th>Captador</th><th>Cliente</th><th>Celular</th><th>Ciudad</th><th>Medio</th><th>Estado</th></tr></thead>
-      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px;white-space:nowrap">${l.created_at?new Date(l.created_at).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td><td>${l.captador||'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${l.ciudad||'—'}</td><td>${l.medio_difusion||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(data||[]).map(l=>`<tr><td style="font-size:10px;white-space:nowrap">${l.created_at?new Date(l.created_at).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td><td>${l.captador||'—'}</td><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.medio_difusion||'—'}</td><td style="font-size:10px">${l.estado||'—'}</td></tr>`).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Leads Buscados · '+desde+' → '+hasta,html,'busqueda');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -3892,7 +3920,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Estado</dt><dd><span class="badge-abierto">● ${lead.estado||'abierto'}</span></dd>
           <dt>Captador</dt><dd>${lead.captador||'—'}</dd>
           <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
-          <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
+          <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||lead.ind_ciudad||'—'}</dd>
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
           ${_leadCampanaHtml(lead)}
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
@@ -4154,7 +4182,7 @@ function renderViajeCliente(lead,segs,history){
   const _iniPipe=leadFechaContacto(lead);
   const diasEnPipeline=_iniPipe?Math.max(0,Math.round((Date.now()-_iniPipe.getTime())/86400000)):0;
   const indCampos=[
-    {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
+    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||lead.ind_ciudad},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
@@ -4200,7 +4228,7 @@ function renderViajeCliente(lead,segs,history){
     <div class="section-title">📊 PERFIL DEL CLIENTE</div>
     <dl class="data-grid">
       <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
-      <dt>Ciudad</dt><dd>${lead.ciudad||lead.ind_ciudad||'—'}</dd>
+      <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||lead.ind_ciudad||'—'}</dd>
       <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
       ${_leadCampanaHtml(lead)}
       <dt>Registrado</dt><dd>${fmt(lead.created_at)} por ${lead.captador||'—'}</dd>
@@ -4232,7 +4260,7 @@ function renderViajeCliente(lead,segs,history){
 
 function renderIndagacion(lead){
   const campos=[
-    {label:'Ciudad',val:lead.ciudad||lead.ind_ciudad},
+    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||lead.ind_ciudad},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
@@ -4266,7 +4294,9 @@ function enFaseCierre(lead){
 /* ── RONDA 5: indicador % ficha completa ── */
 function calcularFichaCompleta(lead,refs){
   const campos=[
-    !!lead.nombre,!!lead.celular,!!(lead.ciudad||lead.ind_ciudad),!!lead.medio_difusion,!!lead.grado_interes,
+    /* v193 — 'no_indica' no suma a la ficha completa: es un dato pendiente de
+       confirmar, no una ciudad cargada. */
+    !!lead.nombre,!!lead.celular,!!((_esCiudadNoIndica(lead.ciudad)?'':lead.ciudad)||lead.ind_ciudad),!!lead.medio_difusion,!!lead.grado_interes,
     !!(lead.financiamiento||lead.ind_financiamiento),!!lead.ind_lugar_terreno,!!lead.ind_monto_financiamiento,
     !!lead.ind_plantas,!!lead.ind_cuando_construir,!!lead.ind_presupuesto,
     !!lead.ind_presupuesto_tope,!!lead.ind_tipo,
@@ -6964,7 +6994,7 @@ async function execSearch(q){
     return `<div class="search-result-item" ${action}>
       <div>
         <div class="sr-name">${l.nombre||'—'}${matchTag}</div>
-        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${l.ciudad||'—'}${campanaNombre(l.campana_id)?' · 📣 '+_escPend(campanaNombre(l.campana_id)):''}</div>
+        <div class="sr-meta">${l.celular||'—'} · ${l.captador||'Sin asignar'} · ${_ciudadLabel(l.ciudad)||'—'}${campanaNombre(l.campana_id)?' · 📣 '+_escPend(campanaNombre(l.campana_id)):''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;white-space:nowrap">
         <span class="sr-status ${cls}">${lbl}</span>
@@ -7160,7 +7190,7 @@ async function cargarLeadsRecientes(){
           <td style="font-size:10px">${l.captador||'—'}</td>
           <td><strong style="font-size:11px">${l.nombre||'—'}</strong></td>
           <td style="font-size:11px">${l.celular||'—'}</td>
-          <td style="font-size:10px">${l.ciudad||'—'}</td>
+          <td style="font-size:10px">${_ciudadLabel(l.ciudad)||'—'}</td>
           <td><span class="sr-status ${cls}" style="font-size:9px;padding:2px 6px">${lbl}</span></td>
           <td style="white-space:nowrap">
             <button title="Ver perfil" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="openLeadReadOnly(${l.id})">🔍</button>
@@ -7250,7 +7280,7 @@ async function exportarBusqueda(){
     const rows=(data||[]).map(l=>({
       'Fecha creación':l.created_at?new Date(l.created_at).toLocaleString('es-BO'):'',
       'Captador':l.captador||'—','Cliente':l.nombre,'Celular':l.celular,
-      'Ciudad':l.ciudad||'—','Medio difusión':l.medio_difusion||'—',
+      'Ciudad':_ciudadLabel(l.ciudad)||'—','Medio difusión':l.medio_difusion||'—',
       'Estado':l.estado,'Etapa':l.etapa||'—'
     }));
     xlsxExport([{name:'Leads',rows}],`GEAT_Leads_${desde}_a_${hasta}.xlsx`);
@@ -7283,7 +7313,7 @@ async function generarReporteLeads(){
       <td>${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''}</td>
       <td><strong>${l.nombre||'—'}</strong></td>
       <td>${l.celular||'—'}</td>
-      <td>${l.ciudad||'—'}</td>
+      <td>${_ciudadLabel(l.ciudad)||'—'}</td>
       <td>${l.medio_difusion||'—'}</td>
       <td>${l.captador||'—'}</td>
       <td><span style="font-size:10px;font-weight:700">${l.estado||'—'}</span></td>
@@ -7306,7 +7336,7 @@ async function exportarReporteLeads(){
     if(error)throw error;
     const rows=(data||[]).map(l=>({
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'',
-      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':l.ciudad||'—',
+      'Nombre':l.nombre,'Celular':l.celular,'Ciudad':_ciudadLabel(l.ciudad)||'—',
       'Medio difusión':l.medio_difusion||'—','Captador':l.captador||'—',
       'Estado actual':l.estado,'Etapa':l.etapa||'—','Nota inicial':l.notas||'—'
     }));
