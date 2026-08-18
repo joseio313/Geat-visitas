@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='195';
+  var CURRENT_VERSION='196';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4989,27 +4989,55 @@ function _waDraftHtml(){
 ════════════════════════════════════════ */
 let _avWaMsg='';
 /* v130 — indagación exigida antes de pasar a visita_agendada (no retroactivo) */
+/* ── v196 · EL GATE BAJA DE 10 CAMPOS A 5 ─────────────────────────────────
+   Medido sobre los 1.308 leads activos de Genoveva:
+     ind_lugar_terreno 3 · ind_presupuesto 3 · ind_cuando_construir 2
+     ind_presupuesto_tope 1 · ind_monto_financiamiento 1 · ind_ciudad 1
+     indagacion_completa 1
+   La indagación se completa en el 0,2% de los casos: el gate no filtraba
+   leads malos, los bloqueaba a TODOS — y por eso el CRM registró 0 visitas
+   mientras en el grupo de WhatsApp había visitas reales.
+   (ind_plantas figura en 1.308/1.308: es el default del alta, no un dato
+   preguntado; metodo_pago, que es otra columna, tiene 1.)
+   Ahora BLOQUEAN solo los 5 marcados req:true. Los otros 5 siguen visibles y
+   cargables acá y en la ficha, pero no frenan el agendado: se capturan
+   durante la visita, que es cuando el cerrador realmente los pregunta.
+   El % de ficha completa NO cambia: renderIndagacion() y
+   calcularFichaCompleta() siguen contándolos todos.
+   OJO: el trigger bloquear_visita_sin_indagacion valida lo mismo del lado
+   del servidor. Los dos se bajaron a estos 5 en la misma versión; si se
+   agrega o saca un requerido acá, hay que tocar el trigger también. */
 const IND_CAMPOS=[
-  {key:'grado_interes',label:'Grado de interés',type:'select',opts:[['bajo','🟢 Bajo'],['medio','🟡 Medio'],['alto','🔴 Alto']]},
   /* v195 — era type:'text'. Ese input sin opciones es el "no te aparece la
      ciudad, no hay opción" de la reunión #197: el select cerrado de v191 nunca
      llegó a este gate. Ahora es el MISMO campo que el alta y la ficha. */
-  {key:'ind_ciudad',label:'Ciudad',type:'ciudad'},
+  {key:'ind_ciudad',label:'Ciudad',type:'ciudad',req:true},
+  {key:'ind_lugar_terreno',label:'Lugar del terreno',type:'text',req:true},
+  {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario']],req:true},
+  {key:'ind_presupuesto',label:'Presupuesto ($)',type:'number',req:true},
+  {key:'ind_cuando_construir',label:'¿Cuándo construir?',type:'text',req:true},
+  {key:'grado_interes',label:'Grado de interés',type:'select',opts:[['bajo','🟢 Bajo'],['medio','🟡 Medio'],['alto','🔴 Alto']]},
   {key:'ind_tipo',label:'¿Vivienda o inversión?',type:'select',opts:[['vivienda','Vivienda'],['inversion','Inversión']]},
-  {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario']]},
   {key:'ind_monto_financiamiento',label:'Monto financiable ($)',type:'number'},
-  {key:'ind_presupuesto',label:'Presupuesto ($)',type:'number'},
   {key:'ind_presupuesto_tope',label:'Presupuesto tope ($)',type:'number'},
-  {key:'ind_lugar_terreno',label:'Lugar del terreno',type:'text'},
-  {key:'ind_plantas',label:'Plantas',type:'number'},
-  {key:'ind_cuando_construir',label:'¿Cuándo construir?',type:'text'}
+  {key:'ind_plantas',label:'Plantas',type:'number'}
 ];
+/* Los que bloquean. Se calcula del array para que no haya dos listas que
+   puedan quedar desincronizadas. */
+const IND_CAMPOS_REQ=IND_CAMPOS.filter(function(c){return c.req;});
 const IND_CAMPOS_SEL=IND_CAMPOS.map(function(c){return c.key;}).join(',');
+function _avVacio(lf,c){
+  const v=lf?lf[c.key]:null;
+  return v===null||v===undefined||v==='';
+}
+/* TODOS los que faltan — se siguen mostrando en el gate y cuentan para el
+   aviso de "ya visitó pero le falta indagación". */
 function _avCamposFaltantes(lf){
-  return IND_CAMPOS.filter(function(c){
-    const v=lf?lf[c.key]:null;
-    return v===null||v===undefined||v==='';
-  });
+  return IND_CAMPOS.filter(function(c){return _avVacio(lf,c);});
+}
+/* v196 — solo estos frenan el agendado. */
+function _avReqFaltantes(lf){
+  return IND_CAMPOS_REQ.filter(function(c){return _avVacio(lf,c);});
 }
 function _avRenderGate(faltantes){
   window._avFaltantes=faltantes;
@@ -5019,28 +5047,40 @@ function _avRenderGate(faltantes){
      en el gate y el formulario está oculto, así que ella no tenía forma de
      saber que había un paso más ni cuánto le faltaba. Se le dice ambas cosas.
      La indagación sigue yendo PRIMERO (protocolo comercial). */
-  const _nf=faltantes.length;
+  /* v196 — el contador es sobre los 5 que bloquean, no sobre los 10. */
+  const _nf=faltantes.filter(function(c){return c.req;}).length;
+  const _nop=faltantes.length-_nf;
   const _res=document.getElementById('av-gate-resumen');
   if(_res){
-    _res.innerHTML='Paso 1 de 2 · falta'+(_nf===1?' 1 dato':'n '+_nf+' datos')+
-      ' de la indagación.<br><span style="font-weight:400;color:var(--gray-400)">'+
-      'Cuando los completes te pedimos la fecha y la hora de la visita, y te damos el mensaje para el grupo de WhatsApp.</span>';
+    _res.innerHTML='Paso 1 de 2 · '+(_nf===1?'falta 1 de 5 datos':'faltan '+_nf+' de 5 datos')+' para poder agendar.'+
+      '<br><span style="font-weight:400;color:var(--gray-400)">'+
+      'Cuando los completes te pedimos la fecha y la hora de la visita, y te damos el mensaje para el grupo de WhatsApp.'+
+      (_nop?' Los marcados como opcionales no frenan nada — se cargan en la visita.':'')+'</span>';
   }
   const _btn=document.getElementById('av-gate-btn');
   if(_btn)_btn.innerHTML='Guardar y seguir a fecha y hora →';
-  document.getElementById('av-gate-fields').innerHTML=faltantes.map(function(c){
+  /* v196 — requeridos primero; los opcionales van abajo y se marcan como
+     tales, para que se vea de un vistazo qué es lo que frena. */
+  const _orden=faltantes.slice().sort(function(a,b){return (b.req?1:0)-(a.req?1:0);});
+  document.getElementById('av-gate-fields').innerHTML=_orden.map(function(c,i){
     const id='av-gate-'+c.key;
+    const marca=c.req
+      ? ' <span style="color:var(--st-atrasado)">*</span>'
+      : ' <span style="font-weight:400;font-size:10px;color:var(--gray-400)">(opcional · se carga en la visita)</span>';
+    const sep=(!c.req&&(i===0||_orden[i-1].req))
+      ? '<div style="border-top:1px solid var(--gray-600);margin:12px 0 10px;padding-top:8px;font-size:11px;color:var(--gray-400)">Opcionales — no frenan el agendado</div>'
+      : '';
     /* v195 — ciudad: select del catálogo + "Otra ciudad..." con texto libre */
     if(c.type==='ciudad'){
-      return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+      return sep+'<div class="form-group"><label class="form-label">'+c.label+marca+'</label>'+
         _ciudadCampoHtml(id,'')+'</div>';
     }
     if(c.type==='select'){
       const opts=c.opts.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
-      return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+      return sep+'<div class="form-group"><label class="form-label">'+c.label+marca+'</label>'+
         '<select class="form-control" id="'+id+'"><option value="">Seleccionar...</option>'+opts+'</select></div>';
     }
-    return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+    return sep+'<div class="form-group"><label class="form-label">'+c.label+marca+'</label>'+
       '<input class="form-control" type="'+(c.type==='number'?'number':'text')+'" id="'+id+'"></div>';
   }).join('');
 }
@@ -5054,8 +5094,12 @@ async function guardarIndagacionYContinuar(){
     const raw=c.type==='ciudad'
       ? _ciudadValor('av-gate-'+c.key)
       : ((document.getElementById('av-gate-'+c.key)||{}).value||'');
-    if(raw===''||raw==null){
-      toast('Completá: '+c.label+(c.type==='ciudad'?' (si elegiste "Otra ciudad..." escribila)':''),'error');
+    const vacio=(raw===''||raw==null);
+    /* v196 — solo los 5 requeridos frenan. Un opcional vacío simplemente no
+       se guarda; si lo cargó, se guarda igual. */
+    if(vacio){
+      if(!c.req)continue;
+      toast('Falta: '+c.label+(c.type==='ciudad'?' (si elegiste "Otra ciudad..." escribila)':''),'error');
       return;
     }
     upd[c.key]=c.type==='number'?parseFloat(raw):raw;
@@ -5193,12 +5237,15 @@ async function abrirAgendarVisita(){
     /* v161: si el lead YA visitó la oficina la visita es un hecho consumado —
        no se bloquea, pero se avisa para que la indagación se cargue después */
     const yaVisitoOficina=!!(lf&&lf.visito_oficina);
+    /* v196 — el gate MUESTRA todo lo que falta pero solo FRENA por los 5
+       requeridos. La excepción de "visitó oficina" queda igual que antes. */
     const faltantes=(yaAvanzado||yaVisitoOficina)?[]:_avCamposFaltantes(lf);
+    const reqFaltan=(yaAvanzado||yaVisitoOficina)?[]:_avReqFaltantes(lf);
     const avisoInd=yaVisitoOficina&&!yaAvanzado&&_avCamposFaltantes(lf).length>0;
     document.getElementById('av-aviso-ind').style.display=avisoInd?'':'none';
     /* v195 — el gate incluye el select de ciudad y este modal puede abrirse
        antes de que loadCatalogs() haya terminado: sin esto salía sin ciudades. */
-    if(faltantes.length){await _asegurarCiudades();_avRenderGate(faltantes);}
+    if(reqFaltan.length){await _asegurarCiudades();_avRenderGate(faltantes);}
     else{
       document.getElementById('av-form').style.display='';
       if(avisoInd)toast('⚠️ Este lead ya visitó pero le falta indagación — completala cuando puedas');
