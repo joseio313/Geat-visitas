@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='196';
+  var CURRENT_VERSION='197';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1807,18 +1807,14 @@ async function registrarAuditoria(accion,tabla,registroId,detalles){
     });
   }catch(e){}
 }
-async function registrarLoginAuditoria(col,pinUsado,exitoso){
-  try{
-    await sb.from('auditoria_logins').insert({
-      colaborador_id:exitoso&&col?col.id:null,
-      colaborador_nombre:exitoso&&col?col.nombre:'desconocido',
-      pin_usado:pinUsado,exitoso,
-      ip:_userIp,user_agent:navigator.userAgent,
-      dispositivo:detectarDispositivo(),navegador:detectarNavegador(),
-      fecha_login:new Date().toISOString()
-    });
-  }catch(e){}
-}
+/* v197 — acá vivía registrarLoginAuditoria(): insertaba en auditoria_logins
+   desde el navegador con el PIN COMPLETO en texto plano. Quedó sin llamadas
+   cuando el login pasó a geat-auth (v126), pero seguía en el archivo: 420
+   filas con PINs completos (25 distintos) entraron por acá entre el 25-may y
+   el 19-jun, y la tabla se leía con la anon key que está en este mismo HTML.
+   Se borra para que nadie la vuelva a llamar. La auditoría de login la hace
+   geat-auth con service_role: NULL en los exitosos, enmascarado en los
+   fallidos. Ver también _adminCargarLogins(). */
 
 /* ════════════════════════════════════════
    HELPERS
@@ -7884,7 +7880,11 @@ async function renderAdmin(){
 
   try{
     const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas,rPend,rUsuarios]=await Promise.all([
-      sb.from('auditoria_logins').select('*').order('fecha_login',{ascending:false}).limit(50),
+      /* v197 — antes: sb.from('auditoria_logins').select('*'). Esa tabla guarda
+         el PIN de los intentos fallidos y se leía con la anon key del HTML, o
+         sea que era pública. Ahora pasa por geat-auth, que valida token +
+         rol=admin server-side, y la tabla queda cerrada a anon. */
+      authCall({action:'admin_logins',token:localStorage.getItem('geat_session_token'),limite:50}),
       sb.from('auditoria_acciones').select('*').order('fecha',{ascending:false}).limit(100),
       sb.from('leads').select('captador,estado,metros_cuadrados,created_at').gte('created_at',mesInicio).lt('created_at',mesFin),
       sb.from('agenda_personal').select('colaborador,completada,fecha_programada').gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
@@ -7893,7 +7893,10 @@ async function renderAdmin(){
       authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')})
     ]);
 
-    const logins=rLogins.data||[];
+    /* v197 — la respuesta ahora viene de la Edge Function: {ok,logins}. Si el
+       token venció, se avisa en vez de dibujar la sección vacía y en silencio. */
+    const logins=(rLogins&&rLogins.logins)||[];
+    if(rLogins&&rLogins.ok===false)toast('No se pudieron cargar los logins: '+(rLogins.error||'error'),'error');
     const acciones=rAcciones.data||[];
     const leadsMes=rLeadsMes.data||[];
     const actsMes=rActsMes.data||[];
