@@ -3051,10 +3051,18 @@ async function renderWeek(){
 
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
   if(cu.rol==='field_capturer'){
-    const{data:misLeads}=await sb.from('leads').select('id').eq('captador',cu.nombre).or('archivado.is.null,archivado.eq.false');
-    const ids=(misLeads||[]).map(function(l){return l.id;});
-    /* v184 — sus leads O actividades sin lead; siempre acotado a sus propias tareas */
-    query=ids.length?query.or('lead_id.is.null,lead_id.in.('+ids.join(',')+')'):query.is('lead_id',null);
+    /* ── v195 · LOS LEADS QUE NO APARECIAN EN SU AGENDA ────────────────────
+       v184 prefiltraba con la lista de ids de sus leads:
+         select('id').eq('captador',cu.nombre)  ->  .or('lead_id.in.(...)')
+       PostgREST corta esa lista en 1000 filas (devuelve 206 Partial Content).
+       Genoveva tiene 1.308 leads no archivados, asi que 308 quedaban afuera —
+       y como la consulta no lleva order, los que se caian eran arbitrarios y
+       en la practica los mas nuevos, justo los que esta trabajando.
+       Medido el 18-ago: de sus 92 actividades de la semana ella veia 19.
+       El prefiltro ademas no aportaba nada: la consulta ya esta acotada a
+       colaborador = cu.nombre (sus propias tareas) y los leads archivados se
+       descartan mas abajo con _archSetW. Peor: escondia una tarea asignada a
+       ella sobre un lead captado por otra persona, que si le corresponde. */
     query=query.eq('colaborador',cu.nombre);
   } else if(!isJefe){
     query=_filtrarPorColaborador(query);
@@ -3182,9 +3190,8 @@ async function renderMonth(){
     .lt('fecha_programada',end.toISOString());
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
   if(cu.rol==='field_capturer'){
-    const{data:misLeadsM}=await sb.from('leads').select('id').eq('captador',cu.nombre).or('archivado.is.null,archivado.eq.false');
-    const idsM=(misLeadsM||[]).map(function(l){return l.id;});
-    q=idsM.length?q.or('lead_id.is.null,lead_id.in.('+idsM.join(',')+')'):q.is('lead_id',null);
+    /* v195 — mismo corte de 1000 filas que en la semanal (ver renderWeek).
+       Los archivados se siguen descartando abajo con _archSetM. */
     q=q.eq('colaborador',cu.nombre);
   } else if(!isJefe){
     q=_filtrarPorColaborador(q);
