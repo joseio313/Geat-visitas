@@ -1130,13 +1130,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         </div>
         <div class="form-row">
           <div class="form-group">
+            <!-- v195: eran dos campos (date + time) y la fecha se guardaba sin
+                 hora en leads.proximo_contacto. Ahora es uno solo y se guarda
+                 el instante completo en UTC. -->
             <label class="form-label">📅 Próximo contacto</label>
-            <input class="form-control" type="date" id="next-fecha">
-            <div class="form-help">Sugerido según la etapa · editable</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">🕐 Hora</label>
-            <input class="form-control" type="time" id="next-hora" value="10:00">
+            <input class="form-control" type="datetime-local" id="next-cuando">
+            <div class="form-help">Día y hora (Bolivia) · sugerido según la etapa, editable</div>
           </div>
         </div>
         <div class="form-group">
@@ -1992,9 +1991,17 @@ function _dtLocalBolivia(d){
 }
 /* Convierte lo tipeado en el datetime-local (hora boliviana) al instante UTC
    que va a la base. */
+/* v195 — endurecido: acepta 'YYYY-MM-DD', '...THH:mm' y '...THH:mm:ss', y si
+   el string NO trae zona horaria le pone la de Bolivia. Antes solo contemplaba
+   el largo 16 y cualquier otro formato caía en new Date(), que lo interpreta en
+   la zona del dispositivo. */
 function _dtBoliviaToIso(v){
   if(!v)return null;
-  const d=new Date(String(v).length===16?v+':00-04:00':v);
+  let t=String(v).trim().replace(' ','T');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(t))t+='T00:00';
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t))t+=':00';
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(t))t+='-04:00';
+  const d=new Date(t);
   return isNaN(d.getTime())?null:d.toISOString();
 }
 function _nlResetFechaContacto(){
@@ -2050,9 +2057,70 @@ function getMonday(d){
   return dt;
 }
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
-function fmt(d){if(!d)return'—';const dt=new Date(d);return dt.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});}
-function fmtDT(d){if(!d)return'—';const dt=new Date(d);return dt.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+dt.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});}
-function fmtTime(d){if(!d)return'—';return new Date(d).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});}
+/* ── v195 · EL BUG DE LAS 2 AM ────────────────────────────────────────────
+   new Date('2026-08-19') NO es el 19 de agosto: es la medianoche UTC de ese
+   día. Formateado con la zona del equipo sale corrido. Medido en producción,
+   con el navegador en America/La_Paz:
+       fmt('2026-08-19')    ->  "18/08/2026"            (el día ANTERIOR)
+       fmtDT('2026-08-19')  ->  "18/08/2026 08:00 p.m."
+   y el mismo string en un equipo al este de Greenwich (UTC+2):
+       new Date('2026-08-19') -> "19/8/2026, 2:00:00 a. m."
+   Eso es el "cambios de horario a las 2 am, es ilógico" que reportó la
+   captadora. Estos tres helpers los usa toda la app, así que se arreglan acá:
+   un string sin hora se ancla al MEDIODÍA de Bolivia (ningún redondeo lo cruza
+   de día) y el formateo fija timeZone America/La_Paz, no la del dispositivo. */
+const TZ_BO='America/La_Paz';
+function _esSoloDia(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.trim());}
+function _aFechaBo(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v.getTime())?null:v;
+  const t=String(v).trim();
+  const d=_esSoloDia(t)?new Date(t+'T12:00:00-04:00'):new Date(t);
+  return isNaN(d.getTime())?null:d;
+}
+/* '19/08/2026'. Reemplaza a todo new Date(x).toLocaleDateString(). */
+function _fechaDiaTxt(v,extra){
+  const d=_aFechaBo(v);
+  if(!d)return'—';
+  return new Intl.DateTimeFormat('es-BO',Object.assign(
+    {timeZone:TZ_BO,day:'2-digit',month:'2-digit',year:'numeric'},extra||{})).format(d);
+}
+/* '14:30' en hora de Bolivia. El '24' que devuelve Intl a medianoche se
+   normaliza a '00' (mismo criterio que _dtLocalBolivia y _visFechaHora). */
+function _horaTxt(v){
+  const d=_aFechaBo(v);
+  if(!d)return'—';
+  const p=new Intl.DateTimeFormat('es-BO',{timeZone:TZ_BO,hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d);
+  const g=function(t){return(p.find(function(x){return x.type===t;})||{}).value||'00';};
+  return (g('hour')==='24'?'00':g('hour'))+':'+g('minute');
+}
+/* '19/08/2026 14:30'. Un valor SIN hora no se inventa una: sale solo el día. */
+function _fechaHoraTxt(v){
+  if(!_aFechaBo(v))return'—';
+  return _esSoloDia(v)?_fechaDiaTxt(v):(_fechaDiaTxt(v)+' '+_horaTxt(v));
+}
+function fmt(d){return _fechaDiaTxt(d);}
+function fmtDT(d){return _fechaHoraTxt(d);}
+function fmtTime(d){return _aFechaBo(d)?(_esSoloDia(d)?'—':_horaTxt(d)):'—';}
+/* Instante en que TERMINA el día de hoy en Bolivia, en ISO. Es el corte para
+   comparar una columna timestamptz contra "hasta hoy": mandar 'YYYY-MM-DD' a
+   PostgREST lo castea a medianoche UTC = 20:00 del día anterior en Bolivia. */
+function _finDeHoyBoIso(){
+  return new Date(ymdBolivia(new Date(Date.now()+86400000))+'T00:00:00-04:00').toISOString();
+}
+/* Valor para un <input type="datetime-local">: el día de hoy + `dias` y la
+   hora ACTUAL de Bolivia redondeada hacia arriba a la próxima media hora. */
+function _dtSugerido(dias){
+  const ahora=new Date();
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:TZ_BO,hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(ahora);
+  const g=function(t){return(p.find(function(x){return x.type===t;})||{}).value;};
+  let h=parseInt(g('hour')==='24'?'0':g('hour'),10),m=parseInt(g('minute'),10),saltaDia=0;
+  if(m===0||m===30){/* ya está justo en media hora */}
+  else if(m<30)m=30;
+  else{m=0;h+=1;if(h>23){h=0;saltaDia=1;}}
+  const base=new Date(ahora.getTime()+((dias||0)+saltaDia)*86400000);
+  return ymdBolivia(base)+'T'+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
 function toast(msg,tipo='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='show '+(tipo==='error'?'err':'ok');
@@ -6572,7 +6640,7 @@ async function prepareFinalize(){
     const{data:lf}=await sb.from('leads').select('etapa').eq('id',currentLeadId).single();
     diasSug=_diasProximoContacto(lf&&lf.etapa);
   }catch(e){}
-  document.getElementById('next-fecha').value=ymdLocal(addDays(new Date(),diasSug));
+  document.getElementById('next-cuando').value=_dtSugerido(diasSug);
   // Reset radios
   document.querySelectorAll('.radio-option').forEach(r=>r.classList.remove('selected'));
   document.querySelectorAll('.radio-option')[0].classList.add('selected');
@@ -6651,15 +6719,24 @@ async function saveSeguimiento(){
     if(outcomeMode==='continue'){
       const nextEstado=document.getElementById('next-estado').value;
       const nextAsignado=document.getElementById('next-asignado').value;
-      const nextFecha=document.getElementById('next-fecha').value;
-      const nextHora=document.getElementById('next-hora').value;
+      /* v195 — 'YYYY-MM-DDTHH:mm' en hora de Bolivia (datetime-local) */
+      const nextCuando=document.getElementById('next-cuando').value;
       const nextNota=document.getElementById('next-nota').value;
-      if(!nextFecha){
+      if(!nextCuando){
         if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
         _modalBodyLock('modalFinalize',false);
-        toast('Ingresá la fecha del próximo seguimiento','error');return;
+        toast('Ingresá el día y la hora del próximo seguimiento','error');return;
       }
-      const fp=new Date(`${nextFecha}T${nextHora||'10:00'}:00`).toISOString();
+      /* v195 — _dtBoliviaToIso fija el offset -04:00. Antes era
+         new Date(`${fecha}T${hora}:00`), que interpreta la hora tipeada en la
+         zona del DISPOSITIVO: desde un teléfono mal configurado se guardaba un
+         instante distinto al que la captadora eligió. */
+      const fp=_dtBoliviaToIso(nextCuando);
+      if(!fp){
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        _modalBodyLock('modalFinalize',false);
+        toast('La fecha del próximo seguimiento no es válida','error');return;
+      }
       const{data:lead}=await sb.from('leads').select('nombre,captador,estado').eq('id',currentLeadId).single();
       const nombreLead=lead?.nombre||'—';
       const lead2Estado=lead?.estado||'nuevo';
@@ -6729,7 +6806,9 @@ async function saveSeguimiento(){
       /* v182 — ultima_gestion es la base de "días sin gestión": si solo se
          escribiera en el alta, todo lead trabajado seguiría contando desde su
          primer contacto. Se sella acá, que es donde el seguimiento se completa. */
-      const _updLead={etapa:nextEstado,proximo_contacto:nextFecha,ultima_gestion:ymdBolivia(new Date()),updated_at:now};
+      /* v195 — proximo_contacto pasó de date a timestamptz: se guarda el mismo
+         instante que la actividad de agenda, en UTC. */
+      const _updLead={etapa:nextEstado,proximo_contacto:fp,ultima_gestion:ymdBolivia(new Date()),updated_at:now};
       const _esFaseVisita=/^visita\s/i.test((nextEstado||'').trim());
       if(_esFaseVisita&&!['visita_agendada','visita_realizada','reservado','cerrado_ganado','cerrado_perdido'].includes(lead2Estado)){
         _updLead.estado='visita_agendada';
@@ -6819,7 +6898,9 @@ async function saveSeguimiento(){
     if(outcomeMode==='continue'){
       const nextEstado2=document.getElementById('next-estado')?.value||'';
       if(nextEstado2.toLowerCase()==='visita oficina'){
-        const nextFecha2=document.getElementById('next-fecha')?.value;
+        /* v195 — asignarCerrador espera el DÍA ('YYYY-MM-DD'); el input ahora
+           trae también la hora, así que se recorta. */
+        const nextFecha2=(document.getElementById('next-cuando')?.value||'').slice(0,10);
         if(nextFecha2){
           try{await asignarCerrador(currentLeadId,nextFecha2,false);}catch(eAlt){}
         }
@@ -6922,7 +7003,10 @@ async function saveLead(){
   const fnacExtra=document.getElementById('nl-fnac-extra')?.value||null;
   const fecha=document.getElementById('nl-fecha').value;
   const hora=document.getElementById('nl-hora').value||'10:00';
-  const fp=new Date(`${fecha}T${hora}:00`).toISOString();
+  /* v195 — se fija -04:00. Sin el offset, la hora tipeada se interpretaba en la
+     zona del DISPOSITIVO: desde el teléfono de la captadora (24% de lo que
+     carga desde mobile) el 1er intento caía de madrugada. */
+  const fp=_dtBoliviaToIso(fecha+'T'+hora)||new Date().toISOString();
   const now=new Date().toISOString();
   const hoyBo=ymdBolivia(new Date());
   const clienteMujer=esCaptadora&&document.getElementById('nl-cliente-mujer')?.checked||false;
@@ -6962,7 +7046,10 @@ async function saveLead(){
          esa columna: NULL nunca cumple <= hoy, así que el lead se guardaba bien
          pero no se mostraba (71 leads de Genoveva en un solo día). Se usa la
          fecha del 1er intento y, si no hay, hoy: un lead nuevo se trabaja hoy. */
-      proximo_contacto:fecha||hoyBo,
+      /* v195 — timestamptz: el mismo instante que el 1er intento agendado, no
+         el día pelado (que PostgREST casteaba a medianoche UTC = 20:00 del día
+         anterior en Bolivia). */
+      proximo_contacto:fp,
       /* ultima_gestion arranca en la fecha REAL de contacto, no en la de carga:
          un lead que escribió el sábado y se carga el lunes ya lleva 2 días
          esperando, y así lo cuenta leadDiasSinGestion(). */
@@ -7369,10 +7456,11 @@ async function confirmarReactivar(leadId,nombre){
   }
 
   const now=new Date().toISOString();
-  const fp=new Date(`${fecha}T${hora}:00`).toISOString();
+  /* v195 — mismo criterio que el alta: offset de Bolivia fijo. */
+  const fp=_dtBoliviaToIso(fecha+'T'+hora)||new Date().toISOString();
   try{
     await sb.from('leads').update({
-      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fecha,archivado:false,
+      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fp,archivado:false,
       ultima_gestion:ymdBolivia(new Date()),updated_at:now
     }).eq('id',leadId);
     const{error}=await sb.from('agenda_personal').insert({
@@ -7421,7 +7509,8 @@ async function reactivarLeadDesdePerfil(leadId){
     return;
   }
   const now=new Date().toISOString();
-  const hoy=ymdLocal(new Date());
+  /* v195 — timestamptz: hoy a las 09:00 de Bolivia, no un día pelado. */
+  const hoy=_dtBoliviaToIso(ymdBolivia(new Date())+'T09:00');
   try{
     const{data:l}=await sb.from('leads').select('nombre,etapa').eq('id',leadId).single();
     const{error}=await sb.from('leads').update({
@@ -7661,7 +7750,10 @@ async function asignarCerrador(leadId,fechaVisita,clienteMujer){
   // 3. Regla mujer
   if(clienteMujer&&proximo===CERRADOR_GUSTAVO){
     // Verificar solape ±2h
-    const fv=new Date(fechaVisita+'T00:00:00');
+    /* v195 — se fija -04:00: el solape se mide en hora de Bolivia, no en la
+       del dispositivo. Acepta 'YYYY-MM-DD' y también 'YYYY-MM-DDTHH:mm'. */
+    const _fvTxt=String(fechaVisita||'');
+    const fv=new Date((_fvTxt.length===10?_fvTxt+'T00:00':_fvTxt.slice(0,16))+':00-04:00');
     const desde=new Date(fv.getTime()-2*3600000).toISOString();
     const hasta=new Date(fv.getTime()+2*3600000).toISOString();
     const{data:solape}=await sb.from('agenda_personal')
@@ -8596,7 +8688,8 @@ async function _grabCrearLeadDirecto(id){
          entra a "Para hoy". Acá el 1er intento se agenda hoy 10:00, así que el
          próximo contacto es hoy. La fecha real de contacto es la de la
          grabación: el registro puede cargarse días después de la llamada. */
-      proximo_contacto:ymdBolivia(new Date()),
+      /* v195 — timestamptz: hoy 10:00 Bolivia, igual que el 1er intento. */
+      proximo_contacto:_dtBoliviaToIso(ymdBolivia(new Date())+'T10:00'),
       ultima_gestion:ymdBolivia(g.created_at||new Date()),
       /* v186 — timestamptz: se guarda el instante exacto de la grabación, no
          su día pelado, que es lo que permite medir el tiempo de respuesta. */
@@ -9073,7 +9166,11 @@ async function renderParaHoy(){
          solo `or` en la query y el filtro de proximo_contacto puede usarlo. */
       .not('archivado','is',true)
       .not('estado','in','(cerrado_perdido,cerrado_ganado,visita_agendada,visita_realizada,reservado)')
-      .or('proximo_contacto.lte.'+hoy+',proximo_contacto.is.null')
+      /* v195 — proximo_contacto es timestamptz: mandar 'YYYY-MM-DD' hacía que
+         PostgREST lo casteara a medianoche UTC (= 20:00 del día anterior en
+         Bolivia) y los seguimientos de hoy no entraban. Se corta con el
+         instante en que termina el día boliviano. */
+      .or('proximo_contacto.lt.'+_finDeHoyBoIso()+',proximo_contacto.is.null')
       .limit(_paraHoyTodos?200:100);
     if(cu.rol==='field_capturer') q=q.eq('captador',cu.nombre);
     const{data,error}=await q;
@@ -11878,8 +11975,8 @@ async function _mirSeguimiento(grabId,leadId){
     if(notaTxt)finNota.value=notaTxt;
   }
   /* Sugerir siguiente fecha hoy + 1 día */
-  const finNext=document.getElementById('next-fecha');
-  if(finNext)finNext.value=ymdLocal(addDays(new Date(),1));
+  const finNext=document.getElementById('next-cuando');
+  if(finNext)finNext.value=_dtSugerido(1);
 }
 async function _mirReprocesar(id){
   if(!_mirCache[id]){toast('Registro no encontrado','error');return;}
@@ -12142,7 +12239,7 @@ async function _asistContexto(){
       const rows=leads||[];
       if(rows.length){
         ctx+='LEADS ACTIVOS'+(rol==='field_capturer'?' (tuyos)':'')+' ('+rows.length+', máx 500):\n';
-        ctx+=rows.map(l=>'#'+l.id+' '+_asistNombre(l.nombre)+' | etapa: '+(l.etapa||'—')+' | próx. contacto: '+(l.proximo_contacto||'—')+' | captador: '+_asistNombre(l.captador)+' | cerrador: '+_asistNombre(l.cerrador)).join('\n');
+        ctx+=rows.map(l=>'#'+l.id+' '+_asistNombre(l.nombre)+' | etapa: '+(l.etapa||'—')+' | próx. contacto: '+_fechaHoraTxt(l.proximo_contacto)+' | captador: '+_asistNombre(l.captador)+' | cerrador: '+_asistNombre(l.cerrador)).join('\n');
       }else{ ctx+='(No hay leads activos en tu cartera.)'; }
     }catch(e){ ctx+='(No se pudieron cargar los leads.)'; }
   }
