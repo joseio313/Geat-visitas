@@ -1612,10 +1612,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div style="background:var(--st-completo);color:#06270f;font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">✅ Visita agendada — el cliente pasó a “visita agendada”.</div>
         <div class="form-group">
           <label class="form-label">Mensaje para el grupo</label>
-          <textarea class="form-control" id="av-wa-text" rows="8" readonly style="font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
+          <textarea class="form-control" id="av-wa-text" rows="11" readonly style="font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
         </div>
         <div class="action-row">
-          <button class="btn-primary" onclick="copiarAgendarVisitaWa()">📋 Copiar para WhatsApp</button>
+          <button class="btn-primary" onclick="copiarAgendarVisitaWa(this)">📋 Copiar para WhatsApp</button>
           <button class="btn-ghost" onclick="closeModal('modalAgendarVisita')">Cerrar</button>
         </div>
       </div>
@@ -1670,7 +1670,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='193';
+  var CURRENT_VERSION='194';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3902,6 +3902,7 @@ async function openLeadDetail(leadId,agendaId,mode){
       <button id="tab-detalle" class="btn-primary" onclick="switchLeadTab('detalle')" style="font-size:11px;padding:6px 12px">📋 Detalle</button>
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
       ${currentLeadMode!=='readonly'&&!_leadBloqueado?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
+      ${lead.estado==='visita_agendada'?`<button class="btn-ghost" onclick="copiarVisitaWaLead(${lead.id},this)" style="font-size:11px;padding:6px 12px" title="Reenviar al grupo el mensaje de esta visita, con su mismo número">📋 Copiar para WhatsApp</button>`:''}
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-primary" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px;border:2px solid rgba(0,0,0,0.55)">📝 Resultado visita</button>`:''}
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;background:#43A047;color:#fff;border:2px solid #2E7D32;font-weight:700">💰 Reservado</button>`:''}
       ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border:2px solid #2E7D32;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
@@ -5024,6 +5025,97 @@ function toggleLugarVisita(){
 function _avLabelModoPago(v){
   return v==='recursos_propios'?'Recursos propios':v==='con_financiamiento'?'Con financiamiento':v==='financiamiento_bancario'?'Financiamiento bancario':(v||'—');
 }
+/* ════════════════════════════════════════
+   v194 — MENSAJE DE VISITA PARA EL GRUPO DE WHATSAPP
+   Las visitas se anuncian a mano en un grupo de WhatsApp: el CRM se enteraba
+   tarde o nunca (agosto cerró con 0 visitas registradas contra varias reales,
+   y con eso todo el embudo quedaba mal). La salida no es pedirle otro hábito al
+   equipo sino que el mensaje del grupo SALGA del CRM, con un sello que lo
+   identifique — así una visita escrita a mano se distingue sola.
+   El formato es EL QUE YA USAN, no uno nuevo. Dos cosas son intocables:
+   · el correlativo mensual #N (agenda_personal.visita_nro, asignado por
+     siguiente_visita_nro() con advisory lock: dos captadoras agendando a la vez
+     no pueden sacar el mismo número). Sin él pierden la cuenta y no lo usan.
+   · identificar por NOMBRE si lo tienen y por CELULAR si el lead no lo dio.
+════════════════════════════════════════ */
+/* 'Sin nombre' es el placeholder de 3.136 leads: no es un nombre. */
+const _VIS_NOMBRE_GENERICO=['sin nombre','sin datos','sin nombre aún','s/n','no indica','-','--','—'];
+function _visCliente(nombre,celular){
+  const n=(nombre||'').trim();
+  if(n&&_VIS_NOMBRE_GENERICO.indexOf(n.toLowerCase())<0)return n;
+  return (celular||'').trim();
+}
+/* Fecha y hora SIEMPRE en America/La_Paz, igual criterio que ymdBolivia() */
+function _visFechaHora(iso){
+  if(!iso)return null;
+  const d=(iso instanceof Date)?iso:new Date(iso);
+  if(isNaN(d.getTime()))return null;
+  const p={};
+  new Intl.DateTimeFormat('es-BO',{timeZone:'America/La_Paz',weekday:'long',
+    day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})
+    .formatToParts(d).forEach(function(x){p[x.type]=x.value;});
+  const hh=(p.hour==='24')?'00':p.hour;
+  return {dia:p.weekday||'',fecha:p.day+'/'+p.month+'/'+p.year,hora:hh+':'+p.minute};
+}
+function _visLugarTxt(lugar,ubic){
+  const u=(ubic||'').trim();
+  if(lugar==='terreno')return 'En el terreno'+(u?' — '+u:'');
+  return 'En oficina';
+}
+/* Toda línea sin dato se OMITE (nada de "—"). La primera y la última van
+   siempre: son el sello. */
+function _visArmarMsg(o){
+  const L=[];
+  L.push((o.reagendada?'🔄 VISITA REAGENDADA #':'📌 NUEVA VISITA #')+o.nro+' · CRM '+o.leadId);
+  L.push('');
+  if(o.cliente)L.push('Cliente: '+o.cliente);
+  const f=_visFechaHora(o.iso);
+  if(f){L.push('Fecha: '+f.dia+' '+f.fecha);L.push('Hora: '+f.hora);}
+  if(o.reagendada){
+    const fa=_visFechaHora(o.isoAntes);
+    if(fa)L.push('Antes: '+fa.dia+' '+fa.fecha+' '+fa.hora);
+  }
+  if(o.cerrador)L.push('Cierra: '+o.cerrador);
+  if(o.lugar)L.push(o.lugar);
+  if(o.obs)L.push(o.obs);
+  if(o.pago)L.push(o.pago);
+  L.push('');
+  L.push((o.captador?'Captó: '+o.captador+' · ':'')+'GEAT CRM');
+  return L.join('\n');
+}
+/* Copiado sin alert bloqueante: el propio botón confirma */
+async function _visCopiar(txt,btn){
+  if(!txt){toast('Sin mensaje para copiar','error');return;}
+  let ok=true;
+  try{
+    await navigator.clipboard.writeText(txt);
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=txt;
+    ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{ok=document.execCommand('copy');}catch(_){ok=false;}
+    document.body.removeChild(ta);
+  }
+  if(!ok){toast('No se pudo copiar — seleccioná el texto y copialo a mano','error');return;}
+  if(btn){
+    const prev=btn.getAttribute('data-vis-prev')||btn.innerHTML;
+    btn.setAttribute('data-vis-prev',prev);
+    btn.innerHTML='Copiado ✓';btn.disabled=true;
+    setTimeout(function(){btn.innerHTML=prev;btn.disabled=false;},1600);
+  }else{
+    toast('Copiado ✓');
+  }
+}
+/* Visita pendiente YA numerada del lead (o null). El correlativo vive en
+   agenda_personal, que es además donde el resto del CRM cuenta las visitas. */
+async function _visPendienteNumerada(leadId){
+  const{data,error}=await sb.from('agenda_personal')
+    .select('id,visita_nro,visita_periodo,fecha_programada')
+    .eq('lead_id',leadId).eq('completada',false).eq('activo',true)
+    .not('visita_nro','is',null)
+    .order('fecha_programada',{ascending:false}).limit(1);
+  if(error)throw error;
+  return (data&&data.length)?data[0]:null;
+}
 async function guardarAgendarVisita(){
   const btn=document.getElementById('av-btn-guardar');
   const leadId=Number(document.getElementById('av-lead-id').value);
@@ -5043,6 +5135,20 @@ async function guardarAgendarVisita(){
   try{
     const l=window._leadAgendar||{};
     const isoInicio=new Date(fecha+'T'+hora+':00-04:00').toISOString();
+    /* v194 — correlativo mensual. Un REAGENDAMIENTO conserva su número: el
+       equipo lleva la cuenta del mes con él y un número nuevo se la rompe. */
+    let visPrev=null;
+    try{visPrev=await _visPendienteNumerada(leadId);}catch(ePrev){}
+    const esReag=!!visPrev;
+    let visNro=visPrev?visPrev.visita_nro:null;
+    let visPer=visPrev?visPrev.visita_periodo:null;
+    if(!visNro){
+      const{data:sig,error:eNro}=await sb.rpc('siguiente_visita_nro');
+      if(eNro)throw eNro;
+      const s=Array.isArray(sig)?sig[0]:sig;
+      visNro=s&&s.nro;visPer=s&&s.periodo;
+      if(!visNro)throw new Error('No se pudo asignar el número de visita');
+    }
     const row={
       tipo:'visita_nueva',
       titulo:'Visita · '+(cliente||l.nombre||'Lead'),
@@ -5064,28 +5170,68 @@ async function guardarAgendarVisita(){
       const{data:lf}=await sb.from('leads').select('cerrador,estado').eq('id',leadId).single();
       cerrador=(lf&&lf.cerrador)||'';
     }catch(e){}
-    try{registrarAuditoria('agendar_visita','agenda_grupal',leadId,{lugar:lugar,modo_pago:modoPago,fecha:isoInicio});}catch(e){}
+    try{registrarAuditoria('agendar_visita','agenda_grupal',leadId,{lugar:lugar,modo_pago:modoPago,fecha:isoInicio,visita_nro:visNro});}catch(e){}
+    /* v194 — espejo en agenda_personal: es donde vive visita_nro y donde el
+       resto del CRM cuenta las visitas. Hasta acá la visita del modal solo
+       existía en agenda_grupal, así que no aparecía en ninguna agenda personal
+       ni la veía siguiente_visita_nro(). */
+    const apRow={
+      colaborador:cerrador||l.captador||cu.nombre,
+      lead_id:leadId,
+      tipo:lugar==='terreno'?'Visita terreno':'Visita oficina',
+      titulo:cliente||l.nombre||'Lead',
+      nota:obs||null,
+      fecha_programada:isoInicio,
+      completada:false,
+      activo:true,
+      visita_nro:visNro,
+      visita_periodo:visPer
+    };
+    /* El advisory lock de siguiente_visita_nro() muere al cerrar la transacción
+       del RPC: el número recién queda TOMADO cuando existe la fila. Entre el RPC
+       y este insert otra captadora puede llevarse el mismo nº y el índice único
+       idx_visita_nro_periodo devuelve 23505 — se pide otro y se reintenta. */
+    let apOk=false,apErr=null;
+    for(let intento=0;intento<3&&!apOk;intento++){
+      const{error:eAp}=visPrev
+        ? await sb.from('agenda_personal').update(apRow).eq('id',visPrev.id)
+        : await sb.from('agenda_personal').insert(apRow);
+      if(!eAp){apOk=true;break;}
+      apErr=eAp;
+      if(eAp.code!=='23505')break;
+      const{data:sig2}=await sb.rpc('siguiente_visita_nro');
+      const s2=Array.isArray(sig2)?sig2[0]:sig2;
+      if(!s2||!s2.nro)break;
+      visNro=s2.nro;visPer=s2.periodo;
+      apRow.visita_nro=visNro;apRow.visita_periodo=visPer;
+    }
+    if(!apOk)toast('Visita agendada, pero el nº no quedó en la agenda: '+((apErr&&apErr.message)||'error'),'error');
     // v129 — marcar completada la tarjeta de agenda de la CAPTADORA (no la del cerrador)
     // para que no quede "atrasada" al salir de su lista activa de "Para hoy"
+    // v194 — .is('visita_nro',null): la fila de la visita recién creada NO puede
+    // caer acá. Completarla dispararía fn_registrar_visita_atendida y el lead
+    // pasaría a visita_realizada sin que el cliente haya venido.
     try{
       const{data:actAbierta}=await sb.from('agenda_personal').select('id')
         .eq('lead_id',leadId).eq('colaborador',l.captador||'').eq('completada',false).eq('activo',true)
+        .is('visita_nro',null)
         .order('fecha_programada').limit(1);
       if(actAbierta&&actAbierta.length){
         await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',actAbierta[0].id);
       }
     }catch(e){}
     // Armar mensaje del grupo (el cerrador aparece SOLO acá)
-    const fechaTxt=fecha.split('-').reverse().join('/');
-    const lugarTxt=lugar==='terreno'?('En el terreno — '+ubic):'En oficina';
-    _avWaMsg=
-      '🏠 *Nueva visita agendada*\n'+
-      '👤 Cliente: '+(cliente||l.nombre||'—')+'\n'+
-      '📅 Fecha/Hora: '+fechaTxt+' '+hora+'\n'+
-      '📍 Lugar: '+lugarTxt+'\n'+
-      '🤝 Cerrador: '+(cerrador||'por asignar')+'\n'+
-      '💳 Modo de pago: '+_avLabelModoPago(modoPago)+'\n'+
-      '📝 Observación: '+(obs||'—');
+    _avWaMsg=_visArmarMsg({
+      nro:visNro,leadId:leadId,
+      reagendada:esReag,isoAntes:visPrev?visPrev.fecha_programada:null,
+      cliente:_visCliente(l.nombre,l.celular),
+      iso:isoInicio,
+      cerrador:cerrador,
+      lugar:_visLugarTxt(lugar,ubic),
+      obs:obs,
+      pago:_avLabelModoPago(modoPago),
+      captador:l.captador||''
+    });
     document.getElementById('av-wa-text').value=_avWaMsg;
     document.getElementById('av-form').style.display='none';
     document.getElementById('av-resultado').style.display='';
@@ -5099,18 +5245,55 @@ async function guardarAgendarVisita(){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
   }
 }
-async function copiarAgendarVisitaWa(){
-  if(!_avWaMsg){toast('Sin mensaje para copiar','error');return;}
+async function copiarAgendarVisitaWa(btn){
+  await _visCopiar(_avWaMsg,btn);
+}
+/* v194 — reenviar al grupo una visita YA agendada, sin volver a cargar nada.
+   Reusa el visita_nro existente. Si la visita entró por el flujo de seguimiento
+   (que no pasa por este modal) todavía no tiene número: se le asigna uno acá,
+   que es la primera vez que esa visita se anuncia — no un renumerado. */
+async function copiarVisitaWaLead(leadId,btn){
+  if(!leadId){toast('Sin lead activo','error');return;}
   try{
-    await navigator.clipboard.writeText(_avWaMsg);
-    toast('✅ Mensaje copiado para WhatsApp');
-  }catch(e){
-    const ta=document.createElement('textarea');ta.value=_avWaMsg;
-    ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
-    try{document.execCommand('copy');toast('✅ Mensaje copiado para WhatsApp');}
-    catch(_){toast('No se pudo copiar','error');}
-    document.body.removeChild(ta);
-  }
+    const[rLead,rAp,rAg]=await Promise.all([
+      sb.from('leads').select('id,nombre,celular,captador,cerrador').eq('id',leadId).single(),
+      sb.from('agenda_personal').select('id,visita_nro,visita_periodo,fecha_programada,nota,tipo')
+        .eq('lead_id',leadId).eq('completada',false).eq('activo',true).ilike('tipo','visita%')
+        .order('fecha_programada',{ascending:false}).limit(1),
+      sb.from('agenda_grupal').select('fecha_inicio,lugar,ubicacion_terreno,modo_pago,descripcion')
+        .eq('lead_id',leadId).in('tipo',['visita_nueva','visita_oficina','visita_captador','reagendo'])
+        .order('fecha_inicio',{ascending:false}).limit(1)
+    ]);
+    if(rLead.error)throw rLead.error;
+    if(rAp.error)throw rAp.error;
+    const ap=(rAp.data&&rAp.data.length)?rAp.data[0]:null;
+    if(!ap){toast('Este lead no tiene una visita pendiente para anunciar','error');return;}
+    let nro=ap.visita_nro;
+    if(!nro){
+      const{data:sig,error:eNro}=await sb.rpc('siguiente_visita_nro');
+      if(eNro)throw eNro;
+      const s=Array.isArray(sig)?sig[0]:sig;
+      nro=s&&s.nro;
+      if(!nro)throw new Error('No se pudo asignar el número de visita');
+      const{error:eUp}=await sb.from('agenda_personal')
+        .update({visita_nro:nro,visita_periodo:s.periodo}).eq('id',ap.id);
+      if(eUp)throw eUp;
+    }
+    const lead=rLead.data||{};
+    const ag=(rAg.data&&rAg.data.length)?rAg.data[0]:null;
+    const lugarV=ag?ag.lugar:(/terreno/i.test(ap.tipo||'')?'terreno':'oficina');
+    const msg=_visArmarMsg({
+      nro:nro,leadId:leadId,reagendada:false,
+      cliente:_visCliente(lead.nombre,lead.celular),
+      iso:ap.fecha_programada,
+      cerrador:lead.cerrador||'',
+      lugar:_visLugarTxt(lugarV,ag?ag.ubicacion_terreno:''),
+      obs:(ap.nota||(ag&&ag.descripcion)||''),
+      pago:(ag&&ag.modo_pago)?_avLabelModoPago(ag.modo_pago):'',
+      captador:lead.captador||''
+    });
+    await _visCopiar(msg,btn);
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function guardarGrabacion(){
