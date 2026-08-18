@@ -1555,6 +1555,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <input type="hidden" id="av-lead-id">
       <div id="av-gate" style="display:none">
         <div style="background:var(--gold);color:var(--black);font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">🧭 Hay dos salidas para agendar esta visita:<br>1) Completá la indagación acá abajo.<br>2) Si el cliente YA vino a la oficina, marcá "🏢 Visitó oficina" en la ficha del lead y volvé a agendar.</div>
+        <div id="av-gate-resumen" style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:8px"></div>
         <div id="av-gate-fields"></div>
         <div class="action-row">
           <button class="btn-primary" id="av-gate-btn" onclick="guardarIndagacionYContinuar()">Continuar a agendar</button>
@@ -5014,6 +5015,19 @@ function _avRenderGate(faltantes){
   window._avFaltantes=faltantes;
   document.getElementById('av-form').style.display='none';
   document.getElementById('av-gate').style.display='';
+  /* v195 — la captadora reportó "no me pidió fecha ni hora": el modal se abre
+     en el gate y el formulario está oculto, así que ella no tenía forma de
+     saber que había un paso más ni cuánto le faltaba. Se le dice ambas cosas.
+     La indagación sigue yendo PRIMERO (protocolo comercial). */
+  const _nf=faltantes.length;
+  const _res=document.getElementById('av-gate-resumen');
+  if(_res){
+    _res.innerHTML='Paso 1 de 2 · falta'+(_nf===1?' 1 dato':'n '+_nf+' datos')+
+      ' de la indagación.<br><span style="font-weight:400;color:var(--gray-400)">'+
+      'Cuando los completes te pedimos la fecha y la hora de la visita, y te damos el mensaje para el grupo de WhatsApp.</span>';
+  }
+  const _btn=document.getElementById('av-gate-btn');
+  if(_btn)_btn.innerHTML='Guardar y seguir a fecha y hora →';
   document.getElementById('av-gate-fields').innerHTML=faltantes.map(function(c){
     const id='av-gate-'+c.key;
     /* v195 — ciudad: select del catálogo + "Otra ciudad..." con texto libre */
@@ -5057,9 +5071,17 @@ async function guardarIndagacionYContinuar(){
     if(completa)upd.indagacion_completa=true;
     const{error}=await sb.from('leads').update(upd).eq('id',l.id);
     if(error)throw error;
-    toast('✅ Indagación guardada');
     document.getElementById('av-gate').style.display='none';
     document.getElementById('av-form').style.display='';
+    /* v195 — el gate son hasta 10 campos: al ocultarlo, el modal quedaba
+       scrolleado a la altura del botón y los campos de fecha y hora aparecían
+       ARRIBA, fuera de la vista. Por eso "no me pidió fecha ni hora". */
+    const _md=document.getElementById('modalAgendarVisita');
+    const _mb=_md&&_md.querySelector('.modal-body');
+    if(_mb)_mb.scrollTop=0;
+    if(_md)_md.scrollTop=0;
+    try{document.getElementById('av-fecha').focus({preventScroll:true});}catch(e){}
+    toast('✅ Indagación guardada · Paso 2 de 2: elegí la fecha y la hora de la visita');
   }catch(e){
     toast('Error: '+e.message,'error');
   }finally{
