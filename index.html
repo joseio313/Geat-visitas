@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='197';
+  var CURRENT_VERSION='198';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1797,13 +1797,22 @@ function detectarNavegador(){
   if(/Safari\//i.test(ua)&&!/Chrome/i.test(ua))return'Safari';
   return'Otro';
 }
+/* v198 — antes esto hacía sb.from('auditoria_acciones').insert(...) con la anon
+   key del HTML, y mandaba colaborador_id/colaborador_nombre desde el cliente:
+   cualquiera podía escribir en el log de auditoría a nombre de otro. Ahora pasa
+   por geat-auth (action='audit'), que exige un token de sesión válido y SELLA la
+   identidad y la IP server-side a partir de ese token. Sigue sin lanzar nunca:
+   una auditoría que falla no puede voltear la acción que la originó. */
 async function registrarAuditoria(accion,tabla,registroId,detalles){
   if(!cu)return;
   try{
-    await sb.from('auditoria_acciones').insert({
-      colaborador_id:cu.id||null,colaborador_nombre:cu.nombre,
-      accion,tabla_afectada:tabla||null,registro_id:registroId||null,
-      detalles:detalles||null,ip:_userIp,fecha:new Date().toISOString()
+    await authCall({
+      action:'audit',
+      token:localStorage.getItem('geat_session_token'),
+      accion:accion,
+      tabla:tabla||null,
+      registro_id:registroId||null,
+      detalles:detalles||null
     });
   }catch(e){}
 }
@@ -7885,7 +7894,9 @@ async function renderAdmin(){
          sea que era pública. Ahora pasa por geat-auth, que valida token +
          rol=admin server-side, y la tabla queda cerrada a anon. */
       authCall({action:'admin_logins',token:localStorage.getItem('geat_session_token'),limite:50}),
-      sb.from('auditoria_acciones').select('*').order('fecha',{ascending:false}).limit(100),
+      /* v198 — igual que los logins: por geat-auth con token + rol=admin, para
+         que la tabla pueda quedar cerrada a anon. */
+      authCall({action:'admin_acciones',token:localStorage.getItem('geat_session_token'),limite:100}),
       sb.from('leads').select('captador,estado,metros_cuadrados,created_at').gte('created_at',mesInicio).lt('created_at',mesFin),
       sb.from('agenda_personal').select('colaborador,completada,fecha_programada').gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
       sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10),
@@ -7897,7 +7908,8 @@ async function renderAdmin(){
        token venció, se avisa en vez de dibujar la sección vacía y en silencio. */
     const logins=(rLogins&&rLogins.logins)||[];
     if(rLogins&&rLogins.ok===false)toast('No se pudieron cargar los logins: '+(rLogins.error||'error'),'error');
-    const acciones=rAcciones.data||[];
+    const acciones=(rAcciones&&rAcciones.acciones)||[];
+    if(rAcciones&&rAcciones.ok===false)toast('No se pudieron cargar las acciones: '+(rAcciones.error||'error'),'error');
     const leadsMes=rLeadsMes.data||[];
     const actsMes=rActsMes.data||[];
     const alternas=rAlternas.data||[];
