@@ -1255,7 +1255,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           </div>
           <div class="form-group">
             <label class="form-label">Departamento <span style="color:var(--st-atrasado)">*</span></label>
-            <select class="form-control" id="nl-ciudad"></select>
+            <select class="form-control" id="nl-ciudad" onchange="_ciudadToggleOtra('nl-ciudad')"></select>
+            <input class="form-control" type="text" id="nl-ciudad-otra" maxlength="60" placeholder="Escribí la ciudad" style="display:none;margin-top:6px">
           </div>
         </div>
         <div class="form-row">
@@ -1465,7 +1466,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
                departamentos_bolivia; esta edición era la puerta por donde entraban
                "si constesto", "Chile" y las 60 variantes de la base. -->
           <label class="form-label">Ciudad / Departamento</label>
-          <select class="form-control" id="edit-ciudad"></select>
+          <select class="form-control" id="edit-ciudad" onchange="_ciudadToggleOtra('edit-ciudad')"></select>
+          <input class="form-control" type="text" id="edit-ciudad-otra" maxlength="60" placeholder="Escribí la ciudad" style="display:none;margin-top:6px">
         </div>
       </div>
       <div class="form-group">
@@ -1670,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='194';
+  var CURRENT_VERSION='195';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2633,9 +2635,13 @@ async function loadCatalogs(){
     motivosGanado=mGan.data||[];
     mediosDifusion=medios.data||[];
     departamentos=deptos.data||[];
+    /* v195 — el error del catálogo de ciudades se guarda para poder MOSTRARLO
+       en el select (antes moría en el console.error de abajo y la captadora
+       solo veía un desplegable sin opciones). */
+    _deptosError=deptos.error?(deptos.error.message||'error'):(departamentos.length?'':'la tabla vino vacía');
     campanas=camp.data||[];
     populateCatalogSelects();
-  }catch(e){console.error('catalogs:',e);}
+  }catch(e){_deptosError=(e&&e.message)||'error al cargar catálogos';}
 }
 
 /* ── v190 · MOTIVO DE PÉRDIDA: LISTA CERRADA ──────────────────────────────
@@ -2678,6 +2684,38 @@ function _populateLostMotivos(){
    _zonaCiudad, donde cae en "sin_dato". */
 const _CIUDAD_NO_INDICA='no_indica';
 const _CIUDAD_NO_INDICA_LABEL='— No indica —';
+/* ── v195 · "OTRA CIUDAD..." + EL SELECT NUNCA QUEDA VACÍO ────────────────
+   Reportado por la captadora en la reunión #197: "no te aparece la ciudad — no
+   hay opción". Eran dos agujeros distintos:
+   1) el gate de "Agendar visita" pedía la Ciudad con un <input type=text>: no
+      tenía opciones porque nunca fue un select (ver IND_CAMPOS);
+   2) el catálogo se carga DESPUÉS del login (loadCatalogs) y su catch tragaba
+      el error: si la carga fallaba o el modal abría antes, el select salía sin
+      una sola ciudad y no había forma de saber por qué.
+   Además el catálogo son 25 localidades: si el cliente es de otra, antes no
+   había cómo cargarla. Ahora "Otra ciudad..." abre un texto libre. */
+const _CIUDAD_OTRA='__otra__';
+const _CIUDAD_OTRA_LABEL='Otra ciudad...';
+let _deptosError='';
+let _deptosCargando=null;
+/* Recarga el catálogo si falta. Devuelve true solo si quedaron ciudades. */
+function _asegurarCiudades(){
+  if((departamentos||[]).length)return Promise.resolve(true);
+  if(_deptosCargando)return _deptosCargando;
+  _deptosCargando=(async function(){
+    try{
+      const{data,error}=await sb.from('departamentos_bolivia').select('*').order('grupo,nombre');
+      if(error)throw error;
+      departamentos=data||[];
+      _deptosError=departamentos.length?'':'la tabla vino vacía';
+    }catch(e){
+      _deptosError=(e&&e.message)||'error de conexión';
+    }
+    _deptosCargando=null;
+    return (departamentos||[]).length>0;
+  })();
+  return _deptosCargando;
+}
 /* Etiqueta para MOSTRAR. Devuelve '' si no hay ciudad, para que siga
    funcionando el encadenado `_ciudadLabel(x)||lead.ind_ciudad||'—'`. */
 function _ciudadLabel(c){
@@ -2688,7 +2726,11 @@ function _esCiudadNoIndica(c){return (''+(c==null?'':c)).trim()===_CIUDAD_NO_IND
 function _ciudadOptionsHtml(valorActual){
   const groups={};
   (departamentos||[]).forEach(function(d){(groups[d.grupo]=groups[d.grupo]||[]).push(d);});
-  let html='<option value="">— Seleccionar —</option>'+
+  /* v195 — si el catálogo no está, se DICE. Antes quedaba un select mudo. */
+  const primera=(departamentos||[]).length
+    ? '<option value="">— Seleccionar —</option>'
+    : '<option value="">⚠️ No se pudieron cargar las ciudades'+(_deptosError?' ('+_escPend(_deptosError)+')':'')+'</option>';
+  let html=primera+
     '<option value="'+_CIUDAD_NO_INDICA+'">'+_escPend(_CIUDAD_NO_INDICA_LABEL)+'</option>'+
     Object.keys(groups).map(function(g){
     return'<optgroup label="'+_escPend(g)+'">'+groups[g].map(function(d){
@@ -2696,8 +2738,45 @@ function _ciudadOptionsHtml(valorActual){
     }).join('')+'</optgroup>';
   }).join('');
   const v=(''+(valorActual||'')).trim();
-  if(v&&v!==_CIUDAD_NO_INDICA&&!(departamentos||[]).some(function(d){return d.nombre===v;})){
+  if(v&&v!==_CIUDAD_NO_INDICA&&v!==_CIUDAD_OTRA&&!(departamentos||[]).some(function(d){return d.nombre===v;})){
     html+='<optgroup label="Valor actual"><option value="'+_escPend(v)+'">'+_escPend(v)+' (fuera de catálogo)</option></optgroup>';
+  }
+  /* Siempre última: es la salida cuando la ciudad no está en las 25, y también
+     el plan B si el catálogo no cargó. */
+  html+='<option value="'+_CIUDAD_OTRA+'">'+_escPend(_CIUDAD_OTRA_LABEL)+'</option>';
+  return html;
+}
+/* Muestra u oculta el texto libre que acompaña al select. El input se llama
+   siempre "<idDelSelect>-otra". */
+function _ciudadToggleOtra(id){
+  if(!id)return;
+  const sel=document.getElementById(id),inp=document.getElementById(id+'-otra');
+  if(!sel||!inp)return;
+  const otra=sel.value===_CIUDAD_OTRA;
+  inp.style.display=otra?'':'none';
+  if(otra){try{inp.focus();}catch(e){}}
+  else inp.value='';
+}
+/* Valor final del campo: lo tipeado si eligió "Otra ciudad...", si no lo del
+   select. Devuelve '' cuando eligió "Otra" y no escribió nada — así el llamador
+   lo trata igual que "sin elegir" y avisa. */
+function _ciudadValor(id){
+  const sel=document.getElementById(id);
+  if(!sel)return'';
+  const v=(sel.value||'').trim();
+  if(v!==_CIUDAD_OTRA)return v;
+  const inp=document.getElementById(id+'-otra');
+  return((inp&&inp.value)||'').trim();
+}
+/* HTML del par select+texto, para los campos que se pintan con innerHTML
+   (la ficha y el gate de agendar visita). Si el catálogo todavía no llegó,
+   programa el repintado en vez de dejar el select sin ciudades. */
+function _ciudadCampoHtml(id,valorActual,estilo){
+  const html='<select class="form-control" id="'+id+'" onchange="_ciudadToggleOtra(\''+id+'\')"'+(estilo?' style="'+estilo+'"':'')+'>'+
+    _ciudadOptionsHtml(valorActual)+'</select>'+
+    '<input class="form-control" type="text" id="'+id+'-otra" maxlength="60" placeholder="Escribí la ciudad" style="display:none;margin-top:6px'+(estilo?';'+estilo:'')+'">';
+  if(!(departamentos||[]).length){
+    setTimeout(function(){_poblarCiudadSelect(document.getElementById(id),valorActual);},0);
   }
   return html;
 }
@@ -2705,6 +2784,19 @@ function _poblarCiudadSelect(sel,valorActual){
   if(!sel)return;
   sel.innerHTML=_ciudadOptionsHtml(valorActual);
   sel.value=(''+(valorActual||'')).trim();
+  _ciudadToggleOtra(sel.id);
+  /* v195 — reintento: el catálogo se carga después del login, así que un modal
+     abierto antes (o una carga fallida) dejaba el select sin ciudades. */
+  if(!(departamentos||[]).length){
+    _asegurarCiudades().then(function(ok){
+      if(!document.body.contains(sel))return;
+      const prev=sel.value;
+      sel.innerHTML=_ciudadOptionsHtml(valorActual);
+      sel.value=prev||(''+(valorActual||'')).trim();
+      _ciudadToggleOtra(sel.id);
+      if(!ok)toast('No se pudo cargar la lista de ciudades'+(_deptosError?': '+_deptosError:'')+' — usá "Otra ciudad..."','error');
+    });
+  }
 }
 /* v191 — Aviso discreto en la ficha cuando falta la ciudad. NO bloquea nada: el
    lead viejo se sigue gestionando igual, solo queda el campo a mano para
@@ -2721,14 +2813,13 @@ function _avisoFaltaCiudad(lead){
     : '📍 <strong>Falta la ciudad</strong> — sin este dato el lead no entra en el análisis de cobertura. Se puede seguir gestionando igual.';
   return '<div class="mobile-note" style="border-color:var(--gold)">'+_txt+
     '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">'+
-      '<select class="form-control" id="ficha-ciudad" style="flex:1;min-width:170px;font-size:12px">'+_ciudadOptionsHtml('')+'</select>'+
+      '<div style="flex:1;min-width:170px">'+_ciudadCampoHtml('ficha-ciudad','','font-size:12px')+'</div>'+
       '<button class="btn-primary" style="font-size:11px" onclick="_guardarCiudadFicha('+lead.id+')">Guardar ciudad</button>'+
     '</div></div>';
 }
 async function _guardarCiudadFicha(leadId){
-  const sel=document.getElementById('ficha-ciudad');
-  const v=((sel&&sel.value)||'').trim();
-  if(!v){toast('Elegí una ciudad','error');return;}
+  const v=_ciudadValor('ficha-ciudad');
+  if(!v){toast('Elegí una ciudad (o escribila si elegiste "Otra ciudad...")','error');return;}
   try{
     const{error}=await sb.from('leads').update({ciudad:v,updated_at:new Date().toISOString()}).eq('id',leadId);
     if(error)throw error;
@@ -3921,7 +4012,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Estado</dt><dd><span class="badge-abierto">● ${lead.estado||'abierto'}</span></dd>
           <dt>Captador</dt><dd>${lead.captador||'—'}</dd>
           <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
-          <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||lead.ind_ciudad||'—'}</dd>
+          <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)||'—'}</dd>
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
           ${_leadCampanaHtml(lead)}
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
@@ -4183,7 +4274,7 @@ function renderViajeCliente(lead,segs,history){
   const _iniPipe=leadFechaContacto(lead);
   const diasEnPipeline=_iniPipe?Math.max(0,Math.round((Date.now()-_iniPipe.getTime())/86400000)):0;
   const indCampos=[
-    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||lead.ind_ciudad},
+    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
@@ -4229,7 +4320,7 @@ function renderViajeCliente(lead,segs,history){
     <div class="section-title">📊 PERFIL DEL CLIENTE</div>
     <dl class="data-grid">
       <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
-      <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||lead.ind_ciudad||'—'}</dd>
+      <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)||'—'}</dd>
       <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
       ${_leadCampanaHtml(lead)}
       <dt>Registrado</dt><dd>${fmt(lead.created_at)} por ${lead.captador||'—'}</dd>
@@ -4261,7 +4352,7 @@ function renderViajeCliente(lead,segs,history){
 
 function renderIndagacion(lead){
   const campos=[
-    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||lead.ind_ciudad},
+    {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
     {label:'Lugar terreno',val:lead.ind_lugar_terreno},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
@@ -4824,7 +4915,10 @@ let _avWaMsg='';
 /* v130 — indagación exigida antes de pasar a visita_agendada (no retroactivo) */
 const IND_CAMPOS=[
   {key:'grado_interes',label:'Grado de interés',type:'select',opts:[['bajo','🟢 Bajo'],['medio','🟡 Medio'],['alto','🔴 Alto']]},
-  {key:'ind_ciudad',label:'Ciudad',type:'text'},
+  /* v195 — era type:'text'. Ese input sin opciones es el "no te aparece la
+     ciudad, no hay opción" de la reunión #197: el select cerrado de v191 nunca
+     llegó a este gate. Ahora es el MISMO campo que el alta y la ficha. */
+  {key:'ind_ciudad',label:'Ciudad',type:'ciudad'},
   {key:'ind_tipo',label:'¿Vivienda o inversión?',type:'select',opts:[['vivienda','Vivienda'],['inversion','Inversión']]},
   {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario']]},
   {key:'ind_monto_financiamiento',label:'Monto financiable ($)',type:'number'},
@@ -4847,6 +4941,11 @@ function _avRenderGate(faltantes){
   document.getElementById('av-gate').style.display='';
   document.getElementById('av-gate-fields').innerHTML=faltantes.map(function(c){
     const id='av-gate-'+c.key;
+    /* v195 — ciudad: select del catálogo + "Otra ciudad..." con texto libre */
+    if(c.type==='ciudad'){
+      return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
+        _ciudadCampoHtml(id,'')+'</div>';
+    }
     if(c.type==='select'){
       const opts=c.opts.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
       return '<div class="form-group"><label class="form-label">'+c.label+' <span style="color:var(--st-atrasado)">*</span></label>'+
@@ -4862,9 +4961,14 @@ async function guardarIndagacionYContinuar(){
   if(!l||!l.id){toast('Sesión de lead perdida, reabrí el lead','error');return;}
   const upd={};
   for(const c of faltantes){
-    const el=document.getElementById('av-gate-'+c.key);
-    const raw=el?el.value:'';
-    if(raw===''||raw==null){toast('Completá: '+c.label,'error');return;}
+    /* v195 — la ciudad puede venir del texto libre de "Otra ciudad..." */
+    const raw=c.type==='ciudad'
+      ? _ciudadValor('av-gate-'+c.key)
+      : ((document.getElementById('av-gate-'+c.key)||{}).value||'');
+    if(raw===''||raw==null){
+      toast('Completá: '+c.label+(c.type==='ciudad'?' (si elegiste "Otra ciudad..." escribila)':''),'error');
+      return;
+    }
     upd[c.key]=c.type==='number'?parseFloat(raw):raw;
   }
   const btn=document.getElementById('av-gate-btn');
@@ -4995,7 +5099,9 @@ async function abrirAgendarVisita(){
     const faltantes=(yaAvanzado||yaVisitoOficina)?[]:_avCamposFaltantes(lf);
     const avisoInd=yaVisitoOficina&&!yaAvanzado&&_avCamposFaltantes(lf).length>0;
     document.getElementById('av-aviso-ind').style.display=avisoInd?'':'none';
-    if(faltantes.length){_avRenderGate(faltantes);}
+    /* v195 — el gate incluye el select de ciudad y este modal puede abrirse
+       antes de que loadCatalogs() haya terminado: sin esto salía sin ciudades. */
+    if(faltantes.length){await _asegurarCiudades();_avRenderGate(faltantes);}
     else{
       document.getElementById('av-form').style.display='';
       if(avisoInd)toast('⚠️ Este lead ya visitó pero le falta indagación — completala cuando puedas');
@@ -6785,8 +6891,8 @@ async function saveLead(){
      desperdicia. Se valida ACÁ, antes del anti-dup lock: si se validara después,
      un error de validación dejaría el lock tomado y el usuario tendría que
      esperar sus 10 s de TTL para reintentar. */
-  const ciudad=(document.getElementById('nl-ciudad').value||'').trim();
-  if(!ciudad){toast('Elegí la ciudad del cliente','error');return;}
+  const ciudad=_ciudadValor('nl-ciudad');
+  if(!ciudad){toast('Elegí la ciudad del cliente (o escribila si elegiste "Otra ciudad...")','error');return;}
 
   // CAMBIO 1.A — Deshabilitar botón
   const btn=document.getElementById('btn-guardar-lead');
@@ -6951,8 +7057,8 @@ async function saveLeadPerdido(){
   }
   /* v191 — ciudad obligatoria también en el alta como perdido: es justamente el
      caso donde más importa saber de dónde era el lead. */
-  const ciudad=(document.getElementById('nl-ciudad')?.value||'').trim();
-  if(!ciudad){toast('Elegí la ciudad del cliente','error');return;}
+  const ciudad=_ciudadValor('nl-ciudad');
+  if(!ciudad){toast('Elegí la ciudad del cliente (o escribila si elegiste "Otra ciudad...")','error');return;}
   const medio=document.getElementById('nl-medio')?.value||null;
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:(document.getElementById('nl-captador-sel')?.value||cu.nombre);
@@ -7422,7 +7528,7 @@ async function guardarEdicionLead(){
   if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Guardando...';}
   const cambios={
     nombre,celular,
-    ciudad:document.getElementById('edit-ciudad').value,
+    ciudad:_ciudadValor('edit-ciudad'),
     medio_difusion:document.getElementById('edit-medio').value,
     correo:correo||null,
     grado_interes:document.getElementById('edit-grado-interes').value||null,
