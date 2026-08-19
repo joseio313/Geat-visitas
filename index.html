@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='198';
+  var CURRENT_VERSION='199';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2635,8 +2635,7 @@ function startApp(){
     const cab=document.getElementById('capAudioBtn');
     if(cab&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)cab.style.display='inline-flex';
   }
-  /* v156 — Gerencia: admin + socios (flag es_socio). Si geat-auth todavía no
-     devuelve es_socio, degrada a solo-admin: nunca se abre de más. */
+  /* v199 — Gerencia: SOLO admin. Antes era admin + es_socio; ver _esGerencia(). */
   if(_esGerencia()){
     const tabGer=document.getElementById('tab-gerencia');
     if(tabGer)tabGer.style.display='';
@@ -2987,7 +2986,36 @@ function buildPersonaFilters(){
 /* ════════════════════════════════════════
    NAVIGATION TABS
 ════════════════════════════════════════ */
+/* ── v199 · PERMISOS DE PANTALLA, NO SOLO DE BOTÓN ────────────────────────
+   Esconder la pestaña con style.display='none' no protege nada: switchTab()
+   no miraba permisos, así que desde la consola alcanzaba con
+   switchTab(cualquierTab,'screen-gerencia') para abrir el panel.
+   Acá se declara quién puede entrar a cada pantalla y se corta la entrada.
+   OJO — esto es defensa de INTERFAZ, no de datos: las policies de leads y de
+   cobranza siguen siendo USING(true) para anon, así que los montos igual
+   viajan al navegador de cualquiera con la anon key. El blindaje server-side
+   es aparte (ver el reporte del punto 2). */
+const _SCREEN_ROLES={
+  'screen-gerencia'     :['admin'],
+  'screen-cobranzas'    :['admin'],
+  'screen-admin'        :['admin'],
+  'screen-reclutamiento':['admin'],
+  'screen-miregistro'   :['admin','field_capturer','commercial_lead'],
+  'screen-reports'      :['admin','commercial_lead','closer','tecnico']
+};
+function _puedeVerPantalla(screenId){
+  const permitidos=_SCREEN_ROLES[screenId];
+  if(!permitidos)return true;              // pantallas comunes a todo el equipo
+  return !!(cu&&permitidos.indexOf(cu.rol)>=0);
+}
 function switchTab(tab,screenId){
+  if(!_puedeVerPantalla(screenId)){
+    toast('No tenés permiso para ver esta sección','error');
+    /* además se limpia lo que hubiera quedado dibujado de una sesión anterior */
+    const _sc=document.getElementById(screenId);
+    if(_sc){const _b=_sc.querySelector('[id$="-body"]');if(_b)_b.innerHTML='';}
+    return;
+  }
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
@@ -9388,8 +9416,15 @@ function _toggleEnCierre(){
    NUNCA comisiones ni utilidad — las tablas `comisiones` / `comisiones_calculadas`
    no se consultan desde el frontend. Las captadoras no-socias no ven este panel.
 ════════════════════════════════════════ */
+/* ── v199 · GERENCIA ES SOLO DEL ADMIN ────────────────────────────────────
+   v156 abrió el panel a admin + colaboradores con es_socio=true. Con eso
+   Steffi Villarpando (rol field_capturer, es_socio=true) veía Total Vendido,
+   Ticket Promedio, cantidad de ventas y el formulario de históricos con
+   montos. David Gambarte (commercial_lead, es_socio=true) también.
+   Regla de la empresa: al equipo se le muestra m², NUNCA dinero. El flag
+   es_socio queda en la base para lo que sirva, pero ya no abre este panel. */
 function _esGerencia(){
-  return !!(cu&&(cu.rol==='admin'||cu.es_socio===true));
+  return !!(cu&&cu.rol==='admin');
 }
 function _gerUSD(n){
   return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
