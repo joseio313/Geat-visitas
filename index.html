@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='203';
+  var CURRENT_VERSION='206';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -9814,7 +9814,36 @@ let _cobTlGranu='mensual',_cobTlAbierto=null;
 let _cobAltaHecha=false,_cobAltaEstado=null;
 const COB_MAX_INTENTOS=3;
 
-function _cobBs(n){return 'Bs '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
+/* v206 — el simbolo sale de la moneda del CONTRATO, no era fijo "Bs".
+   El contrato de Javier tiene moneda='USD' y el panel decia "Bs 19.800" donde
+   el contrato dice USD 19.800. Sin 2do argumento se comporta como antes. */
+function _cobSimb(moneda){return String(moneda||'BS').toUpperCase()==='USD'?'USD ':'Bs ';}
+function _cobBs(n,moneda){return _cobSimb(moneda)+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
+/* Tipo de cambio: SIEMPRE de app_config, nunca una constante en el codigo.
+   El dia que cambie se toca esa fila y nada mas. */
+function _cobTC(){return Number(_cobCfg.tipo_cambio_usd_bs)||6.96;}
+/* Convierte un importe entre BS y USD. */
+function _cobConv(n,de,a){
+  const D=String(de||'BS').toUpperCase(),A=String(a||'BS').toUpperCase();
+  const v=Number(n)||0;
+  if(D===A)return v;
+  return D==='USD'?v*_cobTC():v/_cobTC();
+}
+/* v206 — TOPE: la mora de una cuota nunca supera el 20% de esa cuota.
+   El tope vive en la moneda de la CUOTA; solo se convierte para comparar
+   contra una penalidad pactada en otra moneda (caso Nancy: cuotas en Bs,
+   penalidad en USD). */
+const COB_TOPE_MORA_PCT=0.20;
+function _cobTopeMora(p,c){
+  const topeEnMonedaCuota=(Number(p.monto_bs)||0)*COB_TOPE_MORA_PCT;
+  return _cobConv(topeEnMonedaCuota,c.moneda,_cobMoraMoneda(c));
+}
+function _cobMoraTasa(c){
+  /* mora_usd_dia quedo obsoleta en v206; se lee solo si el contrato es viejo */
+  const v=(c.mora_cliente_dia===null||c.mora_cliente_dia===undefined)?c.mora_usd_dia:c.mora_cliente_dia;
+  return Number(v)||0;
+}
+function _cobMoraMoneda(c){return String(c.mora_cliente_moneda||'USD').toUpperCase();}
 function _cobUsd(n){return 'USD '+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 /* 'pagado' es el estado legacy de las filas de abril; se lee como cobrado */
 function _cobEsCobrado(p){return !!p&&(p.estado==='cobrado'||p.estado==='pagado');}
@@ -9882,23 +9911,37 @@ function _cobFechaHito(p,c){
   return{fecha:a?String(a).slice(0,10):null,estimada:true};
 }
 /* Estado visual de un hito + mora acumulada (FUNCIÓN 5, solo informativa) */
+/* v206 — la mora es POR CUOTA, corre desde SU vencimiento, tiene tope del 20%
+   del monto de la cuota, y al cobrarse queda SELLADA en pagos_cliente.mora_historica
+   (no se recalcula ni se borra: es plata reclamable aunque la cuota este paga). */
 function _cobEstadoHito(p,c){
   const hoy=ymdLocal(new Date());
-  if(_cobEsCobrado(p))return{cod:'cobrado',icono:'✅',label:'Pagado',aviso:p.fecha_cobro||p.fecha_pago||null,
-                             mora:0,estimada:false};
+  const mm=_cobMoraMoneda(c);
+  if(_cobEsCobrado(p)){
+    /* La mora devengada hasta el cobro queda fija. Una fila vieja sin sellar
+       muestra 0, nunca un numero recalculado contra hoy. */
+    const mh=Number(p.mora_historica)||0;
+    return{cod:'cobrado',icono:'✅',label:'Pagado',aviso:p.fecha_cobro||p.fecha_pago||null,
+           mora:mh,moraMoneda:mm,historica:true,topeada:false,estimada:false};
+  }
   const f=_cobFechaHito(p,c);
-  if(!f.fecha)return{cod:'pendiente',icono:'⬜',label:'Sin fecha estimada',aviso:null,mora:0,estimada:true};
+  if(!f.fecha)return{cod:'pendiente',icono:'⬜',label:'Sin fecha estimada',aviso:null,mora:0,moraMoneda:mm,topeada:false,estimada:true};
   const d=_cobDiasEntre(f.fecha,hoy);
   if(!f.estimada){
-    if(d>0)return{cod:'vencido',icono:'🔴',label:'Vencido hace '+d+' día(s)',aviso:f.fecha,
-                  mora:_cobR2(d*(Number(c.mora_usd_dia)||0)),estimada:false};
-    if(d===0)return{cod:'toca',icono:'🔔',label:'Vence hoy',aviso:f.fecha,mora:0,estimada:false};
-    return{cod:'pendiente',icono:'⬜',label:'Vence en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,estimada:false};
+    if(d>0){
+      const bruta=_cobR2(d*_cobMoraTasa(c));
+      const tope=_cobR2(_cobTopeMora(p,c));
+      const topeada=bruta>tope;
+      return{cod:'vencido',icono:'🔴',label:'Vencido hace '+d+' día(s)',aviso:f.fecha,
+             mora:topeada?tope:bruta,moraMoneda:mm,topeada:topeada,estimada:false};
+    }
+    if(d===0)return{cod:'toca',icono:'🔔',label:'Vence hoy',aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:false};
+    return{cod:'pendiente',icono:'⬜',label:'Vence en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:false};
   }
   /* Estimada: nunca vencida, nunca mora. Empuja a consultar el avance. */
   if(d>=0)return{cod:'toca',icono:'🏗️',label:'Estimado hace '+d+' día(s) — consultar avance',
-                 aviso:f.fecha,mora:0,estimada:true};
-  return{cod:'pendiente',icono:'🏗️',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,estimada:true};
+                 aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:true};
+  return{cod:'pendiente',icono:'🏗️',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:true};
 }
 /* FUNCIÓN 7 — comisión informativa del cobro. Nunca se expone al equipo. */
 function _cobComision(monto){
@@ -10074,7 +10117,14 @@ function _cobFilasCuotas(contratoId,leadId,qs,ctx){
       fecha_prevista:f.fecha_prevista,
       fecha_estimada:f.fecha_estimada,
       fecha_es_estimada:!!f.fecha_es_estimada,
-      estado:'pendiente',activo:true};
+      /* v206 — una RESERVA es plata ya entregada al firmar ("monto ya
+         efectuado" dice el contrato): nace cobrada, con fecha de cobro = su
+         vencimiento. Antes nacia 'pendiente' y devengaba mora sobre un dinero
+         que el cliente ya habia pagado. _cobGenerarHitos ya lo hacia bien; este
+         camino, el del .docx, no. */
+      estado:(q.condicion_tipo==='reserva'&&Number(q.monto)>0)?'cobrado':'pendiente',
+      fecha_cobro:(q.condicion_tipo==='reserva'&&Number(q.monto)>0)?f.fecha_prevista:null,
+      activo:true};
   });
 }
 
@@ -10101,7 +10151,15 @@ async function _cobCrearContratoAuto(o,r){
       precio_total_bs:Number(x.precio_total)||0,
       moneda:String(x.moneda||'BS').toUpperCase(),
       fecha_firma:firma,
+      /* v206 — mora_usd_dia queda por compatibilidad; lo que manda es
+         mora_cliente_dia + su moneda. El lector del .docx devuelve el numero y
+         la moneda por separado: el contrato de Mollo decia "70 Bs. por dia" y
+         ese 70 termino guardado como USD 70. */
       mora_usd_dia:Number(x.mora_monto_dia)||0,
+      mora_cliente_dia:Number(x.mora_monto_dia)||0,
+      mora_cliente_moneda:String(x.mora_moneda||x.moneda||'USD').toUpperCase(),
+      penalidad_geat_dia:(x.penalidad_geat_dia===null||x.penalidad_geat_dia===undefined)?null:Number(x.penalidad_geat_dia),
+      penalidad_geat_moneda:String(x.penalidad_geat_moneda||x.mora_moneda||'USD').toUpperCase(),
       dias_hasta_inicio:dias,
       plazo_obra_dias:plazo||null,
       observaciones:_cobObsLeido(x),
@@ -10205,7 +10263,7 @@ const COB_RAYADO='repeating-linear-gradient(45deg,#3A3526 0,#3A3526 5px,#FAC305 
 const COB_TL_BLOQUE=48;     /* ancho del bloque de una cuota */
 const COB_TL_MINPER={mensual:62,trimestral:88,anual:114};
 
-function _cobBsCorto(n){
+function _cobBsCorto(n,moneda){
   const v=Math.abs(Number(n)||0);
   if(v>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
   if(v>=1000)return Math.round(v/1000)+'k';
@@ -10375,7 +10433,7 @@ function _cobHtmlTimeline(){
     return '<div style="margin-bottom:12px">'+
       '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:3px">'+
         '<span style="font-size:11px;font-weight:700">'+_escPend(c.cliente_nombre||'—')+_cobBadgeRevisar(c)+'</span>'+
-        '<span style="font-size:11px;color:'+COB_C.txt2+'">'+_cobBs(total)+'</span>'+
+        '<span style="font-size:11px;color:'+COB_C.txt2+'">'+_cobBs(total,c.moneda)+'</span>'+
       '</div>'+
       '<div style="position:relative;height:30px;background:'+COB_C.barra+';border-radius:5px">'+bloques+'</div>'+
       '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
@@ -10475,7 +10533,7 @@ function _cobHtmlTimeline(){
           return '<div style="padding:5px 0;border-bottom:1px solid '+COB_C.sep+'">'+
             '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline">'+
               '<strong style="font-size:11px">'+_escPend(q.c.cliente_nombre||'—')+'</strong>'+
-              '<strong style="font-size:11px;color:'+(cierto1?COB_C.verde:COB_C.oro)+'">'+_cobBs(q.monto)+'</strong>'+
+              '<strong style="font-size:11px;color:'+(cierto1?COB_C.verde:COB_C.oro)+'">'+_cobBs(q.monto,q.c&&q.c.moneda)+'</strong>'+
             '</div>'+
             '<div style="font-size:10px;color:'+COB_C.txt2+'">'+_escPend(_cobNomCuota(q.p))+' · '+_cobTlCuando(q)+'</div>'+
             '<div style="font-size:10px;color:'+COB_C.txt2+'">'+st.icono+' '+_escPend(st.label)+'</div>'+
@@ -10529,12 +10587,15 @@ function _cobPintar(){
         '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">'+
           '<strong style="font-size:13px">'+_escPend(t.c.cliente_nombre||'—')+'</strong>'+
         '</div>'+
-        '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_escPend(_cobNomCuota(t.p))+'</strong> · '+_cobBs(t.p.monto_bs)+
+        '<div style="font-size:12px;margin:4px 0">'+t.st.icono+' <strong>'+_escPend(_cobNomCuota(t.p))+'</strong> · '+_cobBs(t.p.monto_bs,t.c.moneda)+
           ' <span style="color:var(--gray-400)">— '+_escPend(t.st.label)+'</span></div>'+
-        (t.st.mora>0?'<div style="font-size:12px;color:var(--st-atrasado);margin-bottom:4px">⏱️ Mora acumulada: '+_cobUsd(t.st.mora)+' ('+_cobUsd(t.c.mora_usd_dia)+'/día)</div>':'')+
+        (t.st.mora>0?'<div style="font-size:12px;color:var(--st-atrasado);margin-bottom:4px">⏱️ Mora '+
+          (t.st.historica?'<strong>sellada</strong>':'acumulada')+': '+_cobBs(t.st.mora,t.st.moraMoneda)+
+          ' ('+_cobBs(_cobMoraTasa(t.c),t.st.moraMoneda)+'/día)'+
+          (t.st.topeada?' · <strong>tope alcanzado</strong> (20% de la cuota)':'')+'</div>':'')+
         '<div style="height:6px;background:var(--gray-900);border-radius:3px;overflow:hidden;margin:6px 0">'+
           '<div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>'+
-        '<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">Cobrado '+_cobBs(cobrado)+' de '+_cobBs(total)+' ('+pct+'%)</div>'+
+        '<div style="font-size:10px;color:var(--gray-400);margin-bottom:8px">Cobrado '+_cobBs(cobrado,t.c.moneda)+' de '+_cobBs(total,t.c.moneda)+' ('+pct+'%)</div>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
           '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobPedirAvanceFatima('+t.c.id+','+t.p.numero_pago+')">📲 Pedir avance a Fátima</button>'+
           '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirCobro('+t.p.id+')">✓ Registrar cobro</button>'+
@@ -10578,7 +10639,7 @@ function _cobPintar(){
           ' <span style="color:var(--gray-400);font-size:10px">'+_escPend(p.porcentaje||'')+'</span></span>'+
         '<span style="display:flex;gap:10px;align-items:baseline">'+
           '<span style="color:var(--gray-400);font-size:10px">'+_escPend(st.label)+'</span>'+
-          '<strong>'+_cobBs(p.monto_bs)+'</strong>'+
+          '<strong>'+_cobBs(p.monto_bs,c.moneda)+'</strong>'+
           (p.comprobante_url?'<button class="btn-ghost btn-sm" style="font-size:10px" onclick="_cobVerComprobante(\''+_escPend(p.comprobante_url)+'\')">📎</button>':'')+
           (_cobEsCobrado(p)?'':'<button class="btn-ghost btn-sm" style="font-size:10px" onclick="_cobAbrirCobro('+p.id+')">✓</button>')+
         '</span>'+
@@ -10589,9 +10650,16 @@ function _cobPintar(){
         '<strong style="font-size:13px">'+(abierto?'▾ ':'▸ ')+_escPend(c.cliente_nombre||'—')+
           (_cobHitoObraCumplido(c)?' <span style="color:var(--gold)" title="Hito cumplido — cobrar">🔔</span>':'')+
           _cobBadgeRevisar(c)+'</strong>'+
-        '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(c.contrato_codigo||'')+' · '+_cobBs(cobrado)+' / '+_cobBs(c.precio_total_bs)+'</span>'+
+        '<span style="font-size:11px;color:var(--gray-400)">'+_escPend(c.contrato_codigo||'')+' · '+_cobBs(cobrado,c.moneda)+' / '+_cobBs(c.precio_total_bs,c.moneda)+'</span>'+
       '</div>'+
-      (abierto?'<div style="padding:0 10px 10px">'+(filas||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+
+      (abierto?'<div style="padding:0 10px 10px">'+
+        /* v206 — pasivo de GEAT: se muestra, no se calcula. Si nos atrasamos en
+           la entrega lo pagamos nosotros, y hasta ahora no figuraba en ningun lado. */
+        (Number(c.penalidad_geat_dia)>0
+          ? '<div class="mobile-note" style="border-color:var(--st-atrasado);font-size:11px">⚠️ <strong>Penalidad a cargo de GEAT:</strong> '+
+            _cobBs(c.penalidad_geat_dia,c.penalidad_geat_moneda)+'/día por atraso en la entrega. Informativa — no se calcula sola.</div>'
+          : '')+
+        (filas||'<div style="font-size:11px;color:var(--gray-400)">Sin hitos generados.</div>')+
         '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'+
           '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_cobArchivarContrato('+c.id+')">🗄️ Archivar contrato</button>'+
         '</div></div>':'')+
@@ -10702,6 +10770,9 @@ async function _cobGuardarContrato(){
       precio_total_bs:P,
       fecha_firma:firma,
       mora_usd_dia:Number(val('cob-ct-mora'))||10,
+      /* v206 — el alta manual siempre fue en USD; queda explicito. */
+      mora_cliente_dia:Number(val('cob-ct-mora'))||10,
+      mora_cliente_moneda:'USD',
       dias_aviso_2do:Number(val('cob-ct-d2'))||60,
       dias_aviso_3er:Number(val('cob-ct-d3'))||120,
       lead_id:Number(val('cob-ct-lead'))||null
@@ -10785,13 +10856,22 @@ async function _cobConfirmarCobro(){
     }catch(e){toast('⚠️ No se pudo subir el comprobante: '+e.message,'warning');}
   }
   try{
+    /* v206 — la mora devengada hasta HOY se sella ANTES de marcar cobrado.
+       Despues no se recalcula nunca: si la cuota se pago tarde, esa plata sigue
+       siendo reclamable aunque la cuota figure paga. */
+    const _cSel=_cobContratos.find(function(x){return x.id===p.contrato_id;})||{};
+    const _moraSellada=_cobR2(Number(_cobEstadoHito(p,_cSel).mora)||0);
     await _cobCallOk({action:'pago_update',id:p.id,campos:{
       estado:'cobrado',monto_bs:monto,fecha_cobro:fecha,fecha_pago:fecha,
-      comprobante_url:comprobante,updated_at:new Date().toISOString()
+      comprobante_url:comprobante,
+      mora_historica:_moraSellada,
+      mora_historica_at:new Date().toISOString(),
+      updated_at:new Date().toISOString()
     }});
     const k=_cobComision(monto);
     closeModal('modalCobCobro');
-    toast('✅ Cobro registrado · comisión '+_cobBs(k.total),'ok');
+    toast('✅ Cobro registrado · comisión '+_cobBs(k.total)+
+      (_moraSellada>0?' · mora sellada '+_cobBs(_moraSellada,_cobMoraMoneda(_cSel)):''),'ok');
     try{await registrarAuditoria('registrar_cobro','pagos_cliente',p.id,{monto_bs:monto,fecha:fecha});}catch(e){}
     await renderCobranzas();
     if(typeof renderParteDia==='function'){_pdDatos=null;renderParteDia();}
@@ -10953,7 +11033,10 @@ async function _cobRevisarContrato(id){
       precio_total:(c.precio_total_bs===null||c.precio_total_bs===undefined)?null:Number(c.precio_total_bs),
       moneda:c.moneda||'BS',
       fecha_firma:c.fecha_firma?String(c.fecha_firma).slice(0,10):null,
-      mora_monto_dia:(c.mora_usd_dia===null||c.mora_usd_dia===undefined)?null:Number(c.mora_usd_dia),
+      mora_monto_dia:(_cobMoraTasa(c)||null),
+      mora_moneda:_cobMoraMoneda(c),
+      penalidad_geat_dia:(c.penalidad_geat_dia===null||c.penalidad_geat_dia===undefined)?null:Number(c.penalidad_geat_dia),
+      penalidad_geat_moneda:String(c.penalidad_geat_moneda||'USD').toUpperCase(),
       dias_hasta_inicio:(c.dias_hasta_inicio===null||c.dias_hasta_inicio===undefined)?10:Number(c.dias_hasta_inicio),
       plazo_obra_dias:c.plazo_obra_dias||(o&&o.dias_ejecucion)||null,
       financiamiento_banco:/financiamiento bancario/i.test(c.observaciones||''),
@@ -11215,7 +11298,13 @@ async function _cobGuardarLeido(){
     precio_total_bs:Number(x.precio_total)||0,
     moneda:String(x.moneda||'BS').toUpperCase(),
     fecha_firma:ctx.fecha_firma,
+    /* v206 — ver la nota del alta automatica: la moneda de la mora es un dato
+       aparte del numero. */
     mora_usd_dia:Number(x.mora_monto_dia)||0,
+    mora_cliente_dia:Number(x.mora_monto_dia)||0,
+    mora_cliente_moneda:String(x.mora_moneda||x.moneda||'USD').toUpperCase(),
+    penalidad_geat_dia:(x.penalidad_geat_dia===null||x.penalidad_geat_dia===undefined)?null:Number(x.penalidad_geat_dia),
+    penalidad_geat_moneda:String(x.penalidad_geat_moneda||x.mora_moneda||'USD').toUpperCase(),
     dias_hasta_inicio:(ctx.dias_hasta_inicio===null?10:ctx.dias_hasta_inicio),
     plazo_obra_dias:ctx.plazo_obra_dias,
     observaciones:_cobObsLeido(x),
@@ -11438,8 +11527,8 @@ function _pdPintar(){
         ((D.cobranzas&&D.cobranzas.length)?D.cobranzas.slice(0,4).map(function(t){
           return '<div class="pd-det-row" style="background:var(--gray-800);margin-bottom:5px;cursor:pointer" onclick="switchTab(document.getElementById(\'tab-cobranzas\'),\'screen-cobranzas\');renderCobranzas()">'+
             '<span style="flex:1;min-width:110px;font-weight:700">'+t.st.icono+' '+_escPend(t.c.cliente_nombre||'—')+'</span>'+
-            '<span class="d">'+_escPend(_cobNomCuota(t.p))+' · '+_cobBs(t.p.monto_bs)+
-              (t.st.mora>0?' · ⏱️ '+_cobUsd(t.st.mora):'')+'</span>'+
+            '<span class="d">'+_escPend(_cobNomCuota(t.p))+' · '+_cobBs(t.p.monto_bs,t.c.moneda)+
+              (t.st.mora>0?' · ⏱️ '+_cobBs(t.st.mora,t.st.moraMoneda)+(t.st.topeada?' (tope)':''):'')+'</span>'+
           '</div>';
         }).join('')+
           ((D.cobranzas.length>4)?'<div style="font-size:10px;color:var(--gray-400);padding:2px">+'+(D.cobranzas.length-4)+' más</div>':'')
