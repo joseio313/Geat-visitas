@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='200';
+  var CURRENT_VERSION='201';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1743,6 +1743,26 @@ const SB_URL='https://jsacnpgpnvoslrpurfxc.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzYWNucGdwbnZvc2xycHVyZnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTIwNjUsImV4cCI6MjA4OTc4ODA2NX0.fOF7BQuNG6KdWMbsr7YQJ3kUIeJ9mdgV1fGmDMDGWtE';
 const sb=supabase.createClient(SB_URL,SB_KEY);
 const AUTH_URL=SB_URL+'/functions/v1/geat-auth';
+/* ── v201 · COBRANZAS PASA POR EDGE FUNCTION ──────────────────────────────
+   cobranza_contratos y pagos_cliente tenían `FOR ALL TO anon USING(true)`:
+   con la anon key del HTML cualquiera leía el libro de cobranzas y también
+   podía hacerle UPDATE y DELETE. El panel es 100% del admin, así que todo
+   pasa por geat-cobranzas, que revalida el token y exige rol=admin.
+   Las escrituras van por lista blanca de columnas del lado del servidor. */
+const COB_URL=SB_URL+'/functions/v1/geat-cobranzas';
+async function _cobCall(payload){
+  const r=await fetch(COB_URL,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+    body:JSON.stringify(Object.assign({token:localStorage.getItem('geat_session_token')},payload))});
+  return await r.json();
+}
+/* Devuelve la respuesta o tira con el error del servidor, para que los
+   try/catch que ya existían sigan funcionando igual. */
+async function _cobCallOk(payload){
+  const r=await _cobCall(payload);
+  if(!r||r.ok!==true)throw new Error((r&&r.error)||'error de cobranzas');
+  return r;
+}
 async function authCall(payload){
   const r=await fetch(AUTH_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
   return await r.json();
@@ -9944,14 +9964,10 @@ function _cobAvanceVsCalendario(c){
 /* Los datos van aparte del render porque el alta automática recarga y repinta
    sin volver a dispararse a sí misma. */
 async function _cobCargarDatos(){
-  const{data:cts,error:e1}=await sb.from('cobranza_contratos')
-    .select('*').eq('activo',true).order('created_at',{ascending:false});
-  if(e1)throw e1;
-  _cobContratos=cts||[];
-  const{data:pgs,error:e2}=await sb.from('pagos_cliente')
-    .select('*').not('contrato_id','is',null).eq('activo',true).order('numero_pago');
-  if(e2)throw e2;
-  _cobPagos=pgs||[];
+  /* v201 — contratos y cuotas en una sola llamada a geat-cobranzas */
+  const _rl=await _cobCallOk({action:'listar'});
+  _cobContratos=_rl.contratos||[];
+  _cobPagos=_rl.pagos||[];
   const{data:cfg}=await sb.from('app_config').select('key,value').like('key','cobranza%');
   _cobCfg={};(cfg||[]).forEach(function(r){_cobCfg[r.key]=r.value;});
   /* v178 — obras activas: alimentan el alta automática y el 🔔 de hito de avance.
@@ -9962,8 +9978,8 @@ async function _cobCargarDatos(){
             'dias_ejecucion,fecha_inicio,fecha_inicio_real,cobranza_intentos,cobranza_ultimo_error')
     .eq('activo',true).order('nombre');
   _cobObras=obs||[];
-  const{data:occ}=await sb.from('cobranza_contratos').select('obra_id').not('obra_id','is',null);
-  _cobObrasConContrato=(occ||[]).map(function(r){return r.obra_id;});
+  const _ro=await _cobCall({action:'obras_con_contrato'});
+  _cobObrasConContrato=(_ro&&_ro.obra_ids)||[];
 }
 
 async function renderCobranzas(){
@@ -10050,7 +10066,7 @@ async function _cobCrearContratoAuto(o,r){
   const qAv=qs.find(function(q){return q.condicion_tipo==='avance_obra'&&Number(q.avance_pct_requerido)>0;});
   let ct=null;
   try{
-    const{data,error}=await sb.from('cobranza_contratos').insert({
+    const{contrato:data}=await _cobCallOk({action:'contrato_insert',row:{
       obra_id:o.id,
       cliente_nombre:(x.cliente_nombre||'').trim()||o.nombre||('Obra '+o.id),
       contrato_codigo:o.codigo||null,
@@ -10065,16 +10081,14 @@ async function _cobCrearContratoAuto(o,r){
       origen:'auto',revisado:false,contrato_validado:false,
       /* Los avisos de la lectura quedan a la vista de quien después revise */
       lectura_error:(r.avisos&&r.avisos.length)?r.avisos.join(' | ').slice(0,1000):null
-    }).select().single();
-    if(error)throw error;
+    }});
     ct=data;
   }catch(e){return{ok:false,error:'no se pudo crear el contrato: '+(e.message||'error')};}
   try{
-    const{error}=await sb.from('pagos_cliente').insert(_cobFilasCuotas(ct.id,null,qs,ctx));
-    if(error)throw error;
+    await _cobCallOk({action:'pagos_insert',filas:_cobFilasCuotas(ct.id,null,qs,ctx)});
   }catch(e){
     /* Un contrato sin cuotas es peor que ningún contrato: se revierte el alta. */
-    try{await sb.from('cobranza_contratos').delete().eq('id',ct.id);}catch(e2){}
+    try{await _cobCall({action:'contrato_delete',id:ct.id});}catch(e2){}
     return{ok:false,error:'no se pudieron generar las cuotas: '+(e.message||'error')};
   }
   try{await registrarAuditoria('alta_auto_contrato','cobranza_contratos',ct.id,
@@ -10654,7 +10668,7 @@ async function _cobGuardarContrato(){
   if(R>P*0.30){toast('La reserva no puede superar el 30% (quedaría un 1er pago negativo)','error');return;}
   const firma=val('cob-ct-firma')||null;
   try{
-    const{data:ct,error}=await sb.from('cobranza_contratos').insert({
+    const{contrato:ct}=await _cobCallOk({action:'contrato_insert',row:{
       cliente_nombre:cliente,
       contrato_codigo:(val('cob-ct-codigo')||'').trim()||null,
       precio_total_bs:P,
@@ -10663,8 +10677,7 @@ async function _cobGuardarContrato(){
       dias_aviso_2do:Number(val('cob-ct-d2'))||60,
       dias_aviso_3er:Number(val('cob-ct-d3'))||120,
       lead_id:Number(val('cob-ct-lead'))||null
-    }).select().single();
-    if(error)throw error;
+    }});
     const ok=await _cobGenerarHitos(ct,R);
     if(!ok)return;
     closeModal('modalCobContrato');
@@ -10698,8 +10711,7 @@ async function _cobGenerarHitos(c,reservaBs){
      fecha_prevista:null,fecha_estimada:est3,fecha_es_estimada:true,fecha_cobro:null}
   ].map(function(f){f.contrato_id=c.id;f.lead_id=c.lead_id||null;f.activo=true;return f;});
   try{
-    const{error}=await sb.from('pagos_cliente').upsert(filas,{onConflict:'contrato_id,numero_pago'});
-    if(error)throw error;
+    await _cobCallOk({action:'pagos_upsert',filas:filas});
     return true;
   }catch(e){toast('Error generando hitos: '+e.message,'error');return false;}
 }
@@ -10745,11 +10757,10 @@ async function _cobConfirmarCobro(){
     }catch(e){toast('⚠️ No se pudo subir el comprobante: '+e.message,'warning');}
   }
   try{
-    const{error}=await sb.from('pagos_cliente').update({
+    await _cobCallOk({action:'pago_update',id:p.id,campos:{
       estado:'cobrado',monto_bs:monto,fecha_cobro:fecha,fecha_pago:fecha,
       comprobante_url:comprobante,updated_at:new Date().toISOString()
-    }).eq('id',p.id);
-    if(error)throw error;
+    }});
     const k=_cobComision(monto);
     closeModal('modalCobCobro');
     toast('✅ Cobro registrado · comisión '+_cobBs(k.total),'ok');
@@ -10769,8 +10780,7 @@ async function _cobVerComprobante(nombre){
 async function _cobArchivarContrato(id){
   if(!confirm('¿Archivar este contrato? Sale del panel pero no se borra nada.'))return;
   try{
-    const{error}=await sb.from('cobranza_contratos').update({activo:false,updated_at:new Date().toISOString()}).eq('id',id);
-    if(error)throw error;
+    await _cobCallOk({action:'contrato_update',id:id,campos:{activo:false,updated_at:new Date().toISOString()}});
     try{await registrarAuditoria('archivar_contrato_cobranza','cobranza_contratos',id,{});}catch(e){}
     toast('Contrato archivado','ok');
     await renderCobranzas();
@@ -11193,9 +11203,7 @@ async function _cobGuardarLeido(){
   if(_cobLeido.contrato_id){
     const id=_cobLeido.contrato_id;
     try{
-      const{error}=await sb.from('cobranza_contratos')
-        .update(Object.assign({updated_at:ahora},campos)).eq('id',id);
-      if(error)throw error;
+      await _cobCallOk({action:'contrato_update',id:id,campos:Object.assign({updated_at:ahora},campos)});
     }catch(e){toast('Error guardando el contrato: '+e.message,'error');return;}
     const filas=_cobFilasCuotas(id,leadId,qs,ctx);
     const previas=_cobPagos.filter(function(p){return p.contrato_id===id;});
@@ -11210,13 +11218,11 @@ async function _cobGuardarLeido(){
         delete upd.contrato_id;delete upd.estado;delete upd.activo;
         upd.updated_at=ahora;
         try{
-          const{error}=await sb.from('pagos_cliente').update(upd).eq('id',pid);
-          if(error)throw error;
+          await _cobCallOk({action:'pago_update',id:pid,campos:upd});
         }catch(e){fallos++;}
       }else{
         try{
-          const{error}=await sb.from('pagos_cliente').insert(filas[i]);
-          if(error)throw error;
+          await _cobCallOk({action:'pagos_insert',filas:[filas[i]]});
         }catch(e){fallos++;}
       }
     }
@@ -11225,7 +11231,7 @@ async function _cobGuardarLeido(){
       return vistos.indexOf(p.id)<0&&!_cobEsCobrado(p);
     }).map(function(p){return p.id;});
     if(bajas.length){
-      try{await sb.from('pagos_cliente').update({activo:false,updated_at:ahora}).in('id',bajas);}catch(e){}
+      try{await _cobCall({action:'pagos_baja',ids:bajas});}catch(e){}
     }
     closeModal('modalCobLeerContrato');
     _cobLeido=null;
@@ -11239,20 +11245,18 @@ async function _cobGuardarLeido(){
   /* ── Alta manual (la ficha abierta sin contrato detrás) ────────────── */
   let ct=null;
   try{
-    const{data,error}=await sb.from('cobranza_contratos').insert(Object.assign({
+    const{contrato:data}=await _cobCallOk({action:'contrato_insert',row:Object.assign({
       obra_id:_cobLeido.obra.id,
       contrato_codigo:_cobLeido.obra.codigo||null,
       origen:'manual'
-    },campos)).select().single();
-    if(error)throw error;
+    },campos)});
     ct=data;
   }catch(e){toast('Error creando el contrato: '+e.message,'error');return;}
   try{
-    const{error}=await sb.from('pagos_cliente').insert(_cobFilasCuotas(ct.id,leadId,qs,ctx));
-    if(error)throw error;
+    await _cobCallOk({action:'pagos_insert',filas:_cobFilasCuotas(ct.id,leadId,qs,ctx)});
   }catch(e){
     /* Un contrato sin cuotas es peor que ningún contrato: se revierte el alta. */
-    try{await sb.from('cobranza_contratos').delete().eq('id',ct.id);}catch(e2){}
+    try{await _cobCall({action:'contrato_delete',id:ct.id});}catch(e2){}
     toast('Error generando las cuotas (se revirtió el contrato): '+e.message,'error');
     return;
   }
@@ -11267,10 +11271,12 @@ async function _cobGuardarLeido(){
 /* Hitos que tocan cobrar, para el Parte del Día (solo admin) */
 async function _cobPendientesParteDia(){
   try{
-    const{data:cts}=await sb.from('cobranza_contratos').select('*').eq('activo',true);
-    if(!cts||!cts.length)return[];
-    const{data:pgs}=await sb.from('pagos_cliente').select('*').not('contrato_id','is',null).eq('activo',true);
-    _cobContratos=cts;_cobPagos=pgs||[];
+    /* v201 — por geat-cobranzas; si el usuario no es admin devuelve 403 y el
+       catch de abajo deja el Parte del Día sin la sección de cobranzas. */
+    const _rp=await _cobCallOk({action:'listar'});
+    const cts=_rp.contratos||[],pgs=_rp.pagos||[];
+    if(!cts.length)return[];
+    _cobContratos=cts;_cobPagos=pgs;
     const out=[];
     cts.forEach(function(c){
       (pgs||[]).filter(function(p){return p.contrato_id===c.id;}).forEach(function(p){
