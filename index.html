@@ -2462,6 +2462,27 @@ function _filtrarPorColaborador(q){
   if(cu&&cu.asistente_de)return q.in('colaborador',[cu.nombre,cu.asistente_de]);
   return q.eq('colaborador',cu.nombre);
 }
+/* ── v208 · ALCANCE DE LAS DOS VISTAS DE AGENDA (semanal y mensual) ──────
+   La visita la ATIENDE el cerrador, así que la fila nace con
+   colaborador = cerrador. Pero la GENERA la captadora, y hasta v207 ella no la
+   veía en ninguna parte: agendaba y la visita desaparecía de su agenda.
+   La fila sigue siendo UNA sola; lo que se agrega es agenda_personal.captador
+   (quién la generó) y acá se la mira por las dos puntas.
+   OJO — solo acá. Los contadores de carga (marcadores del día, SOBRECARGADO,
+   métricas del mes) siguen filtrando por colaborador: si contaran también por
+   captador, la misma visita sumaría carga a dos personas a la vez. */
+function _filtrarAgendaVisible(q){
+  const nombres=(cu&&cu.asistente_de)?[cu.nombre,cu.asistente_de]:[cu.nombre];
+  /* comillas dobles: los nombres llevan espacio y sin ellas PostgREST corta el in.(...) */
+  const lista='("'+nombres.join('","')+'")';
+  return q.or('colaborador.in.'+lista+',captador.in.'+lista);
+}
+/* ¿esta fila la veo porque la generé yo, pero la atiende otro? */
+function _esVisitaQueGenere(a){
+  if(!a||!cu||!a.captador)return false;
+  if(a.colaborador===cu.nombre)return false;
+  return a.captador===cu.nombre||(!!cu.asistente_de&&a.captador===cu.asistente_de);
+}
 /* v127 — ¿el lead es propio del usuario actual? admin=todos, David(commercial_lead/closer)=sus cierres/captados, resto=solo captador propio */
 function esLeadPropio(lead){
   if(!cu||!lead)return false;
@@ -3137,7 +3158,7 @@ async function renderWeek(){
   /* v184 — criterio unificado con la vista mensual: activo=true y SIN filtrar por
      lead_id (las actividades tipo 'evento' no tienen lead y también ocupan la jornada). */
   let query=sb.from('agenda_personal')
-    .select('id,colaborador,lead_id,tipo,titulo,nota,fecha_programada,completada,completada_en,nota_resultado')
+    .select('id,colaborador,captador,lead_id,tipo,titulo,nota,fecha_programada,completada,completada_en,nota_resultado')
     .eq('activo',true)
     .gte('fecha_programada',currentWeekStart.toISOString())
     .lt('fecha_programada',weekEnd.toISOString())
@@ -3156,11 +3177,14 @@ async function renderWeek(){
        El prefiltro ademas no aportaba nada: la consulta ya esta acotada a
        colaborador = cu.nombre (sus propias tareas) y los leads archivados se
        descartan mas abajo con _archSetW. Peor: escondia una tarea asignada a
-       ella sobre un lead captado por otra persona, que si le corresponde. */
-    query=query.eq('colaborador',cu.nombre);
+       ella sobre un lead captado por otra persona, que si le corresponde.
+       v208 — y ahora además las visitas que ella generó y atiende el cerrador. */
+    query=_filtrarAgendaVisible(query);
   } else if(!isJefe){
-    query=_filtrarPorColaborador(query);
+    query=_filtrarAgendaVisible(query);
   } else if(filtP){
+    /* v208 — el jefe filtrando por persona sigue viendo por colaborador: es la
+       vista de supervisión y ahí la visita se atribuye a quien la atiende. */
     query=query.eq('colaborador',filtP);
   }
   if(filtE&&filtE!=='__visito_oficina') query=query.eq('tipo',filtE);
@@ -3232,9 +3256,17 @@ function renderCard(a,now){
   const _bd=estadoBorderColor(_estadoLeadMap[a.lead_id]);
   const _bdStyle=_bd?` style="border-left:4px solid ${_bd}"`:'';
   const _esRes=_estadoLeadMap[a.lead_id]==='reservado';
-  return `<div class="activity-card ${cls}"${_bdStyle} onclick="openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})">
+  /* v208 — visita que generé yo y atiende otro: se VE, no se opera.
+     Va en modo consulta a propósito: si la captadora la completara se dispara
+     fn_registrar_visita_atendida y el lead pasa a visita_realizada sin que el
+     cliente haya venido (de ahí salieron los 52 falsos positivos de v168). */
+  const _gen=_esVisitaQueGenere(a);
+  const _open=_gen?`openLeadDetail(${a.lead_id},null,'readonly')`
+                  :`openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})`;
+  return `<div class="activity-card ${cls}"${_bdStyle} onclick="${_open}">
     <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}${_esRes?' <span style="background:#43A047;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 6px;vertical-align:middle;white-space:nowrap">💰 RESERVADO</span>':''}</div>
+    ${_gen?`<div style="font-size:8px;font-weight:800;letter-spacing:.03em;background:rgba(0,0,0,.28);border-radius:8px;padding:1px 6px;display:inline-block;margin-top:2px">👁️ LA AGENDASTE VOS · LA ATIENDE ${(a.colaborador||'').toUpperCase()}</div>`:''}
     <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
     <div class="activity-times">
       <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
@@ -3278,18 +3310,20 @@ async function renderMonth(){
   /* v184 — criterio unificado con la vista semanal: activo=true (antes la mensual
      contaba también las actividades dadas de baja, por eso un mismo día daba 48 acá
      y 39 en la semanal) + mismo alcance por rol. */
-  let q=sb.from('agenda_personal').select('id,colaborador,lead_id,tipo,titulo,fecha_programada,completada')
+  let q=sb.from('agenda_personal').select('id,colaborador,captador,lead_id,tipo,titulo,fecha_programada,completada')
     .eq('activo',true)
     .gte('fecha_programada',start.toISOString())
     .lt('fecha_programada',end.toISOString());
   const isJefe=cu.rol==='admin'||cu.rol==='commercial_lead';
   if(cu.rol==='field_capturer'){
     /* v195 — mismo corte de 1000 filas que en la semanal (ver renderWeek).
-       Los archivados se siguen descartando abajo con _archSetM. */
-    q=q.eq('colaborador',cu.nombre);
+       Los archivados se siguen descartando abajo con _archSetM.
+       v208 — mismo alcance que la semanal: propias + las que ella generó. */
+    q=_filtrarAgendaVisible(q);
   } else if(!isJefe){
-    q=_filtrarPorColaborador(q);
+    q=_filtrarAgendaVisible(q);
   } else if(filtP){
+    /* v208 — ver renderWeek: la vista de jefe atribuye por quien atiende. */
     q=q.eq('colaborador',filtP);
   }
 
@@ -3338,7 +3372,9 @@ async function renderMonth(){
       const dotColor=col?col.color_bg:'#888';
       const _bdM=estadoBorderColor(_estadoLeadMap[a.lead_id]);
       const _bdMStyle=_bdM?`border-left:4px solid ${_bdM};padding-left:5px`:'';
-      return `<div class="month-event" style="${_bdMStyle}"><span class="month-dot" style="background:${dotColor}"></span>${a.titulo||a.tipo}</div>`;
+      /* v208 — 👁️ = visita que generó esta persona y atiende otro */
+      const _genM=_esVisitaQueGenere(a)?'👁️ ':'';
+      return `<div class="month-event" style="${_bdMStyle}"><span class="month-dot" style="background:${dotColor}"></span>${_genM}${a.titulo||a.tipo}</div>`;
     }).join('');
     html+=`<div class="month-cell${isToday?' today':''}" onclick="navWeekToDay('${dateStr}')">
       <div class="month-cell-num">${d}${countBadge}</div>
@@ -5383,6 +5419,31 @@ function toggleLugarVisita(){
 function _avLabelModoPago(v){
   return v==='recursos_propios'?'Recursos propios':v==='con_financiamiento'?'Con financiamiento':v==='financiamiento_bancario'?'Financiamiento bancario':(v||'—');
 }
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v208 · DAR DE BAJA UNA VISITA = SOLO activo=false. NUNCA             ║
+   ║  completada=true. Vale para el código y para la limpieza a mano.      ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   agenda_personal tiene DOS banderas y no significan lo mismo:
+     · activo=false     → la fila se da de baja (duplicado, error de carga).
+                          No dispara nada. Es el ÚNICO borrado correcto.
+     · completada=true  → "la visita OCURRIÓ". Dispara en la base
+                          fn_registrar_visita_atendida, que pone el lead en
+                          estado='visita_realizada', y si el tipo empieza con
+                          'Visita oficina' además visito_oficina=true y
+                          fecha_visita_oficina=hoy.
+   Pasó de verdad (20-ago-2026, lead 7414): al limpiar la fila duplicada del
+   agendado se la dio de baja con activo=false + completada=true. El
+   completada=true marcó como asistida una visita que era del día siguiente:
+   el lead saltó a visita_realizada con visito_oficina=true. Hubo que revertir
+   el lead a mano y borrar dos filas de actividades.
+   Poner las dos juntas es el mismo error que produjo los 52 falsos positivos
+   de v168 (ver "Visita vencida ≠ visita asistida").
+   REGLA: completada=true se escribe SOLO cuando una persona registra que la
+   visita se hizo. Para todo lo demás — activo=false y nada más.
+   Este aviso está repetido como COMMENT en la tabla y en las columnas
+   completada/activo de agenda_personal, para quien limpie desde el SQL editor.
+════════════════════════════════════════ */
+
 /* ════════════════════════════════════════
    v194 — MENSAJE DE VISITA PARA EL GRUPO DE WHATSAPP
    Las visitas se anuncian a mano en un grupo de WhatsApp: el CRM se enteraba
@@ -5543,7 +5604,10 @@ async function guardarAgendarVisita(){
       completada:false,
       activo:true,
       visita_nro:visNro,
-      visita_periodo:visPer
+      visita_periodo:visPer,
+      /* v208 — la fila es del cerrador, pero la generó la captadora: sin esto
+         ella agenda la visita y no la ve en ninguna de sus dos vistas. */
+      captador:l.captador||null
     };
     /* ── v207 · POR QUE SALIAN DOS FILAS ──────────────────────────────────
        El insert de arriba en agenda_grupal dispara sincronizar_estado_lead_visita,
@@ -7999,11 +8063,15 @@ async function asignarCerrador(leadId,fechaVisita,clienteMujer){
     const{data:leadRow}=await sb.from('leads').select('nombre').eq('id',leadId).single();
     const nombreLead=leadRow?.nombre||'Lead';
     try{
+      /* v208 — captador: misma razón que en guardarAgendarVisita(). Este es el
+         camino viejo (desde el seguimiento) y también deja la fila al cerrador. */
+      const{data:_lc}=await sb.from('leads').select('captador').eq('id',leadId).single();
       await sb.from('agenda_personal').insert({
         colaborador:proximo,lead_id:leadId,tipo:'visita_oficina',
         titulo:'Visita oficina · '+nombreLead,
         fecha_programada:new Date(fechaVisita+'T10:00:00').toISOString(),
-        completada:false
+        completada:false,
+        captador:(_lc&&_lc.captador)||null
       });
     }catch(e){}
   }

@@ -78,6 +78,17 @@ Bolivia es UTC-4. Para fechas de DISPLAY o COMPARACIÓN de calendario, SIEMPRE u
   → ymdLocal(algFecha)    en lugar de  algFecha.toISOString().slice(0,10)
 Solo dejar toISOString() SIN .slice(0,10) para timestamps completos guardados en Supabase.
 
+## BAJA DE UNA FILA DE agenda_personal — REGLA CRÍTICA
+Dar de baja una tarea o visita es **SOLO `activo=false`**. NUNCA `completada=true`.
+`completada=true` significa "ocurrió" y dispara en la base `fn_registrar_visita_atendida`:
+el lead pasa a `visita_realizada`, y si el tipo empieza con "Visita oficina" además
+`visito_oficina=true` y `fecha_visita_oficina=hoy`.
+Pasó el 20-ago-2026 limpiando el duplicado del lead 7414: marcó como asistida una
+visita del día siguiente y hubo que revertir el lead a mano.
+Vale igual para el código y para la limpieza a mano desde el SQL editor.
+El aviso está en index.html (bloque v208, arriba de la sección de visitas) y como
+COMMENT en la tabla y en las columnas `completada` / `activo`.
+
 ## NUNCA:
 - Hardcodear API keys
 - Mostrar montos USD al equipo (solo m²)
