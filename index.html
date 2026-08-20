@@ -1672,7 +1672,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='206';
+  var CURRENT_VERSION='207';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5545,14 +5545,44 @@ async function guardarAgendarVisita(){
       visita_nro:visNro,
       visita_periodo:visPer
     };
+    /* ── v207 · POR QUE SALIAN DOS FILAS ──────────────────────────────────
+       El insert de arriba en agenda_grupal dispara sincronizar_estado_lead_visita,
+       que deja el lead en estado='visita_agendada'; ese UPDATE dispara
+       asignar_cerrador_alternancia (asigna cerrador) y, detrás, en la misma
+       cadena, fn_tarea_para_nuevo_cerrador, que INSERTA en agenda_personal una
+       tarea para el cerrador recién asignado con tipo FIJO 'Visita oficina' y
+       sin visita_nro. Un segundo después este código insertaba la suya con el
+       tipo real y el correlativo: dos filas, misma fecha, mismo lead, mismo
+       colaborador. Medido en el lead 7414 — id 5351 (trigger, 14:29:51.6) y
+       5352 (este insert, 14:29:52.4), y el nº solo en la segunda.
+       El guard del trigger (NOT EXISTS tarea abierta del cerrador) no alcanza:
+       cuando corre, nuestra fila todavía no existe. Así que en vez de insertar,
+       ADOPTAMOS la fila que dejó el trigger y le escribimos encima el tipo real
+       + el nº. Queda UNA sola fila, la del tipo elegido en el modal. */
+    let apDestId=visPrev?visPrev.id:null;
+    if(!apDestId){
+      try{
+        const{data:abiertas}=await sb.from('agenda_personal')
+          .select('id,tipo,nota')
+          .eq('lead_id',leadId).eq('colaborador',apRow.colaborador)
+          .eq('completada',false).eq('activo',true)
+          .is('visita_nro',null)
+          .order('id',{ascending:false}).limit(5);
+        const adopt=(abiertas||[]).find(function(t){
+          return /^visita/i.test(t.tipo||'')||
+                 (t.nota||'').indexOf('automáticamente al asignarte el lead como cerrador')>=0;
+        });
+        if(adopt)apDestId=adopt.id;
+      }catch(eAd){}
+    }
     /* El advisory lock de siguiente_visita_nro() muere al cerrar la transacción
        del RPC: el número recién queda TOMADO cuando existe la fila. Entre el RPC
        y este insert otra captadora puede llevarse el mismo nº y el índice único
        idx_visita_nro_periodo devuelve 23505 — se pide otro y se reintenta. */
     let apOk=false,apErr=null;
     for(let intento=0;intento<3&&!apOk;intento++){
-      const{error:eAp}=visPrev
-        ? await sb.from('agenda_personal').update(apRow).eq('id',visPrev.id)
+      const{error:eAp}=apDestId
+        ? await sb.from('agenda_personal').update(apRow).eq('id',apDestId)
         : await sb.from('agenda_personal').insert(apRow);
       if(!eAp){apOk=true;break;}
       apErr=eAp;
