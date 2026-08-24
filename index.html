@@ -1269,14 +1269,18 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             <select class="form-control" id="nl-captador-sel" style="display:none"></select>
           </div>
         </div>
-        <!-- v185 — solo aparece con medios pagos/redes. Select cerrado a propósito:
-             con texto libre se llena de "plaza paraiso"/"Plaza Paraíso"/"paraiso"
-             y el conteo por campaña vuelve a ser inservible. -->
-        <div class="form-row" id="nl-campana-row" style="display:none">
+        <!-- v209 — "¿De dónde vino?": SIEMPRE visible y OBLIGATORIO al crear.
+             v185 lo dejó oculto salvo medios de pauta y siempre opcional. Medido
+             el 24-ago-2026: 0 de 7.354 leads con campana_id, y 424 de los últimos
+             45 días entraron por Facebook (o sea que el campo SÍ se mostraba y
+             nadie lo tocaba). Select cerrado a propósito: con texto libre se
+             llena de "plaza paraiso"/"Plaza Paraíso"/"paraiso" y el conteo por
+             campaña vuelve a ser inservible. -->
+        <div class="form-row" id="nl-campana-row">
           <div class="form-group">
-            <label class="form-label">📣 Campaña</label>
+            <label class="form-label">📣 ¿De dónde vino? <span style="color:var(--st-atrasado)">*</span></label>
             <select class="form-control" id="nl-campana"></select>
-            <div class="form-help">El nombre es el mismo que figura en Meta. Si la campaña no está en la lista, pedile al admin que la cargue — no la anotes en la nota.</div>
+            <div class="form-help">Obligatorio. Si vino por una pauta, elegí la campaña: el nombre es el mismo que figura en Meta. Si no vino de pauta, usá Referido, Vino solo u Otro. Si la campaña no está en la lista, pedile al admin que la cargue — no la anotes en la nota.</div>
           </div>
         </div>
         <div class="form-row">
@@ -1672,7 +1676,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='208';
+  var CURRENT_VERSION='209';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1937,28 +1941,67 @@ function _medioEsCampana(nombreMedio){
   const g=(m&&m.grupo||'').toLowerCase();
   return g==='facebook'||g==='redes sociales';
 }
-/* Muestra u oculta el select de campaña según el medio. Al ocultarlo limpia el
-   valor: si no, un cambio de medio dejaba pegada la campaña anterior. */
+/* ── v209 · ORIGEN DEL LEAD ("¿De dónde vino?") ───────────────────────────
+   Un solo select obligatorio al crear, con las campañas ACTIVAS más tres
+   opciones fijas. Los valores llevan prefijo para no confundir nunca un id con
+   un texto libre:
+     'c:<id>'    -> campaña real            -> leads.campana_id (campana=null)
+     't:<texto>' -> Referido/Vino solo/Otro -> leads.campana    (campana_id=null)
+   Las inactivas siguen existiendo para nombrar leads históricos, pero no se
+   ofrecen para cargar nuevos. */
+const ORIGEN_FIJOS=['Referido','Vino solo','Otro'];
+/* Valor de select que le corresponde a un lead ya guardado ('' si no tiene). */
+function _origenValor(l){
+  if(!l)return'';
+  if(l.campana_id)return'c:'+l.campana_id;
+  const t=(l.campana||'').trim();
+  return t?'t:'+t:'';
+}
+/* Texto para mostrar en la ficha. Las campañas pausadas se siguen nombrando. */
+function _origenLabel(l){
+  if(l&&l.campana_id)return campanaNombre(l.campana_id)||('Campaña #'+l.campana_id);
+  return((l&&l.campana)||'').trim();
+}
+/* `actual` se agrega al final si no está entre las opciones (campaña pausada o
+   texto viejo): así abrir el editor de un lead histórico no le borra en
+   silencio el origen que ya tenía. */
+function _origenOpcionesHTML(actual){
+  const activas=(campanas||[]).filter(c=>c.activa);
+  let h='<option value="">— Elegí de dónde vino —</option>';
+  if(activas.length)h+='<optgroup label="Campañas">'+activas.map(c=>'<option value="c:'+c.id+'">'+_escPend(c.nombre)+'</option>').join('')+'</optgroup>';
+  h+='<optgroup label="Sin campaña">'+ORIGEN_FIJOS.map(t=>'<option value="t:'+t+'">'+t+'</option>').join('')+'</optgroup>';
+  const a=(actual||'').trim();
+  if(a&&!activas.some(c=>('c:'+c.id)===a)&&!ORIGEN_FIJOS.some(t=>('t:'+t)===a)){
+    let et=a.slice(2);
+    if(a.charAt(0)==='c'){
+      const c=(campanas||[]).find(x=>String(x.id)===a.slice(2));
+      et=(c?c.nombre:'Campaña #'+a.slice(2))+' (pausada)';
+    }
+    h+='<optgroup label="Origen actual"><option value="'+_escPend(a)+'">'+_escPend(et)+'</option></optgroup>';
+  }
+  return h;
+}
+/* Valor del select -> las dos columnas. null si no se eligió nada. */
+function _origenDesdeValor(v){
+  const s=(v||'').trim();
+  if(!s)return null;
+  if(s.charAt(0)==='c')return{campana_id:parseInt(s.slice(2),10)||null,campana:null};
+  return{campana_id:null,campana:s.slice(2)};
+}
+/* v209 — el campo ya no se oculta nunca: es obligatorio para TODO lead nuevo,
+   venga o no de pauta. Se conserva la función porque la llaman el onchange del
+   medio y el poblado de catálogos; ahora solo garantiza que la fila esté
+   visible (una copia cacheada del HTML podía dejarla en display:none). */
 function _nlCampanaToggle(){
   const row=document.getElementById('nl-campana-row');
-  const sel=document.getElementById('nl-campana');
-  if(!row||!sel)return;
-  const medio=document.getElementById('nl-medio')?.value||'';
-  const mostrar=_medioEsCampana(medio);
-  row.style.display=mostrar?'':'none';
-  if(!mostrar)sel.value='';
+  if(row)row.style.display='';
 }
-/* Opciones del alta: SOLO activas. Las inactivas siguen existiendo para los
-   leads históricos, pero no se ofrecen para cargar nuevos. */
 function _poblarCampanaSelect(){
   const sel=document.getElementById('nl-campana');
   if(!sel)return;
-  const activas=(campanas||[]).filter(c=>c.activa);
-  sel.innerHTML='<option value="">— Sin campaña —</option>'+
-    activas.map(c=>'<option value="'+c.id+'">'+_escPend(c.nombre)+'</option>').join('');
-  if(!activas.length){
-    sel.innerHTML='<option value="">— No hay campañas cargadas —</option>';
-  }
+  const prev=sel.value||'';
+  sel.innerHTML=_origenOpcionesHTML(prev);
+  if(prev)sel.value=prev;
 }
 /* Fila "Campaña" de la ficha. No se muestra si el lead no tiene campaña: la
    enorme mayoría de los históricos no la tiene y una fila con "—" en cada ficha
@@ -2011,20 +2054,37 @@ function _leadEmbudo(l){
     perdido    : l.estado==='cerrado_perdido'
   };
 }
-function _leadCampanaHtml(l){
-  const nom=campanaNombre(l&&l.campana_id);
-  if(!nom)return'';
-  const c=(campanas||[]).find(x=>String(x.id)===String(l.campana_id));
+/* v209 — la fila pasa a llamarse "Origen" y muestra tanto la campaña como el
+   texto (Referido / Vino solo / Otro). Para quien no es admin sigue oculta si el
+   lead no tiene origen: la enorme mayoría de los 7.354 históricos no lo tiene
+   (no se backfillean) y una fila con "—" en cada ficha solo ensucia. El admin la
+   ve siempre, porque es el único que puede corregirla.
+   `editable` va en false en el bloque "Perfil del cliente": esa función se
+   renderiza en la MISMA ficha, y con el editor en las dos habría ids repetidos. */
+let _origenLeadActual='';
+function _leadCampanaHtml(l,editable){
+  const esAdmin=!!(cu&&cu.rol==='admin');
+  const puedeEditar=!!(esAdmin&&editable&&l&&l.id);
+  const txt=_origenLabel(l);
+  if(!txt&&!puedeEditar)return'';
+  if(puedeEditar)_origenLeadActual=_origenValor(l);
+  const c=(l&&l.campana_id)?(campanas||[]).find(x=>String(x.id)===String(l.campana_id)):null;
   const off=(c&&!c.activa)?' <span style="font-size:10px;color:var(--gray-400)">(pausada)</span>':'';
-  return '<dt>📣 Campaña</dt><dd>'+_escPend(nom)+off+'</dd>';
+  const val=txt?(_escPend(txt)+off):'<span style="color:var(--gray-400)">sin registrar</span>';
+  const btn=puedeEditar?' <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirEditarOrigen('+l.id+')">✏️ Cambiar</button>':'';
+  const box=puedeEditar?'<div id="edit-origen-'+l.id+'" style="display:none;margin-top:6px"></div>':'';
+  return '<dt>📣 Origen</dt><dd>'+val+btn+box+'</dd>';
 }
-/* Campaña elegida en el alta. Devuelve null si el campo está oculto (medio que
-   no es pauta) o si no se eligió ninguna: campana_id es opcional siempre. */
+/* Origen elegido en el alta: {campana_id, campana} o null si no se eligió nada.
+   La validación de obligatorio vive en saveLead/saveLeadPerdido, que son los que
+   pueden mostrar el toast y devolver el foco. */
+function _nlOrigen(){
+  return _origenDesdeValor(document.getElementById('nl-campana')?.value);
+}
+/* v185 — se conserva por compatibilidad: solo el id de campaña. */
 function _nlCampanaId(){
-  const medio=document.getElementById('nl-medio')?.value||'';
-  if(!_medioEsCampana(medio))return null;
-  const v=(document.getElementById('nl-campana')?.value||'').trim();
-  return v?parseInt(v,10):null;
+  const o=_nlOrigen();
+  return o?o.campana_id:null;
 }
 /* Campo "¿Cuándo te contactó?" del alta: hoy por defecto, editable hacia atrás.
    El max lo pone el navegador; el tope duro va igual en el guardado porque el
@@ -4226,7 +4286,7 @@ async function openLeadDetail(leadId,agendaId,mode){
           <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
           <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)||'—'}</dd>
           <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
-          ${_leadCampanaHtml(lead)}
+          ${_leadCampanaHtml(lead,true)}
           <dt>Grado interés</dt><dd>${badgeGradoInteres(lead.grado_interes)}</dd>
           <dt>Correo</dt><dd>${lead.correo?`${lead.correo} <a class="btn-ghost" style="text-decoration:none;font-size:10px;padding:2px 8px;margin-left:4px" href="mailto:${lead.correo}">📧 Enviar email</a>`:'—'}</dd>
           <dt>Cerrador</dt><dd>${lead.cerrador||'<span style="color:var(--gray-400)">sin asignar</span>'}${cu&&lead.cerrador===cu.nombre?' <span style="font-size:10px;color:var(--st-completo);font-weight:700">(sos vos)</span>':''}${_soyCerrador()&&_leadTomable(lead)&&lead.cerrador!==cu.nombre?` <button class="btn-primary" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="tomarComoCerrador(${lead.id})">🤝 ${lead.cerrador?'Tomarlo yo':'Tomar como cerrador'}</button>`:''}${_puedeReasignarCerrador()?` <button class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="abrirReasignarCerrador(${lead.id})">🔁 ${lead.cerrador?'Cambiar cerrador':'Asignar'}</button>`:''}<div id="reasig-cerrador-${lead.id}" style="display:none;margin-top:6px"></div></dd>
@@ -4470,6 +4530,50 @@ async function toggleVisitoOficina(leadId,el){
   }
 }
 
+/* ── v209 · CORREGIR EL ORIGEN DE UN LEAD YA CARGADO ─────────────────────
+   Solo admin: el resto lo ve pero no lo toca, porque es el dato con el que se
+   mide la pauta. A diferencia del alta, acá NO es obligatorio: los leads viejos
+   no tienen origen y no se backfillean, así que se puede abrir el editor,
+   arrepentirse y cerrarlo sin guardar. */
+function abrirEditarOrigen(leadId){
+  if(!(cu&&cu.rol==='admin')){toast('Solo el administrador puede cambiar el origen','error');return;}
+  const box=document.getElementById('edit-origen-'+leadId);
+  if(!box)return;
+  if(box.style.display!=='none'){box.style.display='none';box.innerHTML='';return;}
+  const actual=_origenLeadActual||'';
+  box.innerHTML='<select class="form-control" id="origen-sel-'+leadId+'" style="font-size:11px">'+_origenOpcionesHTML(actual)+'</select>'+
+    '<button class="btn-primary" style="font-size:11px;padding:4px 10px;margin-top:6px" onclick="guardarOrigenLead('+leadId+')">Guardar origen</button>'+
+    '<button class="btn-ghost" style="font-size:11px;padding:4px 10px;margin-top:6px;margin-left:6px" onclick="abrirEditarOrigen('+leadId+')">Cancelar</button>';
+  const sel=document.getElementById('origen-sel-'+leadId);
+  if(sel&&actual)sel.value=actual;
+  box.style.display='';
+}
+async function guardarOrigenLead(leadId){
+  if(!(cu&&cu.rol==='admin')){toast('Solo el administrador puede cambiar el origen','error');return;}
+  const sel=document.getElementById('origen-sel-'+leadId);
+  if(!sel)return;
+  const o=_origenDesdeValor(sel.value);
+  if(!o){toast('Elegí un origen de la lista','error');return;}
+  sel.disabled=true;
+  try{
+    /* Siempre se escriben las DOS columnas: si el lead tenía texto y ahora se le
+       pone campaña (o al revés), dejar la otra sin limpiar deja el origen
+       contado dos veces en los reportes. */
+    const{data,error}=await sb.from('leads')
+      .update({campana_id:o.campana_id,campana:o.campana,updated_at:new Date().toISOString()})
+      .eq('id',leadId).select('id,campana_id,campana');
+    if(error)throw error;
+    if(!data||!data.length)throw new Error('no se encontró el lead #'+leadId+' (no se guardó)');
+    try{await registrarAuditoria('editar_origen_lead','leads',leadId,{campana_id:o.campana_id,campana:o.campana});}catch(e){}
+    toast('✅ Origen actualizado','ok');
+    _origenLeadActual=_origenValor(data[0]);
+    await openLeadDetail(leadId,currentAgendaId,currentLeadMode); // re-render de la ficha
+  }catch(e){
+    sel.disabled=false;
+    toast('No se pudo guardar el origen: '+(e.message||'error'),'error');
+  }
+}
+
 function switchLeadTab(tab){
   document.getElementById('lead-tab-detalle').style.display=tab==='detalle'?'':'none';
   document.getElementById('lead-tab-viaje').style.display=tab==='viaje'?'':'none';
@@ -4534,7 +4638,7 @@ function renderViajeCliente(lead,segs,history){
       <dt>Celular</dt><dd>${lead.celular||'—'}</dd>
       <dt>Ciudad</dt><dd>${_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)||'—'}</dd>
       <dt>Medio</dt><dd>${lead.medio_difusion||lead.canal||'—'}</dd>
-      ${_leadCampanaHtml(lead)}
+      ${_leadCampanaHtml(lead,false)}
       <dt>Registrado</dt><dd>${fmt(lead.created_at)} por ${lead.captador||'—'}</dd>
       <dt>Etapa actual</dt><dd><span class="badge-fase">${lead.etapa||'—'}</span></dd>
       <dt>Días en pipeline</dt><dd>${diasEnPipeline} día${diasEnPipeline!==1?'s':''}</dd>
@@ -7253,6 +7357,11 @@ async function saveLead(){
      esperar sus 10 s de TTL para reintentar. */
   const ciudad=_ciudadValor('nl-ciudad');
   if(!ciudad){toast('Elegí la ciudad del cliente (o escribila si elegiste "Otra ciudad...")','error');return;}
+  /* v209 — origen obligatorio. Se valida ACÁ, con la ciudad y antes del anti-dup
+     lock, por el mismo motivo: un error de validación tomado después del lock
+     obliga a esperar los 10 s de TTL para reintentar. */
+  const _origenNL=_nlOrigen();
+  if(!_origenNL){toast('Elegí de dónde vino el lead: campaña, Referido, Vino solo u Otro','error');document.getElementById('nl-campana')?.focus();return;}
 
   // CAMBIO 1.A — Deshabilitar botón
   const btn=document.getElementById('btn-guardar-lead');
@@ -7316,7 +7425,8 @@ async function saveLead(){
   try{
     const{data:newLead,error:e1}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
-      campana_id:_nlCampanaId(), // v185
+      // v185/v209 — origen: una de las dos va con dato y la otra en null
+      campana_id:_origenNL.campana_id,campana:_origenNL.campana,
       notas:nota,estado:'nuevo',etapa:'1er intento',cliente_mujer:clienteMujer,
       grado_interes:gradoInteres,correo:correoRaw||null,
       metodo_pago:metodoPagoExtra,banco_preferido:bancoExtra,
@@ -7385,7 +7495,11 @@ async function saveLead(){
     if(btn){btn.innerHTML='✅ Creado';}
     setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
-    ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    /* v209 — 'nl-campana' entra al reset a propósito: al ser obligatorio y
+       quedar pegado del lead anterior, cargar cinco leads seguidos les pondría
+       el mismo origen sin que nadie lo mire. El medio SÍ queda pegado, como
+       siempre. */
+    ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra','nl-campana'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     _nlResetFechaContacto();
     document.getElementById('dupWarning').classList.remove('show');
     _modalBodyLock('modalNewLead',false);
@@ -7425,6 +7539,10 @@ async function saveLeadPerdido(){
      caso donde más importa saber de dónde era el lead. */
   const ciudad=_ciudadValor('nl-ciudad');
   if(!ciudad){toast('Elegí la ciudad del cliente (o escribila si elegiste "Otra ciudad...")','error');return;}
+  /* v209 — el origen es obligatorio también acá: es justamente el caso donde más
+     importa saber qué pauta trajo un lead que no sirvió. */
+  const _origenNLP=_nlOrigen();
+  if(!_origenNLP){toast('Elegí de dónde vino el lead: campaña, Referido, Vino solo u Otro','error');document.getElementById('nl-campana')?.focus();return;}
   const medio=document.getElementById('nl-medio')?.value||null;
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:(document.getElementById('nl-captador-sel')?.value||cu.nombre);
@@ -7436,7 +7554,8 @@ async function saveLeadPerdido(){
     if(dup&&dup.length){toast('Número ya registrado','error');return;}
     const{data:newLead,error}=await sb.from('leads').insert({
       nombre,celular,ciudad,medio_difusion:medio,captador,
-      campana_id:_nlCampanaId(), // v185
+      // v185/v209 — origen: una de las dos va con dato y la otra en null
+      campana_id:_origenNLP.campana_id,campana:_origenNLP.campana,
       estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:_otroTxtNl||null,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
