@@ -1676,7 +1676,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='209';
+  var CURRENT_VERSION='210';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5120,6 +5120,7 @@ async function procesarGrabacion(transcript){
 
 function renderRecResult(j){
   const card=document.getElementById('recResultCard'); if(!card)return;
+  const vacio=_resumenVacioIA(j); /* v210 — bloque vacío → decirlo, no mostrar nada */
   const niv=(j.nivel_interes||'').toLowerCase();
   const badge=niv==='alto'?'var(--st-completo)':niv==='medio'?'var(--gold)':'var(--st-atrasado)';
   const puntos=(j.puntos_clave||[]).map(p=>`<li style="margin-bottom:3px">${p}</li>`).join('');
@@ -5127,8 +5128,9 @@ function renderRecResult(j){
   card.innerHTML=`<div class="section" style="margin-top:10px;border:1px solid var(--gray-600);border-radius:10px;padding:12px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div class="section-title" style="margin:0">🎙️ Resumen de reunión</div>
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>
+      ${vacio?'':`<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>`}
     </div>
+    ${vacio?HTML_SIN_CONTENIDO_IA+'<div style="height:12px"></div>':''}
     ${puntos?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${puntos}</ul>`:''}
     ${objec?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${objec}</ul>`:''}
     ${j.proximo_paso?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Próximo paso</div><div style="font-size:12px;margin-bottom:12px">${j.proximo_paso}</div>`:''}
@@ -5202,6 +5204,9 @@ async function _procesarPostGrabacion(leadId,j){
 /* 4) Draft de WhatsApp */
 function _buildWaDraft(nombreCliente,j){
   const puntos=(j.puntos_clave||[]).filter(Boolean).join('; ');
+  /* v210 — con el resumen vacío esto salía como "Resumen: . Próximo paso: ."
+     directo al cliente. Sin contenido, solo el saludo. */
+  if(_resumenVacioIA(j))return 'Hola '+(nombreCliente||'')+', fue un gusto conversar.';
   return 'Hola '+(nombreCliente||'')+', fue un gusto conversar. Resumen: '+puntos+'. Próximo paso: '+(j.proximo_paso||'')+'.';
 }
 async function copiarWaDraft(){
@@ -5943,9 +5948,63 @@ async function _gptMiniIA(userMsg,maxTokens,jsonMode){
   const txt=((data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'').trim();
   return txt.replace(/```json/gi,'').replace(/```/g,'').trim();
 }
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v210 · GATE ANTI-RESUMEN INVENTADO                                   ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   La grabación 200 tenía 35 caracteres de transcripción ("Este tono dejar
+   mensajes tiene como") y el resumen decía "Cliente interesado en construir
+   viviendas de dos plantas, solicitó información sobre materiales..." con dos
+   objeciones. Todo inventado. Verificadas 7 grabaciones iguales (ids 4, 25,
+   121, 122, 142, 181, 200: entre 17 y 118 chars de audio). El prompt pedía un
+   resumen de reunión comercial sin decir qué hacer cuando no hay contenido, y
+   el modelo rellenaba con lo que suena típico. Un resumen inventado es PEOR
+   que no tener resumen: hace creer que existe un cliente interesado que no
+   existe.
+   Dos capas, y ninguna reemplaza a la otra:
+     1. Debajo de MIN_CHARS_RESUMEN_IA NO se llama al modelo (elimina la causa
+        de raíz y ahorra el token).
+     2. Arriba de ese umbral, _PROMPT_ANTI_INVENCION prohíbe explícitamente
+        inferir interés, objeciones y próximos pasos no dichos textualmente.
+   Va en las funciones IA (no en los call sites): resumen, extracción de
+   prospecto, extracción de reclutamiento, clasificación y título comparten
+   el mismo gate. */
+const MIN_CHARS_RESUMEN_IA=200;
+const TXT_SIN_CONTENIDO_IA='Audio sin contenido suficiente para resumir';
+function _sinContenidoIA(t){return (''+(t||'')).trim().length<MIN_CHARS_RESUMEN_IA;}
+/* Título genérico con fecha y hora de Bolivia — nunca describe el audio. */
+function _tituloSinContenidoIA(){
+  const d=new Date();
+  const f=d.toLocaleDateString('es-BO',{timeZone:'America/La_Paz',day:'2-digit',month:'2-digit',year:'numeric'});
+  const h=d.toLocaleTimeString('es-BO',{timeZone:'America/La_Paz',hour:'2-digit',minute:'2-digit',hour12:false});
+  return 'Audio sin contenido '+f+' '+h;
+}
+function _resumenSinContenidoIA(){
+  return{sin_contenido:true,nota:TXT_SIN_CONTENIDO_IA,puntos_clave:[],nivel_interes:null,
+    objeciones:[],proximo_paso:null,ciudad:null,metodo_pago:null,
+    presupuesto_construccion:null,plantas:null,cuando_construir:null};
+}
+/* true si el resumen no aporta NADA: el marcador del gate, o los 4 campos que
+   se muestran vacíos (los 7 casos limpiados a mano en la base caen acá). */
+function _resumenVacioIA(r){
+  if(!r||typeof r!=='object')return false;
+  if(r.sin_contenido)return true;
+  const p=Array.isArray(r.puntos_clave)?r.puntos_clave.filter(Boolean):[];
+  const o=Array.isArray(r.objeciones)?r.objeciones.filter(Boolean):[];
+  return !p.length&&!o.length&&
+    !(r.proximo_paso&&(''+r.proximo_paso).trim())&&
+    !(r.nivel_interes&&(''+r.nivel_interes).trim());
+}
+const HTML_SIN_CONTENIDO_IA='<div style="font-size:12px;color:var(--gray-400);font-style:italic">Sin contenido suficiente para resumir</div>';
+const _PROMPT_ANTI_INVENCION=
+  'REGLA ABSOLUTA — NO INVENTES NADA. Si la transcripción no permite identificar con certeza lo que se habló, devolvé TODOS los campos vacíos o null. NUNCA completes con lo que suele decirse en una reunión comercial. '+
+  'No infieras interés, objeciones ni próximos pasos que no estén dichos textualmente en la transcripción. '+
+  'Si el audio es una prueba, está cortado o es inentendible, devolvé puntos_clave vacío y nivel_interes null.\n';
 async function _resumirReunionIA(transcript){
   /* Sin toast: el procesamiento del botón reloj corre en silencio de fondo */
-  const userMsg='Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+  /* v210 — Capa 1: por debajo del umbral no se llama al modelo. */
+  if(_sinContenidoIA(transcript))return _resumenSinContenidoIA();
+  const userMsg=_PROMPT_ANTI_INVENCION+
+    'Resumí esta transcripción de reunión comercial de GEAT (construcción de viviendas). Devolvé SOLO JSON, sin texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
     '{"puntos_clave":["..."],"nivel_interes":"Alto|Medio|Bajo","objeciones":["..."],"proximo_paso":"...","ciudad":null,"metodo_pago":null,"presupuesto_construccion":null,"plantas":null,"cuando_construir":null}\n'+
     'Campos extra: ciudad=ciudad del cliente; metodo_pago=uno de: contado|financiamiento_bancario|credito_directo|mixto; presupuesto_construccion=monto aprox en USD (solo número); plantas=cantidad de plantas/pisos (número); cuando_construir=cuándo planea construir.\n\n'+transcript;
   return JSON.parse(await _gptMiniIA(userMsg,1024,true));
@@ -5954,7 +6013,14 @@ async function _resumirReunionIA(transcript){
 /* Extracción IA de datos de prospecto desde la transcripción.
    Mismo patrón que _resumirReunionIA (OpenAI gpt-4o-mini vía _gptMiniIA). */
 async function _extraerProspectoIA(transcript,fechaRef){
-  const userMsg='Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+  /* v210 — mismo gate que el resumen: sin contenido no hay prospecto que extraer
+     (este es además el prompt que producía los títulos inventados vía ext.titulo). */
+  if(_sinContenidoIA(transcript))return{titulo:_tituloSinContenidoIA(),sin_contenido:true,
+    es_prospecto:false,nombre:null,celular:null,ciudad:null,lugar_terreno:null,
+    financiamiento:null,plantas:null,cuando_construir:null,presupuesto:null,
+    vivienda_o_inversion:null,temas_clave:[],compromisos:[]};
+  const userMsg=_PROMPT_ANTI_INVENCION+
+    'Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
     '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null}]}\n'+
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha calendario explícita.\n'+
     _promptFechas(fechaRef)+'\n'+transcript;
@@ -6104,6 +6170,9 @@ function _promptFechas(fechaRef){
 /* Clasifica el contexto de la conversación. Ante cualquier fallo devuelve
    'venta' para conservar el comportamiento histórico del pipeline. */
 async function _grabClasificarIA(transcript){
+  /* v210 — sin contenido no hay contexto que clasificar; 'venta' (el fallback de
+     error) marcaría un audio de prueba como conversación con un cliente. */
+  if(_sinContenidoIA(transcript))return 'equipo/otro';
   const userMsg='Clasificá el contexto de esta conversación de GEAT Construcción. Devolvé SOLO JSON: {"contexto":"venta"|"reclutamiento"|"equipo/otro"}\n'+
     'venta = conversación con un cliente o posible cliente sobre construir/cotizar una vivienda. '+
     'reclutamiento = entrevista, llamada o conversación con alguien que postula a un puesto de trabajo. '+
@@ -6118,7 +6187,12 @@ async function _grabClasificarIA(transcript){
 /* Extracción para contexto=reclutamiento. fechaRef = día de la grabación
    (YYYY-MM-DD Bolivia) para que la IA resuelva "el miércoles" a fecha real. */
 async function _extraerReclutamientoIA(transcript,fechaRef){
-  const userMsg='Analizá esta transcripción de una entrevista o llamada de reclutamiento de GEAT Construcción y extraé los datos del candidato. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
+  /* v210 — mismo gate que el resumen: sin contenido no hay candidato que extraer. */
+  if(_sinContenidoIA(transcript))return{titulo:_tituloSinContenidoIA(),sin_contenido:true,
+    candidato:null,telefono:null,pretension_bs:null,ciudad:null,
+    experiencia_clave:[],cita:null,alertas:[],proximo_paso:null};
+  const userMsg=_PROMPT_ANTI_INVENCION+
+    'Analizá esta transcripción de una entrevista o llamada de reclutamiento de GEAT Construcción y extraé los datos del candidato. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
     '{"titulo":null,"candidato":null,"telefono":null,"pretension_bs":null,"ciudad":null,"experiencia_clave":["..."],"cita":{"fecha":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null,"hora":"HH:MM","lugar":null},"alertas":["..."],"proximo_paso":null}\n'+
     'titulo=título corto de 3 a 6 palabras que describa la conversación (ej: "Entrevista arquitecta de obra"); siempre completalo. '+
     'candidato=nombre completo del postulante. telefono=su celular. pretension_bs=pretensión salarial mensual en bolivianos (solo el número). '+
@@ -6331,9 +6405,20 @@ function _esTituloGenerico(t){
    Prompt del brief v109: 4-7 palabras, sin comillas, sin punto final. */
 async function _grabAutoTituloIA(texto){
   if(!texto)return null;
+  /* v210 — el título se inventaba igual que el resumen ("Consulta sobre
+     departamentos" sobre 34 caracteres de audio). Los 4 call sites pasan cosas
+     distintas —el JSON del resumen o la transcripción cruda—, así que el gate
+     mira las dos: texto corto, marcador del gate, o resumen sin nada adentro.
+     Falso positivo posible y aceptado: un título genérico con fecha y hora es
+     preferible a uno inventado. */
+  if(_sinContenidoIA(texto))return _tituloSinContenidoIA();
+  let _r=null; try{_r=JSON.parse(''+texto);}catch(e){}
+  if(_resumenVacioIA(_r))return _tituloSinContenidoIA();
   try{
-    const raw=await _gptMiniIA('Devolvé SOLO un título corto de 4 a 7 palabras que describa el tema principal de esta conversación. Sin comillas, sin punto final.\n\n'+(''+texto).slice(0,3000),50,false);
+    const raw=await _gptMiniIA('Devolvé SOLO un título corto de 4 a 7 palabras que describa el tema principal de esta conversación. Sin comillas, sin punto final. NO inventes: el título tiene que salir de lo que está dicho textualmente. Si la conversación no permite identificar un tema con certeza, devolvé exactamente: Audio sin contenido.\n\n'+(''+texto).slice(0,3000),50,false);
     const tit=raw.trim().replace(/^["'«»]|["'«»]$/g,'').replace(/\.$/,'').slice(0,120);
+    /* v210 — el modelo dijo que no puede identificar el tema: fecha y hora, no un tema inventado. */
+    if(/^audio sin contenido/i.test(tit))return _tituloSinContenidoIA();
     return tit||null;
   }catch(e){return null;}
 }
@@ -6904,6 +6989,7 @@ function stopCapturaPC(){
 }
 async function abrirGrabH(){
   const j=_recHResult||{};
+  const vacio=_resumenVacioIA(j); /* v210 — bloque vacío → decirlo, no mostrar nada */
   const niv=(j.nivel_interes||'').toLowerCase();
   const badge=niv==='alto'?'var(--st-completo)':niv==='medio'?'var(--gold)':'var(--st-atrasado)';
   const puntos=(j.puntos_clave||[]).map(p=>`<li style="margin-bottom:3px">${p}</li>`).join('');
@@ -6921,8 +7007,9 @@ async function abrirGrabH(){
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div class="section-title" style="margin:0">🎙️ Resumen de reunión</div>
-      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>
+      ${vacio?'':`<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#000;background:${badge};padding:2px 10px;border-radius:11px">Interés ${j.nivel_interes||'—'}</span>`}
     </div>
+    ${vacio?HTML_SIN_CONTENIDO_IA+'<div style="height:12px"></div>':''}
     ${puntos?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Puntos clave</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${puntos}</ul>`:''}
     ${objec?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Objeciones</div><ul style="font-size:12px;padding-left:18px;margin-bottom:10px">${objec}</ul>`:''}
     ${j.proximo_paso?`<div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Próximo paso</div><div style="font-size:12px;margin-bottom:12px">${j.proximo_paso}</div>`:''}
@@ -8895,9 +8982,14 @@ function _grabToggle(id){
   det.dataset.loaded='1';
   const g=_grabCache[id]||{};
   let resumenHtml='';
-  if(g.resumen){
+  {
     let r=null; try{r=JSON.parse(g.resumen);}catch(e){}
-    if(r&&typeof r==='object'){
+    /* v210 — resumen vacío o ausente sobre un audio que SÍ se transcribió: hay
+       que decirlo. Antes la sección "📝 Resumen" simplemente no se dibujaba y
+       "no hay nada que resumir" se leía igual que "todavía no se procesó". */
+    if(!g.resumen){resumenHtml=g.transcripcion?HTML_SIN_CONTENIDO_IA:'';}
+    else if(_resumenVacioIA(r)){resumenHtml=HTML_SIN_CONTENIDO_IA;}
+    else if(r&&typeof r==='object'){
       const puntos=(r.puntos_clave||[]).map(p=>'<li>'+_escPend(p)+'</li>').join('');
       const objec=(r.objeciones||[]).map(o=>'<li>'+_escPend(o)+'</li>').join('');
       resumenHtml=(r.nivel_interes?'<div style="font-size:11px;margin-bottom:4px"><strong>Interés:</strong> '+_escPend(r.nivel_interes)+'</div>':'')+
@@ -12380,9 +12472,14 @@ function _mirToggle(id){
   det.dataset.loaded='1';
   const g=_mirCache[id]||{};
   let resumenHtml='';
-  if(g.resumen){
+  {
     let r=null; try{r=JSON.parse(g.resumen);}catch(e){}
-    if(r&&typeof r==='object'){
+    /* v210 — resumen vacío o ausente sobre un audio que SÍ se transcribió: hay
+       que decirlo. Antes la sección "📝 Resumen" simplemente no se dibujaba y
+       "no hay nada que resumir" se leía igual que "todavía no se procesó". */
+    if(!g.resumen){resumenHtml=g.transcripcion?HTML_SIN_CONTENIDO_IA:'';}
+    else if(_resumenVacioIA(r)){resumenHtml=HTML_SIN_CONTENIDO_IA;}
+    else if(r&&typeof r==='object'){
       const puntos=(r.puntos_clave||[]).map(function(p){return'<li>'+_escPend(p)+'</li>';}).join('');
       const objec=(r.objeciones||[]).map(function(o){return'<li>'+_escPend(o)+'</li>';}).join('');
       resumenHtml=(r.nivel_interes?'<div style="font-size:11px;margin-bottom:4px"><strong>Interés:</strong> '+_escPend(r.nivel_interes)+'</div>':'')+
