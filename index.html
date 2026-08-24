@@ -1339,7 +1339,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
                 <option value="contado">Contado</option>
                 <option value="financiamiento_bancario">Financiamiento bancario</option>
                 <option value="credito_directo">Crédito directo GEAT</option>
-                <option value="mixto">Mixto (contado + financiamiento)</option>
+                <option value="mixto">Mixto (aporte propio + financiamiento)</option>
               </select>
             </div>
             <div class="form-group">
@@ -1603,6 +1603,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             <option value="recursos_propios">Recursos propios</option>
             <option value="con_financiamiento">Con financiamiento</option>
             <option value="financiamiento_bancario">Financiamiento bancario</option>
+            <!-- v210 — pedido de la captadora: el caso real mas frecuente no
+                 tenia opcion (JAV, 30% financiado). Historicos sin migrar. -->
+            <option value="mixto">Mixto (aporte propio + financiamiento)</option>
           </select>
         </div>
         <div class="form-group">
@@ -4738,7 +4741,7 @@ function renderFichaCompleta(lead,refs){
 }
 
 /* ── RONDA 6: perfil consolidado del cliente ── */
-const _METODO_PAGO_OPTS=[['contado','Contado'],['financiamiento_bancario','Financiamiento bancario'],['credito_directo','Crédito directo GEAT'],['mixto','Mixto (contado + financiamiento)']];
+const _METODO_PAGO_OPTS=[['contado','Contado'],['financiamiento_bancario','Financiamiento bancario'],['credito_directo','Crédito directo GEAT'],['mixto','Mixto (aporte propio + financiamiento)']];
 const _BANCOS=[['mercantil','Banco Mercantil Santa Cruz'],['bnb','Banco Nacional de Bolivia (BNB)'],['bcp','Banco BCP'],['bancosol','Banco Sol'],['union','Banco Unión'],['otro','Otro']];
 const _ECIVIL=[['soltero','Soltero/a'],['casado','Casado/a'],['conviviente','Conviviente'],['divorciado','Divorciado/a'],['viudo','Viudo/a']];
 
@@ -5156,7 +5159,9 @@ function _normMetodoPago(v){
   if(!v)return null;
   const s=(''+v).toLowerCase();
   if(_METODO_PAGO_OPTS.some(m=>m[0]===s))return s;
-  if(s.includes('mixto')||(s.includes('contado')&&(s.includes('financ')||s.includes('banc'))))return 'mixto';
+  /* v210 — 'aporte propio + financiamiento' caía en la regla de 'propio' de abajo
+     y se guardaba como credito_directo. El mixto se decide primero. */
+  if(s.includes('mixto')||((s.includes('contado')||s.includes('propio'))&&(s.includes('financ')||s.includes('banc'))))return 'mixto';
   if(s.includes('directo')||s.includes('geat')||s.includes('propio'))return 'credito_directo';
   if(s.includes('banc')||s.includes('financ')||s.includes('crédit')||s.includes('credit')||s.includes('prestamo')||s.includes('préstamo')||s.includes('hipotec'))return 'financiamiento_bancario';
   if(s.includes('contado')||s.includes('efectivo')||s.includes('cash'))return 'contado';
@@ -5258,7 +5263,11 @@ const IND_CAMPOS=[
      llegó a este gate. Ahora es el MISMO campo que el alta y la ficha. */
   {key:'ind_ciudad',label:'Ciudad',type:'ciudad',req:true},
   {key:'ind_lugar_terreno',label:'Lugar del terreno',type:'text',req:true},
-  {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario']],req:true},
+  /* v210 — se agrega 'mixto' (pedido de la captadora). OJO: este catálogo usa
+     códigos propios ('financiamiento','bancario') distintos de los del select
+     de agendar visita y de _METODO_PAGO_OPTS; se respeta tal cual porque hay
+     leads guardados con esos valores y no se migran históricos. */
+  {key:'ind_financiamiento',label:'Método de pago',type:'select',opts:[['recursos_propios','Recursos propios'],['financiamiento','Con financiamiento'],['bancario','Financiamiento bancario'],['mixto','Mixto (aporte propio + financiamiento)']],req:true},
   {key:'ind_presupuesto',label:'Presupuesto ($)',type:'number',req:true},
   {key:'ind_cuando_construir',label:'¿Cuándo construir?',type:'text',req:true},
   {key:'grado_interes',label:'Grado de interés',type:'select',opts:[['bajo','🟢 Bajo'],['medio','🟡 Medio'],['alto','🔴 Alto']]},
@@ -5526,7 +5535,7 @@ function toggleLugarVisita(){
   document.getElementById('av-ubicacion-wrap').style.display=esTerreno?'':'none';
 }
 function _avLabelModoPago(v){
-  return v==='recursos_propios'?'Recursos propios':v==='con_financiamiento'?'Con financiamiento':v==='financiamiento_bancario'?'Financiamiento bancario':(v||'—');
+  return v==='recursos_propios'?'Recursos propios':v==='con_financiamiento'?'Con financiamiento':v==='financiamiento_bancario'?'Financiamiento bancario':v==='mixto'?'Mixto (aporte propio + financiamiento)':(v||'—');
 }
 /* ╔═══════════════════════════════════════════════════════════════════════╗
    ║  v208 · DAR DE BAJA UNA VISITA = SOLO activo=false. NUNCA             ║
