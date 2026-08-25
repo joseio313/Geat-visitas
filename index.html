@@ -1173,6 +1173,16 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             <input class="form-control" type="text" id="won-codigo-venta" placeholder="Autogenerado si se deja vacío">
           </div>
         </div>
+        <!-- v211 — gestor bancario. Solo aparece si el lead tiene método de pago
+             con banco. El monto NO se pide acá: lo resuelve el servidor con la
+             tarifa vigente a la fecha de firma, así nadie lo tipea distinto. -->
+        <div id="won-gestor-wrap" style="display:none">
+          <div class="form-group">
+            <label class="form-label">🏦 Gestor bancario que intervino</label>
+            <select class="form-control" id="won-gestor"><option value="">Ninguno</option></select>
+            <div class="form-help">Si intervino un gestor, se le registra la comisión como <strong>firmada</strong>. Recién se paga cuando el banco desembolsa.</div>
+          </div>
+        </div>
         <!-- Fix 4a — preview registro en ventas -->
         <div style="background:rgba(46,204,113,0.08);border:1px solid var(--st-completo);border-radius:8px;padding:11px;margin-top:10px">
           <div style="font-size:11px;color:var(--st-completo);font-weight:600;margin-bottom:8px">✅ Se registrará automáticamente en <strong>ventas</strong></div>
@@ -1679,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='210';
+  var CURRENT_VERSION='211';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -7143,14 +7153,48 @@ function setOutcome(el,mode){
   if(mode==='lost')document.getElementById('block-lost').classList.add('show');
 }
 
+/* v211 — ¿el pago de este lead pasa por un banco?
+   El método de pago vive en TRES catálogos con códigos distintos (v210), así que
+   se miran los dos que están en `leads` y se matchea por texto, no por igualdad:
+     metodo_pago        → financiamiento_bancario | mixto
+     ind_financiamiento → bancario | financiamiento | mixto
+   'recursos_propios', 'contado' y 'credito_directo' no matchean ninguno de los
+   tres patrones y quedan afuera solos.
+   Se prefiere el falso positivo: ofrecer el gestor de más cuesta un select que
+   queda en "Ninguno"; no ofrecerlo cuesta una comisión que nadie registra, que
+   es exactamente el problema que este bloque viene a eliminar. */
+function _esPagoBancario(l){
+  const re=/banc|mixto|financiamiento/i;
+  return re.test(String((l&&l.metodo_pago)||''))||re.test(String((l&&l.ind_financiamiento)||''));
+}
 async function fillWonPreview(){
   try{
-    const{data:l}=await sb.from('leads').select('cerrador,captador').eq('id',currentLeadId).single();
+    const{data:l}=await sb.from('leads')
+      .select('cerrador,captador,metodo_pago,ind_financiamiento').eq('id',currentLeadId).single();
     const yr=new Date().getFullYear();
     document.getElementById('won-prev-codigo').textContent='GEAT-'+yr+'-'+String(currentLeadId).padStart(4,'0');
     document.getElementById('won-prev-cerrador').textContent=(l&&l.cerrador)||'—';
     document.getElementById('won-prev-captador').textContent=(l&&l.captador)||'—';
     document.getElementById('won-prev-fecha').textContent=document.getElementById('won-fecha-firma').value||'—';
+    await _wonCargarGestores(l);
+  }catch(e){}
+}
+/* Llena el select de gestores. Si no hay ninguno cargado, el bloque no se
+   muestra: no tiene sentido ofrecer una lista vacía. */
+async function _wonCargarGestores(l){
+  const wrap=document.getElementById('won-gestor-wrap');
+  const sel=document.getElementById('won-gestor');
+  if(!wrap||!sel)return;
+  wrap.style.display='none';
+  sel.innerHTML='<option value="">Ninguno</option>';
+  if(!_esPagoBancario(l))return;
+  try{
+    const r=await _montosCall({action:'gestores_opciones'});
+    const gs=r.gestores||[];
+    if(!gs.length)return;
+    sel.innerHTML='<option value="">Ninguno</option>'+
+      gs.map(g=>'<option value="'+g.id+'">'+_escPend(g.nombre)+'</option>').join('');
+    wrap.style.display='block';
   }catch(e){}
 }
 
@@ -7331,6 +7375,25 @@ async function saveSeguimiento(){
       }catch(eVenta){
         toast('Lead ganado, pero no se registró en ventas: '+eVenta.message,'error');
       }
+
+      /* v211 — comisión del gestor bancario. No interrumpe el cierre: si falla,
+         avisa y sigue. Entra SIEMPRE como 'firmado' (el banco todavía no
+         desembolsó) y sin monto en el payload — lo pone el servidor con la
+         tarifa vigente a la fecha de firma. */
+      const _gSel=document.getElementById('won-gestor');
+      const _gId=_gSel&&_gSel.value?parseInt(_gSel.value,10):0;
+      if(_gId>0){
+        try{
+          await _montosCall({action:'comision_alta',gestor_id:_gId,lead_id:currentLeadId,
+            cliente_nombre:(leadFull&&leadFull.nombre)||'',
+            fecha_firma:fechaFirma||ymdLocal(new Date())});
+          toast('🏦 Comisión del gestor registrada como FIRMADA','ok');
+          try{await registrarAuditoria('comision_gestor_alta','comisiones_gestor',currentLeadId,{gestor_id:_gId});}catch(_ea){}
+        }catch(eCom){
+          toast('Lead ganado, pero no se registró la comisión del gestor: '+eCom.message,'error');
+        }
+      }
+
       /* v156 — monto viaja en wonData: es const de bloque y la celebración se dispara más abajo */
       wonData={cod:_vCod,m2,monto,cerrador:_vCerr,captador:_vCap,nombre:(leadFull&&leadFull.nombre)||''};
 
@@ -9866,9 +9929,12 @@ async function renderGerencia(){
   }
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   try{
-    /* v203 — por geat-montos: los montos ya no se leen con la anon key. */
+    /* v203 — por geat-montos: los montos ya no se leen con la anon key.
+       v211 — las comisiones del gestor viajan por la misma puerta. */
     const _rm=await _montosCall({action:'cierres_ganados'});
     _gerCache=_rm.leads||[];
+    try{_gerCom=await _montosCall({action:'comisiones_panel'});}
+    catch(_ec){_gerCom={gestores:[],tarifas:[],comisiones:[],_error:_ec.message||'error'};}
     _gerPintar();
   }catch(e){
     cont.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
@@ -9924,7 +9990,187 @@ function _gerPintar(){
     (incompletos.length?_gerHistoricosHtml(incompletos):'')+
     tabla('🏆 Por cerrador','Cerrador',porCerrador)+
     tabla('🎯 Por captador','Captador',porCaptador)+
-    tabla('📅 Por mes','Mes',porMes.map(f=>({...f,k:_gerMesLbl(f.k)})));
+    tabla('📅 Por mes','Mes',porMes.map(f=>({...f,k:_gerMesLbl(f.k)})))+
+    _gerComHtml();
+}
+
+/* ════════════════════════════════════════
+   v211 — COMISIONES DE GESTORES BANCARIOS (dentro de Gerencia, solo admin)
+
+   El problema que elimina: nadie tenía la lista completa. El CEO decía una
+   cantidad de cierres, la gestora tenía otra, el cerrador había pasado un
+   informe distinto, y el monto se calculó tres veces con tres resultados.
+
+   Por eso el panel NO calcula nada: suma `monto_bs` de las filas guardadas.
+   La tarifa vigente sirve para PROPONER el monto al dar de alta, nunca para
+   recalcular lo ya cargado.
+
+   El corte que causó la confusión va separado y en ese orden:
+     FIRMADO SIN DESEMBOLSAR → el banco no desembolsó, NO se paga
+     DESEMBOLSADO POR PAGAR  → se debe hoy
+     PAGADO                  → ya salió
+   Todo en BOLIVIANOS. Es el único lugar del CRM donde se muestran Bs.
+════════════════════════════════════════ */
+let _gerCom={gestores:[],tarifas:[],comisiones:[]};
+
+function _gerBs(n){
+  return 'Bs '+Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:0,maximumFractionDigits:2});
+}
+/* Tarifa vigente hoy para un gestor: la de mayor vigente_desde que ya arrancó y
+   no está cerrada. Espejo de fn_tarifa_gestor, solo para mostrar. */
+function _gerTarifaVigente(gestorId){
+  const hoy=ymdLocal(new Date());
+  const ts=(_gerCom.tarifas||[]).filter(t=>t.gestor_id===gestorId&&t.vigente_desde<=hoy&&
+    (!t.vigente_hasta||t.vigente_hasta>=hoy));
+  if(!ts.length)return null;
+  return ts.sort((a,b)=>(a.vigente_desde<b.vigente_desde?1:-1))[0];
+}
+function _gerComEstadoLbl(e){
+  if(e==='firmado')return '🟡 Firmado sin desembolsar';
+  if(e==='desembolsado')return '🟢 Desembolsado por pagar';
+  if(e==='pagado')return '✅ Pagado';
+  return e||'—';
+}
+
+function _gerComHtml(){
+  const G=_gerCom.gestores||[],C=_gerCom.comisiones||[];
+  let h='<div class="admin-section" id="ger-comisiones">'+
+    '<div class="admin-section-title">🏦 Comisiones de gestores bancarios (Bs)</div>';
+
+  if(_gerCom._error){
+    h+='<div style="color:var(--st-atrasado);font-size:12px;margin-bottom:10px">No se pudieron leer las comisiones: '+_escPend(_gerCom._error)+'</div>';
+  }
+
+  /* Totales globales — el corte que causó la confusión, en el orden en que hay
+     que leerlo. "Se debe hoy" es SOLO lo desembolsado y no pagado. */
+  const tFirmado=C.filter(c=>c.estado==='firmado').reduce((s,c)=>s+Number(c.monto_bs||0),0);
+  const tDesemb =C.filter(c=>c.estado==='desembolsado').reduce((s,c)=>s+Number(c.monto_bs||0),0);
+  const tPagado =C.filter(c=>c.estado==='pagado').reduce((s,c)=>s+Number(c.monto_bs||0),0);
+
+  h+='<div class="ger-kpis" style="margin-bottom:12px">'+
+      '<div class="ger-kpi"><div class="lbl">🟡 Firmado sin desembolsar</div><div class="val">'+_gerBs(tFirmado)+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">NO se paga todavía</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">🟢 Desembolsado por pagar</div><div class="val">'+_gerBs(tDesemb)+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">se debe hoy</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">✅ Pagado</div><div class="val">'+_gerBs(tPagado)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Total comprometido</div><div class="val">'+_gerBs(tFirmado+tDesemb+tPagado)+'</div>'+
+        '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">'+C.length+' comisión(es)</div></div>'+
+    '</div>';
+
+  if(!G.length){
+    h+='<div style="color:var(--gray-400);font-size:12px;margin-bottom:10px">Todavía no hay ningún gestor cargado. Cargá uno y su tarifa para poder registrar comisiones.</div>';
+  }
+
+  /* Un bloque por gestor: su tarifa vigente y sus comisiones. */
+  G.forEach(function(g){
+    const cs=C.filter(c=>c.gestor_id===g.id);
+    const tv=_gerTarifaVigente(g.id);
+    const sub=function(est){return cs.filter(c=>c.estado===est).reduce((s,c)=>s+Number(c.monto_bs||0),0);};
+    h+='<div style="border:1px solid var(--gray-700,#333);border-radius:8px;padding:11px;margin-bottom:11px">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px">'+
+        '<strong style="font-size:13px">'+_escPend(g.nombre)+(g.activo?'':' <span style="color:var(--gray-400);font-size:10px">(inactivo)</span>')+'</strong>'+
+        '<span style="font-size:11px;color:var(--gray-400)">Tarifa vigente: '+
+          (tv?('<strong style="color:var(--gold)">'+_gerBs(tv.tarifa_bs)+'</strong> desde '+_escPend(tv.vigente_desde)):'<span style="color:var(--st-atrasado)">sin tarifa vigente</span>')+
+        '</span>'+
+      '</div>'+
+      '<div style="font-size:11px;margin-bottom:8px">'+
+        '🟡 '+_gerBs(sub('firmado'))+' &nbsp;·&nbsp; 🟢 '+_gerBs(sub('desembolsado'))+' &nbsp;·&nbsp; ✅ '+_gerBs(sub('pagado'))+
+      '</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+
+        '<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerTarifaNueva('+g.id+')">💲 Nueva tarifa</button>'+
+        '<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerComisionNueva('+g.id+')">➕ Cargar comisión</button>'+
+      '</div>';
+    if(!cs.length){
+      h+='<div style="color:var(--gray-400);font-size:12px">Sin comisiones cargadas.</div>';
+    }else{
+      h+='<table class="ger-tbl"><thead><tr><th>Cliente</th><th>Firma</th><th>Estado</th>'+
+         '<th class="num">Monto</th><th>Acción</th></tr></thead><tbody>'+
+        cs.map(function(c){
+          let acc='';
+          if(c.estado==='firmado')acc='<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerComMover('+c.id+',\'desembolsado\')">Marcar desembolsado</button>';
+          else if(c.estado==='desembolsado')acc='<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerComMover('+c.id+',\'pagado\')">Marcar pagado</button>';
+          else acc='<span style="color:var(--gray-400);font-size:11px">'+_escPend(c.fecha_pago||'')+'</span>';
+          return '<tr><td>'+_escPend(c.cliente_nombre||'—')+(c.lead_id?' <span style="color:var(--gray-400);font-size:10px">#'+c.lead_id+'</span>':'')+'</td>'+
+            '<td>'+_escPend(c.fecha_firma||'—')+'</td>'+
+            '<td>'+_gerComEstadoLbl(c.estado)+'</td>'+
+            '<td class="num">'+_gerBs(c.monto_bs)+'</td>'+
+            '<td>'+acc+'</td></tr>';
+        }).join('')+'</tbody></table>';
+    }
+    h+='</div>';
+  });
+
+  h+='<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerGestorNuevo()">👤 Nuevo gestor</button>';
+  h+='</div>';
+  return h;
+}
+
+/* Las altas van por prompt: son de carga esporádica del admin y no justifican
+   un modal propio. Todas pasan por geat-montos, nunca por la anon key. */
+async function _gerGestorNuevo(){
+  const nombre=(prompt('Nombre del gestor bancario:')||'').trim();
+  if(!nombre)return;
+  try{
+    await _montosCall({action:'gestor_alta',nombre:nombre});
+    toast('✅ Gestor creado — cargale la tarifa','ok');
+    await renderGerencia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function _gerTarifaNueva(gestorId){
+  const t=parseFloat((prompt('Tarifa en BOLIVIANOS (ej: 400):')||'').replace(',','.'));
+  if(!(t>0)){if(t!==undefined&&!isNaN(t))toast('Tarifa inválida','error');return;}
+  const desde=(prompt('Vigente desde (YYYY-MM-DD):',ymdLocal(new Date()))||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(desde)){toast('Fecha inválida','error');return;}
+  try{
+    await _montosCall({action:'gestor_tarifa_alta',gestor_id:gestorId,tarifa_bs:t,vigente_desde:desde});
+    toast('✅ Tarifa cargada — la anterior se cerró el día previo','ok');
+    await renderGerencia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Alta manual (histórica). Acá SÍ se tipea el monto: son cierres que no salen
+   de un cierre del CRM y pueden tener una tarifa que ya no está vigente. */
+async function _gerComisionNueva(gestorId){
+  const cliente=(prompt('Nombre del cliente:')||'').trim();
+  if(!cliente)return;
+  const fecha=(prompt('Fecha de firma (YYYY-MM-DD):')||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){toast('Fecha inválida','error');return;}
+  const tv=_gerTarifaVigente(gestorId);
+  const monto=parseFloat((prompt('Monto en BOLIVIANOS:',tv?String(tv.tarifa_bs):'')||'').replace(',','.'));
+  if(!(monto>0)){toast('Monto inválido','error');return;}
+  try{
+    await _montosCall({action:'comision_alta_admin',gestor_id:gestorId,cliente_nombre:cliente,
+      fecha_firma:fecha,monto_bs:monto});
+    toast('✅ Comisión cargada como FIRMADA','ok');
+    await renderGerencia();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+/* Mover de estado exige la fecha del hecho: sin fecha de desembolso no hay
+   'desembolsado'. Lo valida también un CHECK en la tabla. */
+async function _gerComMover(id,estado){
+  const hoy=ymdLocal(new Date());
+  const actual=(_gerCom.comisiones||[]).filter(function(c){return c.id===id;})[0]||{};
+  const payload={action:'comision_estado',id:id,estado:estado};
+  if(estado==='desembolsado'||estado==='pagado'){
+    /* Si ya estaba desembolsada, se conserva esa fecha: pasar a 'pagado' no
+       puede reescribir cuándo desembolsó el banco. */
+    if(actual.fecha_desembolso){
+      payload.fecha_desembolso=actual.fecha_desembolso;
+    }else{
+      const fd=(prompt('Fecha de DESEMBOLSO del banco (YYYY-MM-DD):',hoy)||'').trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(fd)){toast('Fecha inválida','error');return;}
+      payload.fecha_desembolso=fd;
+    }
+  }
+  if(estado==='pagado'){
+    const fp=(prompt('Fecha de PAGO al gestor (YYYY-MM-DD):',hoy)||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fp)){toast('Fecha inválida','error');return;}
+    payload.fecha_pago=fp;
+  }
+  try{
+    await _montosCall(payload);
+    toast('✅ Comisión actualizada','ok');
+    await renderGerencia();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 /* Bloque de carga manual — desaparece solo cuando N llega a 0.
