@@ -1689,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='212';
+  var CURRENT_VERSION='213';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5581,27 +5581,35 @@ function _avLabelModoPago(v){
    identifique — así una visita escrita a mano se distingue sola.
    El formato es EL QUE YA USAN, no uno nuevo. Dos cosas son intocables:
    · el correlativo mensual #N (agenda_personal.visita_nro, asignado por
-     siguiente_visita_nro() con advisory lock: dos captadoras agendando a la vez
+     fn_siguiente_visita_nro() con advisory lock: dos captadoras agendando a la vez
      no pueden sacar el mismo número). Sin él pierden la cuenta y no lo usan.
    · identificar por NOMBRE si lo tienen y por CELULAR si el lead no lo dio.
 ════════════════════════════════════════ */
 /* ════════════════════════════════════════
-   v212 — EL CORRELATIVO SE RECICLA: NO ES DEL FRONTEND
-   Agosto tiene el nº 19 dos veces (agenda_personal 5376 y 5485; la 5376 con
-   activo=false). El front NO calcula el número: desde v194 pide
-   siguiente_visita_nro() por RPC — no hay ningún MAX+1 local que borrar.
-   El MAX+1 vive en la función de la base, y filtra las bajas:
-     SELECT COALESCE(MAX(visita_nro),0)+1 FROM agenda_personal
-     WHERE visita_periodo = p AND activo IS NOT FALSE;   <-- acá
-   Al dar de baja la 5376 su 19 volvió a quedar libre y la visita siguiente se
-   lo llevó. El índice idx_visita_nro_periodo tampoco frena el duplicado:
-   es UNIQUE parcial con el mismo WHERE (visita_nro IS NOT NULL AND
-   activo IS NOT FALSE), así que la fila dada de baja deja de ocupar el número.
-   El arreglo es sacar ese filtro de la función (un número entregado no se
-   devuelve nunca, aunque la visita se caiga). Es una escritura en Supabase:
-   queda pendiente del OK del CEO, no se aplica desde acá.
-   OJO: no existe fn_siguiente_visita_nro() — la función es siguiente_visita_nro().
+   v213 — EL CORRELATIVO SALE DE fn_siguiente_visita_nro(), NADA MÁS
+   Agosto tuvo el nº 19 dos veces (agenda_personal 5376 y 5485; la 5376 con
+   activo=false): el MAX+1 de la función vieja siguiente_visita_nro() filtraba
+   por activo, así que al dar de baja una visita su número volvía al pozo.
+   El CEO creó fn_siguiente_visita_nro() en Supabase — misma idea, sin el filtro
+   de activo, con el mismo advisory lock, SECURITY DEFINER y EXECUTE para anon.
+   Firma NUEVA, distinta de la vieja:
+     fn_siguiente_visita_nro() RETURNS integer   -- el número pelado
+     siguiente_visita_nro()    RETURNS TABLE(nro,periodo)   -- la vieja, sin uso
+   Por eso acá:
+   · data ES el número. Nada de data[0].nro ni Array.isArray(...).
+   · el PERÍODO ya no viene de la base: lo arma el front con _visPeriodoBO(),
+     que usa ymdBolivia() — America/La_Paz fija, no la zona del dispositivo
+     (hay cargas desde teléfonos con otra zona; ver el 24% de madrugada).
+   · no queda NINGÚN cálculo del número en este archivo: se pide siempre.
+   El índice idx_visita_nro_periodo sigue siendo UNIQUE parcial (visita_nro IS
+   NOT NULL AND activo IS NOT FALSE), así que no rechaza un duplicado si la otra
+   fila está de baja — el que garantiza que el número no se repita es el MAX+1
+   de la función, no el índice.
 ════════════════════════════════════════ */
+/* v213 — período del correlativo (YYYY-MM) en hora de Bolivia. La función de la
+   base lo calcula con to_char(now() AT TIME ZONE 'America/La_Paz','YYYY-MM')
+   pero ya no lo devuelve; esto tiene que dar exactamente lo mismo. */
+function _visPeriodoBO(){return ymdBolivia(new Date()).slice(0,7);}
 /* 'Sin nombre' es el placeholder de 3.136 leads: no es un nombre. */
 const _VIS_NOMBRE_GENERICO=['sin nombre','sin datos','sin nombre aún','s/n','no indica','-','--','—'];
 function _visCliente(nombre,celular){
@@ -5712,10 +5720,10 @@ async function guardarAgendarVisita(){
     let visNro=visPrev?visPrev.visita_nro:null;
     let visPer=visPrev?visPrev.visita_periodo:null;
     if(!visNro){
-      const{data:sig,error:eNro}=await sb.rpc('siguiente_visita_nro');
+      /* v213 — fn_siguiente_visita_nro() devuelve el entero pelado */
+      const{data:sig,error:eNro}=await sb.rpc('fn_siguiente_visita_nro');
       if(eNro)throw eNro;
-      const s=Array.isArray(sig)?sig[0]:sig;
-      visNro=s&&s.nro;visPer=s&&s.periodo;
+      visNro=Number(sig)||0;visPer=_visPeriodoBO();
       if(!visNro)throw new Error('No se pudo asignar el número de visita');
     }
     const row={
@@ -5757,7 +5765,7 @@ async function guardarAgendarVisita(){
     /* v194 — espejo en agenda_personal: es donde vive visita_nro y donde el
        resto del CRM cuenta las visitas. Hasta acá la visita del modal solo
        existía en agenda_grupal, así que no aparecía en ninguna agenda personal
-       ni la veía siguiente_visita_nro(). */
+       ni la veía fn_siguiente_visita_nro(). */
     const apRow={
       colaborador:cerrador||l.captador||cu.nombre,
       lead_id:leadId,
@@ -5803,7 +5811,7 @@ async function guardarAgendarVisita(){
         if(adopt)apDestId=adopt.id;
       }catch(eAd){}
     }
-    /* El advisory lock de siguiente_visita_nro() muere al cerrar la transacción
+    /* El advisory lock de fn_siguiente_visita_nro() muere al cerrar la transacción
        del RPC: el número recién queda TOMADO cuando existe la fila. Entre el RPC
        y este insert otra captadora puede llevarse el mismo nº y el índice único
        idx_visita_nro_periodo devuelve 23505 — se pide otro y se reintenta. */
@@ -5815,10 +5823,10 @@ async function guardarAgendarVisita(){
       if(!eAp){apOk=true;break;}
       apErr=eAp;
       if(eAp.code!=='23505')break;
-      const{data:sig2}=await sb.rpc('siguiente_visita_nro');
-      const s2=Array.isArray(sig2)?sig2[0]:sig2;
-      if(!s2||!s2.nro)break;
-      visNro=s2.nro;visPer=s2.periodo;
+      const{data:sig2}=await sb.rpc('fn_siguiente_visita_nro');
+      const n2=Number(sig2)||0;
+      if(!n2)break;
+      visNro=n2;visPer=_visPeriodoBO();
       apRow.visita_nro=visNro;apRow.visita_periodo=visPer;
     }
     if(!apOk)toast('Visita agendada, pero el nº no quedó en la agenda: '+((apErr&&apErr.message)||'error'),'error');
@@ -5886,13 +5894,12 @@ async function copiarVisitaWaLead(leadId,btn){
     if(!ap){toast('Este lead no tiene una visita pendiente para anunciar','error');return;}
     let nro=ap.visita_nro;
     if(!nro){
-      const{data:sig,error:eNro}=await sb.rpc('siguiente_visita_nro');
+      const{data:sig,error:eNro}=await sb.rpc('fn_siguiente_visita_nro');
       if(eNro)throw eNro;
-      const s=Array.isArray(sig)?sig[0]:sig;
-      nro=s&&s.nro;
+      nro=Number(sig)||0;
       if(!nro)throw new Error('No se pudo asignar el número de visita');
       const{error:eUp}=await sb.from('agenda_personal')
-        .update({visita_nro:nro,visita_periodo:s.periodo}).eq('id',ap.id);
+        .update({visita_nro:nro,visita_periodo:_visPeriodoBO()}).eq('id',ap.id);
       if(eUp)throw eUp;
     }
     const lead=rLead.data||{};
