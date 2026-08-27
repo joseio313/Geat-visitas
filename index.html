@@ -5714,7 +5714,9 @@ async function guardarAgendarVisita(){
       ubicacion_terreno:lugar==='terreno'?ubic:null,
       modo_pago:modoPago
     };
-    const{error}=await sb.from('agenda_grupal').insert(row);
+    /* v212 — .select('id'): el id de la fila hace falta para escribirle el
+       cerrador unas líneas más abajo. */
+    const{data:agIns,error}=await sb.from('agenda_grupal').insert(row).select('id').single();
     if(error)throw error;
     // Releer el cerrador que asignó el trigger en el lead
     let cerrador='';
@@ -5722,6 +5724,18 @@ async function guardarAgendarVisita(){
       const{data:lf}=await sb.from('leads').select('cerrador,estado').eq('id',leadId).single();
       cerrador=(lf&&lf.cerrador)||'';
     }catch(e){}
+    /* v212 — el cerrador se imprimía en el mensaje ("Cierra: ...") pero
+       agenda_grupal.cerrador quedaba NULL: 0 de 17 visitas del grupal lo
+       tienen, así que desde la base no se puede saber quién cerraba ninguna.
+       No se puede mandar en el insert de arriba porque todavía no existe: lo
+       asigna asignar_cerrador_alternancia, un trigger que corre DESPUÉS,
+       encadenado al update del lead que dispara este mismo insert. Se escribe
+       acá, con el valor ya releído — el mismo que imprime la línea "Cierra:".
+       Si falla, la visita ya quedó agendada: se avisa y no se corta. */
+    if(cerrador&&agIns&&agIns.id){
+      const{error:eCer}=await sb.from('agenda_grupal').update({cerrador:cerrador}).eq('id',agIns.id);
+      if(eCer)toast('Visita agendada, pero el cerrador no quedó guardado en el grupal','error');
+    }
     try{registrarAuditoria('agendar_visita','agenda_grupal',leadId,{lugar:lugar,modo_pago:modoPago,fecha:isoInicio,visita_nro:visNro});}catch(e){}
     /* v194 — espejo en agenda_personal: es donde vive visita_nro y donde el
        resto del CRM cuenta las visitas. Hasta acá la visita del modal solo
