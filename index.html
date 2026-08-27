@@ -1689,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='211';
+  var CURRENT_VERSION='212';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5584,6 +5584,23 @@ function _avLabelModoPago(v){
      siguiente_visita_nro() con advisory lock: dos captadoras agendando a la vez
      no pueden sacar el mismo número). Sin él pierden la cuenta y no lo usan.
    · identificar por NOMBRE si lo tienen y por CELULAR si el lead no lo dio.
+════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   v212 — EL CORRELATIVO SE RECICLA: NO ES DEL FRONTEND
+   Agosto tiene el nº 19 dos veces (agenda_personal 5376 y 5485; la 5376 con
+   activo=false). El front NO calcula el número: desde v194 pide
+   siguiente_visita_nro() por RPC — no hay ningún MAX+1 local que borrar.
+   El MAX+1 vive en la función de la base, y filtra las bajas:
+     SELECT COALESCE(MAX(visita_nro),0)+1 FROM agenda_personal
+     WHERE visita_periodo = p AND activo IS NOT FALSE;   <-- acá
+   Al dar de baja la 5376 su 19 volvió a quedar libre y la visita siguiente se
+   lo llevó. El índice idx_visita_nro_periodo tampoco frena el duplicado:
+   es UNIQUE parcial con el mismo WHERE (visita_nro IS NOT NULL AND
+   activo IS NOT FALSE), así que la fila dada de baja deja de ocupar el número.
+   El arreglo es sacar ese filtro de la función (un número entregado no se
+   devuelve nunca, aunque la visita se caiga). Es una escritura en Supabase:
+   queda pendiente del OK del CEO, no se aplica desde acá.
+   OJO: no existe fn_siguiente_visita_nro() — la función es siguiente_visita_nro().
 ════════════════════════════════════════ */
 /* 'Sin nombre' es el placeholder de 3.136 leads: no es un nombre. */
 const _VIS_NOMBRE_GENERICO=['sin nombre','sin datos','sin nombre aún','s/n','no indica','-','--','—'];
