@@ -1619,8 +1619,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Observación <span style="color:var(--gray-400)">(opcional)</span></label>
-          <input class="form-control" type="text" id="av-observacion" maxlength="160" placeholder="Nota corta...">
+          <label class="form-label">Nota para el grupo <span style="color:var(--gray-400)">(opcional)</span></label>
+          <input class="form-control" type="text" id="av-observacion" maxlength="160" placeholder="Sale al final del mensaje de WhatsApp...">
         </div>
         <div class="action-row">
           <button class="btn-primary" id="av-btn-guardar" onclick="guardarAgendarVisita()">💾 Guardar visita</button>
@@ -5624,10 +5624,15 @@ function _visArmarMsg(o){
   }
   if(o.cerrador)L.push('Cierra: '+o.cerrador);
   if(o.lugar)L.push(o.lugar);
-  if(o.obs)L.push(o.obs);
   if(o.pago)L.push(o.pago);
   L.push('');
   L.push((o.captador?'Captó: '+o.captador+' · ':'')+'GEAT CRM');
+  /* v212 — la observación del modal iba suelta en el medio del mensaje, sin
+     rótulo: en el grupo se leía como una línea más del formulario y no se
+     distinguía de los datos fijos. Ahora va al final, rotulada "Nota:". Si
+     viene vacía no se imprime la línea, igual que el resto del mensaje. */
+  const _nota=(o.obs||'').trim();
+  if(_nota)L.push('Nota: '+_nota);
   return L.join('\n');
 }
 /* Copiado sin alert bloqueante: el propio botón confirma */
