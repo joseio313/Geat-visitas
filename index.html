@@ -1689,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='214';
+  var CURRENT_VERSION='215';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -8994,15 +8994,17 @@ async function renderRegistroGrabaciones(){
 async function _grabDetectarRecuperables(){
   const banner=document.getElementById('grab-recover-banner'); if(!banner)return;
   try{
+    /* v215 — también las 'descartada': hasta v213 un fallo de transcripción
+       marcaba así una fila cuyo audio seguía sano en el bucket. */
     const cand=_grabListAll.filter(function(g){
-      return g.estado==='interrumpida'&&!(g.transcripcion&&g.transcripcion.trim());
+      return (g.estado==='interrumpida'||g.estado==='descartada')&&!(g.transcripcion&&g.transcripcion.trim());
     });
     const rec=[];
     for(const g of cand){
       try{
         const{data:segs,error}=await sb.storage.from('grabaciones').list(String(g.id)+'/',{limit:200});
         if(error)continue;
-        if((segs||[]).some(function(s){return /^seg_\d+\.webm$/i.test(s.name);}))rec.push(g.id);
+        if((segs||[]).some(function(s){return s.name&&/^(seg_|up_)/i.test(s.name)&&_ES_AUDIO_RE.test(s.name);}))rec.push(g.id);
       }catch(e){}
     }
     _grabRecuperables=rec;
@@ -9040,7 +9042,7 @@ async function _grabRecuperarUna(id){
   if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
   const{data:segs,error:el}=await sb.storage.from('grabaciones').list(String(id)+'/',{limit:200});
   if(el)throw el;
-  const names=(segs||[]).map(function(s){return s.name;}).filter(function(n){return /^seg_\d+\.webm$/i.test(n);}).sort();
+  const names=(segs||[]).map(function(s){return s.name;}).filter(function(n){return /^(seg_|up_)/i.test(n)&&_ES_AUDIO_RE.test(n);}).sort();
   if(!names.length)throw new Error('sin segmentos');
   const partes=[];
   for(let i=0;i<names.length;i++){
@@ -9208,7 +9210,10 @@ function _grabToggle(id){
     '</div>'+
   '</div>';
   _grabCargarAudio(id,g.audio_path);
-  if(g.estado==='interrumpida')_grabRenderReprocesar(id);
+  /* v215 — el botón de reintento se ofrece por lo que le falta a la fila (texto),
+     no por su estado. Una transcripción que falló podía quedar en 'descartada'
+     con el audio sano en el bucket y nadie tenía forma de reintentarla. */
+  if(!(g.transcripcion&&(''+g.transcripcion).trim()))_grabRenderReprocesar(id);
 }
 /* Bloque de extracción IA en el detalle de una grabación (panel admin) */
 function _grabExtraccionHtml(g){
@@ -9533,8 +9538,21 @@ async function _grabCargarAudio(id,audioPath){
     const folder=(audioPath||(String(id)+'/')).replace(/\/+$/,'');
     const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
     if(error)throw error;
-    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
+    const files=(objs||[]).filter(o=>o.name&&_ES_AUDIO_RE.test(o.name));
     if(!files.length){cont.innerHTML=_sinAudio;return;}
+    /* v215 — audios subidos (up_NNN): cada uno conserva su formato original, así
+       que se reproducen por separado en vez de concatenar binarios distintos. */
+    const ups=files.filter(f=>/^up_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    if(ups.length){
+      const{data:sg,error:eu}=await sb.storage.from('grabaciones').createSignedUrls(ups.map(f=>folder+'/'+f.name),3600);
+      if(eu||!sg)throw(eu||new Error('signed urls'));
+      cont.innerHTML=sg.map(function(x,i){
+        if(!x.signedUrl)return '';
+        return (ups.length>1?'<div style="font-size:10px;color:var(--gray-400);margin-top:4px">'+_escPend(ups[i].name)+'</div>':'')+
+          '<audio controls preload="none" style="width:100%" src="'+x.signedUrl+'"></audio>';
+      }).join('');
+      return;
+    }
     // Preferir el archivo completo si existe
     const completo=files.find(f=>/completo\.webm$/i.test(f.name));
     if(completo){
@@ -9599,7 +9617,9 @@ async function _grabEliminar(id){
     renderRegistroGrabaciones();
   }catch(e){toast('Error: '+e.message,'error');}
 }
-/* Muestra el botón 🔁 Procesar en interrumpidas si hay audio en el bucket */
+/* v215 — Botón de reintento para CUALQUIER grabación sin texto que todavía tenga
+   audio en el bucket (interrumpida, descartada o a medio procesar), en cualquiera
+   de los formatos que se guardan: seg_/completo.webm y los audios subidos. */
 async function _grabRenderReprocesar(id){
   const cont=document.getElementById('grab-reproc-'+id); if(!cont)return;
   const g=_grabCache[id]||{};
@@ -9607,9 +9627,10 @@ async function _grabRenderReprocesar(id){
     const folder=(g.audio_path||(String(id)+'/')).replace(/\/+$/,'');
     const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
     if(error)throw error;
-    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
-    if(!files.length){cont.innerHTML=_sinAudio;return;}
-    cont.innerHTML='<button class="btn-primary btn-sm" style="font-size:11px" id="grab-reproc-btn-'+id+'" onclick="_grabReprocesar('+id+')">🔁 Procesar</button>';
+    const files=(objs||[]).filter(o=>o.name&&_ES_AUDIO_RE.test(o.name));
+    if(!files.length){cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)">Sin audio en el servidor: no hay nada que reintentar.</div>';return;}
+    cont.innerHTML='<button class="btn-primary btn-sm" style="font-size:11px" id="grab-reproc-btn-'+id+'" onclick="_grabReprocesar('+id+')">🔁 Reintentar transcripción</button>'+
+      '<div style="font-size:10px;color:var(--gray-400);margin-top:4px">'+files.length+' archivo(s) de audio guardado(s)</div>';
   }catch(e){cont.innerHTML='';}
 }
 /* Duración (seg) de un blob de audio. Los webm de MediaRecorder suelen reportar
@@ -9680,8 +9701,10 @@ async function _grabReprocesar(id){
     const folder=(g.audio_path||(String(id)+'/')).replace(/\/+$/,'');
     const{data:objs,error}=await sb.storage.from('grabaciones').list(folder,{limit:1000,sortBy:{column:'name',order:'asc'}});
     if(error)throw error;
-    const files=(objs||[]).filter(o=>o.name&&/\.webm$/i.test(o.name));
-    const segs=files.filter(f=>/seg_/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    const files=(objs||[]).filter(o=>o.name&&_ES_AUDIO_RE.test(o.name));
+    /* v215: seg_ (grabación por segmentos) y up_ (audios subidos) son archivos
+       independientes y válidos por sí solos → se transcriben uno por uno. */
+    const segs=files.filter(f=>/^(seg_|up_)/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
     const{data:cfg,error:ec}=await sb.from('app_config').select('value').eq('key','openai_api_key').single();
     if(ec||!cfg||!cfg.value)throw new Error('OpenAI API key no configurada');
     let transcript='';
@@ -9699,7 +9722,7 @@ async function _grabReprocesar(id){
         try{ const r=await fetch(signed[i].signedUrl); blob=await r.blob(); }catch(e){ continue; }
         if(!blob||blob.size<1000)continue;
         let t='';
-        try{ t=await _whisperSingleBlob(blob,cfg.value,'segmento.webm'); }catch(e){ t=''; }
+        try{ t=await _whisperSingleBlob(blob,cfg.value,segs[i]?segs[i].name:'segmento.webm'); }catch(e){ t=''; }
         if(t&&t.trim())partes.push(t.trim());
       }
       transcript=partes.join('\n\n').trim();
