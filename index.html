@@ -1689,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='213';
+  var CURRENT_VERSION='214';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5959,6 +5959,9 @@ let _recHState='idle', _recHMR=null, _recHTimer=null, _recHChunks=[], _recHStrea
 let _capMicStream=null, _capAudioCtx=null, _capConMic=false;
 /* v99: estado de la grabación por segmentos en curso */
 let _recHSegBlobs=[], _recHSegIdx=0, _recHFileBase='reunion', _recHFinalCb=null, _recHFinalizando=false;
+/* v214: promesas de subida de cada segmento — se esperan ANTES de transcribir
+   para que el audio esté a salvo aunque la transcripción falle o se corte. */
+let _recHSegSubidas=[];
 /* Título/participantes del modal previo. NO se limpian en _recHReset():
    startGrabacionH() resetea internamente y los necesita después. Siempre
    se sobreescriben en confirmarPreGrabH() antes de cada grabación. */
@@ -6030,6 +6033,9 @@ async function _gptMiniIA(userMsg,maxTokens,jsonMode){
    Va en las funciones IA (no en los call sites): resumen, extracción de
    prospecto, extracción de reclutamiento, clasificación y título comparten
    el mismo gate. */
+/* v214 — extensiones que el bucket puede tener: seg_/completo (webm) y los
+   archivos subidos, que conservan su formato original. */
+const _ES_AUDIO_RE=/\.(webm|ogg|opus|m4a|mp3|wav|mp4|aac)$/i;
 const MIN_CHARS_RESUMEN_IA=200;
 const TXT_SIN_CONTENIDO_IA='Audio sin contenido suficiente para resumir';
 function _sinContenidoIA(t){return (''+(t||'')).trim().length<MIN_CHARS_RESUMEN_IA;}
@@ -6554,7 +6560,7 @@ function _recHReset(){
   try{if(_recHWakeLock)_recHWakeLock.release();}catch(e){}
   _recHMR=null;_recHChunks=[];_recHStream=null;_capDisplayStream=null;_recHWakeLock=null;_recHSeconds=0;
   _recHResult=null;_recHLeadId=null;_recHGrabId=null;_recHChunkIdx=0;_recHTranscript='';_recHState='idle';
-  _recHSegBlobs=[];_recHSegIdx=0;_recHFinalCb=null;_recHFinalizando=false;
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFinalCb=null;_recHFinalizando=false;_recHSegSubidas=[];
 }
 /* ════════════════════════════════════════
    v99 — MOTOR DE GRABACIÓN POR SEGMENTOS (compartido por 🕐 y 🔊)
@@ -6575,11 +6581,24 @@ function _arrancarSegmento(){
       const idx=++_recHSegIdx;
       _recHSegBlobs.push(blob);
       if(_recHGrabId){
-        const path=_recHGrabId+'/seg_'+String(idx).padStart(3,'0')+'.webm';
-        _reintentar(async function(){
-          const{error}=await sb.storage.from('grabaciones').upload(path,blob,{upsert:true});
-          if(error)throw error;
-        },3).catch(function(){toast('⚠️ No se pudo archivar un segmento de audio (backup en el servidor). La transcripción no se pierde.','warning');});
+        const gid=_recHGrabId;
+        const path=gid+'/seg_'+String(idx).padStart(3,'0')+'.webm';
+        /* v214 — la promesa se guarda: _finalizarGrabacionSegmentada la espera antes
+           de transcribir. Y con el primer segmento arriba ya se apunta audio_path,
+           así una sesión cortada deja la fila sabiendo dónde está su audio. */
+        _recHSegSubidas.push((async function(){
+          try{
+            await _reintentar(async function(){
+              const{error}=await sb.storage.from('grabaciones').upload(path,blob,{upsert:true});
+              if(error)throw error;
+            },3);
+            if(idx===1){try{await sb.from('grabaciones').update({audio_path:String(gid)+'/'}).eq('id',gid);}catch(e){}}
+            return true;
+          }catch(e){
+            toast('⚠️ No se pudo archivar un segmento de audio (backup en el servidor). La transcripción no se pierde.','warning');
+            return false;
+          }
+        })());
       }
     }
     if(_recHState==='grabando'){ _arrancarSegmento(); }            // rotación: próximo segmento
@@ -6595,16 +6614,43 @@ function _rotarSegmento(){
   if(_recHState!=='grabando')return;
   try{ if(_recHMR&&_recHMR.state!=='inactive')_recHMR.stop(); }catch(e){}
 }
+/* ════════════════════════════════════════
+   v214 — EL AUDIO SE ARCHIVA ANTES DE TRANSCRIBIR
+   Una grabación que no llegó a texto NO se marca 'descartada' si el audio quedó
+   archivado: se marca 'interrumpida', que es el estado recuperable (banner del
+   panel Registro + botón 🔁). 'descartada' queda sólo para lo que de verdad no
+   tiene audio. Antes, un fallo de transcripción escondía para siempre segmentos
+   que estaban sanos en el bucket.
+════════════════════════════════════════ */
+async function _grabCerrarSinTexto(id){
+  if(!id)return false;
+  let hayAudio=false;
+  try{
+    const{data:objs,error}=await sb.storage.from('grabaciones').list(String(id)+'/',{limit:1000});
+    if(!error)hayAudio=(objs||[]).some(function(o){return o.name&&_ES_AUDIO_RE.test(o.name);});
+  }catch(e){}
+  const upd={estado:hayAudio?'interrumpida':'descartada'};
+  if(hayAudio)upd.audio_path=String(id)+'/';
+  try{await sb.from('grabaciones').update(upd).eq('id',id);}catch(e){}
+  if(hayAudio)toast('El audio quedó guardado — reintentá la transcripción desde Registro.','warning');
+  return hayAudio;
+}
 /* Finaliza una grabación segmentada: transcribe CADA segmento (en memoria) por
    separado con el modelo activo (gpt-4o-mini), concatena en orden → UNA
    transcripción, UN registro. NO une binarios (los seg_NNN ya están en Storage). */
 async function _finalizarGrabacionSegmentada(durSeg){
   if(_recHFinalizando)return; _recHFinalizando=true;
+  /* v214 — primero el audio: se espera a que TODOS los segmentos estén en el
+     bucket (incluido el último, que cierra recién con el stop del usuario) y
+     recién después se transcribe. Ninguna promesa rechaza: cada una avisa sola. */
+  if(_recHSegSubidas.length){
+    try{await Promise.all(_recHSegSubidas.slice());}catch(e){}
+  }
   const blobs=_recHSegBlobs.slice();
   const totBytes=blobs.reduce(function(a,b){return a+b.size;},0);
   if(!blobs.length||totBytes<1000){
     toast('No se captó audio.','warning');
-    if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+    await _grabCerrarSinTexto(_recHGrabId);
     _recHReset();setRecHState('idle');return;
   }
   try{
@@ -6620,7 +6666,7 @@ async function _finalizarGrabacionSegmentada(durSeg){
     const combinado=partes.join('\n\n').trim();
     if(combinado.length<10){
       toast('No se captó texto en el audio.','warning');
-      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+      await _grabCerrarSinTexto(_recHGrabId);
       _recHReset();setRecHState('idle');return;
     }
     /* Audio archivado como segmentos seg_NNN (no se une binario) → blob null + audioPath a la carpeta. */
@@ -6706,7 +6752,7 @@ async function startGrabacionH(){
   }catch(e){ _recHGrabId=null; }
 
   /* v99: grabación por segmentos independientes (~10 min c/u). */
-  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='reunion';_recHFinalCb=null;_recHFinalizando=false;
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='reunion';_recHFinalCb=null;_recHFinalizando=false;_recHSegSubidas=[];
   try{ if(navigator.wakeLock)_recHWakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
   if(!_arrancarSegmento()){toast('No se pudo iniciar la grabación','error');_recHReset();setRecHState('idle');return;}
@@ -6742,14 +6788,14 @@ async function _procesarAudioBlob(blob,opts){
   const chunksArr=opts.chunksArr; // undefined para audios subidos
   if(!blob||!blob.size||blob.size<1000){
     toast('No se captó audio.','warning');
-    if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+    await _grabCerrarSinTexto(_recHGrabId);
     _recHReset();setRecHState('idle');return;
   }
   try{
     const transcript=await _transcribirWhisperSegmentado(blob,chunksArr,fileName);
     if(!transcript||transcript.trim().length<10){
       toast('No se captó texto en el audio.','warning');
-      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+      await _grabCerrarSinTexto(_recHGrabId);
       _recHReset();setRecHState('idle');return;
     }
     await _finalizarConTranscript(transcript,{durSeg:durSeg,blob:blob});
@@ -6891,6 +6937,31 @@ async function _procesarAudiosSubidos(files){
     }).select('id').single();
     if(!ger&&gr)_recHGrabId=gr.id;
   }catch(e){ _recHGrabId=null; }
+  /* v214 — EL AUDIO PRIMERO: cada archivo se sube al bucket ANTES de transcribir.
+     Antes se transcribía y recién al final se archivaba, así que un error de
+     Whisper (o cerrar la pestaña) dejaba la fila en 'descartada' y el audio no
+     existía en ningún lado: no había nada que reintentar. */
+  let _audioArchivado=false;
+  if(_recHGrabId){
+    toast('Archivando audio...','ok');
+    for(let i=0;i<files.length;i++){
+      const nm=_fixOpusName(files[i].name||'audio.webm');
+      const m=nm.match(/\.[a-z0-9]+$/i);
+      const path=String(_recHGrabId)+'/up_'+String(i+1).padStart(3,'0')+((m?m[0]:'.webm').toLowerCase());
+      try{
+        await _reintentar(async function(){
+          const{error}=await sb.storage.from('grabaciones').upload(path,files[i],{upsert:true});
+          if(error)throw error;
+        },3);
+        _audioArchivado=true;
+      }catch(e){}
+    }
+    if(_audioArchivado){
+      try{await sb.from('grabaciones').update({audio_path:String(_recHGrabId)+'/'}).eq('id',_recHGrabId);}catch(e){}
+    }else{
+      toast('⚠️ No se pudo archivar el audio en el servidor; se transcribe igual.','warning');
+    }
+  }
   /* Transcribir CADA audio por separado y concatenar los textos en orden. */
   try{
     const partes=[];
@@ -6902,7 +6973,7 @@ async function _procesarAudiosSubidos(files){
         t=await _transcribirWhisperSegmentado(files[i],undefined,fn);
       }catch(e){
         toast('Error transcribiendo '+(files[i].name||'audio')+': '+e.message,'error');
-        if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(_e){}}
+        await _grabCerrarSinTexto(_recHGrabId);
         _recHReset();setRecHState('idle');return;
       }
       if(t&&t.trim())partes.push(t.trim());
@@ -6910,11 +6981,14 @@ async function _procesarAudiosSubidos(files){
     const combinado=partes.join('\n\n').trim();
     if(combinado.length<10){
       toast('No se captó texto en el audio.','warning');
-      if(_recHGrabId){try{await sb.from('grabaciones').update({estado:'descartada'}).eq('id',_recHGrabId);}catch(e){}}
+      await _grabCerrarSinTexto(_recHGrabId);
       _recHReset();setRecHState('idle');return;
     }
-    /* Un solo audio: archivar el binario. Varios: NO unir binarios → blob null. */
-    await _finalizarConTranscript(combinado,{durSeg:0,blob:(files.length===1?files[0]:null)});
+    /* v214: si ya quedó archivado arriba, sólo se apunta la carpeta (no se re-sube).
+       Si la subida falló, se intenta de nuevo con el binario del audio único. */
+    await _finalizarConTranscript(combinado,{durSeg:0,
+      blob:(_audioArchivado?null:(files.length===1?files[0]:null)),
+      audioPath:(_audioArchivado?String(_recHGrabId)+'/':null)});
   }catch(e){
     toast('Error procesando: '+e.message,'error');_recHReset();setRecHState('idle');
   }
@@ -7016,7 +7090,7 @@ async function capturarAudioPC(){
   }catch(e){ _recHGrabId=null; }
   /* v99: captura por segmentos independientes (mismo motor que 🕐).
      _arrancarSegmento construye el MediaRecorder sobre _recHStream=audioStream. */
-  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='captura';_recHFinalCb=null;_recHFinalizando=false;
+  _recHSegBlobs=[];_recHSegIdx=0;_recHFileBase='captura';_recHFinalCb=null;_recHFinalizando=false;_recHSegSubidas=[];
   _recHState='grabando';_recHSeconds=0;setRecHState('grabando');
   if(!_arrancarSegmento()){toast('No se pudo iniciar la captura','error');_recHReset();setRecHState('idle');_setCapUI(false);return;}
   _recHTimer=setInterval(function(){
