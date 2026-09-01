@@ -1689,7 +1689,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='215';
+  var CURRENT_VERSION='216';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5693,6 +5693,32 @@ async function _visPendienteNumerada(leadId){
   if(error)throw error;
   return (data&&data.length)?data[0]:null;
 }
+/* ── v216 · HORA FUERA DEL HORARIO DE ATENCIÓN ──────────────────────────
+   Medido el 1-sep-2026 sobre agenda_personal (visitas activas, tipo 'Visita%'):
+   99 visitas, y dos imposibles — una a las 05:00 y otra a las 22:30 (lead 7533,
+   fila 5660). Nadie recibe clientes a esas horas: son dedazos del selector de
+   hora del teléfono, la misma raíz que el 24% de cargas de madrugada.
+   NO se bloquea — puede haber un caso real fuera de rango — pero no se guarda
+   sin que la persona lo confirme. El rango se compara SIEMPRE contra lo que se
+   tipeó en el input (hora de Bolivia), nunca contra el ISO en UTC: a las 22:30
+   de Bolivia el ISO dice 02:30 y "entraría" en rango al revés. */
+const VIS_HORA_MIN=8, VIS_HORA_MAX=20;
+function _horaFueraDeRango(hhmm){
+  const m=/^(\d{1,2}):(\d{2})/.exec(String(hhmm||''));
+  if(!m)return false;
+  const h=Number(m[1]), mi=Number(m[2]);
+  if(h<VIS_HORA_MIN||h>VIS_HORA_MAX)return true;
+  return h===VIS_HORA_MAX&&mi>0;
+}
+/* true = seguir guardando. false = la persona canceló para corregir la hora. */
+function _confirmarHoraVisita(hhmm){
+  if(!_horaFueraDeRango(hhmm))return true;
+  return confirm('⏰ Hora fuera del horario de atención.\n\n'+
+    'Anotaste las '+hhmm+' y el horario de atención es de '+
+    ('0'+VIS_HORA_MIN).slice(-2)+':00 a '+('0'+VIS_HORA_MAX).slice(-2)+':00.\n\n'+
+    '¿Confirmás que la visita es a esa hora?\n'+
+    'Cancelá para corregirla.');
+}
 async function guardarAgendarVisita(){
   const btn=document.getElementById('av-btn-guardar');
   const leadId=Number(document.getElementById('av-lead-id').value);
@@ -5707,6 +5733,8 @@ async function guardarAgendarVisita(){
   if(!leadId){toast('Sin lead activo','error');return;}
   if(!fecha||!hora){toast('Completá fecha y hora','error');return;}
   if(lugar==='terreno'&&!ubic){toast('Indicá la ubicación del terreno','error');return;}
+  /* v216 - antes de tocar nada: 22:30 y 05:00 son dedazos, no visitas */
+  if(!_confirmarHoraVisita(hora))return;
   const origTxt=btn?btn.innerHTML:'';
   if(btn){btn.disabled=true;btn.style.opacity='.6';btn.innerHTML='⏳ Guardando...';}
   try{
