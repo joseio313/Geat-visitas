@@ -1642,6 +1642,54 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- v217 — REPROGRAMAR VISITA. Mueve fecha/hora/nota de una visita ya agendada.
+     Deliberadamente NO tiene cerrador ni "marcar como realizada": reprogramar
+     es mover el turno, no cambiar de dueño ni dar la visita por ocurrida. -->
+<div id="modalReprogramarVisita" class="modal-backdrop" onclick="if(event.target===this)cerrarReprogramarVisita()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h2>🔄 Reprogramar visita</h2>
+      <button class="modal-close" onclick="cerrarReprogramarVisita()">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rp-ap-id">
+      <div id="rp-form">
+        <div id="rp-actual" style="background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;line-height:1.6"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nueva fecha <span style="color:var(--st-atrasado)">*</span></label>
+            <input class="form-control" type="date" id="rp-fecha">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nueva hora <span style="color:var(--st-atrasado)">*</span></label>
+            <input class="form-control" type="time" id="rp-hora">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nota <span style="color:var(--gray-400)">(por qué se movió, qué acordaron)</span></label>
+          <textarea class="form-control" id="rp-nota" rows="2" maxlength="300" placeholder="El cliente no vino, quedamos en..."></textarea>
+        </div>
+        <div class="form-help">El cerrador asignado no cambia y la visita sigue pendiente: reprogramar no la marca como realizada. Conserva su número de visita.</div>
+        <div class="action-row">
+          <button class="btn-primary" id="rp-btn" onclick="guardarReprogramarVisita()">💾 Guardar nueva fecha</button>
+          <button class="btn-ghost" onclick="cerrarReprogramarVisita()">Cancelar</button>
+        </div>
+      </div>
+      <div id="rp-resultado" style="display:none">
+        <div style="background:var(--st-completo);color:#06270f;font-weight:700;font-size:12px;border-radius:8px;padding:8px 10px;margin-bottom:10px">✅ Visita reprogramada — avisale al grupo con el mensaje de abajo.</div>
+        <div class="form-group">
+          <label class="form-label">Mensaje para el grupo</label>
+          <textarea class="form-control" id="rp-wa-text" rows="11" readonly style="font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" onclick="copiarReprogramarWa(this)">📋 Copiar para WhatsApp</button>
+          <button class="btn-ghost" onclick="cerrarReprogramarVisita()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ ASISTENTE IA FLOTANTE ══ -->
 <button id="asistFab" type="button" onclick="toggleAsistente()" title="Asistente GEAT"
   style="display:none;position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;border:2px solid var(--gold);background:var(--black);color:var(--gold);font-size:24px;line-height:1;cursor:pointer;z-index:850;box-shadow:0 4px 14px rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:0">💬</button>
@@ -1689,7 +1737,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='216';
+  var CURRENT_VERSION='217';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4262,6 +4310,12 @@ async function openLeadDetail(leadId,agendaId,mode){
   const history=rHistory.data||[];
   const segs=rSegs.data||[];
   _refsLeadActual=rRefs.data||[];
+  /* v217 — la visita viva del lead y quien la puede mover. Ver el bloque
+     REPROGRAMAR VISITA: la fila queda a nombre del cerrador, asi que la
+     captadora entra acá en modo consulta y este es su unico boton operable. */
+  _rpVis=_visitaPendienteDeLead(history);
+  _rpLead={id:lead.id,nombre:lead.nombre||'',celular:lead.celular||'',captador:lead.captador||'',cerrador:lead.cerrador||'',estado:lead.estado||'',archivado:lead.archivado===true};
+  const _puedeRep=_puedeReprogramarVisita(_rpVis,lead);
   const _fp=calcularFichaCompleta(lead,_refsLeadActual).porcentaje;
   const _fichaBadge=_fp===100?'<span style="font-size:10px;color:var(--st-completo);font-weight:normal;margin-left:6px">✅ Ficha completa</span>':_fp>=70?`<span style="font-size:10px;color:var(--gold);font-weight:normal;margin-left:6px">⚠️ Ficha ${_fp}% — faltan datos</span>`:_fp>=30?`<span style="font-size:10px;color:#F9E04B;font-weight:normal;margin-left:6px">🟡 Ficha ${_fp}% — completar datos</span>`:_fp>0?`<span style="font-size:10px;color:var(--st-atrasado);font-weight:normal;margin-left:6px">🔴 Ficha ${_fp}% — completar urgente</span>`:'';
   const _lapizEditar=currentLeadMode==='normal'?` <button title="Editar lead" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 4px;vertical-align:middle" onclick="abrirEditarLead(${lead.id},'${(lead.nombre||'').replace(/'/g,"\\'")}','${lead.celular||''}','${lead.ciudad||''}','${lead.medio_difusion||''}')">✏️</button>`:'';
@@ -4271,7 +4325,7 @@ async function openLeadDetail(leadId,agendaId,mode){
   if(!currentAgendaId&&current&&!current.completada)currentAgendaId=current.id;
 
   document.getElementById('modal-lead-body').innerHTML=`
-    ${currentLeadMode==='readonly'?'<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.</div>':''}
+    ${currentLeadMode==='readonly'?`<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.${_puedeRep?' <strong>Esta visita la agendaste vos:</strong> podés moverla de fecha con 🔄 Reprogramar visita, ahí arriba. No cambia el cerrador ni la marca como realizada.':''}</div>`:''}
     ${currentLeadMode==='reactivar'?'<div class="mobile-note" style="border-color:var(--gold)">♻️ <strong>Reactivar cliente perdido</strong> — revisá el perfil y completá el formulario al pie para agendar.</div>':''}
     ${_leadBloqueado?`<div class="mobile-note" style="border-color:var(--st-atrasado)">${lead.estado==='cerrado_perdido'?'❌':'📦'} <strong>Lead ${lead.estado==='cerrado_perdido'?'perdido':'archivado'}</strong> — en este estado no se puede agendar ni registrar seguimientos. Si el cliente volvió a interesarse, reactivalo:<div style="margin-top:8px"><button class="btn-primary" id="btn-reactivar-inline" onclick="reactivarLeadDesdePerfil(${lead.id})">♻️ Reactivar lead</button></div></div>`:''}
     <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
@@ -4279,6 +4333,7 @@ async function openLeadDetail(leadId,agendaId,mode){
       <button id="tab-viaje" class="btn-ghost" onclick="switchLeadTab('viaje')" style="font-size:11px;padding:6px 12px">🛣️ Viaje del cliente</button>
       ${currentLeadMode!=='readonly'&&!_leadBloqueado?`<button id="tab-agendar-visita" class="btn-primary" onclick="abrirAgendarVisita()" style="font-size:11px;padding:6px 12px;margin-left:auto">📅 Agendar visita</button>`:''}
       ${lead.estado==='visita_agendada'?`<button class="btn-ghost" onclick="copiarVisitaWaLead(${lead.id},this)" style="font-size:11px;padding:6px 12px" title="Reenviar al grupo el mensaje de esta visita, con su mismo número">📋 Copiar para WhatsApp</button>`:''}
+      ${_puedeRep?`<button class="btn-ghost" onclick="abrirReprogramarVisita()" style="font-size:11px;padding:6px 12px;background:#F9A825;color:#111;border:2px solid #C17900;font-weight:700" title="Mover la fecha y la hora de esta visita">🔄 Reprogramar visita</button>`:''}
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-primary" onclick="abrirResultadoVisita()" style="font-size:11px;padding:6px 12px;border:2px solid rgba(0,0,0,0.55)">📝 Resultado visita</button>`:''}
       ${currentLeadMode!=='readonly'&&!_leadBloqueado&&['visita_agendada','visita_realizada'].includes(lead.estado)?`<button class="btn-ghost" onclick="abrirReserva()" style="font-size:11px;padding:6px 12px;background:#43A047;color:#fff;border:2px solid #2E7D32;font-weight:700">💰 Reservado</button>`:''}
       ${lead.estado==='reservado'?`<span style="font-size:11px;font-weight:700;color:#fff;background:#43A047;border:2px solid #2E7D32;border-radius:10px;padding:5px 12px;align-self:center">💰 Con reserva</span>`:''}
@@ -5945,6 +6000,191 @@ async function copiarVisitaWaLead(leadId,btn){
     });
     await _visCopiar(msg,btn);
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+/* ════════════════════════════════════════
+   v217 · REPROGRAMAR VISITA — la captadora puede mover la que ella agendó
+   Caso real: lead 7533 (Edwin Escalera), agenda_personal 5660. Genoveva la
+   agendó, el cliente no vino, y no tenía por dónde reagendarla: desde v208 la
+   fila queda a nombre del CERRADOR (colaborador='David Gambarte') y ella solo
+   la ve en modo consulta, sin un solo botón que la deje operar.
+   Acá se abre exactamente una puerta: mover FECHA, HORA y NOTA.
+   Lo que esta pantalla NUNCA toca, y por qué:
+     · completada  → dispara fn_registrar_visita_atendida y el lead pasaría a
+                     visita_realizada sin que el cliente haya venido (los 52
+                     falsos positivos de v168 salieron de ahí).
+     · colaborador / leads.cerrador → reprogramar no es reasignar.
+     · visita_nro  → un reagendamiento CONSERVA su número; el equipo lleva la
+                     cuenta del mes con él (mismo criterio que v194).
+     · activo      → sigue viva; dar de baja es otra cosa.
+   Y sobre todo NO pasa por leads.visita_fecha: ese UPDATE dispara
+   trg_sincronizar_visita → sincronizar_visita_grupal(), que borra los espejos
+   e INSERTA una fila 'visita_captador' nueva. La visita quedaría duplicada en
+   el calendario del grupo. Se escribe derecho en las dos tablas:
+   agenda_personal.fecha_programada y agenda_grupal.fecha_inicio.
+   Un UPDATE sobre esas dos tablas no dispara ningún trigger: los 4 de
+   agenda_grupal son de INSERT, y los AFTER UPDATE de agenda_personal
+   (fn_registrar_visita_atendida, fn_sync_estado_lead_por_tarea) arrancan todos
+   con "completada = true AND OLD.completada = false", que acá no pasa.
+════════════════════════════════════════ */
+var _rpVis=null, _rpLead=null, _rpWaMsg='';
+
+/* La visita viva del lead: activa, sin completar y de tipo visita. Si quedó
+   más de una (pasó al limpiar duplicados), se toma la más adelantada. */
+function _visitaPendienteDeLead(history){
+  const vs=(history||[]).filter(function(h){
+    return h&&h.activo!==false&&!h.completada&&/^visita/i.test(h.tipo||'');
+  });
+  if(!vs.length)return null;
+  vs.sort(function(a,b){return new Date(b.fecha_programada)-new Date(a.fecha_programada);});
+  return vs[0];
+}
+/* Quién la puede mover: quien la ATIENDE, quien la GENERÓ (la captadora — la
+   fila queda a nombre del cerrador, ver v208) y la jefatura. Lead cerrado o
+   archivado, nadie. */
+function _puedeReprogramarVisita(ap,lead){
+  if(!ap||!ap.id||!cu)return false;
+  if(lead&&(lead.archivado===true||['cerrado_ganado','cerrado_perdido'].indexOf(lead.estado||'')>=0))return false;
+  if(cu.rol==='admin'||cu.rol==='commercial_lead')return true;
+  const mios=[cu.nombre];
+  if(cu.asistente_de)mios.push(cu.asistente_de);
+  return mios.indexOf(ap.colaborador)>=0||mios.indexOf(ap.captador)>=0;
+}
+function abrirReprogramarVisita(){
+  if(!_rpVis||!_rpVis.id){toast('Esta visita ya no se puede reprogramar','error');return;}
+  if(!_puedeReprogramarVisita(_rpVis,_rpLead)){toast('No podés reprogramar esta visita','error');return;}
+  /* v195 — la fecha se lleva al input en hora de Bolivia, no en la del
+     dispositivo: hay cargas desde teléfonos con otra zona. */
+  const dt=_dtLocalBolivia(_rpVis.fecha_programada);
+  document.getElementById('rp-ap-id').value=_rpVis.id;
+  document.getElementById('rp-fecha').value=dt.slice(0,10);
+  document.getElementById('rp-hora').value=dt.slice(11,16);
+  document.getElementById('rp-nota').value=_rpVis.nota||'';
+  const f=_visFechaHora(_rpVis.fecha_programada);
+  document.getElementById('rp-actual').innerHTML=
+    (_rpVis.visita_nro?'Visita <strong>#'+_rpVis.visita_nro+'</strong> · ':'')+(_rpVis.tipo||'—')+
+    '<br>Hoy está para: <strong>'+(f?f.dia+' '+f.fecha+' · '+f.hora:'—')+'</strong>'+
+    '<br>La atiende: <strong>'+(_rpVis.colaborador||'—')+'</strong>';
+  document.getElementById('rp-form').style.display='';
+  document.getElementById('rp-resultado').style.display='none';
+  _rpWaMsg='';
+  openModal('modalReprogramarVisita');
+}
+/* Al cerrar se refresca la ficha para que no quede mostrando la fecha vieja. */
+function cerrarReprogramarVisita(){
+  closeModal('modalReprogramarVisita');
+  try{
+    const ml=document.getElementById('modalLead');
+    if(_rpVis&&_rpVis.lead_id&&ml&&ml.classList.contains('show'))
+      openLeadDetail(_rpVis.lead_id,null,currentLeadMode);
+  }catch(e){}
+}
+async function copiarReprogramarWa(btn){
+  await _visCopiar(_rpWaMsg,btn);
+}
+async function guardarReprogramarVisita(){
+  const btn=document.getElementById('rp-btn');
+  if(!_rpVis||!_rpVis.id){toast('Sin visita para reprogramar','error');return;}
+  if(!_puedeReprogramarVisita(_rpVis,_rpLead)){toast('No podés reprogramar esta visita','error');return;}
+  const fecha=document.getElementById('rp-fecha').value;
+  const hora=document.getElementById('rp-hora').value;
+  const nota=(document.getElementById('rp-nota').value||'').trim();
+  if(!fecha||!hora){toast('Completá fecha y hora','error');return;}
+  /* v216 — misma validación que al agendar: 22:30 y 05:00 son dedazos */
+  if(!_confirmarHoraVisita(hora))return;
+  const iso=_dtBoliviaToIso(fecha+'T'+hora);
+  if(!iso){toast('Fecha u hora inválida','error');return;}
+  const isoAntes=_rpVis.fecha_programada;
+  let mismaFecha=false;
+  try{mismaFecha=new Date(isoAntes).toISOString()===iso;}catch(e){}
+  if(mismaFecha&&nota===(_rpVis.nota||'')){toast('No cambiaste ni la fecha ni la nota','error');return;}
+  const origTxt=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.style.opacity='.6';btn.innerHTML='⏳ Guardando...';}
+  try{
+    /* 1) agenda_personal — SOLO fecha_programada y nota (ver cabecera del bloque) */
+    const{error:eAp}=await sb.from('agenda_personal')
+      .update({fecha_programada:iso,nota:nota||null}).eq('id',_rpVis.id);
+    if(eAp)throw eAp;
+    /* 2) agenda_grupal — el espejo que ve el equipo. Se busca la fila por la
+       fecha VIEJA (es la que corresponde a esta visita); si no aparece, la más
+       reciente del lead. Si el lead no tiene fila grupal no se corta: la visita
+       ya quedó movida en la agenda personal. */
+    let ag=null, agAviso='';
+    try{
+      const{data:ags}=await sb.from('agenda_grupal')
+        .select('id,fecha_inicio,fecha_fin,lugar,ubicacion_terreno,modo_pago')
+        .eq('lead_id',_rpVis.lead_id)
+        .in('tipo',['visita_nueva','visita_oficina','visita_captador','reagendo'])
+        .order('fecha_inicio',{ascending:false}).limit(10);
+      const lista=ags||[];
+      ag=lista.find(function(g){
+        try{return new Date(g.fecha_inicio).toISOString()===new Date(isoAntes).toISOString();}catch(e){return false;}
+      })||lista[0]||null;
+      if(ag){
+        const up={fecha_inicio:iso,descripcion:nota||null};
+        /* se conserva la duración que tuviera; muchas filas tienen fecha_fin NULL */
+        if(ag.fecha_fin){
+          const dur=new Date(ag.fecha_fin)-new Date(ag.fecha_inicio);
+          if(dur>0)up.fecha_fin=new Date(new Date(iso).getTime()+dur).toISOString();
+        }
+        const{error:eAg}=await sb.from('agenda_grupal').update(up).eq('id',ag.id);
+        if(eAg)agAviso=eAg.message||'error';
+      }
+    }catch(eG){agAviso=(eG&&eG.message)||'error';}
+    if(agAviso)toast('Visita movida, pero el calendario del grupo no se actualizó: '+agAviso,'error');
+    /* El número: casi siempre ya está. Una visita que entró por el flujo de
+       seguimiento no lo tiene, y ésta es la primera vez que se anuncia — se le
+       asigna uno, igual que en copiarVisitaWaLead(). No es un renumerado. */
+    let nro=_rpVis.visita_nro;
+    if(!nro){
+      try{
+        const{data:sig}=await sb.rpc('fn_siguiente_visita_nro');
+        const n=Number(sig)||0;
+        if(n){
+          const{error:eN}=await sb.from('agenda_personal')
+            .update({visita_nro:n,visita_periodo:_visPeriodoBO()}).eq('id',_rpVis.id);
+          if(!eN)nro=n;
+        }
+      }catch(eN2){}
+    }
+    const fA=_visFechaHora(isoAntes), fN=_visFechaHora(iso);
+    try{
+      await sb.from('historial_lead').insert({
+        lead_id:_rpVis.lead_id, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
+        tipo_actividad:'reprogramar_visita',
+        nota:'🔄 Visita reprogramada: '+(fA?fA.fecha+' '+fA.hora:'—')+' → '+(fN?fN.fecha+' '+fN.hora:'—')+(nota?' · '+nota:''),
+        fecha_actividad:new Date().toISOString()
+      });
+    }catch(eH){}
+    try{registrarAuditoria('reprogramar_visita','agenda_personal',_rpVis.id,
+      {lead_id:_rpVis.lead_id,antes:isoAntes,ahora:iso,visita_nro:nro||null,grupal_id:ag?ag.id:null});}catch(e){}
+    _rpWaMsg=_visArmarMsg({
+      nro:nro||'—', leadId:_rpVis.lead_id, reagendada:true, isoAntes:isoAntes,
+      cliente:_visCliente(_rpLead&&_rpLead.nombre,_rpLead&&_rpLead.celular),
+      iso:iso,
+      cerrador:(_rpLead&&_rpLead.cerrador)||_rpVis.colaborador||'',
+      lugar:_visLugarTxt(ag?ag.lugar:(/terreno/i.test(_rpVis.tipo||'')?'terreno':'oficina'),ag?ag.ubicacion_terreno:''),
+      obs:nota,
+      pago:(ag&&ag.modo_pago)?_avLabelModoPago(ag.modo_pago):'',
+      captador:(_rpLead&&_rpLead.captador)||_rpVis.captador||''
+    });
+    document.getElementById('rp-wa-text').value=_rpWaMsg;
+    document.getElementById('rp-form').style.display='none';
+    document.getElementById('rp-resultado').style.display='';
+    /* la copia en memoria queda al día: si vuelve a abrir el modal sin recargar
+       la ficha, el "Hoy está para" tiene que mostrar la fecha nueva */
+    _rpVis.fecha_programada=iso; _rpVis.nota=nota||null; _rpVis.visita_nro=nro||_rpVis.visita_nro;
+    toast('✅ Visita reprogramada');
+    try{renderWeek();}catch(e){}
+    try{renderMonth();}catch(e){}
+    try{cargarMarcadoresDia();}catch(e){}
+    try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
+    try{_searchAlertaVisitas();}catch(e){}
+  }catch(e){
+    toast('Error: '+((e&&e.message)||'no se pudo reprogramar'),'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=origTxt;}
+  }
 }
 
 async function guardarGrabacion(){
