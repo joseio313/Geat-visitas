@@ -1750,7 +1750,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='220';
+  var CURRENT_VERSION='221';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1839,7 +1839,7 @@ const AUTH_URL=SB_URL+'/functions/v1/geat-auth';
        from information_schema.columns
       where table_schema='public' and table_name='leads'
         and column_name not in ('monto_contrato','monto_reserva'); */
-const LEAD_COLS='id,nombre,celular,ciudad,canal,etapa,asesor,fecha_registro,ultima_gestion,created_at,updated_at,captador,fecha_ingreso,financiamiento,estado,intento1_estado,intento1_fecha,intento2_estado,intento2_fecha,intento3_estado,intento3_fecha,motivo_perdida,motivo_perdida_detalle,notas,proximo_contacto,campana,cerrador,visita_fecha,visita_sala,resultado_reunion,resultado_estado,mes_anio,numero_mes,alert_15_days,alert_30_days,alert_60_days,status_at_risk,archivado,fecha_contrato,comision_pagada,fecha_programacion,proximo_seguimiento,fuente_campana,medio_difusion,visito_oficina,fecha_visita_oficina,codigo_venta,metros_cuadrados,campana_id,reactivaciones,ultimo_reactivado_en,ind_ciudad,ind_financiamiento,ind_lugar_terreno,ind_monto_financiamiento,ind_presupuesto,ind_presupuesto_tope,ind_tipo,ind_primera_vivienda,ind_cuando_construir,ind_plantas,indagacion_completa,gps_terreno,info_enviada,cerrador_confirmacion,cerrador_asignado_en,cerrador_rechazo_motivo,cerrador_rechazo_detalle,motivo_ganado,cliente_mujer,grado_interes,correo,ocupacion,ocupacion_detalle,banco_preferido,fecha_nacimiento,estado_civil,ingresos_mensuales_bs,antiguedad_trabajo_anios,ci_anverso_url,ci_reverso_url,correo_electronico,ingresos_mensuales,tiempo_trabajo_anos,metodo_pago,credito_directo_detalle,fecha_reserva,fecha_contacto_real';
+const LEAD_COLS='id,nombre,celular,ciudad,canal,etapa,asesor,fecha_registro,ultima_gestion,created_at,updated_at,captador,fecha_ingreso,financiamiento,estado,intento1_estado,intento1_fecha,intento2_estado,intento2_fecha,intento3_estado,intento3_fecha,motivo_perdida,motivo_perdida_id,motivo_perdida_detalle,notas,proximo_contacto,campana,cerrador,visita_fecha,visita_sala,resultado_reunion,resultado_estado,mes_anio,numero_mes,alert_15_days,alert_30_days,alert_60_days,status_at_risk,archivado,fecha_contrato,comision_pagada,fecha_programacion,proximo_seguimiento,fuente_campana,medio_difusion,visito_oficina,fecha_visita_oficina,codigo_venta,metros_cuadrados,campana_id,reactivaciones,ultimo_reactivado_en,ind_ciudad,ind_financiamiento,ind_lugar_terreno,ind_monto_financiamiento,ind_presupuesto,ind_presupuesto_tope,ind_tipo,ind_primera_vivienda,ind_cuando_construir,ind_plantas,indagacion_completa,gps_terreno,info_enviada,cerrador_confirmacion,cerrador_asignado_en,cerrador_rechazo_motivo,cerrador_rechazo_detalle,motivo_ganado,cliente_mujer,grado_interes,correo,ocupacion,ocupacion_detalle,banco_preferido,fecha_nacimiento,estado_civil,ingresos_mensuales_bs,antiguedad_trabajo_anios,ci_anverso_url,ci_reverso_url,correo_electronico,ingresos_mensuales,tiempo_trabajo_anos,metodo_pago,credito_directo_detalle,fecha_reserva,fecha_contacto_real';
 /* Lectura de montos: solo admin, y del lado del servidor. */
 const MONTOS_URL=SB_URL+'/functions/v1/geat-montos';
 async function _montosCall(payload){
@@ -2932,29 +2932,53 @@ async function loadCatalogs(){
   }catch(e){_deptosError=(e&&e.message)||'error al cargar catálogos';}
 }
 
-/* ── v190 · MOTIVO DE PÉRDIDA: LISTA CERRADA ──────────────────────────────
-   Hasta v189 el select era base fija + tabla motivos_perdida + sugerencias de
-   la IA + "Otro" con texto libre que se guardaba TAL CUAL en motivo_perdida.
-   Resultado medido en la base: ~190 variantes distintas para lo mismo
-   ("no construimos en cbba" / "No construimos en cbba" / "no cosntruimos en
-   cbba"), más basura tipo "3 dic", "pendiente", "confirmar". Con eso no se
-   puede agrupar nada, así que la lista pasa a ser cerrada de verdad: estas 7
-   más "Otro". Cambiar esta constante es el ÚNICO modo de agregar un motivo. */
-const _MOTIVOS_PERDIDA_BASE=[
-  'Fuera de zona de cobertura',
-  'No tiene terreno',
-  'No califica para financiamiento',
-  'Presupuesto insuficiente',
-  'No respondió (3 intentos)',
-  'Solo pedía información / curioso',
-  'Eligió otra empresa'
-];
+/* ── v221 · MOTIVO DE PÉRDIDA: LA FUENTE DE VERDAD ES motivos_perdida ─────
+   v190 cerró la lista con una constante en el código (_MOTIVOS_PERDIDA_BASE,
+   7 motivos) porque la tabla estaba abierta y por ahí entraron ~190 variantes
+   del mismo motivo ("no construimos en cbba" / "No construimos en cbba" /
+   "no cosntruimos en cbba"). Eso mató el ruido pero dejó el catálogo dentro
+   del HTML: agregar un motivo era editar y deployar.
+   Ahora manda la tabla motivos_perdida, que tiene `categoria`
+   (desaparecio | mala_segmentacion | objecion_real | otro) — esa columna es la
+   que alimenta el Radar de contenido. El select guarda
+   leads.motivo_perdida_id; sigue cerrado (nadie escribe texto libre), pero se
+   amplía desde la base y no desde el código.
+   El nombre se sigue escribiendo en leads.motivo_perdida por compatibilidad:
+   los exports y los reportes viejos leen esa columna, y los 4.007 leads
+   históricos que el barrido de fase 1 normalizó conservan su texto original. */
+const _CAT_MOTIVO_LABEL={desaparecio:'Desapareció',mala_segmentacion:'Mala segmentación',objecion_real:'Objeción real',otro:'Otro'};
+const _CAT_MOTIVO_ORDEN=['objecion_real','desaparecio','mala_segmentacion','otro'];
+function _catMotivo(m){return (m&&m.categoria)||'otro';}
+function _motivosActivos(){
+  return (motivosPerdida||[]).filter(function(m){return m&&m.id&&m.activo!==false;});
+}
+function _motivoById(id){
+  const n=parseInt(id,10);
+  if(!n)return null;
+  return (motivosPerdida||[]).filter(function(m){return m.id===n;})[0]||null;
+}
+/* "Otro" es el único que pide texto libre, y se reconoce por nombre y no por id
+   hardcodeado: si Chat renumera el catálogo, esto no se rompe. */
+function _motivoEsOtro(id){
+  const m=_motivoById(id);
+  return !!(m&&_cvNorm(m.nombre)==='otro');
+}
 function _populateLostMotivos(){
-  /* Cerrada a propósito: NO se concatenan motivosPerdida (tabla) ni las
-     sugerencias de la IA. Si volvieran a entrar acá, en un mes tenemos otra vez
-     190 variantes y los reportes dejan de servir. */
-  const todas=_MOTIVOS_PERDIDA_BASE.concat(['Otro']);
-  const html='<option value="">— Motivo —</option>'+todas.map(function(m){return'<option value="'+_escPend(m)+'">'+_escPend(m)+'</option>';}).join('');
+  const act=_motivosActivos();
+  let html='<option value="">— Motivo —</option>';
+  const _grupo=function(cat,label){
+    const g=act.filter(function(m){return _catMotivo(m)===cat;})
+               .sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'','es');});
+    if(!g.length)return '';
+    return '<optgroup label="'+_escPend(label)+'">'+
+      g.map(function(m){return'<option value="'+m.id+'">'+_escPend(m.nombre)+'</option>';}).join('')+
+      '</optgroup>';
+  };
+  _CAT_MOTIVO_ORDEN.forEach(function(cat){html+=_grupo(cat,_CAT_MOTIVO_LABEL[cat]||cat);});
+  /* Una categoría nueva que Chat agregue y no esté en _CAT_MOTIVO_ORDEN no se
+     pierde: cae acá abajo en vez de desaparecer del selector. */
+  const _otras=[...new Set(act.map(_catMotivo).filter(function(c){return _CAT_MOTIVO_ORDEN.indexOf(c)<0;}))];
+  _otras.forEach(function(cat){html+=_grupo(cat,_CAT_MOTIVO_LABEL[cat]||cat);});
   const s1=document.getElementById('lost-motivo');if(s1)s1.innerHTML=html;
   const s2=document.getElementById('nl-perdido-motivo');if(s2)s2.innerHTML=html;
 }
@@ -3120,7 +3144,8 @@ async function _guardarCiudadFicha(leadId){
 function _lostMotivoChange(sel,wrapId){
   const w=document.getElementById(wrapId);
   if(!w)return;
-  w.style.display=sel.value==='Otro'?'block':'none';
+  /* v221 — el value del select ahora es motivos_perdida.id, no el nombre */
+  w.style.display=_motivoEsOtro(sel.value)?'block':'none';
 }
 function populateCatalogSelects(){
   // Filtro estado en semana
@@ -3735,7 +3760,7 @@ async function renderReports(){
   /* v203 — el admin ya no puede pedir monto_contrato con la anon key: su
      versión del reporte viene de geat-montos. El resto de los roles sigue
      yendo directo, con el mismo set de columnas de siempre menos el monto. */
-  const _leadsSelect='id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,visito_oficina,indagacion_completa,created_at';
+  const _leadsSelect='id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,motivo_perdida_id,visito_oficina,indagacion_completa,created_at';
   const _pedirLeads=esAdmin
     ? _montosCall({action:'reportes_leads',desde:rng.desde,hasta:rng.hasta}).then(function(r){return{data:r.leads,error:null};})
     : sb.from('leads').select(_leadsSelect).gte('created_at',rng.desde).lt('created_at',rng.hasta);
@@ -4095,22 +4120,35 @@ let _repLeadsPerdidos=[];
 const _MOTIVO_REGLAS=[
   /* servicio que GEAT no presta: no hay categoría para esto, se ve como "Sin clasificar" */
   [/obra (fina|bruta|gruesa)|mano de obra|remodel|refaccion|ampliacion|solo.*plano|cielo falso|electricidad/,null],
-  [/no construimos|no costruimos|no cosntruimos|no constrimos|otro departamento|cochabamba|cbba|la ?paz|lpz|oruro|potosi|sucre|tarija|beni|trinidad|cobija|yacuiba|bermejo|tupiza|el alto|mizque|puerto suarez|pando|su departamento|otra ciudad|no construimos en su zona|es de /,'Fuera de zona de cobertura'],
+  /* v221 — las etiquetas de la derecha son ahora los NOMBRES REALES de
+     motivos_perdida. Antes decian 'Fuera de zona de cobertura',
+     'No califica para financiamiento', 'Presupuesto insuficiente' y
+     'Solo pedia informacion / curioso', que no existen en la tabla: el mismo
+     motivo abria dos barras segun viniera del id o del texto viejo. */
+  [/no construimos|no costruimos|no cosntruimos|no constrimos|otro departamento|cochabamba|cbba|la ?paz|lpz|oruro|potosi|sucre|tarija|beni|trinidad|cobija|yacuiba|bermejo|tupiza|el alto|mizque|puerto suarez|pando|su departamento|otra ciudad|no construimos en su zona|es de /,'Es de otro departamento'],
   [/no tiene terreno|sin terreno|no tiene aun|quiere terreno|pedia terreno|busca(ba|ndo)? terreno|compra de lote|terreno y casa|papeles al dia/,'No tiene terreno'],
-  [/no califica|financia|credito directo|fap|banco|prestamo|no le financiar|deudas/,'No califica para financiamiento'],
-  [/presupuesto|caro|economico|barato|precio|no se pudo prestar|gasto grande|dolar/,'Presupuesto insuficiente'],
+  [/no califica|financia|credito directo|fap|banco|prestamo|no le financiar|deudas/,'No califica para financiamiento bancario'],
+  [/presupuesto|caro|economico|barato|precio|no se pudo prestar|gasto grande|dolar/,'Por presupuesto'],
   [/no respond|no contest|nunca contest|dejo de contestar|sin respuesta|no accede|numero (fuera|apagado|no existe|invalido)|no responde/,'No respondió (3 intentos)'],
-  [/solo (queria|quiere|pedia) informacion|solo informacion|curioso|pensaba que|creia que|solo el plano/,'Solo pedía información / curioso'],
+  [/solo (queria|quiere|pedia) informacion|solo informacion|curioso|pensaba que|creia que|solo el plano/,'Solo quería información'],
   [/otra empresa|otra opcion|competencia|ya esta construyendo|constructora de|ofrec/,'Eligió otra empresa']
 ];
+/* v221 — la etiqueta sale del id normalizado si el lead lo tiene (4.007 de
+   4.167 tras el barrido de fase 1). Solo los que quedaron sin mapear caen al
+   agrupador por texto de v190. */
+function _motivoLabel(l){
+  const m=_motivoById(l&&l.motivo_perdida_id);
+  if(m)return m.nombre;
+  return _motivoNormalizado(l&&l.motivo_perdida);
+}
 function _motivoNormalizado(raw){
   const s=_cvNorm(raw||'').trim();
   if(!s)return 'Sin motivo registrado';
   if(s==='otro')return 'Otro';
-  /* devolver la constante y NO el crudo: si no, "no tiene terreno" y "No tiene
-     terreno" abren dos filas distintas del mismo motivo */
-  const _exacto=_MOTIVOS_PERDIDA_BASE.filter(function(m){return _cvNorm(m)===s;})[0];
-  if(_exacto)return _exacto;
+  /* devolver el nombre del catalogo y NO el crudo: si no, "no tiene terreno" y
+     "No tiene terreno" abren dos filas distintas del mismo motivo */
+  const _exacto=(motivosPerdida||[]).filter(function(m){return _cvNorm(m.nombre)===s;})[0];
+  if(_exacto)return _exacto.nombre;
   for(let i=0;i<_MOTIVO_REGLAS.length;i++){
     if(_MOTIVO_REGLAS[i][0].test(s))return _MOTIVO_REGLAS[i][1]||'Sin clasificar';
   }
@@ -4123,7 +4161,7 @@ function _renderMotivosPerdida(){
   const rows=(_repLeadsPerdidos||[]).filter(function(l){return!filtro||_campLabel(l)===filtro;});
   if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px">Sin pérdidas en este período</div>';return;}
   const acum={};
-  rows.forEach(function(l){const m=_motivoNormalizado(l.motivo_perdida);acum[m]=(acum[m]||0)+1;});
+  rows.forEach(function(l){const m=_motivoLabel(l);acum[m]=(acum[m]||0)+1;});
   /* "Sin clasificar" y "Sin motivo registrado" van último aunque sean grandes:
      son ruido histórico, no un motivo de negocio. */
   const cola=['Sin clasificar','Sin motivo registrado'];
@@ -4181,11 +4219,11 @@ async function exportarPerdidos(){
   const rng=getReportRange();
   toast('Generando Excel perdidos...','ok');
   try{
-    const{data:leads}=await sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,motivo_perdida,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const{data:leads}=await sb.from('leads').select('id,nombre,celular,ciudad,medio_difusion,captador,estado,motivo_perdida,motivo_perdida_id,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
     const rows=(leads||[]).map(l=>({
       'Nombre':l.nombre,'Celular':l.celular,'Ciudad':_ciudadLabel(l.ciudad)||'—',
       'Captador':l.captador||'—','Medio':l.medio_difusion||'—',
-      'Motivo pérdida':l.motivo_perdida||'—','Detalle':l.motivo_perdida_detalle||'—',
+      'Motivo pérdida':_motivoLabel(l),'Texto original':l.motivo_perdida||'—','Detalle':l.motivo_perdida_detalle||'—',
       'Fecha registro':l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):''
     }));
     xlsxExport([{name:'Perdidos',rows}],`GEAT_Perdidos_${rng.label}.xlsx`);
@@ -4304,11 +4342,11 @@ async function verReportePerdidos(){
   const rng=getReportRange();
   toast('Cargando reporte...','ok');
   try{
-    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,captador,motivo_perdida,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
+    const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,captador,motivo_perdida,motivo_perdida_id,motivo_perdida_detalle,created_at').eq('estado','cerrado_perdido').gte('created_at',rng.desde).lt('created_at',rng.hasta);
     const html=`<div style="color:var(--gray-400);font-size:11px;margin-bottom:12px">${(leads||[]).length} leads perdidos en el período</div>
     <table class="team-table" style="width:100%">
       <thead><tr><th>Nombre</th><th>Celular</th><th>Ciudad</th><th>Captador</th><th>Motivo pérdida</th><th>Detalle</th><th>Fecha</th></tr></thead>
-      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.captador||'—'}</td><td style="color:var(--st-atrasado)">${l.motivo_perdida||'—'}</td><td style="font-size:10px;color:var(--gray-400)">${l.motivo_perdida_detalle||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
+      <tbody>${(leads||[]).map(l=>`<tr><td><strong>${l.nombre||'—'}</strong></td><td>${l.celular||'—'}</td><td>${_ciudadLabel(l.ciudad)||'—'}</td><td>${l.captador||'—'}</td><td style="color:var(--st-atrasado)">${_motivoLabel(l)}</td><td style="font-size:10px;color:var(--gray-400)">${l.motivo_perdida_detalle||'—'}</td><td style="font-size:10px">${l.created_at?new Date(l.created_at).toLocaleDateString('es-BO'):'—'}</td></tr>`).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Reporte Perdidos · '+rng.label,html,'perdidos');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -7893,23 +7931,28 @@ async function saveSeguimiento(){
       wonData={cod:_vCod,m2,monto,cerrador:_vCerr,captador:_vCap,nombre:(leadFull&&leadFull.nombre)||''};
 
     } else if(outcomeMode==='lost'){
-      let motivo=document.getElementById('lost-motivo').value;
-      if(!motivo){toast('Seleccioná un motivo de pérdida','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
+      /* v221 — el select devuelve motivos_perdida.id */
+      const _motivoId=document.getElementById('lost-motivo').value;
+      const _mo=_motivoById(_motivoId);
+      if(!_mo){toast(_motivoId?'Ese motivo ya no está en el catálogo — recargá la página':'Seleccioná un motivo de pérdida','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
       let _otroTxt='';
-      if(motivo==='Otro'){
+      if(_motivoEsOtro(_motivoId)){
         _otroTxt=(document.getElementById('lost-otro-texto')?.value||'').trim();
         if(!_otroTxt){toast('Escribí el motivo en el campo de texto','error');if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}_modalBodyLock('modalFinalize',false);return;}
       }
       /* v190 — con "Otro", motivo_perdida queda en 'Otro' y el texto libre va al
          detalle. Antes el texto se escribía en motivo_perdida y por ahí entraron
-         las ~190 variantes que hacen inagrupable el reporte. */
+         las ~190 variantes que hacen inagrupable el reporte.
+         v221 — se escriben las DOS columnas: el id (lo que agrupa de verdad) y
+         el nombre (lo que leen los exports y los reportes viejos). */
       const notaLost=document.getElementById('lost-nota').value;
       const _detLost=[_otroTxt,notaLost].filter(function(s){return(s||'').trim();}).join(' — ');
       const{error:e4}=await sb.from('leads').update({
-        estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:_detLost,updated_at:now
+        estado:'cerrado_perdido',motivo_perdida:_mo.nombre,motivo_perdida_id:_mo.id,
+        motivo_perdida_detalle:_detLost,updated_at:now
       }).eq('id',currentLeadId);
       if(e4)throw e4;
-      registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo,nota:notaLost});
+      registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo:_mo.nombre,motivo_id:_mo.id,nota:notaLost});
     }
 
     /* v144 — completar la tarea actual AL FINAL: el siguiente paso (o el
@@ -8180,12 +8223,14 @@ async function saveLeadPerdido(){
   const nombre=document.getElementById('nl-nombre')?.value.trim();
   const celular=document.getElementById('nl-celular')?.value.trim();
   if(!nombre||!celular){toast('Nombre y celular son requeridos','error');return;}
-  let motivo=document.getElementById('nl-perdido-motivo')?.value;
-  if(!motivo){toast('Elegí un motivo','error');return;}
+  /* v221 — el select devuelve motivos_perdida.id */
+  const _motivoIdNl=document.getElementById('nl-perdido-motivo')?.value;
+  const _moNl=_motivoById(_motivoIdNl);
+  if(!_moNl){toast(_motivoIdNl?'Ese motivo ya no está en el catálogo — recargá la página':'Elegí un motivo','error');return;}
   /* v190 — igual que en finalizar: con "Otro" el motivo queda en 'Otro' y el
      texto libre va a motivo_perdida_detalle, para no reabrir el texto libre. */
   let _otroTxtNl='';
-  if(motivo==='Otro'){
+  if(_motivoEsOtro(_motivoIdNl)){
     _otroTxtNl=(document.getElementById('nl-perdido-otro-texto')?.value||'').trim();
     if(!_otroTxtNl){toast('Escribí el motivo en el campo de texto','error');return;}
   }
@@ -8210,7 +8255,8 @@ async function saveLeadPerdido(){
       nombre,celular,ciudad,medio_difusion:medio,captador,
       // v185/v209 — origen: una de las dos va con dato y la otra en null
       campana_id:_origenNLP.campana_id,campana:_origenNLP.campana,
-      estado:'cerrado_perdido',motivo_perdida:motivo,motivo_perdida_detalle:_otroTxtNl||null,
+      estado:'cerrado_perdido',motivo_perdida:_moNl.nombre,motivo_perdida_id:_moNl.id,
+      motivo_perdida_detalle:_otroTxtNl||null,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
          para que el CPL y el tiempo de respuesta lo cuenten. */
@@ -8219,7 +8265,7 @@ async function saveLeadPerdido(){
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id').single();
     if(error)throw error;
-    try{await registrarAuditoria('marcar_perdido','leads',newLead.id,{motivo});}catch(e){}
+    try{await registrarAuditoria('marcar_perdido','leads',newLead.id,{motivo:_moNl.nombre,motivo_id:_moNl.id});}catch(e){}
     /* Vincular con grabación si viene de Mi Registro */
     if(_grabOrigenRegId&&newLead){
       const regId=_grabOrigenRegId; _grabOrigenRegId=null; _grabOrigenExtraccion=null;
@@ -8228,7 +8274,7 @@ async function saveLeadPerdido(){
         if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
       }catch(e){}
     }
-    toast('Lead registrado como perdido ('+motivo+')','ok');
+    toast('Lead registrado como perdido ('+_moNl.nombre+')','ok');
     closeModal('modalNewLead');
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -8989,17 +9035,26 @@ async function renderAdmin(){
       <div id="registro-grab-body" style="margin-top:12px"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
     </div>
 
-    <!-- 📊 Motivos de pérdida — v190: lista cerrada, sin ABM -->
+    <!-- 📊 Motivos de pérdida — v221: la fuente de verdad es la tabla -->
     <div class="admin-section">
-      <div class="admin-section-title" style="margin:0">📊 Motivos de pérdida</div>
+      <div class="admin-section-title" style="margin:0">📊 Motivos de pérdida (<span>${_motivosActivos().length}</span> activos)</div>
       <div style="font-size:12px;color:var(--gray-400);margin-top:8px;line-height:1.5">
-        La lista es <strong>cerrada</strong> desde v190. El selector ya no se puede ampliar desde acá ni con sugerencias de la IA: así se juntaron ~190 variantes del mismo motivo
-        (<span style="color:var(--gray-600)">“no construimos en cbba” / “No construimos en cbba” / “no cosntruimos en cbba”</span>) y los reportes dejaron de poder agrupar nada.
-        Para agregar o cambiar un motivo hay que tocar <code style="font-size:11px">_MOTIVOS_PERDIDA_BASE</code> en el código.
+        La lista sigue siendo <strong>cerrada</strong> — nadie escribe texto libre — pero desde v221 vive en la tabla
+        <code style="font-size:11px">motivos_perdida</code>, no en el código. El selector guarda
+        <code style="font-size:11px">leads.motivo_perdida_id</code>, y la columna <code style="font-size:11px">categoria</code>
+        es la que alimenta el Radar de contenido: solo <strong>objeción real</strong> genera guiones.
+        Agregar, renombrar o dar de baja un motivo (<code style="font-size:11px">activo=false</code>) se hace en la base.
       </div>
-      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
-        ${_MOTIVOS_PERDIDA_BASE.concat(['Otro']).map(function(m){return'<span style="font-size:11px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:11px;padding:3px 10px">'+_escPend(m)+'</span>';}).join('')}
-      </div>
+      ${_CAT_MOTIVO_ORDEN.map(function(cat){
+        const g=_motivosActivos().filter(function(m){return _catMotivo(m)===cat;});
+        if(!g.length)return '';
+        const col=cat==='objecion_real'?'var(--gold)':'var(--gray-600)';
+        return '<div style="margin-top:12px">'+
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:'+col+';margin-bottom:6px">'+_escPend(_CAT_MOTIVO_LABEL[cat]||cat)+' · '+g.length+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+            g.map(function(m){return'<span style="font-size:11px;background:var(--gray-800);border:1px solid '+col+';border-radius:11px;padding:3px 10px">'+_escPend(m.nombre)+'</span>';}).join('')+
+          '</div></div>';
+      }).join('')}
     </div>
 
     <!-- 📣 Campañas (v185) — ABM solo admin. El nombre se escribe UNA vez acá,
@@ -9258,7 +9313,7 @@ async function _analizarMotivosPerdida(){
   try{
     const{data,error}=await sb.from('leads').select('motivo_perdida').not('motivo_perdida','is',null).or('archivado.is.null,archivado.eq.false');
     if(error)throw error;
-    const fixed=_MOTIVOS_PERDIDA_BASE.concat((motivosPerdida||[]).map(function(m){return m.nombre;})).concat(['Otro']);
+    const fixed=(motivosPerdida||[]).map(function(m){return m.nombre;}).concat(['Otro']);
     const manuales=[...new Set((data||[]).map(function(l){return(l.motivo_perdida||'').trim();}).filter(function(m){return m&&!fixed.includes(m);}))];
     if(!manuales.length){
       if(res)res.innerHTML='<div style="color:var(--gray-400);font-size:12px">No hay motivos manuales para analizar todavía.</div>';
@@ -9292,13 +9347,20 @@ async function _aprobarMotivosSugeridos(){
   const nuevos=Array.from(checks).map(function(c){return(c.value||'').trim();}).filter(Boolean);
   try{
     for(var i=0;i<nuevos.length;i++){
-      const{error}=await sb.from('motivos_perdida').insert({nombre:nuevos[i]});
+      /* categoria='otro' explicita: sin categoria el motivo queda invisible
+         para el Radar. Quien la corrige es Chat, que es duenio del catalogo. */
+      const{error}=await sb.from('motivos_perdida').insert({nombre:nuevos[i],categoria:'otro'});
       if(error&&error.code!=='23505')throw error;
     }
-    motivosPerdida=motivosPerdida.concat(nuevos.filter(function(n){return!(motivosPerdida||[]).some(function(m){return m.nombre===n;});}).map(function(n){return{nombre:n};}));
+    /* v221 — antes se fabricaban objetos {nombre} sin id y se empujaban a
+       motivosPerdida. Con el selector guardando motivos_perdida.id eso saldria
+       como <option value="undefined"> y grabaría un motivo invalido. Ahora se
+       relee el catalogo de la base, que devuelve id y categoria reales. */
+    const{data:_mRel}=await sb.from('motivos_perdida').select('*').order('nombre');
+    if(_mRel)motivosPerdida=_mRel;
     _populateLostMotivos();
     toast('✅ '+nuevos.length+' motivo(s) agregado(s) al selector','ok');
-    if(res)res.innerHTML='<div style="color:var(--st-completo);font-size:12px;padding:6px 0">✅ Motivos agregados. Ya aparecen en los selectores.</div>';
+    if(res)res.innerHTML='<div style="color:var(--st-completo);font-size:12px;padding:6px 0">✅ Motivos agregados con categoría <b>Otro</b>. Mientras no se recategoricen en la base, NO aparecen en el Radar de contenido (solo entra <b>objeción real</b>).</div>';
   }catch(e){toast('Error al guardar: '+e.message,'error');}
 }
 
