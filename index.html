@@ -733,6 +733,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
     <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()">🧾 Cobranzas</div>
     <div class="nav-tab" id="tab-zonas" style="display:none" onclick="switchTab(this,'screen-zonas');renderZonas()">📍 Precios por zona</div>
+    <div class="nav-tab" id="tab-radar" style="display:none" onclick="switchTab(this,'screen-radar');renderRadar()">📡 Radar de contenido</div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
@@ -920,6 +921,16 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>📍 Precios por <span class="gold">zona</span></h1>
     </div>
     <div id="zonas-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: RADAR DE CONTENIDO (v223) — admin + commercial_lead.
+       Mismo mecanismo de permisos que Gerencia/Cobranzas/Zonas: _SCREEN_ROLES
+       en switchTab, o sea validación de CLIENTE. ══ -->
+  <section id="screen-radar" class="screen">
+    <div class="screen-title">
+      <h1>📡 Radar de <span class="gold">contenido</span></h1>
+    </div>
+    <div id="radar-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
   <!-- ══ SCREEN: RECLUTAMIENTO (v145) — solo admin, datos vía Edge Function geat-cv-panel ══ -->
@@ -1764,7 +1775,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='222';
+  var CURRENT_VERSION='223';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2875,6 +2886,8 @@ function startApp(){
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
     const tabZon=document.getElementById('tab-zonas');
     if(tabZon)tabZon.style.display='';
+    const tabRad=document.getElementById('tab-radar');
+    if(tabRad)tabRad.style.display='';
   }
   // Reportes tab: oculto para field_capturer
   if(cu.rol==='field_capturer'){
@@ -3269,7 +3282,9 @@ const _SCREEN_ROLES={
   'screen-miregistro'   :['admin','field_capturer','commercial_lead'],
   'screen-reports'      :['admin','commercial_lead','closer','tecnico'],
   /* v222 — Precios por zona: lo edita David (commercial_lead) y el CEO. */
-  'screen-zonas'        :['admin','commercial_lead']
+  'screen-zonas'        :['admin','commercial_lead'],
+  /* v223 — Radar de contenido: mismo par que Precios por zona. */
+  'screen-radar'        :['admin','commercial_lead']
 };
 function _puedeVerPantalla(screenId){
   const permitidos=_SCREEN_ROLES[screenId];
@@ -4311,6 +4326,375 @@ async function guardarZona(id){
   }catch(e){
     toast('Error al guardar: '+((e&&e.message)||'error'),'error');
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='💾 Guardar zona '+z.codigo;}
+  }
+}
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v223 · RADAR DE CONTENIDO                                            ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Qué objeción está costando más leads → un guion de reel que la responda.
+   Solo entra motivos_perdida.categoria='objecion_real': desapareció y mala
+   segmentación no se arreglan con contenido, son ruido para esta pantalla.
+
+   EL EJE DE TIEMPO ES created_at (cuándo ENTRÓ el lead), no cuándo se perdió.
+   Motivo, y no es un detalle: leads no tiene columna de fecha de pérdida, y
+   updated_at dejó de servir el 2-sep-2026 — el barrido de v221 tocó los 4.007
+   leads y el trigger trigger_updated_at_leads les puso a todos la misma fecha.
+   ultima_gestion solo está en 47 de 328. Así que la lectura correcta de cada
+   fila es "de los leads que ENTRARON en el período, cuántos terminaron
+   perdidos por esta objeción", que además es el mismo eje que usa Reportes.
+
+   El conteo de ruido va con head:true — son 3.679 filas en 90 días y traerlas
+   chocaría contra el corte de 1000 de PostgREST. */
+let _radarPeriodo=90;
+let _radarMotivos=[];
+let _radarGuiones=[];
+let _radarFrases={};
+let _radarAbierto=null;
+let _radarGenerando=false;
+let _radarKeywordSugerida={};
+
+function _radarDesde(dias){return new Date(Date.now()-dias*86400000).toISOString();}
+function _radarMotivosObjecion(){
+  return (motivosPerdida||[]).filter(function(m){return m&&m.categoria==='objecion_real';});
+}
+function setRadarPeriodo(d){_radarPeriodo=parseInt(d,10)||90;_radarAbierto=null;renderRadar();}
+
+async function renderRadar(){
+  const body=document.getElementById('radar-body');
+  if(!body)return;
+  if(!_puedeVerPantalla('screen-radar')){body.innerHTML='';return;}
+  body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  const objs=_radarMotivosObjecion();
+  const ids=objs.map(function(m){return m.id;});
+  if(!ids.length){body.innerHTML='<div class="loading-state">No hay motivos con categoría <b>objeción real</b> en el catálogo.</div>';return;}
+  const desde=_radarDesde(_radarPeriodo);
+  const desdePrev=_radarDesde(_radarPeriodo*2);
+  const mesIni=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+  try{
+    const[rLeads,rRuido,rGui]=await Promise.all([
+      /* Solo objeción real y solo desde el período anterior: son 328 filas en
+         total, muy por debajo del corte de PostgREST. */
+      sb.from('leads').select('id,motivo_perdida_id,created_at,ind_lugar_terreno,campana,campana_id')
+        .in('motivo_perdida_id',ids).gte('created_at',desdePrev),
+      sb.from('leads').select('id',{count:'exact',head:true})
+        .not('motivo_perdida_id','is',null).not('motivo_perdida_id','in','('+ids.join(',')+')')
+        .gte('created_at',desde),
+      sb.from('radar_guiones').select('*').eq('activo',true).order('id',{ascending:false})
+    ]);
+    if(rLeads.error)throw rLeads.error;
+    if(rGui.error)throw rGui.error;
+    const filas=rLeads.data||[];
+    _radarGuiones=rGui.data||[];
+    const act={},prev={},zonas={},camps={};
+    filas.forEach(function(l){
+      const k=l.motivo_perdida_id;
+      const esAct=l.created_at>=desde;
+      if(esAct){
+        act[k]=(act[k]||0)+1;
+        const z=_zonaDeLugar(l.ind_lugar_terreno);
+        if(z){if(!zonas[k])zonas[k]={};zonas[k][z.zona.codigo]=(zonas[k][z.zona.codigo]||0)+1;}
+        const c=campanaNombre(l.campana_id)||((l.campana||'').trim()||null);
+        if(c){if(!camps[k])camps[k]={};camps[k][c]=(camps[k][c]||0)+1;}
+      }else{
+        prev[k]=(prev[k]||0)+1;
+      }
+    });
+    _radarMotivos=objs.map(function(m){
+      return{motivo:m,n:act[m.id]||0,nPrev:prev[m.id]||0,zonas:zonas[m.id]||{},camps:camps[m.id]||{}};
+    }).sort(function(a,b){return b.n-a.n||a.motivo.nombre.localeCompare(b.motivo.nombre,'es');});
+
+    const totalObj=Object.keys(act).reduce(function(s,k){return s+act[k];},0);
+    const enProduccion=_radarGuiones.filter(function(g){return g.estado==='asignado'||g.estado==='grabado';}).length;
+    const pubMes=_radarGuiones.filter(function(g){
+      if(g.estado!=='publicado'||!g.publicado_el)return false;
+      const p=_radarFechaDia(g.publicado_el);
+      return p&&p>=mesIni;
+    }).length;
+    body.innerHTML=_radarCabecera(totalObj,enProduccion,pubMes,rRuido.count||0)+_radarLista();
+  }catch(e){
+    body.innerHTML='<div class="loading-state" style="color:var(--st-atrasado)">No se pudo cargar el radar: '+_escPend((e&&e.message)||'error')+'</div>';
+  }
+}
+/* 'YYYY-MM-DD' con componentes locales: new Date('2026-09-01') es medianoche
+   UTC y en Bolivia cae el día anterior a las 20:00. */
+function _radarFechaDia(s){
+  const p=String(s||'').slice(0,10).split('-');
+  if(p.length!==3)return null;
+  return new Date(+p[0],+p[1]-1,+p[2]);
+}
+function _radarCabecera(obj,prod,pub,ruido){
+  const per=[[30,'30 días'],[90,'90 días'],[365,'Último año']];
+  const kpi=function(n,lbl,col,hint){
+    return '<div style="flex:1;min-width:135px;background:var(--gray-800);border:1px solid var(--gray-600);border-left:3px solid '+col+';border-radius:9px;padding:11px 13px">'+
+      '<div style="font-size:23px;font-weight:800;color:'+col+';line-height:1.1">'+n+'</div>'+
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-top:3px">'+lbl+'</div>'+
+      (hint?'<div style="font-size:9px;color:var(--gray-600);margin-top:2px">'+hint+'</div>':'')+
+    '</div>';
+  };
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">'+
+      '<span style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">Período</span>'+
+      '<div class="view-toggle">'+
+        per.map(function(p){return '<button'+(p[0]===_radarPeriodo?' class="active"':'')+' onclick="setRadarPeriodo('+p[0]+')">'+p[1]+'</button>';}).join('')+
+      '</div>'+
+      '<span style="font-size:10px;color:var(--gray-600)">por fecha de ingreso del lead</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">'+
+      kpi(obj,'Objeciones reales','var(--gold)','leads perdidos en el período')+
+      kpi(prod,'Videos en producción','var(--st-vis-of)','asignados + grabados')+
+      kpi(pub,'Publicados este mes','var(--st-completo)','')+
+      kpi(ruido,'Ruido filtrado','var(--gray-600)','desapareció / mala segmentación / otro')+
+    '</div>';
+}
+function _radarTendencia(n,nPrev){
+  if(!nPrev&&!n)return '<span style="color:var(--gray-600)">—</span>';
+  if(!nPrev)return '<span style="color:var(--st-atrasado);font-weight:700">nuevo</span>';
+  const pct=Math.round((n-nPrev)/nPrev*100);
+  if(Math.abs(pct)<5)return '<span style="color:var(--gray-400)">estable</span>';
+  const sube=pct>0;
+  return '<span style="color:'+(sube?'var(--st-atrasado)':'var(--st-completo)')+';font-weight:700">'+(sube?'+':'')+pct+'%</span>';
+}
+function _radarChips(mapa,pre,col){
+  const ks=Object.keys(mapa||{}).sort(function(a,b){return mapa[b]-mapa[a];}).slice(0,3);
+  if(!ks.length)return '';
+  return ks.map(function(k){
+    return '<span style="font-size:9px;background:var(--gray-900);border:1px solid '+col+';color:'+col+';border-radius:9px;padding:1px 7px">'+pre+_escPend(k)+' '+mapa[k]+'</span>';
+  }).join(' ');
+}
+const _RADAR_ESTADO={borrador:['Borrador','var(--gray-400)'],asignado:['Asignado','var(--st-vis-of)'],grabado:['Grabado','var(--gold)'],publicado:['Publicado','var(--st-completo)']};
+function _radarGuionDe(motivoId){
+  return (_radarGuiones||[]).filter(function(g){return g.motivo_id===motivoId;})[0]||null;
+}
+function _radarLista(){
+  if(!_radarMotivos.length)return '';
+  const conDatos=_radarMotivos.filter(function(r){return r.n>0;});
+  const sinDatos=_radarMotivos.filter(function(r){return r.n===0;});
+  const fila=function(r){
+    const m=r.motivo,g=_radarGuionDe(m.id);
+    const est=g?(_RADAR_ESTADO[g.estado]||['?','var(--gray-400)']):null;
+    const abierto=_radarAbierto===m.id;
+    return '<div class="admin-section" style="padding:12px 14px">'+
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+        '<div style="font-size:21px;font-weight:800;color:var(--gold);min-width:42px">'+r.n+'</div>'+
+        '<div style="flex:1;min-width:190px">'+
+          '<div style="font-size:13px;font-weight:700">'+_escPend(m.nombre)+'</div>'+
+          '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:5px">'+
+            '<span style="font-size:10px;color:var(--gray-400)">vs. período anterior:</span> '+_radarTendencia(r.n,r.nPrev)+
+            (Object.keys(r.zonas).length?' '+_radarChips(r.zonas,'📍 Zona ','var(--gray-600)'):'')+
+            (Object.keys(r.camps).length?' '+_radarChips(r.camps,'📣 ','var(--gray-600)'):'')+
+          '</div>'+
+        '</div>'+
+        (est?'<span style="font-size:10px;font-weight:700;border:1px solid '+est[1]+';color:'+est[1]+';border-radius:9px;padding:2px 9px">'+est[0]+'</span>':'')+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+          '<button type="button" class="btn-ghost" style="font-size:11px" onclick="radarToggleVoz('+m.id+')">'+(abierto?'▾':'▸')+' Voz del cliente</button>'+
+          (g
+            ? '<button type="button" class="btn-ghost" style="font-size:11px" onclick="radarVerGuion('+g.id+')">📄 Ver guion</button>'
+            : '<button type="button" class="btn-primary" style="font-size:11px" id="radar-gen-'+m.id+'" onclick="radarGenerarGuion('+m.id+')">✨ Generar guion</button>')+
+        '</div>'+
+      '</div>'+
+      '<div id="radar-voz-'+m.id+'" style="display:'+(abierto?'block':'none')+';margin-top:10px"></div>'+
+      '<div id="radar-guion-'+m.id+'" style="margin-top:10px"></div>'+
+    '</div>';
+  };
+  return conDatos.map(fila).join('')+
+    (sinDatos.length
+      ? '<div style="margin-top:14px;font-size:11px;color:var(--gray-600)">Sin pérdidas en el período: '+
+          sinDatos.map(function(r){return _escPend(r.motivo.nombre);}).join(' · ')+'</div>'
+      : '');
+}
+
+/* ── Voz del cliente ─────────────────────────────────────────────────────
+   Frases textuales, solo lectura. Salen de agenda_personal.nota_resultado y
+   de leads.resultado_reunion. Medido el 3-sep-2026: 415 notas de 247 leads
+   con objeción real llegan a los 40 caracteres, contra 2 resultado_reunion —
+   la nota de la tarea es en la práctica la única fuente. */
+async function radarToggleVoz(motivoId){
+  const cont=document.getElementById('radar-voz-'+motivoId);
+  if(!cont)return;
+  if(_radarAbierto===motivoId){_radarAbierto=null;cont.style.display='none';return;}
+  _radarAbierto=motivoId;
+  document.querySelectorAll('[id^="radar-voz-"]').forEach(function(d){if(d!==cont)d.style.display='none';});
+  cont.style.display='block';
+  if(_radarFrases[motivoId]){cont.innerHTML=_radarVozHtml(_radarFrases[motivoId]);return;}
+  cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)"><span class="spin"></span> Buscando frases...</div>';
+  try{
+    await _radarCargarFrases(motivoId);
+    cont.innerHTML=_radarVozHtml(_radarFrases[motivoId]);
+  }catch(e){
+    cont.innerHTML='<div style="font-size:11px;color:var(--st-atrasado)">No se pudieron traer las frases: '+_escPend((e&&e.message)||'error')+'</div>';
+  }
+}
+/* Solo trae y cachea. Separado del toggle porque la generación del guion las
+   necesita SIN abrir ni cerrar el panel. */
+async function _radarCargarFrases(motivoId){
+  if(_radarFrases[motivoId])return _radarFrases[motivoId];
+  {
+    const desde=_radarDesde(_radarPeriodo);
+    const{data:lds}=await sb.from('leads').select('id,nombre,resultado_reunion,created_at')
+      .eq('motivo_perdida_id',motivoId).gte('created_at',desde).order('created_at',{ascending:false}).limit(300);
+    const leads=lds||[];
+    const ids=leads.map(function(l){return l.id;});
+    let frases=[];
+    leads.forEach(function(l){
+      const t=(l.resultado_reunion||'').trim();
+      if(t.length>=40)frases.push({txt:t,quien:l.nombre,cuando:l.created_at,fuente:'resultado de reunión'});
+    });
+    if(ids.length){
+      const{data:notas}=await sb.from('agenda_personal')
+        .select('lead_id,nota_resultado,completada_en,fecha_programada')
+        .in('lead_id',ids).not('nota_resultado','is',null)
+        .order('fecha_programada',{ascending:false}).limit(400);
+      const nom={};leads.forEach(function(l){nom[l.id]=l.nombre;});
+      (notas||[]).forEach(function(a){
+        const t=(a.nota_resultado||'').trim();
+        if(t.length>=40)frases.push({txt:t,quien:nom[a.lead_id],cuando:a.completada_en||a.fecha_programada,fuente:'nota de la tarea'});
+      });
+    }
+    frases.sort(function(a,b){return new Date(b.cuando||0)-new Date(a.cuando||0);});
+    _radarFrases[motivoId]=frases.slice(0,5);
+  }
+  return _radarFrases[motivoId];
+}
+function _radarVozHtml(fr){
+  if(!fr||!fr.length)return '<div style="font-size:11px;color:var(--gray-600)">Sin frases registradas de al menos 40 caracteres para este motivo en el período.</div>';
+  return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:6px">🗣 Voz del cliente · lo que quedó escrito, textual</div>'+
+    fr.map(function(f){
+      return '<div style="border-left:2px solid var(--gold);background:var(--gray-900);padding:7px 10px;margin-bottom:6px;border-radius:0 6px 6px 0">'+
+        '<div style="font-size:12px;line-height:1.5;color:var(--gray-100)">"'+_escPend(f.txt)+'"</div>'+
+        '<div style="font-size:9px;color:var(--gray-600);margin-top:4px">'+_escPend(f.quien||'—')+' · '+_escPend(f.fuente)+(f.cuando?' · '+_fechaHoraTxt(f.cuando):'')+'</div>'+
+      '</div>';
+    }).join('');
+}
+
+/* ── Generación del guion ────────────────────────────────────────────────
+   Via _gptMiniIA, que ya inyecta "Hoy es <fecha> (America/La_Paz)" en el
+   system prompt desde v187 — el arreglo de las tareas fantasma con fechas de
+   2023. Se le pasan las frases textuales y se le prohíbe explícitamente
+   inventar: si no hay material, que devuelva campos vacíos. */
+const _RADAR_REGLAS_REEL=
+  'FORMATO OBLIGATORIO DEL REEL (GEAT Construcción, Santa Cruz de la Sierra, Bolivia):\n'+
+  '- gancho: 0 a 3 segundos, una sola frase, tiene que frenar el scroll y nombrar la objeción.\n'+
+  '- desarrollo: se graba con una casa YA ENTREGADA de fondo; describí qué se muestra y qué se dice.\n'+
+  '- cierre: llamada a la acción con la keyword dicha EN VOZ ALTA y además escrita en pantalla.\n'+
+  '- duración total 30 a 40 segundos: escribí un texto que se lea en ese tiempo, no más.\n'+
+  '- respuesta_whatsapp: 3 líneas para que la captadora se la mande al prospecto que puso esa objeción. Trato de vos, sin emojis de relleno, sin prometer precios.\n'+
+  '- keyword_sugerida: UNA a TRES palabras en MAYÚSCULAS, sin tildes, fácil de escribir por WhatsApp.\n';
+
+async function radarGenerarGuion(motivoId){
+  if(_radarGenerando){toast('Esperá a que termine el guion anterior','error');return;}
+  const m=_motivoById(motivoId);
+  if(!m)return;
+  const fila=(_radarMotivos||[]).filter(function(r){return r.motivo.id===motivoId;})[0];
+  const btn=document.getElementById('radar-gen-'+motivoId);
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Generando...';}
+  _radarGenerando=true;
+  const cont=document.getElementById('radar-guion-'+motivoId);
+  if(cont)cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)"><span class="spin"></span> La IA está escribiendo el guion...</div>';
+  try{
+    /* un guion sin frases es un guion inventado: se cargan primero */
+    await _radarCargarFrases(motivoId);
+    const frases=(_radarFrases[motivoId]||[]).map(function(f){return '- "'+f.txt+'"';}).join('\n');
+    const userMsg=_PROMPT_ANTI_INVENCION+
+      'Sos el guionista de contenido de GEAT Construcción. Escribí un reel que responda esta objeción real de prospectos.\n\n'+
+      'OBJECIÓN: "'+m.nombre+'"\n'+
+      'CUÁNTOS LEADS SE PERDIERON POR ESTO en el período: '+((fila&&fila.n)||0)+'\n'+
+      'FRASES TEXTUALES DE LOS CLIENTES (no inventes otras, no las cites deformadas):\n'+(frases||'(no hay frases registradas)')+'\n\n'+
+      _RADAR_REGLAS_REEL+
+      '\nDevolvé SOLO este JSON, sin texto alrededor:\n'+
+      '{"titulo":"...","gancho":"...","desarrollo":"...","cierre":"...","keyword_sugerida":"...","respuesta_whatsapp":"..."}';
+    const j=JSON.parse(await _gptMiniIA(userMsg,1100,true));
+    if(!j||!(j.gancho||'').trim()){throw new Error('La IA no devolvió un guion utilizable');}
+    const{data:ins,error}=await sb.from('radar_guiones').insert({
+      motivo_id:motivoId,
+      titulo:(j.titulo||('Reel: '+m.nombre)).slice(0,200),
+      gancho:(j.gancho||'').slice(0,600),
+      desarrollo:(j.desarrollo||'').slice(0,2000),
+      cierre:(j.cierre||'').slice(0,600),
+      respuesta_whatsapp:(j.respuesta_whatsapp||'').slice(0,600),
+      estado:'borrador',
+      activo:true,
+      creado_por:(cu&&cu.nombre)||'—'
+    }).select('*').single();
+    if(error)throw error;
+    /* La keyword sugerida NO se guarda sola: pasa por la validación contra la
+       tabla keywords, que es donde se decide si está libre. */
+    _radarGuiones.unshift(ins);
+    try{await registrarAuditoria('generar_guion_radar','radar_guiones',ins.id,{motivo:m.nombre,motivo_id:motivoId});}catch(e){}
+    toast('✅ Guion generado como borrador');
+    _radarKeywordSugerida[ins.id]=(j.keyword_sugerida||'').toUpperCase().trim();
+    renderRadar();
+  }catch(e){
+    if(cont)cont.innerHTML='<div style="font-size:11px;color:var(--st-atrasado)">No se pudo generar el guion: '+_escPend((e&&e.message)||'error')+'</div>';
+    toast('No se pudo generar el guion: '+((e&&e.message)||'error'),'error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='✨ Generar guion';}
+  }finally{_radarGenerando=false;}
+}
+
+function radarVerGuion(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  const cont=document.getElementById('radar-guion-'+g.motivo_id);
+  if(!cont)return;
+  if(cont.getAttribute('data-abierto')===String(guionId)){cont.innerHTML='';cont.removeAttribute('data-abierto');return;}
+  cont.setAttribute('data-abierto',String(guionId));
+  const kwSug=_radarKeywordSugerida[g.id]||'';
+  const bloque=function(t,v){
+    return '<div style="margin-bottom:9px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--gold);margin-bottom:3px">'+t+'</div>'+
+      '<div style="font-size:12px;line-height:1.55;color:var(--gray-100);white-space:pre-wrap">'+_escPend(v||'—')+'</div></div>';
+  };
+  cont.innerHTML='<div style="border:1px solid var(--gray-600);border-radius:9px;padding:13px;background:var(--gray-900)">'+
+    '<div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px">🎬 '+_escPend(g.titulo||'—')+'</div>'+
+    bloque('Gancho · 0-3 seg',g.gancho)+
+    bloque('Desarrollo · casa entregada de fondo',g.desarrollo)+
+    bloque('Cierre · keyword hablada y escrita',g.cierre)+
+    bloque('Respuesta de WhatsApp para la captadora',g.respuesta_whatsapp)+
+    '<div class="form-group" style="margin-top:12px">'+
+      '<label class="form-label">Keyword</label>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<input class="form-control" id="radar-kw-'+g.id+'" value="'+_escPend(g.keyword||kwSug)+'" maxlength="40" placeholder="CASA ENTREGADA" style="flex:1;min-width:170px;font-size:12px;text-transform:uppercase">'+
+        '<button type="button" class="btn-primary" style="font-size:11px" id="radar-kwbtn-'+g.id+'" onclick="radarGuardarKeyword('+g.id+')">Asignar keyword</button>'+
+      '</div>'+
+      '<div class="form-help">Se valida contra la tabla de keywords: si ya está en uso no se puede reutilizar.</div>'+
+      (kwSug&&!g.keyword?'<div style="font-size:10px;color:var(--gray-600);margin-top:4px">Sugerida por la IA: <b>'+_escPend(kwSug)+'</b></div>':'')+
+      '<div id="radar-kwmsg-'+g.id+'" style="font-size:11px;margin-top:6px"></div>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ── Keyword ─────────────────────────────────────────────────────────────
+   La tabla keywords es el registro de qué palabra está tomada y por qué. Una
+   keyword repetida en dos piezas rompe el ruteo: el prospecto escribe
+   RESGUARDO y no se sabe de qué video vino. */
+async function radarGuardarKeyword(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  const inp=document.getElementById('radar-kw-'+guionId);
+  const msg=document.getElementById('radar-kwmsg-'+guionId);
+  const btn=document.getElementById('radar-kwbtn-'+guionId);
+  const kw=((inp&&inp.value)||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const poner=function(txt,col){if(msg)msg.innerHTML='<span style="color:'+col+'">'+txt+'</span>';};
+  if(!kw){poner('Escribí la keyword','var(--st-atrasado)');return;}
+  if(g.keyword&&g.keyword.toUpperCase()===kw){poner('Ya es la keyword de este guion','var(--gray-400)');return;}
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';}
+  try{
+    const{data:ex,error:eSel}=await sb.from('keywords').select('keyword,uso,destino').eq('keyword',kw).limit(1);
+    if(eSel)throw eSel;
+    if(ex&&ex.length){
+      const k=ex[0];
+      poner('⛔ Ya usada en <b>'+_escPend(k.uso||'—')+'</b> → <b>'+_escPend(k.destino||'—')+'</b>','var(--st-atrasado)');
+      if(btn){btn.disabled=false;btn.style.opacity='1';}
+      return;
+    }
+    const{error:eIns}=await sb.from('keywords').insert({keyword:kw,uso:g.titulo||('Guion #'+g.id),destino:g.asignado_a||null,activo:true});
+    if(eIns)throw eIns;
+    const{error:eUpd}=await sb.from('radar_guiones').update({keyword:kw,updated_at:new Date().toISOString()}).eq('id',guionId);
+    if(eUpd)throw eUpd;
+    g.keyword=kw;
+    try{await registrarAuditoria('asignar_keyword','radar_guiones',guionId,{keyword:kw});}catch(e){}
+    poner('✅ Keyword <b>'+_escPend(kw)+'</b> reservada para este guion','var(--st-completo)');
+    toast('✅ Keyword asignada');
+  }catch(e){
+    poner('No se pudo guardar: '+_escPend((e&&e.message)||'error'),'var(--st-atrasado)');
+    if(btn){btn.disabled=false;btn.style.opacity='1';}
   }
 }
 /* v191 — Aviso en la ficha para la zona condicional. No bloquea: avisa. */
