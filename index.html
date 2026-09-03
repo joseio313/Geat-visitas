@@ -757,14 +757,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     </div>
 
     <div class="filter-bar">
-      <select id="filtro-persona" onchange="renderWeek();cargarMarcadoresDia()">
+      <select id="filtro-persona" onchange="onFiltroPersonaWeek()">
         <option value="">Todos los vendedores</option>
       </select>
       <select id="filtro-estado" onchange="renderWeek()">
         <option value="">Todos los estados</option>
       </select>
       <div class="date-range" id="week-label">—</div>
-      <div class="view-toggle">
+      <div class="view-toggle" id="week-view-toggle">
         <button class="active" onclick="setView('semana',this)">Semana</button>
         <button onclick="setView('mes',this)">Mes</button>
       </div>
@@ -790,8 +790,21 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       </div>
     </div>
     <div id="marcadores-por-vendedor" style="display:none;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:12px;margin-bottom:14px"></div>
-    <div class="week-grid" id="week-grid"></div>
-    <div class="legend" id="week-legend"></div>
+    <!-- v218 — el toggle SEMANA/MES ahora cambia la vista SIN salir de esta pantalla.
+         Antes setView('mes') hacía click en la pestaña "Vista mensual" y te sacaba de
+         Agenda semanal (el botón "Mes" ni siquiera quedaba activo). -->
+    <div id="ws-wrap">
+      <div class="week-grid" id="week-grid"></div>
+      <div class="legend" id="week-legend"></div>
+    </div>
+    <div id="wm-wrap" style="display:none">
+      <div class="month-total">
+        <div>Total actividades del mes:</div>
+        <div class="big" id="wm-total-count">—</div>
+      </div>
+      <div class="month-grid" id="wm-grid"></div>
+      <div class="legend" id="wm-legend"></div>
+    </div>
   </section>
 
   <!-- ══ SCREEN: MES ══ -->
@@ -1737,7 +1750,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='217';
+  var CURRENT_VERSION='218';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3226,16 +3239,55 @@ function switchTab(tab,screenId){
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
   if(screenId==='screen-month')renderMonth();
 }
+/* ── v218 · VISTA MENSUAL DENTRO DE AGENDA SEMANAL ──────────────────────
+   El toggle SEMANA/MES existía en la barra de filtros pero era falso: "Mes"
+   hacía click en la pestaña "Vista mensual" y te sacaba de Agenda semanal.
+   Ahora el mes se dibuja acá mismo (mismas visitas y tareas de agenda_personal,
+   mismo alcance por rol) y las flechas ‹ Hoy › navegan meses. */
+let _weekView='semana';
+let _weekMonthDate=new Date();
+
 function setView(v,btn){
-  if(v==='mes'){
-    document.querySelector('[onclick*="screen-month"]').click();
+  _weekView=(v==='mes')?'mes':'semana';
+  const tg=document.getElementById('week-view-toggle');
+  if(tg){
+    tg.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+    if(btn)btn.classList.add('active');
   }
+  const ws=document.getElementById('ws-wrap');
+  const wm=document.getElementById('wm-wrap');
+  const fe=document.getElementById('filtro-estado');
+  if(_weekView==='mes'){
+    if(ws)ws.style.display='none';
+    if(wm)wm.style.display='';
+    /* el filtro por estado solo aplica a la grilla semanal */
+    if(fe)fe.style.display='none';
+    _weekMonthDate=new Date(currentWeekStart.getFullYear(),currentWeekStart.getMonth(),1);
+    renderWeekMonth();
+  }else{
+    if(wm)wm.style.display='none';
+    if(ws)ws.style.display='';
+    if(fe)fe.style.display='';
+    renderWeek();
+  }
+}
+
+function onFiltroPersonaWeek(){
+  if(_weekView==='mes')renderWeekMonth(); else renderWeek();
+  cargarMarcadoresDia();
 }
 
 /* ════════════════════════════════════════
    SEMANA
 ════════════════════════════════════════ */
 function navWeek(dir){
+  /* v218 — en modo MES las mismas flechas navegan meses */
+  if(_weekView==='mes'){
+    if(dir===0){const h=new Date();_weekMonthDate=new Date(h.getFullYear(),h.getMonth(),1);}
+    else{_weekMonthDate=new Date(_weekMonthDate.getFullYear(),_weekMonthDate.getMonth()+dir,1);}
+    renderWeekMonth();
+    return;
+  }
   if(dir===0){currentWeekStart=getMonday(new Date());}
   else{currentWeekStart=addDays(currentWeekStart,dir*7);}
   renderWeek();
@@ -3267,6 +3319,9 @@ function dayCountPill(n){
          (over?'<div class="day-count-warn">SOBRECARGADO</div>':'');
 }
 async function renderWeek(){
+  /* v218 — punto único de delegación: los ~18 llamadores de renderWeek() (guardados,
+     refrescos post-agenda, switchTab) refrescan el mes si esa es la vista activa. */
+  if(_weekView==='mes')return renderWeekMonth();
   const weekEnd=addDays(currentWeekStart,7);
   const lbl=document.getElementById('week-label');
   const days=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -3419,14 +3474,34 @@ function navMonth(dir){
   renderMonth();
 }
 
-async function renderMonth(){
-  const y=currentMonthDate.getFullYear(),m=currentMonthDate.getMonth();
+/* v218 — el mismo render sirve a la pestaña "Vista mensual" y al modo MES de
+   Agenda semanal. Sin opts se comporta exactamente como antes. */
+function renderWeekMonth(){
+  return renderMonth({
+    ref:_weekMonthDate,
+    filtSel:'filtro-persona',
+    label:'week-label',
+    total:'wm-total-count',
+    grid:'wm-grid',
+    legend:'wm-legend'
+  });
+}
+
+async function renderMonth(opts){
+  const o=opts||{};
+  const refDate=o.ref||currentMonthDate;
+  const elLabel=o.label||'month-label';
+  const elTotal=o.total||'month-total-count';
+  const elGrid=o.grid||'month-grid';
+  const y=refDate.getFullYear(),m=refDate.getMonth();
   const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  document.getElementById('month-label').textContent=`${meses[m]} ${y}`;
+  const _lb=document.getElementById(elLabel);
+  if(_lb)_lb.textContent=`${meses[m]} ${y}`;
 
   const start=new Date(y,m,1);
   const end=new Date(y,m+1,1);
-  const filtP=document.getElementById('filtro-mes-persona').value;
+  const _fs=document.getElementById(o.filtSel||'filtro-mes-persona');
+  const filtP=_fs?_fs.value:'';
 
   /* v184 — criterio unificado con la vista semanal: activo=true (antes la mensual
      contaba también las actividades dadas de baja, por eso un mismo día daba 48 acá
@@ -3460,7 +3535,25 @@ async function renderMonth(){
     /* v149 defensivo: tarea abierta de lead cerrado no se muestra */
     acts=acts.filter(a=>a.completada||!a.lead_id||!/^cerrado_/.test(_estadoLeadMap[a.lead_id]||''));
   }
-  document.getElementById('month-total-count').textContent=acts.length;
+  const _tt=document.getElementById(elTotal);
+  if(_tt)_tt.textContent=acts.length;
+
+  /* v218 — leyenda de estados presentes en el mes (espejo de buildLegend) */
+  if(o.legend){
+    const lg=document.getElementById(o.legend);
+    if(lg){
+      const usados=new Set(acts.map(a=>a.tipo));
+      const items=itemsSeg.filter(s=>usados.has(s.nombre));
+      if(!items.length){lg.style.display='none';}
+      else{
+        lg.style.display='flex';
+        lg.innerHTML=`<div class="legend-title">Estados presentes este mes</div>`+
+          items.map(s=>`<div class="legend-item"><div class="legend-dot" style="background:${s.color_bg}"></div>${s.nombre}</div>`).join('')+
+          `<div class="legend-item"><div class="legend-dot" style="background:var(--st-completo)"></div>✓ Completado</div>`+
+          `<div class="legend-item"><div class="legend-dot" style="background:var(--st-atrasado)"></div>⚠️ Atrasado</div>`;
+      }
+    }
+  }
 
   // Agrupar por día
   const byDay={};
@@ -3509,11 +3602,20 @@ async function renderMonth(){
   for(let i=1;i<=remainder;i++){
     html+=`<div class="month-cell other-month"><div class="month-cell-num">${i}</div></div>`;
   }
-  document.getElementById('month-grid').innerHTML=html;
+  const _gr=document.getElementById(elGrid);
+  if(_gr)_gr.innerHTML=html;
 }
 
 function navWeekToDay(dateStr){
-  currentWeekStart=getMonday(new Date(dateStr));
+  /* v218 — new Date('YYYY-MM-DD') es medianoche UTC: en Bolivia (UTC-4) cae el día
+     anterior a las 20:00, y para un lunes getMonday devolvía la semana ANTERIOR.
+     Se arma la fecha con los componentes locales. */
+  const p=String(dateStr).split('-');
+  currentWeekStart=getMonday(new Date(+p[0],+p[1]-1,+p[2]));
+  if(_weekView==='mes'){
+    const b=document.querySelector('#week-view-toggle button');
+    setView('semana',b);
+  }
   document.querySelector('[onclick*="screen-week"]').click();
 }
 
