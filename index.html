@@ -1242,6 +1242,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <div id="lost-otro-wrap" style="display:none;margin-top:6px">
             <input class="form-control" type="text" id="lost-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off">
           </div>
+          <!-- v224 — respuesta de WhatsApp del guion que responde este motivo -->
+          <div id="lost-wa-wrap"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Nota adicional</label>
@@ -1428,6 +1430,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <div id="nl-perdido-otro-wrap" style="display:none;flex:0 0 100%">
           <input type="text" id="nl-perdido-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off" style="width:100%;box-sizing:border-box;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
         </div>
+        <div id="nl-perdido-wa-wrap" style="flex:0 0 100%"></div>
       </div>
     </div>
   </div>
@@ -1775,7 +1778,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='223';
+  var CURRENT_VERSION='224';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1903,6 +1906,7 @@ let _loginInit=null; // promise de initLogin — usado por checkPin para esperar
 let itemsSeg=[];
 let motivosPerdida=[];
 let zonasPrecio=[];   // v222 — catálogo de zonas_precio, ver _zonaDeLugar()
+let radarGuiones=[]; // v224 — guiones del Radar; se cargan para TODOS los roles porque la respuesta de WhatsApp vive en la ficha del lead
 let motivosGanado=[];
 let mediosDifusion=[];
 /* v185 — CAMPAÑA DE ORIGEN. 316 de 329 leads del último mes cayeron en
@@ -2941,7 +2945,7 @@ function attachPickerListeners(){
 
 async function loadCatalogs(){
   try{
-    const[seg,mPerd,mGan,medios,deptos,camp,zon]=await Promise.all([
+    const[seg,mPerd,mGan,medios,deptos,camp,zon,rgui]=await Promise.all([
       sb.from('items_seguimiento').select('*').order('orden'),
       sb.from('motivos_perdida').select('*').order('nombre'),
       sb.from('motivos_ganado').select('*').order('nombre'),
@@ -2954,7 +2958,10 @@ async function loadCatalogs(){
       /* v222 — zonas de precio. Se cargan con el resto del catálogo porque la
          ficha de CADA lead las necesita para mostrar la zona detectada: pedirlas
          por lead sería una consulta por apertura de ficha. */
-      sb.from('zonas_precio').select('*').order('codigo')
+      sb.from('zonas_precio').select('*').order('codigo'),
+      /* v224 — la captadora no ve el Radar pero sí la respuesta de WhatsApp
+         sugerida al marcar un motivo, así que el catálogo va para todos. */
+      sb.from('radar_guiones').select('id,motivo_id,titulo,keyword,respuesta_whatsapp,estado,activo').eq('activo',true)
     ]);
     itemsSeg=seg.data||[];
     motivosPerdida=mPerd.data||[];
@@ -2967,6 +2974,7 @@ async function loadCatalogs(){
     _deptosError=deptos.error?(deptos.error.message||'error'):(departamentos.length?'':'la tabla vino vacía');
     campanas=camp.data||[];
     zonasPrecio=zon.data||[];
+    radarGuiones=rgui.data||[];
     populateCatalogSelects();
   }catch(e){_deptosError=(e&&e.message)||'error al cargar catálogos';}
 }
@@ -3182,9 +3190,15 @@ async function _guardarCiudadFicha(leadId){
 }
 function _lostMotivoChange(sel,wrapId){
   const w=document.getElementById(wrapId);
-  if(!w)return;
-  /* v221 — el value del select ahora es motivos_perdida.id, no el nombre */
-  w.style.display=_motivoEsOtro(sel.value)?'block':'none';
+  if(w){
+    /* v221 — el value del select ahora es motivos_perdida.id, no el nombre */
+    w.style.display=_motivoEsOtro(sel.value)?'block':'none';
+  }
+  /* v224 — si ya hay un guion que responde este motivo, se ofrece su respuesta
+     de WhatsApp acá mismo. Para todos los roles. */
+  const waId=wrapId==='lost-otro-wrap'?'lost-wa-wrap':'nl-perdido-wa-wrap';
+  const wa=document.getElementById(waId);
+  if(wa)wa.innerHTML=sel.value?_radarWaHtml(sel.value):'';
 }
 function populateCatalogSelects(){
   // Filtro estado en semana
@@ -4410,7 +4424,10 @@ async function renderRadar(){
       const p=_radarFechaDia(g.publicado_el);
       return p&&p>=mesIni;
     }).length;
-    body.innerHTML=_radarCabecera(totalObj,enProduccion,pubMes,rRuido.count||0)+_radarLista();
+    /* v224 — el catálogo global (el que usa la ficha del lead para la respuesta
+       de WhatsApp) se mantiene al día con lo que acaba de leer el panel. */
+    radarGuiones=_radarGuiones;
+    body.innerHTML=_radarCabecera(totalObj,enProduccion,pubMes,rRuido.count||0)+_radarLista()+_radarEnProduccion();
   }catch(e){
     body.innerHTML='<div class="loading-state" style="color:var(--st-atrasado)">No se pudo cargar el radar: '+_escPend((e&&e.message)||'error')+'</div>';
   }
@@ -4657,7 +4674,13 @@ function radarVerGuion(guionId){
       (kwSug&&!g.keyword?'<div style="font-size:10px;color:var(--gray-600);margin-top:4px">Sugerida por la IA: <b>'+_escPend(kwSug)+'</b></div>':'')+
       '<div id="radar-kwmsg-'+g.id+'" style="font-size:11px;margin-top:6px"></div>'+
     '</div>'+
+    _radarBloqueAsignar(g)+
+    _radarBloqueEstado(g)+
+    '<div id="radar-circulo-'+g.id+'"></div>'+
   '</div>';
+  /* el cierre del círculo pide dos conteos a la base: solo se mide si el guion
+     ya está publicado */
+  if(g.estado==='publicado'&&g.publicado_el){try{radarCerrarCirculo(g.id);}catch(e){}}
 }
 
 /* ── Keyword ─────────────────────────────────────────────────────────────
@@ -4695,6 +4718,242 @@ async function radarGuardarKeyword(guionId){
   }catch(e){
     poner('No se pudo guardar: '+_escPend((e&&e.message)||'error'),'var(--st-atrasado)');
     if(btn){btn.disabled=false;btn.style.opacity='1';}
+  }
+}
+/* ── v224 · ASIGNAR, PRODUCIR Y CERRAR EL CÍRCULO ────────────────────────
+   Asignar un guion crea la tarea de grabación en la agenda de esa persona.
+   La fila NO lleva lead_id ni visita_nro a propósito: no es una visita, y sin
+   lead_id no la toca el trigger que exige un siguiente paso al completar una
+   tarea de un lead activo (v144). */
+function _radarColabsActivos(){
+  return (colaboradores||[]).filter(function(c){return c&&c.activo;});
+}
+function _radarBloqueAsignar(g){
+  const opts=_radarColabsActivos().map(function(c){
+    return '<option value="'+_escPend(c.nombre)+'"'+(g.asignado_a===c.nombre?' selected':'')+'>'+_escPend(c.nombre)+'</option>';
+  }).join('');
+  return '<div class="form-row" style="margin-top:10px">'+
+    '<div class="form-group">'+
+      '<label class="form-label">Asignar a</label>'+
+      '<select class="form-control" id="radar-asig-'+g.id+'" style="font-size:12px"><option value="">— Elegir —</option>'+opts+'</select>'+
+    '</div>'+
+    '<div class="form-group">'+
+      '<label class="form-label">📅 Fecha de grabación</label>'+
+      '<input class="form-control" type="date" id="radar-fecha-'+g.id+'" value="'+_escPend(g.fecha_grabacion||ymdLocal(addDays(new Date(),1)))+'" style="font-size:12px">'+
+    '</div>'+
+  '</div>'+
+  '<button type="button" class="btn-primary" style="font-size:11px" id="radar-asigbtn-'+g.id+'" onclick="radarAsignar('+g.id+')">🎬 '+(g.estado==='borrador'?'Asignar y crear tarea':'Reasignar')+'</button>';
+}
+function _radarBloqueEstado(g){
+  const b=[];
+  if(g.estado==='asignado')b.push('<button type="button" class="btn-ghost" style="font-size:11px" onclick="radarPasarEstado('+g.id+',\'grabado\')">🎥 Marcar grabado</button>');
+  if(g.estado==='grabado')b.push('<button type="button" class="btn-primary" style="font-size:11px" onclick="radarPublicar('+g.id+')">🚀 Marcar publicado</button>');
+  if(!b.length)return '';
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'+b.join('')+'</div>';
+}
+async function radarAsignar(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  const quien=((document.getElementById('radar-asig-'+guionId)||{}).value||'').trim();
+  const fecha=((document.getElementById('radar-fecha-'+guionId)||{}).value||'').trim();
+  const btn=document.getElementById('radar-asigbtn-'+guionId);
+  if(!quien){toast('Elegí a quién se le asigna','error');return;}
+  if(!fecha){toast('Poné la fecha de grabación','error');return;}
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Asignando...';}
+  /* 09:00 de Bolivia, igual que el resto de las tareas que crea el sistema */
+  const fp=_dtBoliviaToIso(fecha+'T09:00');
+  try{
+    const{error:eG}=await sb.from('radar_guiones').update({
+      asignado_a:quien,fecha_grabacion:fecha,estado:'asignado',updated_at:new Date().toISOString()
+    }).eq('id',guionId);
+    if(eG)throw eG;
+    const{error:eA}=await sb.from('agenda_personal').insert({
+      colaborador:quien,tipo:'grabacion',titulo:('Grabar: '+(g.titulo||'guion #'+g.id)).slice(0,200),
+      nota:('Guion del Radar de contenido #'+g.id+(g.keyword?'\nKeyword: '+g.keyword:'')).slice(0,2000),
+      fecha_programada:fp,completada:false,activo:true
+    });
+    if(eA)throw eA;
+    /* la keyword ya reservada pasa a apuntar a quien graba */
+    if(g.keyword){try{await sb.from('keywords').update({destino:quien}).eq('keyword',g.keyword);}catch(e){}}
+    g.asignado_a=quien;g.fecha_grabacion=fecha;g.estado='asignado';
+    try{await registrarAuditoria('asignar_guion_radar','radar_guiones',guionId,{asignado_a:quien,fecha_grabacion:fecha});}catch(e){}
+    toast('✅ Asignado a '+quien+' · tarea creada para el '+_fechaDiaTxt(fp));
+    try{await renderWeek();}catch(e){}
+    try{await cargarMarcadoresDia();}catch(e){}
+    await renderRadar();
+  }catch(e){
+    toast('No se pudo asignar: '+((e&&e.message)||'error'),'error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='🎬 Asignar y crear tarea';}
+  }
+}
+async function radarPasarEstado(guionId,estado){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  try{
+    const{error}=await sb.from('radar_guiones').update({estado:estado,updated_at:new Date().toISOString()}).eq('id',guionId);
+    if(error)throw error;
+    g.estado=estado;
+    try{await registrarAuditoria('estado_guion_radar','radar_guiones',guionId,{estado:estado});}catch(e){}
+    toast('✅ Guion marcado como '+estado);
+    await renderRadar();
+  }catch(e){toast('No se pudo cambiar el estado: '+((e&&e.message)||'error'),'error');}
+}
+async function radarPublicar(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  const cont=document.getElementById('radar-guion-'+g.motivo_id);
+  if(!cont)return;
+  const wrap=document.getElementById('radar-pub-'+guionId);
+  if(wrap){wrap.remove();return;}
+  const d=document.createElement('div');
+  d.id='radar-pub-'+guionId;
+  d.style.cssText='margin-top:10px;border:1px solid var(--gold);border-radius:8px;padding:10px';
+  d.innerHTML='<div class="form-group" style="margin:0">'+
+    '<label class="form-label">📅 ¿Qué día se publicó?</label>'+
+    '<input class="form-control" type="date" id="radar-pubfecha-'+guionId+'" value="'+ymdLocal(new Date())+'" style="font-size:12px">'+
+    '<div style="display:flex;gap:6px;margin-top:8px">'+
+      '<button type="button" class="btn-primary" style="font-size:11px" onclick="radarConfirmarPublicado('+guionId+')">Confirmar</button>'+
+      '<button type="button" class="btn-ghost" style="font-size:11px" onclick="radarPublicar('+guionId+')">Cancelar</button>'+
+    '</div>'+
+  '</div>';
+  cont.appendChild(d);
+}
+async function radarConfirmarPublicado(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g)return;
+  const f=((document.getElementById('radar-pubfecha-'+guionId)||{}).value||'').trim();
+  if(!f){toast('Poné la fecha de publicación','error');return;}
+  try{
+    const{error}=await sb.from('radar_guiones').update({estado:'publicado',publicado_el:f,updated_at:new Date().toISOString()}).eq('id',guionId);
+    if(error)throw error;
+    g.estado='publicado';g.publicado_el=f;
+    try{await registrarAuditoria('estado_guion_radar','radar_guiones',guionId,{estado:'publicado',publicado_el:f});}catch(e){}
+    toast('🚀 Guion publicado');
+    await renderRadar();
+  }catch(e){toast('No se pudo publicar: '+((e&&e.message)||'error'),'error');}
+}
+
+/* ── Cierre del círculo ──────────────────────────────────────────────────
+   Dos números para un guion publicado.
+
+   1) Leads que llegaron POR la keyword: NO SE PUEDE CALCULAR y se muestra "—".
+      No es una decisión de diseño, es que el dato no existe: leads no tiene
+      ninguna columna con el primer mensaje del prospecto (medido el 3-sep-2026:
+      las únicas candidatas son campana, campana_id, fuente_campana y notas).
+      leads.campana tiene 98 filas de 7.500 y sus valores son "Otro" (69),
+      "Vino solo" (25) y tres números; fuente_campana está en 0; notas es la
+      nota interna del vendedor y en la práctica dice siempre "LEAD LLEGO DE LA
+      PUBLICACION DE GEAT". Buscar la keyword ahí daría un número inventado.
+      Para que este número exista hay que capturar el primer mensaje entrante.
+
+   2) Variación del motivo: esa sí se calcula, con created_at (mismo eje que
+      toda la pantalla), 60 días después de publicado_el contra los 60 previos. */
+async function radarCerrarCirculo(guionId){
+  const g=(_radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  if(!g||!g.publicado_el)return;
+  const cont=document.getElementById('radar-circulo-'+guionId);
+  if(!cont)return;
+  cont.innerHTML='<div style="font-size:11px;color:var(--gray-400)"><span class="spin"></span> Midiendo...</div>';
+  try{
+    const pub=_radarFechaDia(g.publicado_el);
+    const post0=new Date(pub.getTime()), post1=new Date(pub.getTime()+60*86400000);
+    const pre0=new Date(pub.getTime()-60*86400000);
+    const[rPost,rPre]=await Promise.all([
+      sb.from('leads').select('id',{count:'exact',head:true}).eq('motivo_perdida_id',g.motivo_id)
+        .gte('created_at',post0.toISOString()).lt('created_at',post1.toISOString()),
+      sb.from('leads').select('id',{count:'exact',head:true}).eq('motivo_perdida_id',g.motivo_id)
+        .gte('created_at',pre0.toISOString()).lt('created_at',post0.toISOString())
+    ]);
+    const post=rPost.count||0, pre=rPre.count||0;
+    let variacion;
+    if(!pre&&!post)variacion='<span style="color:var(--gray-600)">sin datos en ninguna ventana</span>';
+    else if(!pre)variacion='<span style="color:var(--st-atrasado);font-weight:700">'+post+' donde antes no había ninguno</span>';
+    else{
+      const pct=Math.round((post-pre)/pre*100);
+      const col=pct>0?'var(--st-atrasado)':(pct<0?'var(--st-completo)':'var(--gray-400)');
+      variacion='<span style="color:'+col+';font-weight:700">'+(pct>0?'+':'')+pct+'%</span> <span style="color:var(--gray-400)">('+pre+' → '+post+')</span>';
+    }
+    const dias=Math.round((Date.now()-pub.getTime())/86400000);
+    cont.innerHTML='<div style="border-top:1px solid var(--gray-600);margin-top:10px;padding-top:10px">'+
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:7px">🔄 Cierre del círculo · publicado el '+_escPend(g.publicado_el)+' ('+dias+' días)</div>'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+        '<div style="min-width:190px">'+
+          '<div style="font-size:11px;color:var(--gray-400)">Leads llegados por la keyword</div>'+
+          '<div style="font-size:19px;font-weight:800;color:var(--gray-600)">—</div>'+
+          '<div style="font-size:9px;color:var(--gray-600);line-height:1.5;max-width:330px">No se puede medir: el CRM no guarda el primer mensaje del prospecto, y <code>leads.campana</code> está cargado en 98 de 7.500 leads con valores como "Otro" y "Vino solo". Para tener este número hay que capturar el mensaje entrante.</div>'+
+        '</div>'+
+        '<div style="min-width:190px">'+
+          '<div style="font-size:11px;color:var(--gray-400)">Este motivo, 60 días después vs 60 antes</div>'+
+          '<div style="font-size:19px;font-weight:800;margin-top:2px">'+variacion+'</div>'+
+          '<div style="font-size:9px;color:var(--gray-600)">leads perdidos por este motivo, por fecha de ingreso</div>'+
+        '</div>'+
+      '</div>'+
+      (dias<60?'<div style="font-size:10px;color:var(--gold);margin-top:7px">⏳ Todavía no pasaron los 60 días: la ventana posterior está incompleta.</div>':'')+
+    '</div>';
+  }catch(e){
+    cont.innerHTML='<div style="font-size:11px;color:var(--st-atrasado)">No se pudo medir: '+_escPend((e&&e.message)||'error')+'</div>';
+  }
+}
+
+/* ── Lista al pie: qué hay en producción ─────────────────────────────── */
+function _radarEnProduccion(){
+  const gs=(_radarGuiones||[]).filter(function(g){return g.estado==='asignado'||g.estado==='grabado';});
+  if(!gs.length)return '';
+  return '<div class="admin-section" style="margin-top:18px">'+
+    '<div class="admin-section-title">🎬 En producción ('+gs.length+')</div>'+
+    gs.map(function(g){
+      const e=_RADAR_ESTADO[g.estado]||['?','var(--gray-400)'];
+      const m=_motivoById(g.motivo_id);
+      return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--gray-800)">'+
+        '<span style="font-size:10px;font-weight:700;border:1px solid '+e[1]+';color:'+e[1]+';border-radius:9px;padding:2px 9px">'+e[0]+'</span>'+
+        '<span style="font-size:12px;font-weight:700;flex:1;min-width:170px">'+_escPend(g.titulo||'—')+'</span>'+
+        '<span style="font-size:10px;color:var(--gray-400)">👤 '+_escPend(g.asignado_a||'sin asignar')+'</span>'+
+        '<span style="font-size:10px;color:var(--gray-400)">📅 '+_escPend(g.fecha_grabacion||'sin fecha')+'</span>'+
+        (g.keyword?'<span style="font-size:9px;color:var(--gold)">🔑 '+_escPend(g.keyword)+'</span>':'')+
+        (m?'<span style="font-size:9px;color:var(--gray-600)">'+_escPend(m.nombre)+'</span>':'')+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+
+/* ── Respuesta de WhatsApp en la ficha del lead ──────────────────────────
+   Cuando la captadora elige un motivo que ya tiene guion con respuesta, se le
+   ofrece el texto listo para copiar. Visible para TODOS los roles: es la razón
+   de ser del guion, que la respuesta llegue al prospecto.
+   radar_guiones se carga en loadCatalogs por eso mismo — la captadora no ve el
+   Radar pero necesita esta respuesta. */
+let _radarWaTexto='';
+function _radarRespuestaMotivo(motivoId){
+  const n=parseInt(motivoId,10);
+  if(!n)return null;
+  return (radarGuiones||[]).filter(function(g){
+    return g.motivo_id===n&&g.activo!==false&&(g.respuesta_whatsapp||'').trim();
+  })[0]||null;
+}
+function _radarWaHtml(motivoId){
+  const g=_radarRespuestaMotivo(motivoId);
+  if(!g)return '';
+  return '<div style="margin-top:8px;border:1px solid var(--st-completo);background:rgba(46,204,113,0.06);border-radius:8px;padding:9px 11px">'+
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--st-completo);margin-bottom:5px">💬 Respuesta sugerida para este motivo</div>'+
+    '<div style="font-size:12px;line-height:1.55;white-space:pre-wrap;color:var(--gray-100)">'+_escPend(g.respuesta_whatsapp)+'</div>'+
+    '<button type="button" class="btn-ghost" style="font-size:10px;margin-top:7px" onclick="radarCopiarWa('+g.id+')">📋 Copiar</button>'+
+    '<div style="font-size:9px;color:var(--gray-600);margin-top:5px">Del guion "'+_escPend(g.titulo||'—')+'"'+(g.keyword?' · keyword '+_escPend(g.keyword):'')+'</div>'+
+  '</div>';
+}
+async function radarCopiarWa(guionId){
+  const g=(radarGuiones||[]).filter(function(x){return x.id===guionId;})[0];
+  const txt=(g&&g.respuesta_whatsapp)||'';
+  if(!txt){toast('Sin respuesta para copiar','error');return;}
+  try{
+    await navigator.clipboard.writeText(txt);
+    toast('✅ Respuesta copiada');
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=txt;
+    ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');toast('✅ Respuesta copiada');}
+    catch(_){toast('No se pudo copiar','error');}
+    document.body.removeChild(ta);
   }
 }
 /* v191 — Aviso en la ficha para la zona condicional. No bloquea: avisa. */
