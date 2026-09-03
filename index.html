@@ -121,6 +121,12 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .nav-tab{padding:12px 16px;color:var(--gray-400);cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;border-bottom:2px solid transparent;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.2s}
 .nav-tab:hover{color:var(--white)}
 .nav-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+/* v226 — badges por panel: rojo = fallo/vencido, amarillo = falta cargar */
+.tab-badges{display:inline-flex;gap:4px;margin-left:7px;vertical-align:1px}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:16px;padding:0 5px;border-radius:8px;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;border:none}
+.tab-badge.bdg-rojo{background:var(--st-atrasado);color:var(--white)}
+.tab-badge.bdg-ama{background:var(--gold);color:var(--black)}
+.tab-badge:hover{filter:brightness(1.18)}
 
 /* SCREENS */
 .screen{display:none;padding:16px;max-width:1400px;margin:0 auto}
@@ -725,7 +731,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
   <!-- TABS -->
   <nav class="nav-tabs">
-    <div class="nav-tab active" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
+    <div class="nav-tab active" id="tab-week" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
     <!-- v225 — "🗓️ Vista mensual" y "📥 Sin asignar" salieron de la barra (el CEO lo
          confirmo). El mes vive dentro de Agenda semanal desde v218 (toggle MES) y
          "Sin asignar" era solo monitoreo desde v220. Las <section> y sus funciones
@@ -1781,7 +1787,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='225';
+  var CURRENT_VERSION='226';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2935,6 +2941,10 @@ async function initApp(){
   }
   /* v159 — Parte del Día: solo admin. Para el resto ni se consulta. */
   if(cu.rol==='admin')renderParteDia();
+  /* v226 — badges de la barra. Va al final: necesita los catálogos cargados
+     (zonasPrecio para el matcher, motivosPerdida para el Radar) y las pestañas
+     ya mostradas/ocultadas por startApp. */
+  refrescarBadges();
 }
 
 function attachPickerListeners(){
@@ -3350,6 +3360,446 @@ function switchTab(tab,screenId){
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
   /* v225 — se quitó el `if(screenId==='screen-month')renderMonth()`: esa pestaña
      ya no existe y el mes lo dibuja renderWeek() cuando _weekView==='mes'. */
+  /* v226 — los badges de la barra se recalculan al cambiar de pestaña */
+  refrescarBadges();
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v226 · BADGES POR PANEL                                              ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Cada pestaña de la barra muestra hasta dos números al lado del nombre:
+     🔴 rojo     = algo falló o venció
+     🟡 amarillo = algo falta cargar
+   En 0 no se dibuja nada. Las definiciones son las que pidió el CEO, ni una más.
+
+   REGLAS QUE SE RESPETAN (y por qué):
+   1. Todo conteo va con {count:'exact',head:true}: son números, no filas.
+      agenda_personal tiene 5.584 filas y leads 7.4k — traerlas chocaría contra
+      el corte de 1000 de PostgREST (ver v195). La ÚNICA excepción es el badge
+      de Precios por zona: el matcher de v222 (_zonaDeLugar) es JavaScript y no
+      se puede expresar en el filtro, así que ahí sí se traen filas — son 13 hoy
+      y va con .limit(500) de cinturón.
+   2. Se calculan al cargar la app (final de initApp) y en cada switchTab.
+      SIN polling: no hay setInterval en ningún lado de este bloque.
+   3. Respetan el rol: solo se calcula el badge de una pestaña que el usuario
+      puede abrir (_puedeVerPantalla + pestaña visible), y el conteo va acotado
+      a su alcance — una captadora ve SUS visitas vencidas, no las del equipo.
+   4. Gerencia y Cobranzas cuentan CANTIDADES. Ningún badge muestra un monto.
+   5. Todo con America/La_Paz: los cortes de día salen de ymdLocal() y del
+      offset -04:00, nunca de toISOString().slice(0,10) (ver CLAUDE.md).
+
+   LO QUE NO SE PUDO CALCULAR:
+   · Admin 🟡 "PIN sin rotar hace +90 días" — NO EXISTE la columna. colaboradores
+     tiene (id,nombre,rol,pin,activo,created_at,cargo,email,telefono,
+     puede_subir_propuestas,asistente_de,es_socio) y no hay fecha de rotación en
+     ninguna tabla del proyecto. El badge queda sin definir hasta que exista.
+   · Reclutamiento 🟡 solo aparece DESPUÉS de desbloquear el panel con el PIN:
+     cv_postulaciones tiene RLS solo para 'authenticated' y todo pasa por
+     geat-cv-panel, que exige el PIN de 4 dígitos (no el token de sesión). Sin
+     PIN en memoria no hay forma de contar desde el front. */
+
+const BDG_RADAR_TOP=5;          /* "solo el top 5 de la lista" */
+const BDG_INICIAL_MIN_PCT=0.40; /* "inicial cobrado < 40% del contrato" */
+const BDG_ZONA_MAX=500;         /* tope de filas del único badge que trae filas */
+
+let _bdgCorriendo=false;
+let _bdgCobCache=null;          /* una sola llamada a geat-cobranzas por refresco */
+let _zonaSinMatchLista=[];      /* lo que cuenta el badge de Precios por zona */
+
+async function _bdgN(q){
+  const{count,error}=await q;
+  if(error)throw error;
+  return count||0;
+}
+/* Arranque del día boliviano en instante UTC — mismo cálculo que el Parte del Día. */
+function _bdgInicioHoyIso(){return new Date(ymdLocal(new Date())+'T00:00:00-04:00').toISOString();}
+
+/* ── ALCANCE POR ROL ─────────────────────────────────────────────────────
+   Mismo criterio que renderWeek(): admin y commercial_lead ven todo, el resto
+   pasa por _filtrarAgendaVisible (sus filas + las que generó como captador).
+   OJO: eso agrega un `or=`. Probado contra PostgREST — dos `or=` en la misma
+   consulta se combinan con AND (medido: 428 ∩ 2958 = 170 filas). */
+function _bdgAgendaScope(q){
+  if(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'))return q;
+  return _filtrarAgendaVisible(q);
+}
+/* Para leads: los jefes ven todo, el resto solo lo suyo (captador o cerrador,
+   igual que esLeadPropio). Comillas dobles porque los nombres llevan espacio. */
+function _bdgLeadsScope(q){
+  if(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'))return q;
+  const nombres=(cu&&cu.asistente_de)?[cu.nombre,cu.asistente_de]:[(cu&&cu.nombre)||''];
+  const lista='("'+nombres.join('","')+'")';
+  return q.or('captador.in.'+lista+',cerrador.in.'+lista);
+}
+
+/* ── AGENDA SEMANAL ──────────────────────────────────────────────────────
+   🔴 Mismo criterio que "Visitas vencidas sin resultado" del Parte del Día:
+   se reusa la MISMA constante PD_DIAS_VISITA_VENCIDA para que no se puedan
+   despegar. Diferencia deliberada: el Parte lee leads.visita_fecha y acá se
+   lee agenda_personal.fecha_programada, que es la fila que de verdad se
+   reprograma (v217 dejó leads.visita_fecha vieja).
+   "Sin resultado" son las dos formas que hay en la base: NULL (199 filas) y
+   cadena vacía (229) — por eso el or, no un solo .is(null).
+   🟡 Tareas = todo lo que NO es visita, para no contar dos veces la misma fila. */
+async function _bdgWeekRojo(){
+  const corte=new Date(Date.now()-PD_DIAS_VISITA_VENCIDA*86400000).toISOString();
+  return _bdgN(_bdgAgendaScope(
+    sb.from('agenda_personal').select('id',{count:'exact',head:true})
+      .eq('activo',true).eq('completada',false)
+      .ilike('tipo','%visita%')
+      .lt('fecha_programada',corte)
+      .or('nota_resultado.is.null,nota_resultado.eq.')));
+}
+async function _bdgWeekAma(){
+  /* agenda_personal.tipo no tiene NULL (0 de 5.584), así que el .not(ilike) no
+     se come filas por ese lado. */
+  return _bdgN(_bdgAgendaScope(
+    sb.from('agenda_personal').select('id',{count:'exact',head:true})
+      .eq('activo',true).eq('completada',false)
+      .not('tipo','ilike','%visita%')
+      .lt('fecha_programada',_bdgInicioHoyIso())));
+}
+
+/* ── REPORTES ────────────────────────────────────────────────────────────
+   🟡 Los perdidos que quedaron con el texto viejo y sin motivo_perdida_id: son
+   los que el Radar no puede clasificar (v221 pasó el id a fuente de verdad). */
+async function _bdgReportesAma(){
+  return _bdgN(_bdgLeadsScope(
+    sb.from('leads').select('id',{count:'exact',head:true})
+      .eq('estado','cerrado_perdido')
+      .is('motivo_perdida_id',null)
+      .not('motivo_perdida','is',null)
+      .neq('motivo_perdida','')));
+}
+
+/* ── ADMIN ───────────────────────────────────────────────────────────────
+   🔴 Dos cosas sumadas, las dos "algo falló":
+      · grabaciones con audio en el bucket y sin transcribir — mismo criterio
+        que el banner de recuperables de v215 (_grabDetectarRecuperables):
+        estado interrumpida|descartada y sin transcripción.
+      · leads activos sin captador — el conteo que antes vivía en la pestaña
+        "Sin asignar", que v225 sacó de la barra.
+   La pantalla es admin-only, así que no lleva alcance por rol. */
+async function _bdgAdminRojo(){
+  const[g,l]=await Promise.all([
+    _bdgN(sb.from('grabaciones').select('id',{count:'exact',head:true})
+      .eq('activo',true).is('transcripcion',null).not('audio_path','is',null)
+      .in('estado',['interrumpida','descartada'])),
+    _bdgN(sb.from('leads').select('id',{count:'exact',head:true})
+      .not('estado','in','(cerrado_perdido,cerrado_ganado)')
+      .not('archivado','is',true)
+      .or('captador.is.null,captador.eq.'))
+  ]);
+  return g+l;
+}
+
+/* ── COBRANZAS / GERENCIA — una sola lectura compartida ──────────────────
+   cobranza_contratos y pagos_cliente están cerradas a anon desde v201: todo
+   pasa por geat-cobranzas, que exige token con rol=admin. Las dos pantallas
+   que usan estos badges son admin-only, así que la puerta es la correcta.
+   El resultado se cachea por refresco para no llamar tres veces. */
+async function _bdgCob(){
+  if(_bdgCobCache)return _bdgCobCache;
+  const r=await _cobCallOk({action:'listar'});
+  _bdgCobCache={contratos:r.contratos||[],pagos:r.pagos||[]};
+  /* _cobEstadoHito → _cobFechaAviso lee el global _cobPagos para los contratos
+     v173 (esquema 60/120 días): hay que dejarlo cargado. Son los mismos datos
+     que usaría el panel, así que sobreescribirlo no cambia nada. */
+  _cobContratos=_bdgCobCache.contratos;
+  _cobPagos=_bdgCobCache.pagos;
+  return _bdgCobCache;
+}
+function _bdgCobrado(d,c){
+  return d.pagos.filter(function(p){return p.contrato_id===c.id&&p.activo!==false&&_cobEsCobrado(p);})
+                .reduce(function(s,p){return s+(Number(p.monto_bs)||0);},0);
+}
+/* 🔴 Cuotas con fecha vencida y saldo > 0. El "vencido" lo dice la MISMA
+   función del panel (_cobEstadoHito): así una fecha estimada nunca cuenta como
+   vencida, que es la corrección de v179. */
+async function _bdgCobRojo(){
+  const d=await _bdgCob();
+  let n=0;
+  d.contratos.forEach(function(c){
+    if(c.activo===false)return;
+    d.pagos.forEach(function(p){
+      if(p.contrato_id!==c.id||p.activo===false)return;
+      if(!(Number(p.monto_bs)>0))return;
+      if(_cobEstadoHito(p,c).cod==='vencido')n++;
+    });
+  });
+  return n;
+}
+/* 🟡 Contratos de alta automática que nadie confirmó todavía (v181). */
+async function _bdgCobAma(){
+  const d=await _bdgCob();
+  return d.contratos.filter(function(c){return c.activo!==false&&!c.revisado;}).length;
+}
+/* 🔴 Gerencia: cierres ganados sin monto o sin m². El conteo lo hace
+   geat-montos (action 'cierres_sin_dato'): leads.monto_contrato está FUERA del
+   grant de anon desde v203, así que ni se puede filtrar por esa columna desde
+   el front. Devuelve el número pelado, nunca importes. */
+async function _bdgGerRojo(){
+  const r=await _montosCall({action:'cierres_sin_dato'});
+  return Number(r.faltan)||0;
+}
+/* 🟡 Gerencia: contratos donde lo cobrado hasta hoy no llega al 40% del total.
+   INTERPRETACIÓN: "inicial cobrado" se lee como el acumulado ya cobrado del
+   contrato, no como una cuota puntual — pagos_cliente no marca cuál es "la
+   inicial" de forma confiable en los contratos migrados. Es un CONTEO de
+   contratos; el porcentaje se compara y se descarta, no se muestra. */
+async function _bdgGerAma(){
+  const d=await _bdgCob();
+  let n=0;
+  d.contratos.forEach(function(c){
+    if(c.activo===false)return;
+    const tot=Number(c.precio_total_bs)||0;
+    if(!(tot>0))return;
+    if(_bdgCobrado(d,c)<tot*BDG_INICIAL_MIN_PCT)n++;
+  });
+  return n;
+}
+
+/* ── PRECIOS POR ZONA ────────────────────────────────────────────────────
+   🟡 Leads activos con "Lugar terreno" cargado que el matcher de v222 no cae
+   en ninguna zona. Único badge que trae filas (el matcher es JS, ver arriba).
+   Sin match NO es "fuera de cobertura": es una localidad que nadie clasificó,
+   y esa es justo la carga que falta. */
+async function _bdgZonasAma(){
+  _zonaSinMatchLista=[];
+  if(!(zonasPrecio||[]).length)return 0;
+  const{data,error}=await sb.from('leads').select('id,nombre,ind_lugar_terreno')
+    .not('ind_lugar_terreno','is',null).neq('ind_lugar_terreno','')
+    .not('estado','in','(cerrado_perdido,cerrado_ganado)')
+    .not('archivado','is',true)
+    .order('id',{ascending:false}).limit(BDG_ZONA_MAX);
+  if(error)throw error;
+  _zonaSinMatchLista=(data||[]).filter(function(l){
+    return String(l.ind_lugar_terreno||'').trim()&&!_zonaDeLugar(l.ind_lugar_terreno);
+  });
+  return _zonaSinMatchLista.length;
+}
+
+/* ── RADAR DE CONTENIDO ──────────────────────────────────────────────────
+   🔴 Guiones asignados cuya fecha de grabación ya pasó: se comprometió un día
+      y no se grabó. fecha_grabacion es `date`, se compara con ymdLocal().
+   🟡 De las objeciones reales del período, cuántas del TOP 5 no tienen guion.
+      Un head:true por motivo (son 10) en vez de traer las 328 filas. */
+function _bdgRadarGuiones(){
+  return (_radarGuiones&&_radarGuiones.length)?_radarGuiones:(radarGuiones||[]);
+}
+async function _bdgRadarRojo(){
+  return _bdgN(sb.from('radar_guiones').select('id',{count:'exact',head:true})
+    .eq('activo',true).eq('estado','asignado')
+    .lt('fecha_grabacion',ymdLocal(new Date())));
+}
+async function _bdgRadarAma(){
+  const objs=_radarMotivosObjecion();
+  if(!objs.length)return 0;
+  const desde=_radarDesde(_radarPeriodo);
+  const ns=await Promise.all(objs.map(function(m){
+    return _bdgN(sb.from('leads').select('id',{count:'exact',head:true})
+      .eq('motivo_perdida_id',m.id).gte('created_at',desde));
+  }));
+  const gs=_bdgRadarGuiones();
+  /* Mismo orden que _radarMotivos en renderRadar: n desc y nombre como desempate. */
+  return objs.map(function(m,i){return{m:m,n:ns[i]};})
+    .sort(function(a,b){return b.n-a.n||a.m.nombre.localeCompare(b.m.nombre,'es');})
+    .slice(0,BDG_RADAR_TOP)
+    .filter(function(t){
+      if(!(t.n>0))return false;
+      return !gs.filter(function(g){return g.motivo_id===t.m.id;}).length;
+    }).length;
+}
+
+/* ── RECLUTAMIENTO ───────────────────────────────────────────────────────
+   🟡 Postulantes en etapa 'nuevo' (los que nadie evaluó todavía: el primer
+   estado de _CV_ETAPAS).
+   cv_postulaciones está cerrada a anon (RLS solo 'authenticated'), así que el
+   único camino es geat-cv-panel, que pide el PIN de 4 dígitos y NO el token de
+   sesión. Ese PIN existe en memoria (_cvPin) cuando el admin entró tipeándolo:
+   checkPin lo guarda para esto mismo, y renderReclutamiento ya abre el panel
+   sin volver a pedirlo en ese caso. Así que acá se hace la misma llamada que
+   haría el panel, UNA sola vez por sesión, y el resultado queda en _cvData —
+   o sea que además el panel abre instantáneo después.
+   Si la sesión se restauró por token no hay PIN: el badge no aparece hasta que
+   el CEO entre a Reclutamiento y lo tipee. */
+let _bdgRecIntentado=false;
+async function _bdgRecAma(){
+  if((!_cvData||!Array.isArray(_cvData.cvs))&&_cvPin&&!_bdgRecIntentado){
+    _bdgRecIntentado=true;
+    const r=await _cvCall({pin:_cvPin});
+    if(r&&r.ok)_cvData=r;
+  }
+  if(!_cvData||!Array.isArray(_cvData.cvs))return 0;
+  return _cvData.cvs.filter(function(c){return (c.estado||'nuevo')==='nuevo';}).length;
+}
+
+/* ── NAVEGACIÓN AL TOCAR UN BADGE ────────────────────────────────────────
+   Abre la pestaña y, si el panel tiene un filtro que exprese lo que el badge
+   cuenta, lo deja aplicado. Donde el panel no tiene filtro (Agenda semanal,
+   Reportes) se abre la pestaña y se lleva al bloque que lista esas mismas
+   filas cuando existe. */
+function _bdgIrPestana(tabId){
+  const t=document.getElementById(tabId);
+  if(!t||t.style.display==='none')return false;
+  t.click();
+  return true;
+}
+/* Los render de panel son async: se espera a que el nodo aparezca y se actúa.
+   12 intentos de 250ms y se rinde — acotado a propósito, no es polling. */
+function _bdgAlAparecer(id,fn,intentos){
+  const n=(intentos==null)?12:intentos;
+  const el=document.getElementById(id);
+  if(el){try{fn(el);}catch(e){}return;}
+  if(n<=0)return;
+  setTimeout(function(){_bdgAlAparecer(id,fn,n-1);},250);
+}
+function _bdgScroll(id){
+  _bdgAlAparecer(id,function(el){el.scrollIntoView({behavior:'smooth',block:'start'});});
+}
+/* Agenda semanal: el panel filtra por persona y por tipo, no por "vencido", así
+   que el badge solo abre la pestaña.
+   A PROPÓSITO no se abre el detalle del Parte del Día aunque exista y liste algo
+   parecido: son números distintos y ponerlos juntos confunde.
+     · "Visitas vencidas sin resultado" del Parte cuenta LEADS por
+       leads.visita_fecha; el badge cuenta FILAS de agenda_personal por
+       fecha_programada, que es lo que de verdad se reprograma (v217 dejó
+       leads.visita_fecha vieja). Hoy: 36 en el Parte, 42 en el badge.
+     · "Tareas atrasadas del equipo" del Parte incluye las visitas; el badge
+       amarillo las excluye para no contarlas dos veces (101 vs 57). */
+function _bdgIrWeek(){
+  _bdgIrPestana('tab-week');
+  setView('semana',document.querySelector('#week-view-toggle button'));
+  window.scrollTo(0,0);
+}
+
+/* ── DEFINICIONES ────────────────────────────────────────────────────────
+   Una fila por pestaña. `rojo`/`ama` en null = ese badge no existe para esa
+   pestaña (el guion del CEO lo deja en "—", o la columna no existe).
+
+   Se arman LAZY, la primera vez que se piden: la tabla cita
+   PD_DIAS_VISITA_VENCIDA, que es un const declarado mucho más abajo en el
+   archivo. Armarla al evaluar el script tiraba ReferenceError por TDZ y se
+   caía la app entera antes de pintar nada. */
+let _BADGE_DEFS=null;
+function _bdgDefs(){
+  if(_BADGE_DEFS)return _BADGE_DEFS;
+  _BADGE_DEFS=[
+  {k:'week',   tabId:'tab-week',           screen:'screen-week',
+   rojo:_bdgWeekRojo, ama:_bdgWeekAma,
+   tRojo:'Visitas vencidas sin resultado (+'+PD_DIAS_VISITA_VENCIDA+' días)',
+   tAma:'Tareas atrasadas sin completar',
+   irRojo:_bdgIrWeek,
+   irAma:_bdgIrWeek},
+
+  {k:'reports',tabId:'tab-reports',        screen:'screen-reports',
+   rojo:null, ama:_bdgReportesAma,
+   tAma:'Leads perdidos con motivo viejo y sin motivo_perdida_id',
+   irAma:function(){_bdgIrPestana('tab-reports');}},
+
+  {k:'admin',  tabId:'tab-admin',          screen:'screen-admin',
+   rojo:_bdgAdminRojo, ama:null,
+   tRojo:'Grabaciones con audio sin procesar + leads activos sin captador',
+   irRojo:function(){
+     _bdgIrPestana('tab-admin');
+     _bdgAlAparecer('grab-fil-estado',function(el){
+       el.value='interrumpida';
+       try{_grabFiltroCambio();}catch(e){}
+       _bdgScroll('grab-fil-estado');
+     });
+   }},
+
+  {k:'gerencia',tabId:'tab-gerencia',      screen:'screen-gerencia',
+   rojo:_bdgGerRojo, ama:_bdgGerAma,
+   tRojo:'Cierres ganados sin monto o sin m² cargados',
+   tAma:'Contratos con menos del '+Math.round(BDG_INICIAL_MIN_PCT*100)+'% cobrado',
+   irRojo:function(){_bdgIrPestana('tab-gerencia');_bdgScroll('ger-historicos');},
+   irAma:function(){_bdgIrPestana('tab-gerencia');}},
+
+  {k:'cobranzas',tabId:'tab-cobranzas',    screen:'screen-cobranzas',
+   rojo:_bdgCobRojo, ama:_bdgCobAma,
+   tRojo:'Cuotas vencidas con saldo pendiente',
+   tAma:'Contratos sin revisar',
+   irRojo:function(){_bdgIrPestana('tab-cobranzas');_bdgScroll('cob-sec-tocan');},
+   irAma:function(){_bdgIrPestana('tab-cobranzas');_bdgScroll('cob-sec-cron');}},
+
+  {k:'zonas',  tabId:'tab-zonas',          screen:'screen-zonas',
+   rojo:null, ama:_bdgZonasAma,
+   tAma:'Lugares de terreno sin zona detectada',
+   irAma:function(){_bdgIrPestana('tab-zonas');_bdgScroll('zona-sinmatch');}},
+
+  {k:'radar',  tabId:'tab-radar',          screen:'screen-radar',
+   rojo:_bdgRadarRojo, ama:_bdgRadarAma,
+   tRojo:'Guiones asignados con la fecha de grabación pasada',
+   tAma:'Objeciones del top '+BDG_RADAR_TOP+' sin guion',
+   irRojo:function(){_bdgIrPestana('tab-radar');_bdgScroll('radar-produccion');},
+   irAma:function(){_bdgIrPestana('tab-radar');}},
+
+  {k:'reclutamiento',tabId:'tab-reclutamiento',screen:'screen-reclutamiento',
+   rojo:null, ama:_bdgRecAma,
+   tAma:'Postulantes sin evaluar',
+   irAma:function(){
+     _cvFilEstado='nuevo';
+     _bdgIrPestana('tab-reclutamiento');
+   }}
+  ];
+  return _BADGE_DEFS;
+}
+
+/* ── PINTADO ─────────────────────────────────────────────────────────────
+   El span de badges se crea una sola vez por pestaña y después solo se le
+   cambia el contenido: así el texto del nombre nunca se toca. */
+function _bdgHost(tabId){
+  const t=document.getElementById(tabId);
+  if(!t)return null;
+  let host=t.querySelector('.tab-badges');
+  if(!host){
+    host=document.createElement('span');
+    host.className='tab-badges';
+    t.appendChild(host);
+  }
+  return host;
+}
+function _bdgPintar(def,rojo,ama){
+  const host=_bdgHost(def.tabId);
+  if(!host)return;
+  let h='';
+  if(rojo>0)h+='<span class="tab-badge bdg-rojo" title="'+_escPend(def.tRojo||'')+'" '+
+    'onclick="event.stopPropagation();_bdgClick(\''+def.k+'\',\'rojo\')">'+rojo+'</span>';
+  if(ama>0)h+='<span class="tab-badge bdg-ama" title="'+_escPend(def.tAma||'')+'" '+
+    'onclick="event.stopPropagation();_bdgClick(\''+def.k+'\',\'ama\')">'+ama+'</span>';
+  host.innerHTML=h;
+}
+function _bdgClick(k,cual){
+  const def=_bdgDefs().filter(function(d){return d.k===k;})[0];
+  if(!def)return;
+  const fn=(cual==='rojo')?def.irRojo:def.irAma;
+  if(fn)fn(); else _bdgIrPestana(def.tabId);
+}
+
+/* ── REFRESCO ────────────────────────────────────────────────────────────
+   Al cargar la app y en cada cambio de pestaña. Un solo pase a la vez: si el
+   usuario salta entre pestañas, el pase en curso ya trae los números.
+   Cada contador va en su propio try/catch: un panel que falla (403, columna
+   fuera del grant) apaga SU badge, no los ocho. */
+async function refrescarBadges(){
+  if(!cu||_bdgCorriendo)return;
+  _bdgCorriendo=true;
+  _bdgCobCache=null;
+  try{
+    await Promise.all(_bdgDefs().map(async function(def){
+      const tab=document.getElementById(def.tabId);
+      if(!tab||tab.style.display==='none'||!_puedeVerPantalla(def.screen)){
+        const host=tab?tab.querySelector('.tab-badges'):null;
+        if(host)host.innerHTML='';
+        return;
+      }
+      let rojo=0,ama=0;
+      if(def.rojo){try{rojo=await def.rojo();}catch(e){rojo=0;}}
+      if(def.ama){try{ama=await def.ama();}catch(e){ama=0;}}
+      _bdgPintar(def,rojo,ama);
+    }));
+  }finally{_bdgCorriendo=false;}
 }
 /* ── v218 · VISTA MENSUAL DENTRO DE AGENDA SEMANAL ──────────────────────
    El toggle SEMANA/MES existía en la barra de filtros pero era falso: "Mes"
@@ -4251,7 +4701,7 @@ async function renderZonas(){
         ' <button type="button" class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:6px" onclick="_zonaPendiente=&quot;&quot;;renderZonas()">Descartar</button>'+
       '</div>'
     : '';
-  body.innerHTML=aviso+
+  body.innerHTML=aviso+_zonaSinMatchHtml()+
     '<div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;line-height:1.6">'+
       'El recargo se aplica según <b>dónde está el terreno</b> (campo "Lugar terreno" de la indagación), no según la ciudad del cliente: un cliente de Santa Cruz puede tener el terreno en Yapacaní. '+
       'La ficha de cada lead muestra la zona detectada. Una zona <b>no cotizable</b> dispara el aviso de fuera de cobertura.'+
@@ -4261,6 +4711,29 @@ async function renderZonas(){
     const el=document.getElementById('zona-nueva-loc-'+zonasPrecio[0].id);
     if(el){el.value=_zonaPendiente;}
   }
+}
+/* v226 — lo que cuenta el badge amarillo de la barra: leads activos cuyo
+   "Lugar terreno" el matcher no pudo clasificar. _zonaSinMatchLista la llena
+   _bdgZonasAma(); si el badge nunca corrió (o da 0) este bloque no sale. */
+function _zonaSinMatchHtml(){
+  const L=_zonaSinMatchLista||[];
+  if(!L.length)return '';
+  const filas=L.slice(0,40).map(function(l){
+    return '<div style="display:flex;gap:10px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--gray-800);font-size:12px">'+
+      '<span style="color:var(--gray-400);font-size:10px;min-width:52px">#'+l.id+'</span>'+
+      '<strong style="flex:1;min-width:120px">'+_escPend(String(l.ind_lugar_terreno||'').trim())+'</strong>'+
+      '<span style="color:var(--gray-400);font-size:10px">'+_escPend(l.nombre||'')+'</span>'+
+    '</div>';
+  }).join('');
+  return '<div class="admin-section" id="zona-sinmatch" style="border-left:3px solid var(--gold);margin-bottom:14px">'+
+    '<div class="admin-section-title" style="margin:0">📍 '+L.length+' lugar(es) de terreno sin zona</div>'+
+    '<div style="font-size:11px;color:var(--gray-400);margin:6px 0 10px;line-height:1.5">'+
+      'Son leads activos con el campo cargado que no caen en ninguna localidad de las zonas de abajo. '+
+      'Sin match <b>no</b> es fuera de cobertura: es una localidad que todavía nadie clasificó. '+
+      'Agregá la localidad en la zona que corresponda y guardá.'+
+    '</div>'+filas+
+    (L.length>40?'<div style="font-size:10px;color:var(--gray-600);margin-top:6px">+'+(L.length-40)+' más</div>':'')+
+  '</div>';
 }
 function _zonaCard(z){
   const d=_zonasDraft[z.id]||{localidades:[]};
@@ -4939,7 +5412,8 @@ async function radarCerrarCirculo(guionId){
 function _radarEnProduccion(){
   const gs=(_radarGuiones||[]).filter(function(g){return g.estado==='asignado'||g.estado==='grabado';});
   if(!gs.length)return '';
-  return '<div class="admin-section" style="margin-top:18px">'+
+  /* v226 — id de ancla para el badge rojo de la barra */
+  return '<div class="admin-section" id="radar-produccion" style="margin-top:18px">'+
     '<div class="admin-section-title">🎬 En producción ('+gs.length+')</div>'+
     gs.map(function(g){
       const e=_RADAR_ESTADO[g.estado]||['?','var(--gray-400)'];
@@ -12776,10 +13250,11 @@ function _cobPintar(){
       '<button class="btn-ghost btn-sm" style="font-size:11px" title="Actualizar" onclick="renderCobranzas()">↺</button>'+
     '</div>'+
     _cobHtmlAlta()+
-    '<div class="section-title" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
+    /* v226 — ids de ancla: el badge rojo/amarillo de la barra baja hasta acá */
+    '<div class="section-title" id="cob-sec-tocan" style="margin-bottom:6px">🔔 Toca cobrar</div>'+htmlTocan+
     htmlHitosObra+
     '<div class="section-title" style="margin:16px 0 6px">📈 Línea de tiempo de flujo</div>'+_cobHtmlTimeline()+
-    '<div class="section-title" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron;
+    '<div class="section-title" id="cob-sec-cron" style="margin:16px 0 6px">📋 Cronograma por cliente</div>'+htmlCron;
 }
 
 function _cobToggle(id){_cobAbierto=(_cobAbierto===id?null:id);_cobPintar();}
