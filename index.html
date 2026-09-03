@@ -732,6 +732,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
     <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()">🧾 Cobranzas</div>
+    <div class="nav-tab" id="tab-zonas" style="display:none" onclick="switchTab(this,'screen-zonas');renderZonas()">📍 Precios por zona</div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
@@ -906,6 +907,19 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <h1>🧾 <span class="gold">Cobranzas</span></h1>
     </div>
     <div id="cobranzas-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: PRECIOS POR ZONA (v222) — admin + commercial_lead.
+       El permiso se valida en switchTab con _SCREEN_ROLES: es validación de
+       CLIENTE, igual que Gerencia y Cobranzas. No hay validación server-side de
+       rol en esta app: todo el front habla con la misma anon key y el rol lo
+       devuelve geat-auth pero después no viaja. Queda como deuda la Edge
+       Function geat-zonas. ══ -->
+  <section id="screen-zonas" class="screen">
+    <div class="screen-title">
+      <h1>📍 Precios por <span class="gold">zona</span></h1>
+    </div>
+    <div id="zonas-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
   <!-- ══ SCREEN: RECLUTAMIENTO (v145) — solo admin, datos vía Edge Function geat-cv-panel ══ -->
@@ -1750,7 +1764,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='221';
+  var CURRENT_VERSION='222';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -1877,6 +1891,7 @@ let colaboradores=[];
 let _loginInit=null; // promise de initLogin — usado por checkPin para esperar si carga lenta
 let itemsSeg=[];
 let motivosPerdida=[];
+let zonasPrecio=[];   // v222 — catálogo de zonas_precio, ver _zonaDeLugar()
 let motivosGanado=[];
 let mediosDifusion=[];
 /* v185 — CAMPAÑA DE ORIGEN. 316 de 329 leads del último mes cayeron en
@@ -2855,6 +2870,12 @@ function startApp(){
     const tabGer=document.getElementById('tab-gerencia');
     if(tabGer)tabGer.style.display='';
   }
+  /* v222 — Precios por zona: admin + commercial_lead (mismo criterio que
+     _SCREEN_ROLES['screen-zonas']; si se cambia uno hay que cambiar el otro). */
+  if(cu.rol==='admin'||cu.rol==='commercial_lead'){
+    const tabZon=document.getElementById('tab-zonas');
+    if(tabZon)tabZon.style.display='';
+  }
   // Reportes tab: oculto para field_capturer
   if(cu.rol==='field_capturer'){
     const tabRep=document.getElementById('tab-reports');
@@ -2907,7 +2928,7 @@ function attachPickerListeners(){
 
 async function loadCatalogs(){
   try{
-    const[seg,mPerd,mGan,medios,deptos,camp]=await Promise.all([
+    const[seg,mPerd,mGan,medios,deptos,camp,zon]=await Promise.all([
       sb.from('items_seguimiento').select('*').order('orden'),
       sb.from('motivos_perdida').select('*').order('nombre'),
       sb.from('motivos_ganado').select('*').order('nombre'),
@@ -2916,7 +2937,11 @@ async function loadCatalogs(){
       /* v185 — se traen TODAS (activas e inactivas): el alta ofrece solo las
          activas, pero la ficha y los reportes tienen que poder nombrar la
          campaña de un lead histórico aunque la pauta ya se haya cortado. */
-      sb.from('campanas').select('id,nombre,plataforma,activa').order('nombre')
+      sb.from('campanas').select('id,nombre,plataforma,activa').order('nombre'),
+      /* v222 — zonas de precio. Se cargan con el resto del catálogo porque la
+         ficha de CADA lead las necesita para mostrar la zona detectada: pedirlas
+         por lead sería una consulta por apertura de ficha. */
+      sb.from('zonas_precio').select('*').order('codigo')
     ]);
     itemsSeg=seg.data||[];
     motivosPerdida=mPerd.data||[];
@@ -2928,6 +2953,7 @@ async function loadCatalogs(){
        solo veía un desplegable sin opciones). */
     _deptosError=deptos.error?(deptos.error.message||'error'):(departamentos.length?'':'la tabla vino vacía');
     campanas=camp.data||[];
+    zonasPrecio=zon.data||[];
     populateCatalogSelects();
   }catch(e){_deptosError=(e&&e.message)||'error al cargar catálogos';}
 }
@@ -3241,7 +3267,9 @@ const _SCREEN_ROLES={
   'screen-admin'        :['admin'],
   'screen-reclutamiento':['admin'],
   'screen-miregistro'   :['admin','field_capturer','commercial_lead'],
-  'screen-reports'      :['admin','commercial_lead','closer','tecnico']
+  'screen-reports'      :['admin','commercial_lead','closer','tecnico'],
+  /* v222 — Precios por zona: lo edita David (commercial_lead) y el CEO. */
+  'screen-zonas'        :['admin','commercial_lead']
 };
 function _puedeVerPantalla(screenId){
   const permitidos=_SCREEN_ROLES[screenId];
@@ -4043,6 +4071,248 @@ const _ZONA_INFO={
   fuera      :{label:'Fuera de cobertura',   color:'var(--st-atrasado)',marca:' <span style="font-size:10px">⚠ fuera de cobertura</span>'},
   sin_dato   :{label:'Sin ciudad / No indica',color:'var(--gray-600)',  marca:''}
 };
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v222 · PRECIOS POR ZONA (tabla zonas_precio)                         ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   OJO — son DOS catálogos de zona distintos y NO se pisan:
+     · _CIUDADES_PLENA / _CONDICIONAL / _FUERA (v192, acá arriba) clasifican
+       leads.ciudad para el reporte de cobertura. Siguen igual.
+     · zonas_precio (esto) clasifica ind_lugar_terreno — DÓNDE ESTÁ EL TERRENO —
+       para saber el recargo a cotizar. Lo edita David desde el panel.
+   Un lead puede ser "de Santa Cruz" y tener el terreno en Yapacaní.
+
+   DETECCIÓN — por qué no es una comparación por igualdad:
+   ind_lugar_terreno es texto libre y en la práctica son direcciones, no nombres
+   de localidad: "Doble Vía La Guardia", "2DO ANILLO DE COTOCA",
+   "7MO ANILLO ENTRE AV2 DE AGOSTO Y ALEMANA". Un === contra localidades no
+   matchearía casi nunca. Se busca la localidad DENTRO del texto y con límite de
+   palabra: sin ese límite "montero" matchearía dentro de "monterito".
+   Si matchean varias localidades gana la MÁS RESTRICTIVA: primero la no
+   cotizable, después la de mayor recargo, y a igualdad la localidad más larga
+   (más específica). Es a propósito: ante "Santa Cruz - Yapacaní" conviene
+   cotizar de más y corregir, no cotizar 0% y comerse el margen. */
+function _zonaNorm(s){return _cvNorm(s||'').replace(/\s+/g,' ').trim();}
+function _zonaEscRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function _zonaDeLugar(txt){
+  const t=_zonaNorm(txt);
+  if(!t)return null;
+  const rank=function(z){return (z.cotizable===false?1000000:0)+(Number(z.recargo_pct)||0);};
+  let mejor=null;
+  (zonasPrecio||[]).forEach(function(z){
+    if(!z||z.activo===false)return;
+    (z.localidades||[]).forEach(function(loc){
+      const l=_zonaNorm(loc);
+      if(!l)return;
+      if(!new RegExp('(^|[^a-z0-9])'+_zonaEscRe(l)+'([^a-z0-9]|$)').test(t))return;
+      if(!mejor){mejor={zona:z,localidad:loc};return;}
+      const r1=rank(mejor.zona),r2=rank(z);
+      if(r2>r1||(r2===r1&&l.length>_zonaNorm(mejor.localidad).length))mejor={zona:z,localidad:loc};
+    });
+  });
+  return mejor;
+}
+function _zonaRecargoTxt(z){
+  const r=Number(z&&z.recargo_pct)||0;
+  if(r<=0)return 'sin recargo';
+  return '+'+(r%1===0?String(Math.round(r)):String(r))+'%';
+}
+/* Badge que se muestra al lado de "Lugar terreno" en la ficha del lead. */
+function _zonaBadgeLugar(lead){
+  const txt=lead&&lead.ind_lugar_terreno;
+  if(!txt||!String(txt).trim())return '';
+  if(!(zonasPrecio||[]).length)return '';
+  const m=_zonaDeLugar(txt);
+  if(!m){
+    /* Sin match NO es "fuera de cobertura": es un lugar que todavía nadie
+       clasificó. El atajo al panel se ofrece solo a quien puede editarlo. */
+    const puede=!!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'));
+    const link=puede
+      ? ' <a href="#" onclick="event.preventDefault();irAZonas(this.getAttribute(\'data-l\'))" data-l="'+_escPend(txt)+'" style="color:var(--gold);text-decoration:underline">asignarla</a>'
+      : ' <span style="color:var(--gray-600)">— que la asigne David</span>';
+    return '<div style="margin-top:5px;font-size:10px;color:var(--gray-400)">'+
+      '<span style="border:1px dashed var(--gray-600);border-radius:9px;padding:1px 7px">Zona sin definir</span>'+link+
+    '</div>';
+  }
+  const z=m.zona;
+  const fuera=z.cotizable===false;
+  const col=fuera?'var(--st-atrasado)':(Number(z.recargo_pct)>0?'var(--gold)':'var(--st-completo)');
+  let html='<div style="margin-top:5px;font-size:10px">'+
+    '<span style="background:var(--gray-800);border:1px solid '+col+';color:'+col+';border-radius:9px;padding:1px 7px;font-weight:700">'+
+      'Zona '+_escPend(z.codigo)+' · '+_escPend(z.nombre)+' · '+_zonaRecargoTxt(z)+
+    '</span>'+
+    (z.requiere_evaluacion?' <span style="color:var(--gold)">◆ requiere evaluación</span>':'')+
+    '<div style="color:var(--gray-600);margin-top:3px">detectada por "'+_escPend(m.localidad)+'"</div>';
+  if(fuera){
+    html+='<div style="margin-top:5px;border-left:3px solid var(--st-atrasado);background:rgba(239,68,68,0.08);padding:5px 8px;color:var(--st-atrasado);line-height:1.5">'+
+      '⚠️ <b>Fuera de cobertura</b> — no se cotiza. Corresponde marcar el lead como perdido con el motivo <b>"Es de otro departamento"</b>.'+
+    '</div>';
+  }
+  return html+'</div>';
+}
+/* Atajo desde la ficha: abre el panel con el lugar listo para cargarlo como
+   localidad en la zona que David elija. */
+let _zonaPendiente='';
+function irAZonas(txt){
+  const tab=document.getElementById('tab-zonas');
+  if(!tab||!_puedeVerPantalla('screen-zonas')){toast('No tenés permiso para editar zonas','error');return;}
+  _zonaPendiente=txt||'';
+  try{closeModal('modalLead');}catch(e){}
+  switchTab(tab,'screen-zonas');
+  renderZonas();
+}
+
+/* ── Panel editable ──────────────────────────────────────────────────────
+   El borrador de localidades vive en memoria (_zonasDraft) y se persiste con
+   "Guardar" por fila: agregar y sacar chips de a uno haría un UPDATE por chip.
+   No hay borrado de zonas: son cuatro y fijas. Sacar una de circulación es
+   activo=false en la base, nunca DELETE. */
+let _zonasDraft={};
+async function renderZonas(){
+  const body=document.getElementById('zonas-body');
+  if(!body)return;
+  if(!_puedeVerPantalla('screen-zonas')){body.innerHTML='';return;}
+  body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  const{data,error}=await sb.from('zonas_precio').select('*').order('codigo');
+  if(error){body.innerHTML='<div class="loading-state" style="color:var(--st-atrasado)">No se pudieron cargar las zonas: '+_escPend(error.message)+'</div>';return;}
+  zonasPrecio=data||[];
+  _zonasDraft={};
+  zonasPrecio.forEach(function(z){_zonasDraft[z.id]={localidades:(z.localidades||[]).slice()};});
+  const aviso=_zonaPendiente
+    ? '<div style="border:1px solid var(--gold);background:rgba(242,197,0,0.06);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5">'+
+        '📍 Venís de una ficha cuyo lugar de terreno <b>"'+_escPend(_zonaPendiente)+'"</b> no cayó en ninguna zona. Agregá la localidad que corresponda y guardá.'+
+        ' <button type="button" class="btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:6px" onclick="_zonaPendiente=&quot;&quot;;renderZonas()">Descartar</button>'+
+      '</div>'
+    : '';
+  body.innerHTML=aviso+
+    '<div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;line-height:1.6">'+
+      'El recargo se aplica según <b>dónde está el terreno</b> (campo "Lugar terreno" de la indagación), no según la ciudad del cliente: un cliente de Santa Cruz puede tener el terreno en Yapacaní. '+
+      'La ficha de cada lead muestra la zona detectada. Una zona <b>no cotizable</b> dispara el aviso de fuera de cobertura.'+
+    '</div>'+
+    zonasPrecio.map(_zonaCard).join('');
+  if(_zonaPendiente&&zonasPrecio.length){
+    const el=document.getElementById('zona-nueva-loc-'+zonasPrecio[0].id);
+    if(el){el.value=_zonaPendiente;}
+  }
+}
+function _zonaCard(z){
+  const d=_zonasDraft[z.id]||{localidades:[]};
+  const fuera=z.cotizable===false;
+  const col=fuera?'var(--st-atrasado)':(Number(z.recargo_pct)>0?'var(--gold)':'var(--st-completo)');
+  const upd=z.updated_at?_fechaHoraTxt(z.updated_at):'—';
+  return '<div class="admin-section" style="border-left:3px solid '+col+'">'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<span style="background:'+col+';color:var(--black);font-weight:800;border-radius:7px;padding:3px 11px;font-size:15px">'+_escPend(z.codigo)+'</span>'+
+      '<input class="form-control" id="zona-nombre-'+z.id+'" value="'+_escPend(z.nombre||'')+'" maxlength="60" style="flex:1;min-width:170px;font-size:13px;font-weight:700">'+
+    '</div>'+
+    '<div class="form-row" style="margin-top:12px">'+
+      '<div class="form-group">'+
+        '<label class="form-label">Recargo %</label>'+
+        '<input class="form-control" type="number" id="zona-recargo-'+z.id+'" value="'+(Number(z.recargo_pct)||0)+'" min="0" max="100" step="0.5">'+
+        '<div class="form-help">Sobre el precio base de la cotización</div>'+
+      '</div>'+
+      '<div class="form-group">'+
+        '<label class="form-label">Condiciones</label>'+
+        '<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:5px 0">'+
+          '<input type="checkbox" id="zona-eval-'+z.id+'"'+(z.requiere_evaluacion?' checked':'')+'> Requiere evaluación previa'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer">'+
+          '<input type="checkbox" id="zona-cotiz-'+z.id+'"'+(z.cotizable!==false?' checked':'')+'> Cotizable'+
+        '</label>'+
+        '<div class="form-help">Sin "Cotizable", la ficha avisa fuera de cobertura</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="form-group" style="margin-top:6px">'+
+      '<label class="form-label">Localidades (<span id="zona-loc-n-'+z.id+'">'+d.localidades.length+'</span>)</label>'+
+      '<div id="zona-chips-'+z.id+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+_zonaChips(z.id)+'</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<input class="form-control" id="zona-nueva-loc-'+z.id+'" placeholder="Agregar localidad..." maxlength="60" style="flex:1;min-width:170px;font-size:12px" onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();zonaAddLocalidad('+z.id+');}">'+
+        '<button type="button" class="btn-ghost" style="font-size:11px" onclick="zonaAddLocalidad('+z.id+')">+ Agregar</button>'+
+      '</div>'+
+      '<div class="form-help">Se busca dentro del texto libre de "Lugar terreno", sin distinguir mayúsculas ni tildes.</div>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">'+
+      '<button type="button" class="btn-primary" id="zona-btn-'+z.id+'" style="font-size:12px" onclick="guardarZona('+z.id+')">💾 Guardar zona '+_escPend(z.codigo)+'</button>'+
+      '<span style="font-size:10px;color:var(--gray-600)">Última edición: '+_escPend(z.actualizado_por||'—')+' · '+_escPend(upd)+'</span>'+
+    '</div>'+
+  '</div>';
+}
+function _zonaChips(id){
+  const d=_zonasDraft[id]||{localidades:[]};
+  if(!d.localidades.length)return '<span style="font-size:11px;color:var(--gray-600)">Sin localidades — esta zona no se va a detectar en ninguna ficha</span>';
+  return d.localidades.map(function(loc,i){
+    return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:11px;padding:3px 5px 3px 10px">'+
+      _escPend(loc)+
+      '<button type="button" title="Quitar" onclick="zonaDelLocalidad('+id+','+i+')" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:0 3px">×</button>'+
+    '</span>';
+  }).join('');
+}
+function _zonaRefrescarChips(id){
+  const c=document.getElementById('zona-chips-'+id);
+  if(c)c.innerHTML=_zonaChips(id);
+  const n=document.getElementById('zona-loc-n-'+id);
+  if(n)n.textContent=(_zonasDraft[id]||{localidades:[]}).localidades.length;
+}
+function zonaAddLocalidad(id){
+  const inp=document.getElementById('zona-nueva-loc-'+id);
+  const val=((inp&&inp.value)||'').trim();
+  if(!val){toast('Escribí la localidad','error');return;}
+  const d=_zonasDraft[id];
+  if(!d)return;
+  /* el duplicado se compara normalizado: "Warnes" y "warnes " son la misma */
+  if(d.localidades.some(function(l){return _zonaNorm(l)===_zonaNorm(val);})){
+    toast('"'+val+'" ya está en esta zona','error');return;
+  }
+  /* y tampoco puede estar en OTRA zona: la misma localidad en dos zonas haría
+     que el recargo dependa de cuál gana el desempate, no de una decisión */
+  const otra=(zonasPrecio||[]).filter(function(z){
+    if(z.id===id)return false;
+    const dd=_zonasDraft[z.id]||{localidades:z.localidades||[]};
+    return dd.localidades.some(function(l){return _zonaNorm(l)===_zonaNorm(val);});
+  })[0];
+  if(otra){toast('"'+val+'" ya está en la zona '+otra.codigo+' — sacala de ahí primero','error');return;}
+  d.localidades.push(val);
+  if(inp)inp.value='';
+  _zonaRefrescarChips(id);
+}
+function zonaDelLocalidad(id,i){
+  const d=_zonasDraft[id];
+  if(!d||typeof d.localidades[i]==='undefined')return;
+  d.localidades.splice(i,1);
+  _zonaRefrescarChips(id);
+}
+async function guardarZona(id){
+  const z=(zonasPrecio||[]).filter(function(x){return x.id===id;})[0];
+  if(!z)return;
+  const btn=document.getElementById('zona-btn-'+id);
+  if(btn&&btn.disabled)return;
+  const nombre=((document.getElementById('zona-nombre-'+id)||{}).value||'').trim();
+  const recargo=parseFloat((document.getElementById('zona-recargo-'+id)||{}).value);
+  if(!nombre){toast('La zona necesita un nombre','error');return;}
+  if(isNaN(recargo)||recargo<0||recargo>100){toast('El recargo tiene que estar entre 0 y 100','error');return;}
+  const cotizable=!!(document.getElementById('zona-cotiz-'+id)||{}).checked;
+  const evaluacion=!!(document.getElementById('zona-eval-'+id)||{}).checked;
+  const locs=((_zonasDraft[id]||{}).localidades||[]).slice();
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Guardando...';}
+  try{
+    const{error}=await sb.from('zonas_precio').update({
+      nombre:nombre,
+      recargo_pct:recargo,
+      requiere_evaluacion:evaluacion,
+      cotizable:cotizable,
+      localidades:locs,
+      actualizado_por:(cu&&cu.nombre)||'—',
+      updated_at:new Date().toISOString()
+    }).eq('id',id);
+    if(error)throw error;
+    try{await registrarAuditoria('editar_zona_precio','zonas_precio',id,{codigo:z.codigo,recargo_pct:recargo,cotizable:cotizable,requiere_evaluacion:evaluacion,localidades:locs.length});}catch(e){}
+    toast('✅ Zona '+z.codigo+' guardada');
+    _zonaPendiente='';
+    await renderZonas();
+  }catch(e){
+    toast('Error al guardar: '+((e&&e.message)||'error'),'error');
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='💾 Guardar zona '+z.codigo;}
+  }
+}
 /* v191 — Aviso en la ficha para la zona condicional. No bloquea: avisa. */
 function _avisoZonaCondicional(lead){
   if(!lead||_zonaCiudad(lead.ciudad)!=='condicional')return'';
@@ -4886,7 +5156,9 @@ function renderIndagacion(lead){
   const campos=[
     {label:'Ciudad',val:_ciudadLabel(lead.ciudad)||_ciudadLabel(lead.ind_ciudad)},
     {label:'Método de pago',val:lead.metodo_pago?(_METODO_PAGO_OPTS.find(m=>m[0]===lead.metodo_pago)?.[1]||lead.metodo_pago):(lead.financiamiento||lead.ind_financiamiento)},
-    {label:'Lugar terreno',val:lead.ind_lugar_terreno},
+    /* v222 — debajo del lugar del terreno va la zona de precio detectada
+       (zonas_precio). extra es HTML ya armado y escapado por _zonaBadgeLugar. */
+    {label:'Lugar terreno',val:lead.ind_lugar_terreno,extra:_zonaBadgeLugar(lead)},
     {label:'Monto financiable',val:lead.ind_monto_financiamiento?'$'+lead.ind_monto_financiamiento:null},
     {label:'Presupuesto',val:lead.ind_presupuesto?'$'+lead.ind_presupuesto:null},
     {label:'Presupuesto tope',val:lead.ind_presupuesto_tope?'$'+lead.ind_presupuesto_tope:null},
@@ -4897,6 +5169,7 @@ function renderIndagacion(lead){
   return campos.map(c=>`<div class="indagacion-item ${c.val?'filled':'empty'}">
     <div class="indagacion-label">${c.label}</div>
     <div class="indagacion-value">${c.val||'Pendiente'}</div>
+    ${c.extra||''}
   </div>`).join('');
 }
 
