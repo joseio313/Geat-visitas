@@ -741,7 +741,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
     <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()">🧾 Cobranzas</div>
-    <div class="nav-tab" id="tab-zonas" style="display:none" onclick="switchTab(this,'screen-zonas');renderZonas()">📍 Precios por zona</div>
+    <!-- v228 — "📍 Precios por zona" salió de la barra (el CEO lo confirmó). La
+         <section id="screen-zonas"> y renderZonas()/las funciones de edición siguen
+         en el archivo pero YA NO ESTÁN CABLEADAS: ver _SCREEN_RETIRADAS. La tabla
+         zonas_precio NO se toca — sus 4 filas siguen alimentando la detección de
+         zona en la ficha del lead (v222), que se queda. -->
     <div class="nav-tab" id="tab-radar" style="display:none" onclick="switchTab(this,'screen-radar');renderRadar()">📡 Radar de contenido</div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
@@ -1787,7 +1791,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='227';
+  var CURRENT_VERSION='228';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2894,11 +2898,10 @@ function startApp(){
     const tabGer=document.getElementById('tab-gerencia');
     if(tabGer)tabGer.style.display='';
   }
-  /* v222 — Precios por zona: admin + commercial_lead (mismo criterio que
-     _SCREEN_ROLES['screen-zonas']; si se cambia uno hay que cambiar el otro). */
+  /* v223 — Radar de contenido: admin + commercial_lead (mismo criterio que
+     _SCREEN_ROLES['screen-radar']; si se cambia uno hay que cambiar el otro).
+     v228 — acá también se mostraba "Precios por zona"; esa pestaña se retiró. */
   if(cu.rol==='admin'||cu.rol==='commercial_lead'){
-    const tabZon=document.getElementById('tab-zonas');
-    if(tabZon)tabZon.style.display='';
     const tabRad=document.getElementById('tab-radar');
     if(tabRad)tabRad.style.display='';
   }
@@ -3308,8 +3311,8 @@ const _SCREEN_ROLES={
   'screen-reclutamiento':['admin'],
   'screen-miregistro'   :['admin','field_capturer','commercial_lead'],
   'screen-reports'      :['admin','commercial_lead','closer','tecnico'],
-  /* v222 — Precios por zona: lo edita David (commercial_lead) y el CEO. */
-  'screen-zonas'        :['admin','commercial_lead'],
+  /* v228 — 'screen-zonas' ya no está acá: la pantalla se retiró y pasó a
+     _SCREEN_RETIRADAS, que corta antes que cualquier permiso por rol. */
   /* v223 — Radar de contenido: mismo par que Precios por zona. */
   'screen-radar'        :['admin','commercial_lead']
 };
@@ -3322,7 +3325,12 @@ const _SCREEN_ROLES={
    nadie puede llegar a ellas por switchTab. */
 const _SCREEN_RETIRADAS={
   'screen-month'  :'agenda-mes',
-  'screen-orphans':'sin-reemplazo'
+  'screen-orphans':'sin-reemplazo',
+  /* v228 — Precios por zona. Se retiró el PANEL de edición, no la función: la
+     detección de zona sigue viva en la ficha del lead (_zonaBadgeLugar) y
+     zonasPrecio se sigue cargando en loadCatalogs. Lo que ya no hay es dónde
+     editar las localidades desde el front; eso se hace en la base. */
+  'screen-zonas'  :'sin-reemplazo'
 };
 /* Abre Agenda semanal ya con el toggle MES activo (reemplazo de "Vista mensual"). */
 function abrirAgendaMes(){
@@ -3586,10 +3594,11 @@ async function _bdgGerAma(){
 }
 
 /* ── PRECIOS POR ZONA ────────────────────────────────────────────────────
-   🟡 Leads activos con "Lugar terreno" cargado que el matcher de v222 no cae
-   en ninguna zona. Único badge que trae filas (el matcher es JS, ver arriba).
-   Sin match NO es "fuera de cobertura": es una localidad que nadie clasificó,
-   y esa es justo la carga que falta. */
+   v228 — YA NO ESTÁ CABLEADA: la pestaña salió de la barra y con ella su badge.
+   Se deja la función (no se borran funciones existentes) por si el panel vuelve.
+   Contaba los leads activos con "Lugar terreno" que el matcher de v222 no hacía
+   caer en ninguna zona; era el único badge que traía filas, porque el matcher es
+   JavaScript y no se puede expresar en el filtro de PostgREST. */
 async function _bdgZonasAma(){
   _zonaSinMatchLista=[];
   if(!(zonasPrecio||[]).length)return 0;
@@ -3754,10 +3763,9 @@ function _bdgDefs(){
    irRojo:function(){_bdgIrPestana('tab-cobranzas');_bdgScroll('cob-sec-tocan');},
    irAma:function(){_bdgIrPestana('tab-cobranzas');_bdgScroll('cob-sec-cron');}},
 
-  {k:'zonas',  tabId:'tab-zonas',          screen:'screen-zonas',
-   rojo:null, ama:_bdgZonasAma,
-   tAma:'Lugares de terreno sin zona detectada',
-   irAma:function(){_bdgIrPestana('tab-zonas');_bdgScroll('zona-sinmatch');}},
+  /* v228 — acá estaba el badge de "Precios por zona". Se fue con la pestaña: sin
+     panel donde clasificar la localidad, el conteo no llevaba a ningún lado.
+     _bdgZonasAma() queda en el archivo, sin cablear. */
 
   {k:'radar',  tabId:'tab-radar',          screen:'screen-radar',
    rojo:_bdgRadarRojo, ama:_bdgRadarAma,
@@ -4673,13 +4681,12 @@ function _zonaBadgeLugar(lead){
   const m=_zonaDeLugar(txt);
   if(!m){
     /* Sin match NO es "fuera de cobertura": es un lugar que todavía nadie
-       clasificó. El atajo al panel se ofrece solo a quien puede editarlo. */
-    const puede=!!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'));
-    const link=puede
-      ? ' <a href="#" onclick="event.preventDefault();irAZonas(this.getAttribute(\'data-l\'))" data-l="'+_escPend(txt)+'" style="color:var(--gold);text-decoration:underline">asignarla</a>'
-      : ' <span style="color:var(--gray-600)">— que la asigne David</span>';
+       clasificó.
+       v228 — antes acá iba el atajo "asignarla", que abría el panel Precios por
+       zona. Ese panel se retiró, así que queda el texto solo, sin link: no hay
+       adónde mandar al usuario. La clasificación se hace en la base. */
     return '<div style="margin-top:5px;font-size:10px;color:var(--gray-400)">'+
-      '<span style="border:1px dashed var(--gray-600);border-radius:9px;padding:1px 7px">Zona sin definir</span>'+link+
+      '<span style="border:1px dashed var(--gray-600);border-radius:9px;padding:1px 7px">Zona sin definir</span>'+
     '</div>';
   }
   const z=m.zona;
@@ -4698,12 +4705,17 @@ function _zonaBadgeLugar(lead){
   }
   return html+'</div>';
 }
-/* Atajo desde la ficha: abre el panel con el lugar listo para cargarlo como
-   localidad en la zona que David elija. */
+/* v228 — YA NO ESTÁ CABLEADO. Era el atajo desde la ficha del lead ("asignarla")
+   que abría el panel con el lugar listo para cargarlo como localidad. El panel se
+   retiró de la barra, así que switchTab lo corta y nadie llama a esta función.
+   Se deja entera por si el panel vuelve. */
 let _zonaPendiente='';
 function irAZonas(txt){
+  /* v228 — la guarda vieja preguntaba por _SCREEN_ROLES, pero screen-zonas ya no
+     está ahí (pasó a _SCREEN_RETIRADAS) y _puedeVerPantalla daría true. El corte
+     real es que la pantalla se retiró. */
   const tab=document.getElementById('tab-zonas');
-  if(!tab||!_puedeVerPantalla('screen-zonas')){toast('No tenés permiso para editar zonas','error');return;}
+  if(_SCREEN_RETIRADAS['screen-zonas']||!tab){toast('El panel de zonas se retiró de la barra','error');return;}
   _zonaPendiente=txt||'';
   try{closeModal('modalLead');}catch(e){}
   switchTab(tab,'screen-zonas');
@@ -4716,10 +4728,19 @@ function irAZonas(txt){
    No hay borrado de zonas: son cuatro y fijas. Sacar una de circulación es
    activo=false en la base, nunca DELETE. */
 let _zonasDraft={};
+/* v228 — renderZonas() y TODA la edición de zonas de acá para abajo
+   (_zonaCard, _zonaAddLoc, _zonaDelLoc, guardarZona, _zonaSinMatchHtml) quedan
+   SIN CABLEAR: la pestaña "Precios por zona" salió de la barra y screen-zonas
+   está en _SCREEN_RETIRADAS. No se borra nada.
+   Lo que NO se retiró es la detección: zonasPrecio se sigue cargando en
+   loadCatalogs y _zonaBadgeLugar() sigue mostrando "Zona X · +N%" y el aviso de
+   fuera de cobertura en la ficha del lead. La tabla zonas_precio y sus 4 filas
+   no se tocaron; las localidades ahora se editan en la base. */
 async function renderZonas(){
   const body=document.getElementById('zonas-body');
   if(!body)return;
-  if(!_puedeVerPantalla('screen-zonas')){body.innerHTML='';return;}
+  /* misma razón que en irAZonas: el corte es que la pantalla está retirada */
+  if(_SCREEN_RETIRADAS['screen-zonas']||!_puedeVerPantalla('screen-zonas')){body.innerHTML='';return;}
   body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   const{data,error}=await sb.from('zonas_precio').select('*').order('codigo');
   if(error){body.innerHTML='<div class="loading-state" style="color:var(--st-atrasado)">No se pudieron cargar las zonas: '+_escPend(error.message)+'</div>';return;}
