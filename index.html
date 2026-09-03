@@ -726,8 +726,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   <!-- TABS -->
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
-    <div class="nav-tab" onclick="switchTab(this,'screen-month')">🗓️ Vista mensual</div>
-    <div class="nav-tab" onclick="switchTab(this,'screen-orphans');renderOrphans()">📥 Sin asignar</div>
+    <!-- v225 — "🗓️ Vista mensual" y "📥 Sin asignar" salieron de la barra (el CEO lo
+         confirmo). El mes vive dentro de Agenda semanal desde v218 (toggle MES) y
+         "Sin asignar" era solo monitoreo desde v220. Las <section> y sus funciones
+         (renderMonth, navMonth, renderOrphans, asignarCaptador) siguen en el archivo
+         pero YA NO ESTAN CABLEADAS: ver _SCREEN_RETIRADAS en switchTab. -->
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
@@ -1778,7 +1781,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='224';
+  var CURRENT_VERSION='225';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3300,12 +3303,38 @@ const _SCREEN_ROLES={
   /* v223 — Radar de contenido: mismo par que Precios por zona. */
   'screen-radar'        :['admin','commercial_lead']
 };
+/* v225 — PESTAÑAS RETIRADAS DE LA BARRA.
+   No es un permiso por rol: la pantalla ya no existe para nadie.
+   - 'screen-month'  → el mes se dibuja dentro de Agenda semanal desde v218, así que
+                       cualquier entrada vieja se redirige ahí con el toggle MES activo.
+   - 'screen-orphans'→ desde v220 era solo monitoreo y no tenía acción propia: se corta.
+   Las <section> y sus render siguen en el archivo (no se borran funciones), pero
+   nadie puede llegar a ellas por switchTab. */
+const _SCREEN_RETIRADAS={
+  'screen-month'  :'agenda-mes',
+  'screen-orphans':'sin-reemplazo'
+};
+/* Abre Agenda semanal ya con el toggle MES activo (reemplazo de "Vista mensual"). */
+function abrirAgendaMes(){
+  const t=document.querySelector('.nav-tab[onclick*="screen-week"]');
+  if(!t)return;
+  switchTab(t,'screen-week');
+  const btns=document.querySelectorAll('#week-view-toggle button');
+  setView('mes',btns.length>1?btns[1]:null);
+}
 function _puedeVerPantalla(screenId){
   const permitidos=_SCREEN_ROLES[screenId];
   if(!permitidos)return true;              // pantallas comunes a todo el equipo
   return !!(cu&&permitidos.indexOf(cu.rol)>=0);
 }
 function switchTab(tab,screenId){
+  /* v225 — pestaña retirada: se redirige o se corta antes de tocar el DOM */
+  const _ret=_SCREEN_RETIRADAS[screenId];
+  if(_ret){
+    if(_ret==='agenda-mes'){abrirAgendaMes();return;}
+    toast('Esa sección se retiró de la barra','error');
+    return;
+  }
   if(!_puedeVerPantalla(screenId)){
     toast('No tenés permiso para ver esta sección','error');
     /* además se limpia lo que hubiera quedado dibujado de una sesión anterior */
@@ -3319,7 +3348,8 @@ function switchTab(tab,screenId){
   document.getElementById(screenId).classList.add('active');
   window.scrollTo(0,0);
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
-  if(screenId==='screen-month')renderMonth();
+  /* v225 — se quitó el `if(screenId==='screen-month')renderMonth()`: esa pestaña
+     ya no existe y el mes lo dibuja renderWeek() cuando _weekView==='mes'. */
 }
 /* ── v218 · VISTA MENSUAL DENTRO DE AGENDA SEMANAL ──────────────────────
    El toggle SEMANA/MES existía en la barra de filtros pero era falso: "Mes"
@@ -3552,6 +3582,11 @@ function buildLegend(){
 
 /* ════════════════════════════════════════
    MES
+   v225 — la pestaña "Vista mensual" salió de la barra. renderMonth() sigue VIVO y en
+   uso, pero solo a través de renderWeekMonth() (el modo MES de Agenda semanal, v218).
+   navMonth() y el <select id="filtro-mes-persona"> de la <section id="screen-month">
+   YA NO ESTÁN CABLEADOS a ningún botón alcanzable: se dejan sin borrar por si la
+   pestaña vuelve alguna vez. Las flechas del mes hoy son navWeek() (v218: en modo MES navega meses).
 ════════════════════════════════════════ */
 function navMonth(dir){
   if(dir===0){currentMonthDate=new Date();}
@@ -3708,6 +3743,10 @@ function navWeekToDay(dateStr){
 
 /* ════════════════════════════════════════
    SIN ASIGNAR
+   v225 — la pestaña salió de la barra (venía de v220, donde ya se le había quitado la
+   única acción que tenía). renderOrphans() y asignarCaptador() quedan SIN CABLEAR:
+   no las llama nadie. El conteo de leads activos sin captador ahora se ve como badge
+   rojo en la pestaña Admin.
 ════════════════════════════════════════ */
 async function renderOrphans(){
   const body=document.getElementById('orphans-body');
@@ -7240,7 +7279,8 @@ async function guardarReprogramarVisita(){
     _rpVis.fecha_programada=iso; _rpVis.nota=nota||null; _rpVis.visita_nro=nro||_rpVis.visita_nro;
     toast('✅ Visita reprogramada');
     try{renderWeek();}catch(e){}
-    try{renderMonth();}catch(e){}
+    /* v225 — se quitó `renderMonth()`: refrescaba el grid de la pestaña "Vista mensual"
+       que ya no existe. renderWeek() dibuja el mes solo si _weekView==='mes' (v218). */
     try{cargarMarcadoresDia();}catch(e){}
     try{if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();}catch(e){}
     try{_searchAlertaVisitas();}catch(e){}
@@ -9645,7 +9685,8 @@ async function guardarEdicionLead(){
     closeModal('modalEditLead');
     toast('✅ Perfil actualizado');
     if(typeof cargarLeadsRecientes==='function')cargarLeadsRecientes();
-    if(document.getElementById('screen-orphans')?.classList.contains('active'))renderOrphans();
+    /* v225 — se quitó el refresh de "Sin asignar": la pantalla salió de la barra y
+       no puede estar activa. renderOrphans() sigue existiendo, sin cablear. */
     const sq=document.getElementById('search-q')?.value;
     if(sq&&sq.length>=2&&document.getElementById('modalSearch')?.classList.contains('show'))execSearch(sq);
   }catch(e){
