@@ -835,7 +835,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="screen-title">
       <h1>Prospectos <span class="gold">sin asignar</span></h1>
     </div>
-    <div class="mobile-note">📥 Leads sin captador asignado. Asignalos rápido para que no se enfríen.</div>
+    <div class="mobile-note">📥 Leads sin captador asignado. Monitoreo: tocá 🔍 para ver la ficha o ✏️ para editar el perfil.</div>
     <div id="orphans-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
@@ -1750,7 +1750,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='219';
+  var CURRENT_VERSION='220';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3638,9 +3638,12 @@ async function renderOrphans(){
     body.innerHTML='<div class="loading-state" style="color:var(--st-completo)">✅ Sin prospectos sin asignar</div>';
     return;
   }
-  const captadores=colaboradores.filter(c=>c.activo&&c.rol==='field_capturer');
+  /* v220 — se sacó del front el select de captador + el botón "Asignar" de cada
+     fila (el CEO confirmó que no se usa). La tabla queda como monitoreo: ver la
+     ficha (🔍) y editar el perfil (✏️). No se tocó nada en la base: leads.captador
+     y la acción de auditoría 'cambio_captador' siguen igual. */
   body.innerHTML=`<table class="orphans-table">
-    <thead><tr><th>Nombre</th><th>Celular</th><th>Medio</th><th>Hace</th><th></th><th>Asignar a</th><th></th></tr></thead>
+    <thead><tr><th>Nombre</th><th>Celular</th><th>Medio</th><th>Hace</th><th></th></tr></thead>
     <tbody>${data.map(l=>{
       const hace=Math.round((Date.now()-new Date(l.created_at))/3600000);
       const haceStr=hace<24?hace+'h':Math.floor(hace/24)+'d';
@@ -3654,18 +3657,18 @@ async function renderOrphans(){
           <button title="Ver perfil" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="openLeadReadOnly(${l.id})">🔍</button>
           <button title="Editar" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px" onclick="abrirEditarLead(${l.id},'${(l.nombre||'').replace(/'/g,"\\'")}','${l.celular||''}','${l.ciudad||''}','${l.medio_difusion||''}')">✏️</button>
         </td>
-        <td><select class="form-control" id="cap-${l.id}" style="padding:5px 8px;font-size:11px">
-          <option value="">— Captador —</option>
-          ${captadores.map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('')}
-        </select></td>
-        <td><button class="btn-primary" style="padding:5px 10px;font-size:11px" onclick="asignarCaptador(${l.id})">Asignar</button></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
 }
 
+/* v220 — YA NO ESTÁ CABLEADA A NINGÚN BOTÓN. Se quitó el select + "Asignar" de la
+   tabla de "Sin asignar". Se deja la función (no se borran funciones existentes):
+   si alguna vez vuelve el botón, alcanza con reponer el <select id="cap-N"> y el
+   onclick. Hoy no la llama nadie. */
 async function asignarCaptador(leadId){
   const sel=document.getElementById('cap-'+leadId);
+  if(!sel){toast('La asignación de captador se sacó de esta pantalla','error');return;}
   const nombre=sel.value;
   if(!nombre){toast('Seleccioná un captador','error');return;}
   try{
