@@ -1750,7 +1750,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='218';
+  var CURRENT_VERSION='219';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3262,7 +3262,12 @@ function setView(v,btn){
     if(wm)wm.style.display='';
     /* el filtro por estado solo aplica a la grilla semanal */
     if(fe)fe.style.display='none';
-    _weekMonthDate=new Date(currentWeekStart.getFullYear(),currentWeekStart.getMonth(),1);
+    /* La semana en curso puede arrancar en el mes anterior (hoy 2-sep, lunes 31-ago).
+       Se toma el mes del JUEVES de esa semana — la semana pertenece al mes donde
+       cae la mayoría de sus días — así "Mes" desde la semana actual abre el mes
+       actual y no el anterior. */
+    const _ju=addDays(currentWeekStart,3);
+    _weekMonthDate=new Date(_ju.getFullYear(),_ju.getMonth(),1);
     renderWeekMonth();
   }else{
     if(wm)wm.style.display='none';
