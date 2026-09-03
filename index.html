@@ -1787,7 +1787,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='226';
+  var CURRENT_VERSION='227';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3493,6 +3493,32 @@ async function _bdgAdminRojo(){
   return g+l;
 }
 
+/* 🟡 Admin: PINs sin rotar. "Sin rotar" = pin_rotado_en NULL (nunca se rotó)
+   o anterior a hoy - BDG_PIN_DIAS, con el día en America/La_Paz.
+
+   NO se lee con la anon key aunque el GRANT exista: colaboradores tiene RLS
+   activo y CERO policies, así que para anon la tabla devuelve 0 filas sin dar
+   error (el patrón silencioso de siempre). Verificado con la anon key contra
+   /rest/v1/colaboradores: `[]`. Por eso va por geat-auth action='admin_pins',
+   que ya valida token + rol=admin y que el panel Admin usa desde v138.
+
+   OJO: admin_pins tiene que devolver la columna. Si ninguna fila trae la
+   propiedad, el dato no está disponible y el badge se apaga en vez de contar
+   todo como "sin rotar" — un badge en 7 por un campo que no llegó sería mentira. */
+const BDG_PIN_DIAS=90;
+async function _bdgAdminAma(){
+  const r=await authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')});
+  const us=(r&&r.ok&&r.usuarios)||[];
+  const activos=us.filter(function(u){return u.activo;});
+  if(!activos.length)return 0;
+  if(!activos.some(function(u){return Object.prototype.hasOwnProperty.call(u,'pin_rotado_en');}))return 0;
+  const corte=_cobFechaMas(ymdLocal(new Date()),-BDG_PIN_DIAS);
+  return activos.filter(function(u){
+    const f=u.pin_rotado_en?String(u.pin_rotado_en).slice(0,10):null;
+    return !f||f<corte;
+  }).length;
+}
+
 /* ── COBRANZAS / GERENCIA — una sola lectura compartida ──────────────────
    cobranza_contratos y pagos_cliente están cerradas a anon desde v201: todo
    pasa por geat-cobranzas, que exige token con rol=admin. Las dos pantallas
@@ -3657,20 +3683,23 @@ function _bdgAlAparecer(id,fn,intentos){
 function _bdgScroll(id){
   _bdgAlAparecer(id,function(el){el.scrollIntoView({behavior:'smooth',block:'start'});});
 }
-/* Agenda semanal: el panel filtra por persona y por tipo, no por "vencido", así
-   que el badge solo abre la pestaña.
-   A PROPÓSITO no se abre el detalle del Parte del Día aunque exista y liste algo
-   parecido: son números distintos y ponerlos juntos confunde.
-     · "Visitas vencidas sin resultado" del Parte cuenta LEADS por
-       leads.visita_fecha; el badge cuenta FILAS de agenda_personal por
-       fecha_programada, que es lo que de verdad se reprograma (v217 dejó
-       leads.visita_fecha vieja). Hoy: 36 en el Parte, 42 en el badge.
-     · "Tareas atrasadas del equipo" del Parte incluye las visitas; el badge
-       amarillo las excluye para no contarlas dos veces (101 vs 57). */
-function _bdgIrWeek(){
+/* Agenda semanal: el panel no tiene un filtro que diga "vencido", pero el Parte
+   del Día SÍ tiene la lista exacta — y desde v227 cuenta lo mismo que el badge
+   (las dos leen agenda_personal con la misma consulta), así que tocar el badge
+   abre ese detalle. Antes no lo hacía: el Parte decía 36 y el badge 42 porque
+   el Parte salía de leads.visita_fecha, que queda vieja al reprogramar (v217).
+   El Parte es solo del admin; para el resto el badge abre la pestaña y nada más. */
+function _bdgIrWeek(clave){
   _bdgIrPestana('tab-week');
   setView('semana',document.querySelector('#week-view-toggle button'));
   window.scrollTo(0,0);
+  if(!(cu&&cu.rol==='admin'))return;
+  _pdAbierto=true;
+  _pdDetalleAbierto=clave;
+  _bdgAlAparecer('parte-dia-wrap',function(){
+    if(_pdDatos)_pdPintar(); else renderParteDia();
+    _bdgScroll('parte-dia-wrap');
+  });
 }
 
 /* ── DEFINICIONES ────────────────────────────────────────────────────────
@@ -3689,8 +3718,8 @@ function _bdgDefs(){
    rojo:_bdgWeekRojo, ama:_bdgWeekAma,
    tRojo:'Visitas vencidas sin resultado (+'+PD_DIAS_VISITA_VENCIDA+' días)',
    tAma:'Tareas atrasadas sin completar',
-   irRojo:_bdgIrWeek,
-   irAma:_bdgIrWeek},
+   irRojo:function(){_bdgIrWeek('vencidas');},
+   irAma:function(){_bdgIrWeek('tareas');}},
 
   {k:'reports',tabId:'tab-reports',        screen:'screen-reports',
    rojo:null, ama:_bdgReportesAma,
@@ -3698,8 +3727,10 @@ function _bdgDefs(){
    irAma:function(){_bdgIrPestana('tab-reports');}},
 
   {k:'admin',  tabId:'tab-admin',          screen:'screen-admin',
-   rojo:_bdgAdminRojo, ama:null,
+   rojo:_bdgAdminRojo, ama:_bdgAdminAma,
    tRojo:'Grabaciones con audio sin procesar + leads activos sin captador',
+   tAma:'PINs sin rotar hace más de '+BDG_PIN_DIAS+' días',
+   irAma:function(){_bdgIrPestana('tab-admin');_bdgScroll('admin-pins');},
    irRojo:function(){
      _bdgIrPestana('tab-admin');
      _bdgAlAparecer('grab-fil-estado',function(el){
@@ -10553,7 +10584,7 @@ async function renderAdmin(){
 
     <!-- 🔑 PINs del equipo (v138) — datos SOLO a pedido vía geat-auth admin_pins;
          el gate real es server-side (token de admin). Solo lectura. -->
-    <div class="admin-section">
+    <div class="admin-section" id="admin-pins">
       <div class="admin-section-title">🔑 PINs del equipo</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn-primary btn-sm" onclick="cargarPinsEquipo()">👁 Ver PINs</button>
@@ -13992,24 +14023,54 @@ async function renderParteDia(){
     const corteVisita=new Date(Date.now()-PD_DIAS_VISITA_VENCIDA*24*3600000).toISOString();
     const hace7=new Date(Date.now()-7*24*3600000);
 
-    const[rCal,rNuevos,rCerr,rTareas,rCeo]=await Promise.all([
+    const[rCal,rNuevos,rCerr,rTareas,rCeo,rVis]=await Promise.all([
       sb.from('leads').select('id,nombre,estado,captador,cerrador,visita_fecha,resultado_reunion,updated_at,created_at,fecha_contacto_real,ultima_gestion')
         .in('estado',PD_ESTADOS_CALIENTES).or('archivado.is.null,archivado.eq.false'),
       sb.from('leads').select('id',{count:'exact',head:true})
         .eq('estado','nuevo').or('archivado.is.null,archivado.eq.false'),
       sb.from('leads').select('id',{count:'exact',head:true})
         .eq('estado','cerrado_ganado').gte('fecha_contrato',ymdLocal(hace7)),
+      /* v227 — las tareas atrasadas EXCLUYEN las visitas: esas ya se cuentan
+         arriba, en "Visitas vencidas sin resultado". Antes se contaban en los
+         dos lados (101 acá contra 57 en el badge de la barra). */
       sb.from('agenda_personal').select('id',{count:'exact',head:true})
-        .eq('activo',true).eq('completada',false).lt('fecha_programada',inicioHoy),
+        .eq('activo',true).eq('completada',false)
+        .not('tipo','ilike','%visita%')
+        .lt('fecha_programada',inicioHoy),
       sb.from('tareas_ceo').select('*').eq('activo',true).eq('sugerida',false)
         .neq('estado','hecho')
-        .order('prioridad',{ascending:true}).order('id',{ascending:true})
+        .order('prioridad',{ascending:true}).order('id',{ascending:true}),
+      /* ── v227 · LAS VISITAS VENCIDAS SE LEEN DE agenda_personal ──────────
+         Hasta v226 esto salía de leads.visita_fecha + resultado_reunion, y daba
+         36 mientras el badge de la barra daba 42 sobre la misma pregunta.
+         leads.visita_fecha queda VIEJA por diseño desde v217: reprogramar
+         escribe en agenda_personal y en agenda_grupal, no en el lead. O sea que
+         la columna del lead no es la fuente, es una copia desactualizada.
+         Esta consulta es carácter por carácter la de _bdgWeekRojo() (menos el
+         alcance por rol, que acá no aplica: el Parte es solo del admin y ve
+         todo). Si se toca una, se tocan las dos. */
+      sb.from('agenda_personal')
+        .select('id,lead_id,colaborador,captador,tipo,titulo,fecha_programada')
+        .eq('activo',true).eq('completada',false)
+        .ilike('tipo','%visita%')
+        .lt('fecha_programada',corteVisita)
+        .or('nota_resultado.is.null,nota_resultado.eq.')
+        .order('fecha_programada')
     ]);
     if(rCal.error)throw rCal.error;
+    if(rVis.error)throw rVis.error;
 
     const cal=rCal.data||[];
-    const vencidas=cal.filter(l=>l.estado==='visita_agendada'&&l.visita_fecha&&
-      l.visita_fecha<corteVisita&&!(l.resultado_reunion&&(''+l.resultado_reunion).trim()));
+    const vencidas=rVis.data||[];
+    /* El nombre del cliente para la lista del detalle. Son decenas de ids (42 el
+       3-sep), muy por debajo del corte de 1000 de PostgREST; el .in() no trunca.
+       Sin lead_id la fila igual cuenta: se muestra con su título. */
+    const _lidsV=[...new Set(vencidas.map(v=>v.lead_id).filter(Boolean))];
+    if(_lidsV.length){
+      const{data:_lv}=await sb.from('leads').select('id,nombre,captador,cerrador').in('id',_lidsV);
+      const _mv={};(_lv||[]).forEach(l=>{_mv[l.id]=l;});
+      vencidas.forEach(v=>{v._lead=_mv[v.lead_id]||null;});
+    }
     const reservas=cal.filter(l=>l.estado==='reservado');
     /* Foco: los calientes con más días sin gestión. v182 — se cuenta desde la
        última gestión registrada y, si no hay, desde que el cliente contactó de
@@ -14070,7 +14131,7 @@ function _pdPintar(){
       /* 🔴 URGENTE HOY */
       '<div class="pd-sec"><div class="pd-sec-t pd-rojo">🔴 Urgente hoy</div>'+
         linea('vencidas',D.vencidas.length,'pd-rojo','Visitas vencidas sin resultado','Pasaron +'+PD_DIAS_VISITA_VENCIDA+' días y nadie registró qué pasó')+
-        linea('tareas',D.tareasAtrasadas,'pd-rojo','Tareas atrasadas del equipo','Vencidas y sin completar')+
+        linea('tareas',D.tareasAtrasadas,'pd-rojo','Tareas atrasadas del equipo','Vencidas y sin completar — sin contar visitas')+
         linea('reservas',D.reservas.length,'pd-rojo','Reservas sin cerrar','Plata puesta esperando')+
         /* v175 — el storage lleno corta el servicio entero: cuando pasa el 80%
            deja de ser un dato del pie y sube a lo urgente del día. */
@@ -14279,9 +14340,32 @@ function _pdDetalleHtml(clave){
   const D=_pdDatos; if(!D)return'';
   if(clave==='tareas'){
     return '<div class="pd-det"><div style="font-size:11px;color:var(--gray-400);padding:5px 7px">'+
-      D.tareasAtrasadas+' tarea(s) atrasada(s) repartidas en el equipo. Se trabajan desde la agenda de cada uno.</div></div>';
+      D.tareasAtrasadas+' tarea(s) atrasada(s) repartidas en el equipo, sin contar visitas. Se trabajan desde la agenda de cada uno.</div></div>';
   }
-  const map={vencidas:D.vencidas,reservas:D.reservas,caliente:D.caliente};
+  /* v227 — 'vencidas' ya no son leads sino filas de agenda_personal, así que
+     tiene su propio render: la fecha que importa es fecha_programada y el
+     nombre del cliente viene de _lead (o del título, si la visita no tiene
+     lead asociado). */
+  if(clave==='vencidas'){
+    const filas=(D.vencidas||[]);
+    if(!filas.length)return'';
+    const tope=filas.slice(0,15);
+    return '<div class="pd-det">'+tope.map(function(v){
+      const l=v._lead||null;
+      const nom=(l&&l.nombre)||v.titulo||('Visita #'+v.id);
+      const quien=(l&&(l.cerrador||l.captador))||v.colaborador||v.captador||'—';
+      /* &#39; = comilla simple: el navegador la decodifica antes de parsear el
+         handler, y así el string de JS no necesita escapes anidados. */
+      const click=v.lead_id?' onclick="openLeadDetail('+v.lead_id+',null,&#39;normal&#39;)"':'';
+      return '<div class="pd-det-row"'+click+'>'+
+        '<span style="flex:1;min-width:110px">'+_escPend(nom)+'</span>'+
+        '<span class="d">'+_escPend(quien)+' · '+_pdDias(v.fecha_programada)+'</span>'+
+      '</div>';
+    }).join('')+
+      (filas.length>tope.length?'<div style="font-size:10px;color:var(--gray-400);padding:4px 7px">+'+(filas.length-tope.length)+' más</div>':'')+
+    '</div>';
+  }
+  const map={reservas:D.reservas,caliente:D.caliente};
   const filas=map[clave]||[];
   if(!filas.length)return'';
   const orden=filas.slice().sort((a,b)=>new Date(a.updated_at||0)-new Date(b.updated_at||0));
@@ -14920,16 +15004,26 @@ function _pinsRender(){
     .filter(function(u){return !/mar[ií]a\s+luisa/i.test(u.nombre||'');})
     .filter(function(u){return conInactivos||u.activo;});
   if(!rows.length){cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Sin colaboradores para mostrar.</div>';return;}
+  /* v227 — columna "Rotado": es lo que cuenta el badge amarillo de la pestaña.
+     Sin fecha = nunca se rotó. La columna solo aparece si admin_pins la manda
+     (ver _bdgAdminAma: si el back todavía no la devuelve, no se inventa). */
+  const hayRot=rows.some(function(u){return Object.prototype.hasOwnProperty.call(u,'pin_rotado_en');});
+  const corte=_cobFechaMas(ymdLocal(new Date()),-BDG_PIN_DIAS);
   cont.innerHTML='<table class="prod-table">'+
-    '<thead><tr><th>Nombre</th><th>Rol</th><th>PIN</th><th>Activo</th></tr></thead>'+
+    '<thead><tr><th>Nombre</th><th>Rol</th><th>PIN</th><th>Activo</th>'+(hayRot?'<th>Rotado</th>':'')+'</tr></thead>'+
     '<tbody>'+rows.map(function(u){
+      const f=u.pin_rotado_en?String(u.pin_rotado_en).slice(0,10):null;
+      const viejo=u.activo&&(!f||f<corte);
       return '<tr style="'+(u.activo?'':'opacity:0.5')+'">'+
         '<td><strong>'+_escPend(u.nombre||'—')+'</strong></td>'+
         '<td style="font-size:10px;color:var(--gray-400)">'+_escPend(_asistRolHumano(u.rol))+'</td>'+
         '<td style="font-family:monospace;font-weight:700;letter-spacing:2px">'+_escPend(u.pin||'—')+'</td>'+
         '<td>'+(u.activo?'<span style="color:var(--st-completo)">● sí</span>':'<span style="color:var(--st-atrasado)">○ no</span>')+'</td>'+
+        (hayRot?'<td style="font-size:11px;'+(viejo?'color:var(--gold);font-weight:700':'color:var(--gray-400)')+'">'+
+          (f?_escPend(f):'nunca')+(viejo?' ⚠':'')+'</td>':'')+
       '</tr>';
-    }).join('')+'</tbody></table>';
+    }).join('')+'</tbody></table>'+
+    (hayRot?'<div style="font-size:10px;color:var(--gray-400);margin-top:6px">⚠ = sin rotar hace más de '+BDG_PIN_DIAS+' días. El PIN se cambia en «Gestión de Usuarios»; al guardarlo, la fecha se escribe sola.</div>':'');
 }
 
 /* ── Gestión de Usuarios (panel admin, tabla colaboradores · pin plano) ── */
