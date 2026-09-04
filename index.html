@@ -1944,7 +1944,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='230';
+  var CURRENT_VERSION='231';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3035,14 +3035,18 @@ function startApp(){
     try{cargarTareasCeo();}catch(_e){}
     /* v229 — Mi agenda: pestaña propia + reemplazo del botón de cabecera.
        "Nueva oportunidad" lo usa el equipo comercial; el CEO no da de alta
-       oportunidades desde acá, así que ese lugar pasa a ser el atajo a su
-       agenda. Para el resto de los roles el botón queda como estaba. */
+       oportunidades desde acá, así que ese lugar queda libre para un atajo.
+       v231 — ese atajo va a AGENDA SEMANAL, no a Mi agenda: el CEO ya entra a
+       su agenda por defecto y la pestaña es la primera de la barra, así que un
+       botón más apuntando ahí eran dos accesos a lo mismo. Lo que sí le falta
+       a mano es el salto a la agenda del equipo.
+       Para el resto de los roles el botón queda como estaba. */
     const tabMiAg=document.getElementById('tab-mi-agenda');
     if(tabMiAg)tabMiAg.style.display='';
     const btnOp=document.getElementById('hdr-oportunidad');
     if(btnOp){
-      btnOp.innerHTML='🗓️ Mi agenda';
-      btnOp.setAttribute('onclick',"switchTab(document.getElementById('tab-mi-agenda'),'screen-mi-agenda');renderMiAgenda()");
+      btnOp.innerHTML='📅 Agenda semanal';
+      btnOp.setAttribute('onclick',"switchTab(document.getElementById('tab-week'),'screen-week')");
     }
     const tabAdmin=document.getElementById('tab-admin');
     if(tabAdmin)tabAdmin.style.display='';
