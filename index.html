@@ -213,7 +213,7 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-g-celda{flex:1;border-left:1px solid var(--gray-700)}
 .mia-g-capas{position:absolute;inset:0;display:flex;pointer-events:none}
 .mia-g-capa{flex:1;position:relative;pointer-events:auto;border-left:1px solid transparent}
-.mia-ev{position:absolute;background:var(--gray-700);border-radius:5px;padding:2px 5px;overflow:hidden;cursor:pointer;font-size:10px;line-height:1.25;transition:filter .12s}
+.mia-ev{position:absolute;background:var(--gray-700);border-radius:5px;padding:2px 5px;overflow:hidden;cursor:pointer;font-size:10px;line-height:1.25;transition:filter .12s;touch-action:pan-x}
 .mia-ev:hover{filter:brightness(1.22)}
 .mia-ev.arrastrando{opacity:.8;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.5)}
 .mia-ev.hecho{opacity:.55;text-decoration:line-through}
@@ -221,7 +221,10 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-ev.ro:hover{filter:none}
 .mia-ev-h{font-size:9px;color:var(--gray-400);font-weight:700}
 .mia-ev-t{font-weight:700;color:var(--gray-100);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mia-ev-rz{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize}
+.mia-ev-rz{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize;touch-action:none}
+/* v233 — arrastre tactil: pan-x deja pasar el scroll horizontal pero le cede
+   el gesto vertical a _miaDragMov, que es el que mueve el evento. */
+@media(pointer:coarse){.mia-ev-rz{height:12px}}
 .mia-ev-rz:hover{background:rgba(242,197,0,.35)}
 .mia-ahora{position:absolute;height:0;border-top:2px solid var(--st-atrasado);z-index:20;pointer-events:none}
 .mia-ahora i{position:absolute;left:-4px;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--st-atrasado)}
@@ -270,7 +273,28 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-pop textarea.form-control{font-size:11px;resize:vertical}
 
 /* ══ MI AGENDA · fase 3 (v232): Hoy solo 3, Tareas, Ideas ══ */
-.mia-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:12px;margin-top:14px}
+/* v233 · las tres tarjetas se mudaron al panel DERECHO (layout Google Calendar):
+   izquierda mini-calendario · centro grilla · derecha Hoy3 / Ideas / Tareas.
+   "Hoy, solo 3" vive FUERA del contenedor con scroll (.mia-panel-fijo): es la
+   razon de que el panel exista, tiene que verse sin scrollear nunca. */
+.mia-panel{width:300px;flex-shrink:0;display:flex;flex-direction:column;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;position:sticky;top:58px;max-height:calc(100vh - 74px);overflow:hidden}
+.mia-panel-h{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--gray-700);flex-shrink:0}
+.mia-panel-h .t{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400)}
+.mia-panel-tog{margin-left:auto;background:none;border:1px solid var(--gray-600);color:var(--gray-400);border-radius:7px;width:24px;height:24px;line-height:1;padding:0;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0}
+.mia-panel-tog:hover{border-color:var(--gold);color:var(--gold)}
+.mia-panel-fijo{padding:10px 10px 0;flex-shrink:0}
+.mia-panel-body{padding:10px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1}
+.mia-panel .mia-card{background:var(--gray-900)}
+.mia-panel-icos{display:none;flex-direction:column;align-items:center;gap:9px;padding:10px 0}
+.mia-panel.col .mia-panel-icos{display:flex}
+.mia-panel.col{width:42px}
+.mia-panel.col .mia-panel-h{justify-content:center;padding:8px 0}
+.mia-panel.col .mia-panel-h .t{display:none}
+.mia-panel.col .mia-panel-tog{margin-left:0}
+.mia-panel.col .mia-panel-fijo,.mia-panel.col .mia-panel-body{display:none}
+.mia-panel-ico{position:relative;background:none;border:1px solid var(--gray-600);border-radius:8px;width:30px;height:30px;padding:0;font-size:14px;line-height:1;cursor:pointer;font-family:inherit;color:var(--gray-300)}
+.mia-panel-ico:hover{border-color:var(--gold)}
+.mia-panel-ico b{position:absolute;top:-6px;right:-6px;background:var(--gold);color:#000;border-radius:8px;font-size:8px;font-weight:800;padding:0 4px;line-height:13px}
 .mia-card{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:12px}
 .mia-card-t{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gold);margin-bottom:9px}
 .mia-card-n{margin-left:auto;font-size:10px;color:var(--gray-400);background:var(--gray-900);border-radius:9px;padding:1px 8px;letter-spacing:0}
@@ -301,6 +325,18 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-i-row .acc button:hover{border-color:var(--gold);color:var(--gold)}
 .mia-i-row .acc button.x:hover{border-color:var(--st-atrasado);color:var(--st-atrasado)}
 
+/* v233 — angosto (<1100px): el panel derecho baja debajo de la grilla, como
+   antes de v233. flex-wrap + width:100% lo manda solo a su propia linea. */
+@media(max-width:1100px){
+  .mia-wrap{flex-wrap:wrap}
+  .mia-panel,.mia-panel.col{width:100%;position:static;max-height:none;overflow:visible}
+  .mia-panel-fijo{padding:10px 10px 0}
+  .mia-panel-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;overflow:visible}
+  .mia-panel.col .mia-panel-icos{flex-direction:row;justify-content:center}
+  .mia-panel.col .mia-panel-h{justify-content:flex-start;padding:8px 10px}
+  .mia-panel.col .mia-panel-h .t{display:block}
+  .mia-panel.col .mia-panel-tog{margin-left:auto}
+}
 @media(max-width:860px){
   .mia-wrap{flex-direction:column}
   .mia-side{width:100%;display:flex;gap:11px}
@@ -1982,7 +2018,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='232';
+  var CURRENT_VERSION='233';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4736,6 +4772,7 @@ function miaCrear(){
   miaAbrirPop({fecha:ymdBolivia(new Date()),hora:'09:00'});
 }
 function miaEditar(id,ev){
+  if(Date.now()-_miaDragUlt<500)return;   /* venia de un arrastre, no de un toque */
   const e=_miaEventos.filter(function(x){return String(x.id)===String(id);})[0];
   if(!e)return;
   const p=_miaPartes(e.fecha_programada);
@@ -4779,11 +4816,13 @@ function _miaBloqueHtml(b){
   const st='top:'+top.toFixed(1)+'px;height:'+alto.toFixed(1)+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);'+
     'border-left:3px solid '+cal.color+';'+(ro?'':'background:'+cal.color+'1f;');
   return '<div class="mia-ev'+(ro?' ro':'')+(e.completada?' hecho':'')+'" style="'+st+'" '+
-    'data-id="'+_escPend(String(e.id))+'"'+(ro?'':' onmousedown="_miaDragIni(event,\''+e.id+'\')" onclick="miaEditar('+e.id+',event)"')+
+    'data-id="'+_escPend(String(e.id))+'"'+(ro?'':' onmousedown="_miaDragIni(event,\''+e.id+'\')"'+
+      ' ontouchstart="_miaDragIni(event,\''+e.id+'\')" onclick="miaEditar('+e.id+',event)"')+
     ' title="'+_escPend(_miaHhmm(e.fecha_programada)+'–'+_miaHhmm(_miaFin(e))+' · '+(e.titulo||''))+(ro?' (visita del equipo — solo lectura)':'')+'">'+
     '<div class="mia-ev-h">'+_miaHhmm(e.fecha_programada)+'</div>'+
     '<div class="mia-ev-t">'+_escPend(e.titulo||'(sin título)')+'</div>'+
-    (ro?'':'<div class="mia-ev-rz" onmousedown="_miaDragIni(event,\''+e.id+'\',\'duracion\')"></div>')+
+    (ro?'':'<div class="mia-ev-rz" onmousedown="_miaDragIni(event,\''+e.id+'\',\'duracion\')"'+
+      ' ontouchstart="_miaDragIni(event,\''+e.id+'\',\'duracion\')"></div>')+
   '</div>';
 }
 function _miaGrilla(){
@@ -4847,21 +4886,43 @@ function _miaClicHueco(e,ymd){
 }
 
 /* ── ARRASTRE: mover el evento o estirarlo desde el borde de abajo ───────── */
+/* v233 - el arrastre anda con mouse Y con dedo. La unica diferencia real es de
+   donde salen las coordenadas (_miaPtr) y que en tactil hay que preventDefault()
+   el touchmove para que la pagina no scrollee mientras se arrastra. NO se hace
+   preventDefault en el touchstart: eso mataria el click sintetico y entonces
+   tocar un bloque para editarlo dejaria de funcionar en el telefono. */
+function _miaPtr(e){
+  const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0]);
+  return t?{x:t.clientX,y:t.clientY}:{x:e.clientX,y:e.clientY};
+}
+let _miaDragUlt=0;              /* cuando termino el ultimo arrastre de verdad */
 function _miaDragIni(e,id,modo){
-  if(e.button!==0)return;
+  const tactil=!!(e.touches&&e.touches.length);
+  if(tactil){ if(e.touches.length>1)return; }
+  else if(e.button!==0)return;
   const ev=_miaEventos.filter(function(x){return String(x.id)===String(id);})[0];
   if(!ev)return;
-  e.preventDefault(); e.stopPropagation();
-  _miaDrag={id:id,ev:ev,modo:modo||'mover',y0:e.clientY,x0:e.clientX,movido:false,
+  if(!tactil)e.preventDefault();
+  e.stopPropagation();
+  const p=_miaPtr(e);
+  _miaDrag={id:id,ev:ev,modo:modo||'mover',y0:p.y,x0:p.x,movido:false,tactil:tactil,
     iniMin:_miaMin(ev.fecha_programada),finMin:_miaMin(_miaFin(ev)),ymd:_miaPartes(ev.fecha_programada).ymd};
-  document.addEventListener('mousemove',_miaDragMov);
-  document.addEventListener('mouseup',_miaDragFin);
+  if(tactil){
+    document.addEventListener('touchmove',_miaDragMov,{passive:false});
+    document.addEventListener('touchend',_miaDragFin);
+    document.addEventListener('touchcancel',_miaDragFin);
+  }else{
+    document.addEventListener('mousemove',_miaDragMov);
+    document.addEventListener('mouseup',_miaDragFin);
+  }
 }
 function _miaDragMov(e){
   if(!_miaDrag)return;
-  const dy=e.clientY-_miaDrag.y0, dx=e.clientX-_miaDrag.x0;
+  const p=_miaPtr(e);
+  const dy=p.y-_miaDrag.y0, dx=p.x-_miaDrag.x0;
   if(!_miaDrag.movido&&Math.abs(dy)<4&&Math.abs(dx)<4)return;
   _miaDrag.movido=true;
+  if(_miaDrag.tactil&&e.cancelable)e.preventDefault();
   const dMin=Math.round((dy/MIA_PX_HORA*60)/MIA_SNAP_MIN)*MIA_SNAP_MIN;
   const el=document.querySelector('.mia-ev[data-id="'+_miaDrag.id+'"]');
   if(!el)return;
@@ -4876,15 +4937,22 @@ function _miaDragMov(e){
 async function _miaDragFin(e){
   document.removeEventListener('mousemove',_miaDragMov);
   document.removeEventListener('mouseup',_miaDragFin);
+  document.removeEventListener('touchmove',_miaDragMov,{passive:false});
+  document.removeEventListener('touchend',_miaDragFin);
+  document.removeEventListener('touchcancel',_miaDragFin);
   const d=_miaDrag; _miaDrag=null;
   if(!d||!d.movido)return;
-  const dy=e.clientY-d.y0;
+  /* en tactil el click sintetico llega DESPUES del touchend: sin esta marca,
+     soltar un evento arrastrado abriria el popover de edicion. */
+  _miaDragUlt=Date.now();
+  const pf=_miaPtr(e);
+  const dy=pf.y-d.y0;
   const dMin=Math.round((dy/MIA_PX_HORA*60)/MIA_SNAP_MIN)*MIA_SNAP_MIN;
   /* En Semana, correrse de columna cambia el DÍA. La columna se deduce de en
      qué capa cayó el puntero, no de una cuenta de píxeles: así no se rompe si
      cambia el ancho. */
   let ymd=d.ymd;
-  const bajo=document.elementFromPoint(e.clientX,e.clientY);
+  const bajo=document.elementFromPoint(pf.x,pf.y);
   const capa=bajo&&bajo.closest?bajo.closest('.mia-g-capa'):null;
   if(capa&&capa.dataset.ymd)ymd=capa.dataset.ymd;
 
@@ -5108,7 +5176,7 @@ function _miaTarjetaHoy3(){
     '</div>';
   }).join('');
   const libres=MIA_HOY_MAX-_miaHoy3.length;
-  return '<div class="mia-card">'+
+  return '<div class="mia-card" id="mia-card-hoy3">'+
     '<div class="mia-card-t">🎯 Hoy, solo 3'+
       '<span class="mia-card-n">'+_miaHoy3.length+'/'+MIA_HOY_MAX+'</span></div>'+
     (filas||'<div class="mia-card-vacio">Elegí hasta 3 cosas con el botón ★ Hoy. Nada más entra.</div>')+
@@ -5195,7 +5263,7 @@ function _miaTarjetaTareas(){
   };
   const cuerpo=grupo('Hoy',hoy)+grupo('Esta semana',semana)+
     grupo('Sin fecha',sin,'ponele día o soltala');
-  return '<div class="mia-card">'+
+  return '<div class="mia-card" id="mia-card-tareas">'+
     '<div class="mia-card-t">✅ Tareas<span class="mia-card-n">'+_miaTareas.length+'</span></div>'+
     '<div class="mia-card-inp">'+
       '<input type="text" id="mia-tarea-inp" placeholder="Nueva tarea…" autocomplete="off" '+
@@ -5273,7 +5341,7 @@ function _miaTarjetaIdeas(){
       '</span>'+
     '</div>';
   }).join('');
-  return '<div class="mia-card">'+
+  return '<div class="mia-card" id="mia-card-ideas">'+
     '<div class="mia-card-t">💡 Ideas<span class="mia-card-n">'+_miaIdeas.length+'</span></div>'+
     '<div class="mia-card-inp">'+
       '<input type="text" id="mia-idea-inp" placeholder="Anotá y seguí" autocomplete="off" '+
@@ -5284,8 +5352,61 @@ function _miaTarjetaIdeas(){
   '</div>';
 }
 
-function _miaTarjetas(){
-  return '<div class="mia-cards">'+_miaTarjetaHoy3()+_miaTarjetaTareas()+_miaTarjetaIdeas()+'</div>';
+/* ── v233 · PANEL DERECHO ──────────────────────────────────────
+   Las tres tarjetas dejaron de vivir debajo de la grilla y pasaron a una
+   columna propia a la derecha, orden Hoy 3 → Ideas → Tareas.
+   "Hoy, solo 3" va en .mia-panel-fijo, FUERA del contenedor con scroll: si
+   hubiera que scrollear para verlo, el panel no tendria sentido.
+   El colapsado se guarda en sessionStorage (dura la sesion, no para siempre) y
+   arranca colapsado en pantalla chica, donde el panel cae debajo de la grilla. */
+let _miaPanelCol=(function(){
+  try{ const v=sessionStorage.getItem('mia_panel'); if(v==='col'||v==='exp')return v==='col'; }catch(e){}
+  return window.innerWidth<=640;
+})();
+function _miaPanelIco(k,ico,lbl,n){
+  return '<button type="button" class="mia-panel-ico" title="'+lbl+'" onclick="miaPanelAbrir(\''+k+'\')">'+
+    ico+(n?'<b>'+n+'</b>':'')+'</button>';
+}
+function _miaPanelHtml(){
+  return '<aside class="mia-panel'+(_miaPanelCol?' col':'')+'" id="mia-panel">'+
+    '<div class="mia-panel-h">'+
+      '<span class="t">Tu foco</span>'+
+      '<button type="button" class="mia-panel-tog" onclick="miaPanelToggle()" title="'+
+        (_miaPanelCol?'Desplegar el panel':'Colapsar el panel')+'">'+(_miaPanelCol?'‹':'›')+'</button>'+
+    '</div>'+
+    '<div class="mia-panel-icos">'+
+      _miaPanelIco('hoy3','🎯','Hoy, solo 3',_miaHoy3.length)+
+      _miaPanelIco('ideas','💡','Ideas',_miaIdeas.length)+
+      _miaPanelIco('tareas','✅','Tareas',_miaTareas.length)+
+    '</div>'+
+    '<div class="mia-panel-fijo">'+_miaTarjetaHoy3()+'</div>'+
+    '<div class="mia-panel-body">'+_miaTarjetaIdeas()+_miaTarjetaTareas()+'</div>'+
+  '</aside>';
+}
+/* repinta SOLO el panel: los datos ya estan en memoria, abrir y cerrar no
+   tiene por que volver a pegarle a Supabase. */
+function _miaPanelPintar(){
+  const viejo=document.getElementById('mia-panel');
+  if(!viejo)return;
+  const tmp=document.createElement('div');
+  tmp.innerHTML=_miaPanelHtml();
+  const nuevo=tmp.firstElementChild;
+  if(nuevo&&viejo.parentNode)viejo.parentNode.replaceChild(nuevo,viejo);
+}
+function _miaPanelGuardar(){
+  try{ sessionStorage.setItem('mia_panel',_miaPanelCol?'col':'exp'); }catch(e){}
+}
+function miaPanelToggle(){
+  _miaPanelCol=!_miaPanelCol;
+  _miaPanelGuardar();
+  _miaPanelPintar();
+}
+function miaPanelAbrir(k){
+  _miaPanelCol=false;
+  _miaPanelGuardar();
+  _miaPanelPintar();
+  const el=document.getElementById('mia-card-'+k);
+  if(el&&el.scrollIntoView)el.scrollIntoView({block:'nearest'});
 }
 
 /* ── RENDER ──────────────────────────────────────────────────────────────── */
@@ -5310,7 +5431,8 @@ async function renderMiAgenda(){
     await _miaCargarPanel();
     body.innerHTML=_miaCabecera()+
       '<div class="mia-wrap">'+_miaSidebar()+
-        '<div class="mia-main">'+_miaBarraRapida()+_miaCuerpo()+_miaTarjetas()+'</div>'+
+        '<div class="mia-main">'+_miaBarraRapida()+_miaCuerpo()+'</div>'+
+        _miaPanelHtml()+
       '</div>';
   }catch(e){
     body.innerHTML=_miaCabecera()+
