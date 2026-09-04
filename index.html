@@ -153,6 +153,12 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-crear:hover{filter:brightness(1.08)}
 .mia-hueco{border:1px dashed var(--gray-600);border-radius:10px;padding:34px 18px;text-align:center;color:var(--gray-400);font-size:12px;line-height:1.7}
 /* ══ MI AGENDA · fase 2 (v230): grilla, panel lateral, popover ══ */
+/* #app es flex-column y .screen trae margin:0 auto: en un contenedor flex esa
+   combinación anula el stretch y deja la pantalla en shrink-to-fit. Las otras
+   pantallas no lo notan porque sus tablas piden ancho solas; acá todo es
+   flexible, así que medía 765px de 1536 y las tarjetas caían en una columna.
+   width:100% la devuelve al ancho disponible (el max-width:1400px sigue mandando). */
+#screen-mi-agenda{width:100%}
 .mia-wrap{display:flex;gap:16px;align-items:flex-start}
 .mia-main{flex:1;min-width:0}
 
@@ -262,6 +268,38 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-pop-sep{color:var(--gray-600);font-size:11px}
 .mia-pop-f{display:flex;gap:7px;align-items:center;margin-top:2px}
 .mia-pop textarea.form-control{font-size:11px;resize:vertical}
+
+/* ══ MI AGENDA · fase 3 (v232): Hoy solo 3, Tareas, Ideas ══ */
+.mia-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:12px;margin-top:14px}
+.mia-card{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:12px}
+.mia-card-t{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gold);margin-bottom:9px}
+.mia-card-n{margin-left:auto;font-size:10px;color:var(--gray-400);background:var(--gray-900);border-radius:9px;padding:1px 8px;letter-spacing:0}
+.mia-card-vacio{font-size:11px;color:var(--gray-400);line-height:1.6;padding:3px 0}
+.mia-card-pie{font-size:10px;color:var(--gray-600);margin-top:7px;border-top:1px solid var(--gray-700);padding-top:6px}
+.mia-card-inp{display:flex;gap:5px;margin-bottom:9px}
+.mia-card-inp input{flex:1;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:7px;padding:5px 9px;color:var(--white);font-size:11px;font-family:inherit;outline:none}
+.mia-card-inp input:focus{border-color:var(--gold)}
+.mia-card-inp input::placeholder{color:var(--gray-600)}
+.mia-card-inp button{background:var(--gold);color:#000;border:none;border-radius:7px;width:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
+.mia-h3-row,.mia-t-row,.mia-i-row{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--gray-700);font-size:11px}
+.mia-h3-row:last-child,.mia-t-row:last-child,.mia-i-row:last-child{border-bottom:none}
+.mia-h3-row input[type=checkbox],.mia-t-row input[type=checkbox]{accent-color:var(--gold);cursor:pointer;flex-shrink:0}
+.mia-h3-row .t,.mia-t-row .t,.mia-i-row .t{flex:1;min-width:0;color:var(--gray-100);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mia-h3-row .tag{font-size:9px;color:var(--gray-400);background:var(--gray-900);border-radius:8px;padding:1px 7px;flex-shrink:0}
+.mia-x,.mia-mini-btn{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:1px 4px;font-family:inherit;flex-shrink:0}
+.mia-x:hover,.mia-mini-btn:hover{color:var(--white)}
+.mia-mini-btn.x:hover{color:var(--st-atrasado)}
+.mia-star{background:none;border:1px solid var(--gray-600);color:var(--gray-400);border-radius:9px;padding:1px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0}
+.mia-star:hover{border-color:var(--gold);color:var(--gold)}
+.mia-t-grupo{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:9px 0 3px}
+.mia-t-grupo span{color:var(--gray-600)}
+.mia-t-sub{font-size:9px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--gray-600);font-style:italic;margin-top:1px}
+.mia-i-row{align-items:flex-start;flex-wrap:wrap}
+.mia-i-row .t{white-space:normal;line-height:1.45}
+.mia-i-row .acc{display:flex;gap:3px;flex-wrap:wrap;width:100%;margin-top:3px}
+.mia-i-row .acc button{background:var(--gray-900);border:1px solid var(--gray-600);color:var(--gray-400);border-radius:9px;padding:1px 8px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit}
+.mia-i-row .acc button:hover{border-color:var(--gold);color:var(--gold)}
+.mia-i-row .acc button.x:hover{border-color:var(--st-atrasado);color:var(--st-atrasado)}
 
 @media(max-width:860px){
   .mia-wrap{flex-direction:column}
@@ -1944,7 +1982,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='231';
+  var CURRENT_VERSION='232';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4591,14 +4629,22 @@ async function _miaGuardar(id,d){
       if(error)throw error;
       toast('✅ Evento actualizado');
     }else{
-      const{error}=await sb.from('agenda_personal').insert(Object.assign({
+      const{data:ins,error}=await sb.from('agenda_personal').insert(Object.assign({
         colaborador:cu.nombre,tipo:'ceo',lead_id:null,visita_nro:null,
         completada:false,activo:true,prioridad_hoy:false,
         origen:d.origen||'manual',
         created_at:new Date().toISOString()
-      },fila));
+      },fila)).select('id').single();
       if(error)throw error;
       toast('✅ Agendado');
+      /* v232 — si el evento vino de una idea, la idea sale del inbox */
+      if(_miaIdeaPend){
+        try{
+          await sb.from('ceo_ideas').update({estado:'evento',agenda_id:(ins&&ins.id)||null,
+            updated_at:new Date().toISOString()}).eq('id',_miaIdeaPend);
+        }catch(_e){}
+        _miaIdeaPend=null;
+      }
     }
     miaCerrarPop();
     await renderMiAgenda();
@@ -4622,6 +4668,7 @@ async function miaBorrar(id){
 
 /* ── POPOVER DE CREAR / EDITAR ───────────────────────────────────────────── */
 function miaCerrarPop(){
+  _miaIdeaPend=null;
   const p=document.getElementById('mia-pop');
   if(p)p.remove();
   document.removeEventListener('mousedown',_miaPopFuera,true);
@@ -4922,6 +4969,325 @@ function _miaAgenda(){
   }).join('')+'</div>';
 }
 
+
+/* ── v232 · FASE 3: HOY SOLO 3, TAREAS E IDEAS ───────────────────────────
+   Tres tarjetas debajo de la grilla. Se cargan aparte del calendario porque no
+   dependen del período que se esté mirando: son "hoy" y la cola de pendientes.
+
+   COMPLETAR ES SEGURO ACÁ. En esta tabla `completada=true` significa "ocurrió"
+   y dispara triggers (ver el aviso de v208), pero los CINCO triggers de
+   agenda_personal arrancan con `NEW.lead_id IS NOT NULL` — verificado leyendo
+   fn_exigir_siguiente_paso, fn_registrar_visita_atendida, fn_evitar_tarea_
+   duplicada, fn_sync_estado_lead_por_tarea y fn_set_visita_fecha_desde_agenda.
+   Las filas del CEO nacen con lead_id NULL, así que ninguno se activa. Por eso
+   acá el checkbox puede completar de verdad, y no es contradicción con la regla
+   de nunca usar completada=true para dar de baja: dar de baja sigue siendo
+   activo=false (miaBorrar, miaSoltarTarea).
+
+   LO QUE FALTA EN LA BASE — TAREAS SIN FECHA
+   agenda_personal.fecha_programada es NOT NULL y no tiene default, así que hoy
+   NO se puede guardar una tarea sin día. El grupo "Sin fecha" y la acción
+   "Ideas → Tarea" están escritos contra `fecha_programada IS NULL` y arrancan a
+   funcionar solos en cuanto la columna acepte NULL. Mientras tanto la acción
+   avisa qué falta en vez de fallar con un error de Postgres en crudo.
+   Hay que pedirle a Chat:  ALTER TABLE agenda_personal ALTER COLUMN
+   fecha_programada DROP NOT NULL;  (no se toca desde acá por regla del CEO). */
+
+const MIA_HOY_MAX=3;
+let _miaHoy3=[];
+let _miaTareas=[];
+let _miaIdeas=[];
+let _miaIdeaPend=null;   /* idea que espera convertirse en evento */
+
+function _miaIniHoyIso(){return new Date(ymdBolivia(new Date())+'T00:00:00-04:00').toISOString();}
+function _miaFinHoyIso(){return _finDeHoyBoIso();}
+/* Fin del domingo de la semana en curso, para el grupo "Esta semana". */
+function _miaFinSemanaIso(){
+  const dom=addDays(getMonday(new Date()),7);
+  return new Date(ymdLocal(dom)+'T00:00:00-04:00').toISOString();
+}
+/* ¿Postgres rechazó el insert por el NOT NULL de fecha_programada? */
+function _miaEsFaltaNull(e){
+  const s=((e&&(e.code||''))+' '+((e&&e.message)||'')).toLowerCase();
+  return s.indexOf('23502')>=0||(s.indexOf('null value')>=0&&s.indexOf('fecha_programada')>=0);
+}
+function _miaAvisoSinFecha(){
+  toast('Todavía no se pueden guardar tareas sin día: falta que la base permita fecha_programada en NULL','error');
+}
+
+async function _miaCargarPanel(){
+  /* "A las 00:00 La Paz las de ayer pierden la marca": en vez de un cron, se
+     limpia al cargar. Sin polling y sin depender de que la pestaña esté abierta
+     a medianoche. */
+  try{
+    await sb.from('agenda_personal').update({prioridad_hoy:false})
+      .eq('colaborador',cu.nombre).eq('prioridad_hoy',true)
+      .lt('fecha_programada',_miaIniHoyIso());
+  }catch(e){}
+
+  const cols='id,titulo,nota,tipo,calendario,fecha_programada,fecha_fin,completada,prioridad_hoy';
+  const[rH,rT,rI]=await Promise.all([
+    sb.from('agenda_personal').select(cols)
+      .eq('activo',true).eq('colaborador',cu.nombre).in('tipo',['ceo','ceo_tarea'])
+      .eq('prioridad_hoy',true).eq('completada',false)
+      .gte('fecha_programada',_miaIniHoyIso()).lt('fecha_programada',_miaFinHoyIso())
+      .order('fecha_programada'),
+    sb.from('agenda_personal').select(cols)
+      .eq('activo',true).eq('colaborador',cu.nombre).eq('tipo','ceo_tarea')
+      .eq('completada',false)
+      .order('fecha_programada',{ascending:true,nullsFirst:false}).limit(200),
+    sb.from('ceo_ideas').select('id,texto,estado,created_at')
+      .eq('activo',true).eq('estado','inbox')
+      .order('created_at',{ascending:false}).limit(100)
+  ]);
+  _miaHoy3=(rH.data||[]).slice(0,MIA_HOY_MAX);
+  _miaTareas=rT.data||[];
+  _miaIdeas=rI.data||[];
+}
+
+/* ── HOY, SOLO 3 ─────────────────────────────────────────────────────────── */
+async function miaMarcarHoy(id){
+  if(_miaHoy3.length>=MIA_HOY_MAX){
+    toast('Ya tenés '+MIA_HOY_MAX+' para hoy — primero cerrá una','error');
+    return;
+  }
+  const fila=_miaEventos.concat(_miaTareas).filter(function(x){return String(x.id)===String(id);})[0];
+  if(!fila)return;
+  const upd={prioridad_hoy:true};
+  /* Una tarea sin día que se manda a "Hoy" pasa a ser de hoy: si no, quedaría
+     marcada y sin aparecer, porque la tarjeta lista lo de HOY. A un evento con
+     fecha nunca se le toca el día. */
+  if(!fila.fecha_programada)upd.fecha_programada=_miaIniHoyIso();
+  try{
+    const{error}=await sb.from('agenda_personal').update(upd).eq('id',id);
+    if(error)throw error;
+    toast('★ Sumada a las 3 de hoy');
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+async function miaSacarHoy(id){
+  try{
+    const{error}=await sb.from('agenda_personal').update({prioridad_hoy:false}).eq('id',id);
+    if(error)throw error;
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+/* completada=true es seguro: lead_id NULL, ningún trigger se dispara (ver arriba) */
+async function miaCompletar(id,hecho){
+  try{
+    const{error}=await sb.from('agenda_personal').update({
+      completada:!!hecho,
+      completada_en:hecho?new Date().toISOString():null
+    }).eq('id',id);
+    if(error)throw error;
+    toast(hecho?'✅ Hecho':'Reabierta');
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+/* ¿esta fila puede sumarse a "Hoy"? Solo lo de hoy y las tareas sin día: marcar
+   un evento del viernes no lo haría aparecer y sería un botón que miente. */
+function _miaPuedeHoy(f){
+  if(f.prioridad_hoy)return false;
+  if(!f.fecha_programada)return true;
+  return _miaPartes(f.fecha_programada).ymd===ymdBolivia(new Date());
+}
+function _miaBtnHoy(f){
+  if(!_miaPuedeHoy(f))return '';
+  return '<button type="button" class="mia-star" title="Sumar a las 3 de hoy" '+
+    'onclick="event.stopPropagation();miaMarcarHoy('+f.id+')">★ Hoy</button>';
+}
+function _miaTarjetaHoy3(){
+  const filas=_miaHoy3.map(function(f){
+    const c=f.tipo==='ceo_tarea'?null:_miaCalDe(f);
+    return '<div class="mia-h3-row">'+
+      '<input type="checkbox" onchange="miaCompletar('+f.id+',this.checked)">'+
+      (c?'<span class="mia-cal-dot" style="background:'+c.color+'"></span>':'<span class="mia-cal-dot" style="background:var(--gray-600)"></span>')+
+      '<span class="t">'+_escPend(f.titulo||'')+'</span>'+
+      (f.tipo==='ceo_tarea'?'<span class="tag">tarea</span>':'<span class="tag">'+_miaHhmm(f.fecha_programada)+'</span>')+
+      '<button type="button" class="mia-x" title="Sacar de hoy" onclick="miaSacarHoy('+f.id+')">✕</button>'+
+    '</div>';
+  }).join('');
+  const libres=MIA_HOY_MAX-_miaHoy3.length;
+  return '<div class="mia-card">'+
+    '<div class="mia-card-t">🎯 Hoy, solo 3'+
+      '<span class="mia-card-n">'+_miaHoy3.length+'/'+MIA_HOY_MAX+'</span></div>'+
+    (filas||'<div class="mia-card-vacio">Elegí hasta 3 cosas con el botón ★ Hoy. Nada más entra.</div>')+
+    (_miaHoy3.length&&libres>0?'<div class="mia-card-pie">Te '+(libres===1?'queda 1 lugar':'quedan '+libres+' lugares')+'</div>':'')+
+    (libres===0?'<div class="mia-card-pie">Completo. Para sumar otra, primero cerrá una.</div>':'')+
+  '</div>';
+}
+
+/* ── TAREAS ──────────────────────────────────────────────────────────────── */
+async function miaNuevaTarea(){
+  const inp=document.getElementById('mia-tarea-inp');
+  const txt=((inp&&inp.value)||'').trim();
+  if(!txt){toast('Escribí la tarea','error');return;}
+  await _miaCrearTarea(txt,null);
+  if(inp)inp.value='';
+}
+/* fecha = 'YYYY-MM-DD' o null (sin día). Devuelve el id o null. */
+async function _miaCrearTarea(texto,fecha){
+  try{
+    const{data,error}=await sb.from('agenda_personal').insert({
+      colaborador:cu.nombre,tipo:'ceo_tarea',lead_id:null,visita_nro:null,
+      titulo:String(texto).trim().slice(0,200),
+      fecha_programada:fecha?_dtBoliviaToIso(fecha+'T00:00'):null,
+      hora_programada:null,          /* las tareas no tienen hora */
+      completada:false,activo:true,prioridad_hoy:false,origen:'manual',
+      created_at:new Date().toISOString()
+    }).select('id').single();
+    if(error)throw error;
+    toast('✅ Tarea creada');
+    await renderMiAgenda();
+    return data?data.id:null;
+  }catch(e){
+    if(_miaEsFaltaNull(e))_miaAvisoSinFecha();
+    else toast('Error: '+((e&&e.message)||'error'),'error');
+    return null;
+  }
+}
+async function miaFecharTarea(id){
+  const hoy=ymdBolivia(new Date());
+  const f=prompt('¿Qué día? (AAAA-MM-DD)',hoy);
+  if(!f)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(f)){toast('Formato AAAA-MM-DD','error');return;}
+  try{
+    const{error}=await sb.from('agenda_personal')
+      .update({fecha_programada:_dtBoliviaToIso(f+'T00:00')}).eq('id',id);
+    if(error)throw error;
+    toast('📅 Tarea fechada');
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+/* "soltala": baja lógica, nunca DELETE */
+async function miaSoltarTarea(id){
+  try{
+    const{error}=await sb.from('agenda_personal').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    toast('Tarea soltada');
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+function _miaFilaTarea(t){
+  return '<div class="mia-t-row">'+
+    '<input type="checkbox" onchange="miaCompletar('+t.id+',this.checked)">'+
+    '<span class="t">'+_escPend(t.titulo||'')+'</span>'+
+    _miaBtnHoy(t)+
+    (t.fecha_programada?'':
+      '<button type="button" class="mia-mini-btn" title="Ponerle día" onclick="miaFecharTarea('+t.id+')">📅</button>'+
+      '<button type="button" class="mia-mini-btn x" title="Soltarla" onclick="miaSoltarTarea('+t.id+')">✕</button>')+
+  '</div>';
+}
+function _miaTarjetaTareas(){
+  const hoyYmd=ymdBolivia(new Date());
+  const finSem=_miaFinSemanaIso();
+  const hoy=[],semana=[],sin=[];
+  _miaTareas.forEach(function(t){
+    if(!t.fecha_programada){sin.push(t);return;}
+    const ymd=_miaPartes(t.fecha_programada).ymd;
+    if(ymd<=hoyYmd)hoy.push(t);
+    else if(t.fecha_programada<finSem)semana.push(t);
+  });
+  const grupo=function(titulo,arr,sub){
+    if(!arr.length)return '';
+    return '<div class="mia-t-grupo">'+titulo+' <span>'+arr.length+'</span>'+
+      (sub?'<div class="mia-t-sub">'+sub+'</div>':'')+'</div>'+arr.map(_miaFilaTarea).join('');
+  };
+  const cuerpo=grupo('Hoy',hoy)+grupo('Esta semana',semana)+
+    grupo('Sin fecha',sin,'ponele día o soltala');
+  return '<div class="mia-card">'+
+    '<div class="mia-card-t">✅ Tareas<span class="mia-card-n">'+_miaTareas.length+'</span></div>'+
+    '<div class="mia-card-inp">'+
+      '<input type="text" id="mia-tarea-inp" placeholder="Nueva tarea…" autocomplete="off" '+
+        'onkeydown="if(event.key===\'Enter\')miaNuevaTarea()">'+
+      '<button type="button" onclick="miaNuevaTarea()">+</button>'+
+    '</div>'+
+    (cuerpo||'<div class="mia-card-vacio">Sin tareas abiertas. 👌</div>')+
+  '</div>';
+}
+
+/* ── IDEAS ───────────────────────────────────────────────────────────────── */
+async function miaNuevaIdea(){
+  const inp=document.getElementById('mia-idea-inp');
+  const txt=((inp&&inp.value)||'').trim();
+  if(!txt){toast('Escribí la idea','error');return;}
+  try{
+    const{error}=await sb.from('ceo_ideas').insert({
+      texto:txt.slice(0,1000),estado:'inbox',activo:true,colaborador:cu.nombre,
+      created_at:new Date().toISOString()
+    });
+    if(error)throw error;
+    if(inp)inp.value='';
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+async function _miaIdeaEstado(id,estado,extra){
+  const upd=Object.assign({estado:estado,updated_at:new Date().toISOString()},extra||{});
+  const{error}=await sb.from('ceo_ideas').update(upd).eq('id',id);
+  if(error)throw error;
+}
+async function miaIdeaATarea(id){
+  const idea=_miaIdeas.filter(function(x){return x.id===id;})[0];
+  if(!idea)return;
+  const nuevoId=await _miaCrearTarea(idea.texto,null);
+  if(nuevoId===null)return;   /* no se pudo crear: la idea queda en el inbox */
+  try{ await _miaIdeaEstado(id,'tarea',{agenda_id:nuevoId}); await renderMiAgenda(); }
+  catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+/* Abre el popover de crear evento; al guardar, _miaGuardar cierra el círculo. */
+function miaIdeaAEvento(id,ev){
+  const idea=_miaIdeas.filter(function(x){return x.id===id;})[0];
+  if(!idea)return;
+  _miaIdeaPend=id;
+  miaAbrirPop({titulo:idea.texto.slice(0,200),fecha:ymdBolivia(new Date()),hora:'09:00',
+    x:ev?ev.clientX:null,y:ev?ev.clientY:null});
+}
+async function miaIdeaARadar(id){
+  const idea=_miaIdeas.filter(function(x){return x.id===id;})[0];
+  if(!idea)return;
+  try{
+    const{data,error}=await sb.from('radar_guiones').insert({
+      titulo:idea.texto.slice(0,200),estado:'borrador',activo:true,
+      creado_por:cu.nombre,created_at:new Date().toISOString()
+    }).select('id').single();
+    if(error)throw error;
+    await _miaIdeaEstado(id,'radar',{radar_guion_id:data.id});
+    toast('📡 Guion en borrador creado en el Radar');
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+/* Descartar NO borra: estado='descartada'. */
+async function miaIdeaDescartar(id){
+  try{ await _miaIdeaEstado(id,'descartada'); await renderMiAgenda(); }
+  catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+function _miaTarjetaIdeas(){
+  const filas=_miaIdeas.map(function(i){
+    return '<div class="mia-i-row">'+
+      '<span class="t">'+_escPend(i.texto||'')+'</span>'+
+      '<span class="acc">'+
+        '<button type="button" title="Convertir en tarea" onclick="miaIdeaATarea('+i.id+')">→ Tarea</button>'+
+        '<button type="button" title="Convertir en evento" onclick="miaIdeaAEvento('+i.id+',event)">→ Evento</button>'+
+        '<button type="button" title="Mandar al Radar de contenido" onclick="miaIdeaARadar('+i.id+')">→ Radar</button>'+
+        '<button type="button" class="x" title="Descartar" onclick="miaIdeaDescartar('+i.id+')">✕</button>'+
+      '</span>'+
+    '</div>';
+  }).join('');
+  return '<div class="mia-card">'+
+    '<div class="mia-card-t">💡 Ideas<span class="mia-card-n">'+_miaIdeas.length+'</span></div>'+
+    '<div class="mia-card-inp">'+
+      '<input type="text" id="mia-idea-inp" placeholder="Anotá y seguí" autocomplete="off" '+
+        'onkeydown="if(event.key===\'Enter\')miaNuevaIdea()">'+
+      '<button type="button" onclick="miaNuevaIdea()">+</button>'+
+    '</div>'+
+    (filas||'<div class="mia-card-vacio">Nada anotado. Tirá acá lo que no querés que se te escape.</div>')+
+  '</div>';
+}
+
+function _miaTarjetas(){
+  return '<div class="mia-cards">'+_miaTarjetaHoy3()+_miaTarjetaTareas()+_miaTarjetaIdeas()+'</div>';
+}
+
 /* ── RENDER ──────────────────────────────────────────────────────────────── */
 function _miaCuerpo(){
   if(_miaVista==='mes')return _miaMes();
@@ -4941,9 +5307,10 @@ async function renderMiAgenda(){
     body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando tu agenda...</div>';
   try{
     await _miaCargar();
+    await _miaCargarPanel();
     body.innerHTML=_miaCabecera()+
       '<div class="mia-wrap">'+_miaSidebar()+
-        '<div class="mia-main">'+_miaBarraRapida()+_miaCuerpo()+'</div>'+
+        '<div class="mia-main">'+_miaBarraRapida()+_miaCuerpo()+_miaTarjetas()+'</div>'+
       '</div>';
   }catch(e){
     body.innerHTML=_miaCabecera()+
