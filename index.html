@@ -327,6 +327,16 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 
 /* v233 — angosto (<1100px): el panel derecho baja debajo de la grilla, como
    antes de v233. flex-wrap + width:100% lo manda solo a su propia linea. */
+/* v234 — los dos botones flotantes (💬 asistente y ✅ tareas) viven abajo a la
+   derecha y tapaban la esquina del panel de Mi agenda, que desde v233 tiene
+   contenido permanente ahí. Solo en esa pantalla se van a la izquierda; el resto
+   del CRM no cambia. El !important no es decorativo: #asistFab y #asistPanel
+   traen right:20px en un style= inline, que le gana a cualquier clase. */
+body.mia-flotantes-izq #asistFab,
+body.mia-flotantes-izq #tareasFab,
+body.mia-flotantes-izq #asistPanel,
+body.mia-flotantes-izq #tareasPanel{right:auto !important;left:20px !important}
+
 @media(max-width:1100px){
   .mia-wrap{flex-wrap:wrap}
   .mia-panel,.mia-panel.col{width:100%;position:static;max-height:none;overflow:visible}
@@ -2018,7 +2028,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='233';
+  var CURRENT_VERSION='234';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3626,6 +3636,9 @@ function switchTab(tab,screenId){
   tab.classList.add('active');
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
+  /* v234 — switchTab es el unico embudo por el que se entra a una pantalla, asi
+     que alcanza con marcar el body aca para correr los flotantes en Mi agenda. */
+  document.body.classList.toggle('mia-flotantes-izq', screenId==='screen-mi-agenda');
   window.scrollTo(0,0);
   if(screenId==='screen-mi-agenda')renderMiAgenda();
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
