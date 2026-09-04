@@ -152,6 +152,124 @@ body{font-family:'Montserrat',sans-serif;background:var(--gray-900);color:var(--
 .mia-crear{background:var(--gold);color:#000;border:none;border-radius:8px;padding:7px 15px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
 .mia-crear:hover{filter:brightness(1.08)}
 .mia-hueco{border:1px dashed var(--gray-600);border-radius:10px;padding:34px 18px;text-align:center;color:var(--gray-400);font-size:12px;line-height:1.7}
+/* ══ MI AGENDA · fase 2 (v230): grilla, panel lateral, popover ══ */
+.mia-wrap{display:flex;gap:16px;align-items:flex-start}
+.mia-main{flex:1;min-width:0}
+
+/* panel izquierdo */
+.mia-side{width:208px;flex-shrink:0}
+.mia-mini{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:10px}
+.mia-mini-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;font-weight:700}
+.mia-mini-top button{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;padding:0 6px;font-family:inherit}
+.mia-mini-top button:hover{color:var(--gold)}
+.mia-mini-dow,.mia-mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.mia-mini-dow span{text-align:center;font-size:9px;color:var(--gray-600);font-weight:700;padding-bottom:3px}
+.mia-mini-d{background:none;border:none;color:var(--gray-300);font-size:10px;padding:4px 0;border-radius:5px;cursor:pointer;font-family:inherit}
+.mia-mini-d:hover{background:var(--gray-700)}
+.mia-mini-d.otro{color:var(--gray-600)}
+.mia-mini-d.hoy{color:var(--gold);font-weight:800}
+.mia-mini-d.sel{background:var(--gold);color:#000;font-weight:800}
+.mia-cals{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:11px;margin-top:11px}
+.mia-side-t{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px}
+.mia-side-sep{height:1px;background:var(--gray-700);margin:8px 0}
+.mia-cal-row{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer;font-size:11px}
+.mia-cal-row input{accent-color:var(--gold);cursor:pointer;flex-shrink:0}
+.mia-cal-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.mia-cal-lbl{color:var(--gray-300)}
+.mia-cal-row.ro{align-items:flex-start}
+.mia-cal-row.ro .mia-cal-dot{margin-top:3px}
+.mia-cal-row.ro input{margin-top:2px}
+.mia-cal-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.mia-cal-ro{font-size:8px;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em}
+
+/* entrada rapida */
+.mia-rapida{display:flex;align-items:center;gap:8px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:7px 11px;margin-bottom:12px}
+.mia-rapida-ico{font-size:13px}
+.mia-rapida input{flex:1;background:none;border:none;color:var(--white);font-size:12px;font-family:inherit;outline:none}
+.mia-rapida input::placeholder{color:var(--gray-600)}
+.mia-rapida button{background:none;border:1px solid var(--gold);color:var(--gold);border-radius:7px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.mia-rapida button:hover{background:var(--gold);color:#000}
+.mia-rapida button:disabled{opacity:.5;cursor:wait}
+
+/* grilla de horas */
+.mia-grilla{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;overflow:hidden}
+.mia-g-cab{display:flex;border-bottom:1px solid var(--gray-600);background:var(--gray-900)}
+.mia-g-hcol{width:52px;flex-shrink:0}
+.mia-g-dia{flex:1;text-align:center;padding:7px 2px;border-left:1px solid var(--gray-700)}
+.mia-g-dia .dow{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:700}
+.mia-g-dia .num{display:block;font-size:15px;font-weight:800;color:var(--gray-100)}
+.mia-g-dia.hoy .dow{color:var(--gold)}
+.mia-g-dia.hoy .num{color:#000;background:var(--gold);border-radius:50%;width:25px;height:25px;line-height:25px;margin:1px auto 0}
+.mia-g-cuerpo{position:relative}
+.mia-g-fila{display:flex;border-bottom:1px solid var(--gray-700)}
+.mia-g-fila .mia-g-hcol{position:relative}
+.mia-g-fila .mia-g-hcol span{position:absolute;top:2px;right:7px;font-size:9px;color:var(--gray-600)}
+.mia-g-celda{flex:1;border-left:1px solid var(--gray-700)}
+.mia-g-capas{position:absolute;inset:0;display:flex;pointer-events:none}
+.mia-g-capa{flex:1;position:relative;pointer-events:auto;border-left:1px solid transparent}
+.mia-ev{position:absolute;background:var(--gray-700);border-radius:5px;padding:2px 5px;overflow:hidden;cursor:pointer;font-size:10px;line-height:1.25;transition:filter .12s}
+.mia-ev:hover{filter:brightness(1.22)}
+.mia-ev.arrastrando{opacity:.8;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.mia-ev.hecho{opacity:.55;text-decoration:line-through}
+.mia-ev.ro{background:repeating-linear-gradient(135deg,rgba(107,114,128,.18) 0 6px,transparent 6px 12px);cursor:default}
+.mia-ev.ro:hover{filter:none}
+.mia-ev-h{font-size:9px;color:var(--gray-400);font-weight:700}
+.mia-ev-t{font-weight:700;color:var(--gray-100);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mia-ev-rz{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize}
+.mia-ev-rz:hover{background:rgba(242,197,0,.35)}
+.mia-ahora{position:absolute;height:0;border-top:2px solid var(--st-atrasado);z-index:20;pointer-events:none}
+.mia-ahora i{position:absolute;left:-4px;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--st-atrasado)}
+
+/* vista mes */
+.mia-mes-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:5px}
+.mia-mes-dow div{text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:700}
+.mia-mes{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.mia-mes-c{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:8px;min-height:92px;padding:5px 6px;cursor:pointer;overflow:hidden}
+.mia-mes-c:hover{border-color:var(--gray-400)}
+.mia-mes-c.otro{opacity:.42}
+.mia-mes-c.hoy{border-color:var(--gold)}
+.mia-mes-n{font-size:11px;font-weight:800;color:var(--gray-300);margin-bottom:3px}
+.mia-mes-c.hoy .mia-mes-n{color:var(--gold)}
+.mia-mes-ev{font-size:9px;line-height:1.5;color:var(--gray-200);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:3px}
+.mia-mes-ev .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.mia-mes-ev .h{color:var(--gray-500)}
+.mia-mes-mas{font-size:9px;color:var(--gold);font-weight:700;margin-top:2px}
+
+/* vista agenda */
+.mia-lista{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:10px;padding:6px 12px 12px}
+.mia-lista-dia{display:flex;align-items:baseline;gap:9px;padding:12px 0 5px;border-bottom:1px solid var(--gray-700);margin-bottom:5px}
+.mia-lista-dia .n{font-size:17px;font-weight:800}
+.mia-lista-dia .d{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);font-weight:700}
+.mia-lista-dia.hoy .n,.mia-lista-dia.hoy .d{color:var(--gold)}
+.mia-lista-ev{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:12px;cursor:pointer;border-radius:6px}
+.mia-lista-ev:hover{background:var(--gray-700)}
+.mia-lista-ev .bar{width:3px;align-self:stretch;border-radius:2px;flex-shrink:0}
+.mia-lista-ev .h{font-size:10px;color:var(--gray-400);width:82px;flex-shrink:0;font-weight:700}
+.mia-lista-ev .t{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mia-lista-ev .c{font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+
+/* popover */
+.mia-pop{position:fixed;z-index:1200;width:320px;background:var(--gray-800);border:1px solid var(--gold);border-radius:12px;padding:13px;box-shadow:0 14px 40px rgba(0,0,0,.62);display:flex;flex-direction:column;gap:8px}
+.mia-pop-h{display:flex;align-items:center;font-size:12px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.05em}
+.mia-pop-x{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;font-family:inherit}
+.mia-pop-x:hover{color:var(--white)}
+.mia-pop-cals{display:flex;flex-wrap:wrap;gap:4px}
+.mia-pop-cal{display:flex;align-items:center;gap:4px;background:var(--gray-900);border:1px solid var(--gray-600);color:var(--gray-400);border-radius:12px;padding:2px 8px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit}
+.mia-pop-cal span{width:7px;height:7px;border-radius:50%}
+.mia-pop-cal.on{border-color:var(--gold);color:var(--white)}
+.mia-pop-row{display:flex;gap:5px;align-items:center}
+.mia-pop-row .form-control{font-size:11px;padding:5px 7px}
+.mia-pop-sep{color:var(--gray-600);font-size:11px}
+.mia-pop-f{display:flex;gap:7px;align-items:center;margin-top:2px}
+.mia-pop textarea.form-control{font-size:11px;resize:vertical}
+
+@media(max-width:860px){
+  .mia-wrap{flex-direction:column}
+  .mia-side{width:100%;display:flex;gap:11px}
+  .mia-mini{flex:1}
+  .mia-cals{flex:1;margin-top:0}
+  .mia-grilla{overflow-x:auto}
+}
 
 /* SCREENS */
 .screen{display:none;padding:16px;max-width:1400px;margin:0 auto}
@@ -1826,7 +1944,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='229';
+  var CURRENT_VERSION='230';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4229,21 +4347,582 @@ function _miaCabecera(){
     '</div>';
 }
 
-/* La grilla llega en la fase 2. Hasta entonces el cuerpo dice qué falta, en vez
-   de mostrar un panel vacío que parece roto. */
-function _miaCuerpoPendiente(){
-  return '<div class="mia-hueco">'+
-    '🗓️ La grilla del calendario llega en la próxima versión.<br>'+
-    'Por ahora funcionan la navegación de período y el cambio de vista.'+
-    '<div style="margin-top:10px;font-size:11px;color:var(--gray-600)">'+
-      'Calendarios: '+MIA_CALENDARIOS.map(function(c){
-        return '<span style="color:'+c.color+'">● '+c.lbl+'</span>';
-      }).join(' · ')+
-    '</div></div>';
+/* ── v230 · FASE 2: EL CALENDARIO ───────────────────────────────────────
+   Cuatro vistas sobre las mismas filas: Día y Semana comparten la grilla de
+   horas, Mes es una cuadrícula y Agenda una lista. Un evento tiene el MISMO
+   color en las cuatro, porque el color sale siempre de MIA_CALENDARIOS.
+
+   TODO EN America/La_Paz, y esto no es decorativo: getHours() del navegador
+   devuelve la hora del DISPOSITIVO. Si el CEO abre el CRM desde un teléfono
+   con otra zona, un evento de las 10:00 se dibujaría en otra fila. Por eso la
+   posición de cada bloque se calcula con _miaPartes(), que formatea en La Paz,
+   y lo que se guarda pasa por _dtBoliviaToIso(). Ver el bug de las 2 AM (v195)
+   y la agenda de madrugada desde mobile. */
+
+const MIA_H_INI=7;              /* la grilla arranca 07:00 */
+const MIA_H_FIN=20;             /* y termina 20:00 */
+const MIA_PX_HORA=46;           /* alto de una hora, en px */
+const MIA_SNAP_MIN=15;          /* arrastrar mueve de a 15 minutos */
+const MIA_DUR_DEFECTO=60;       /* sin fecha_fin, un evento dura una hora */
+
+let _miaEventos=[];             /* filas tipo 'ceo' del período */
+let _miaGrupal=[];              /* filas de agenda_grupal — SOLO LECTURA */
+let _miaCargando=false;
+let _miaDrag=null;              /* {id, modo:'mover'|'duracion', ...} */
+/* El sexto calendario arranca apagado a propósito: son las visitas del equipo
+   y llenan la grilla. Se prende cuando el CEO quiere cruzar su día con el de
+   ellos. Es lectura pura: no se puede crear, mover ni editar nada gris. */
+let _miaCalOn={obras:true,clientes:true,equipo:true,foco:true,personal:true,grupal:false};
+
+/* Hora y día de un instante EN BOLIVIA, no en la zona del dispositivo. */
+function _miaPartes(v){
+  const d=(v instanceof Date)?v:new Date(v);
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:TZ_BO,year:'numeric',month:'2-digit',
+    day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d);
+  const g=function(t){return (p.find(function(x){return x.type===t;})||{}).value;};
+  let h=parseInt(g('hour'),10); if(h===24)h=0;
+  return{ymd:g('year')+'-'+g('month')+'-'+g('day'),h:h,m:parseInt(g('minute'),10)};
+}
+function _miaHhmm(v){const p=_miaPartes(v);return String(p.h).padStart(2,'0')+':'+String(p.m).padStart(2,'0');}
+/* Minutos desde medianoche boliviana. */
+function _miaMin(v){const p=_miaPartes(v);return p.h*60+p.m;}
+function _miaFin(ev){
+  if(ev.fecha_fin)return new Date(ev.fecha_fin);
+  return new Date(new Date(ev.fecha_programada).getTime()+MIA_DUR_DEFECTO*60000);
+}
+function _miaCalDe(ev){
+  const k=ev.calendario||'personal';
+  return MIA_CALENDARIOS.filter(function(c){return c.k===k;})[0]||MIA_CALENDARIOS[4];
+}
+function _miaVisible(ev){return _miaCalOn[ev.calendario||'personal']!==false;}
+
+/* Rango del período que se está mirando. La consulta se acota a esto: nunca se
+   traen filas de más (agenda_personal tiene 5.500 y PostgREST corta en 1000). */
+function _miaRango(){
+  if(_miaVista==='dia'){const d=new Date(_miaRef);d.setHours(0,0,0,0);return{ini:d,fin:addDays(d,1)};}
+  if(_miaVista==='semana'){const l=_miaLunes(_miaRef);return{ini:l,fin:addDays(l,7)};}
+  if(_miaVista==='mes'){
+    const a=new Date(_miaRef.getFullYear(),_miaRef.getMonth(),1);a.setHours(0,0,0,0);
+    return{ini:a,fin:new Date(_miaRef.getFullYear(),_miaRef.getMonth()+1,1)};
+  }
+  const d=new Date(_miaRef);d.setHours(0,0,0,0);return{ini:d,fin:addDays(d,30)};
 }
 
+async function _miaCargar(){
+  const r=_miaRango();
+  /* Se pide un día de más a cada lado: un evento que arranca 23:30 del domingo
+     anterior sigue corriendo dentro del lunes que sí se muestra. */
+  const desde=addDays(r.ini,-1).toISOString(), hasta=addDays(r.fin,1).toISOString();
+  const pEv=sb.from('agenda_personal')
+    .select('id,titulo,nota,tipo,calendario,fecha_programada,fecha_fin,completada,prioridad_hoy,origen')
+    .eq('activo',true).eq('colaborador',cu.nombre).eq('tipo','ceo')
+    .gte('fecha_programada',desde).lt('fecha_programada',hasta)
+    .order('fecha_programada');
+  /* agenda_grupal solo si el calendario gris está prendido: si no, ni se pide. */
+  const pGr=_miaCalOn.grupal
+    ? sb.from('agenda_grupal').select('id,titulo,tipo,fecha_inicio,fecha_fin,captador,cerrador,sala')
+        .gte('fecha_inicio',desde).lt('fecha_inicio',hasta).order('fecha_inicio')
+    : Promise.resolve({data:[],error:null});
+  const[rE,rG]=await Promise.all([pEv,pGr]);
+  if(rE.error)throw rE.error;
+  _miaEventos=rE.data||[];
+  _miaGrupal=(rG&&rG.data)||[];
+}
+
+/* Las filas grises se normalizan a la misma forma que un evento propio, así las
+   vistas dibujan una sola cosa. `ro` = read-only. */
+function _miaGrupalNorm(){
+  if(!_miaCalOn.grupal)return[];
+  return _miaGrupal.map(function(g){
+    return{id:'g'+g.id,ro:true,titulo:(g.titulo||g.tipo||'Visita'),
+      nota:[g.captador,g.cerrador,g.sala].filter(Boolean).join(' · '),
+      calendario:'grupal',fecha_programada:g.fecha_inicio,fecha_fin:g.fecha_fin};
+  });
+}
+/* Todo lo que hay que dibujar, propio + gris, ya filtrado por los checkboxes. */
+function _miaTodos(){
+  return _miaEventos.filter(_miaVisible).concat(_miaGrupalNorm());
+}
+
+/* ── PANEL IZQUIERDO ──────────────────────────────────────────────────── */
+function _miaMiniCal(){
+  const y=_miaRef.getFullYear(), m=_miaRef.getMonth();
+  const primero=new Date(y,m,1);
+  const arranque=getMonday(primero);
+  const hoy=ymdLocal(new Date());
+  const selYmd=ymdLocal(_miaRef);
+  let celdas='';
+  for(let i=0;i<42;i++){
+    const d=addDays(arranque,i);
+    const ymd=ymdLocal(d);
+    const otro=d.getMonth()!==m;
+    const cls=['mia-mini-d'];
+    if(otro)cls.push('otro');
+    if(ymd===hoy)cls.push('hoy');
+    if(ymd===selYmd)cls.push('sel');
+    celdas+='<button type="button" class="'+cls.join(' ')+'" onclick="miaIrA(\''+ymd+'\')">'+d.getDate()+'</button>';
+  }
+  return '<div class="mia-mini">'+
+    '<div class="mia-mini-top">'+
+      '<button type="button" onclick="miaMiniMes(-1)">‹</button>'+
+      '<span>'+MIA_MESES[m]+' '+y+'</span>'+
+      '<button type="button" onclick="miaMiniMes(1)">›</button>'+
+    '</div>'+
+    '<div class="mia-mini-dow">'+['L','M','M','J','V','S','D'].map(function(x){return '<span>'+x+'</span>';}).join('')+'</div>'+
+    '<div class="mia-mini-grid">'+celdas+'</div>'+
+  '</div>';
+}
+function miaMiniMes(dir){
+  _miaRef=new Date(_miaRef.getFullYear(),_miaRef.getMonth()+dir,1);
+  renderMiAgenda();
+}
+function miaIrA(ymd){
+  const p=String(ymd).split('-');
+  _miaRef=new Date(+p[0],+p[1]-1,+p[2]);
+  renderMiAgenda();
+}
+function miaToggleCal(k,on){
+  _miaCalOn[k]=!!on;
+  /* prender "Visitas del equipo" exige ir a buscarlas; apagarlo no */
+  renderMiAgenda();
+}
+function _miaListaCals(){
+  const fila=function(k,lbl,color,extra){
+    return '<label class="mia-cal-row'+(extra?' ro':'')+'">'+
+      '<input type="checkbox"'+(_miaCalOn[k]?' checked':'')+' onchange="miaToggleCal(\''+k+'\',this.checked)">'+
+      '<span class="mia-cal-dot" style="background:'+color+'"></span>'+
+      '<span class="mia-cal-txt"><span class="mia-cal-lbl">'+lbl+'</span>'+(extra||'')+'</span>'+
+    '</label>';
+  };
+  return '<div class="mia-side-t">Mis calendarios</div>'+
+    MIA_CALENDARIOS.map(function(c){return fila(c.k,c.lbl,c.color);}).join('')+
+    '<div class="mia-side-sep"></div>'+
+    fila('grupal','Visitas del equipo','var(--mia-grupal)',
+      '<span class="mia-cal-ro">solo lectura</span>');
+}
+function _miaSidebar(){
+  return '<aside class="mia-side">'+_miaMiniCal()+'<div class="mia-cals">'+_miaListaCals()+'</div></aside>';
+}
+
+/* ── ENTRADA RÁPIDA ──────────────────────────────────────────────────────
+   "reunión con Fátima mañana 10:00" -> gpt-4o-mini -> JSON -> fila.
+   _gptMiniIA ya inyecta "Hoy es <fecha>" en el system prompt desde v187; acá se
+   repite en el user prompt porque el modelo tiene que resolver "mañana" y
+   "el viernes" contra ese día y no contra su fecha de entrenamiento.
+   Si vuelve SIN fecha no se guarda nada: se abre el popover prellenado, que es
+   lo que pidió el CEO. Inventar un día es peor que preguntar. */
+function _miaBarraRapida(){
+  return '<div class="mia-rapida">'+
+    '<span class="mia-rapida-ico">✨</span>'+
+    '<input type="text" id="mia-rapida-inp" placeholder="Escribí y listo: «reunión con Fátima mañana 10:00»" '+
+      'autocomplete="off" onkeydown="if(event.key===\'Enter\')miaRapida()">'+
+    '<button type="button" id="mia-rapida-btn" onclick="miaRapida()">Agregar</button>'+
+  '</div>';
+}
+async function miaRapida(){
+  const inp=document.getElementById('mia-rapida-inp');
+  const btn=document.getElementById('mia-rapida-btn');
+  const txt=((inp&&inp.value)||'').trim();
+  if(!txt){toast('Escribí qué querés agendar','error');return;}
+  if(btn){btn.disabled=true;btn.textContent='Pensando...';}
+  try{
+    const hoy=ymdBolivia(new Date());
+    const prompt='Hoy es '+hoy+' (America/La_Paz). Convertí esta frase en un evento de calendario.\n'+
+      'Frase: "'+txt+'"\n'+
+      'Devolvé SOLO un JSON con estas claves:\n'+
+      '{"titulo":"...","fecha":"YYYY-MM-DD o null","hora_inicio":"HH:MM o null","hora_fin":"HH:MM o null",'+
+      '"calendario":"obras|clientes|equipo|foco|personal"}\n'+
+      'Reglas: resolvé "hoy", "mañana" y los días de la semana contra la fecha de hoy. '+
+      'Si la frase NO dice ningún día, poné fecha en null: NO inventes una. '+
+      'Si no dice hora, hora_inicio en null. Si no dice hora de fin, hora_fin en null. '+
+      'calendario: obras para obra/construcción, clientes para clientes y cierres, '+
+      'equipo para el equipo y socios, foco para bloques de trabajo concentrado, '+
+      'personal para lo personal. Ante la duda, personal.';
+    let j=null;
+    try{ j=JSON.parse(await _gptMiniIA(prompt,300,true)); }catch(e){ j=null; }
+    if(!j||!j.titulo){toast('No entendí la frase; probá con otra','error');return;}
+    const cal=MIA_CALENDARIOS.filter(function(c){return c.k===j.calendario;}).length?j.calendario:'personal';
+    if(!j.fecha||!/^\d{4}-\d{2}-\d{2}$/.test(j.fecha)){
+      /* sin fecha no se guarda: se abre el popover con lo que sí entendió */
+      toast('No encontré el día — completalo vos');
+      miaAbrirPop({titulo:j.titulo,calendario:cal,fecha:ymdBolivia(new Date()),
+        hora:j.hora_inicio||'09:00',horaFin:j.hora_fin||''});
+      if(inp)inp.value='';
+      return;
+    }
+    const hIni=/^\d{2}:\d{2}$/.test(j.hora_inicio||'')?j.hora_inicio:'09:00';
+    const hFin=/^\d{2}:\d{2}$/.test(j.hora_fin||'')?j.hora_fin:_miaMasMin(hIni,MIA_DUR_DEFECTO);
+    await _miaGuardar(null,{titulo:j.titulo,calendario:cal,fecha:j.fecha,hora:hIni,horaFin:hFin,nota:'',origen:'claude'});
+    if(inp)inp.value='';
+  }catch(e){
+    toast('Error: '+((e&&e.message)||'no se pudo interpretar'),'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Agregar';}
+  }
+}
+function _miaMasMin(hhmm,min){
+  const p=String(hhmm).split(':');
+  let t=(+p[0])*60+(+p[1])+min;
+  t=Math.max(0,Math.min(23*60+59,t));
+  return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
+}
+
+/* ── GUARDAR / MOVER / BORRAR ────────────────────────────────────────────
+   Las filas del CEO nacen con lead_id y visita_nro en NULL y tipo 'ceo': así
+   ningún trigger de leads las toca. gcal_event_id NO se escribe nunca desde
+   acá — esa columna es del sync de Chat. */
+async function _miaGuardar(id,d){
+  const ini=_dtBoliviaToIso(d.fecha+'T'+(d.hora||'09:00'));
+  const fin=d.horaFin?_dtBoliviaToIso(d.fecha+'T'+d.horaFin):null;
+  if(!ini){toast('Fecha inválida','error');return false;}
+  if(fin&&new Date(fin)<=new Date(ini)){toast('La hora de fin tiene que ser posterior al inicio','error');return false;}
+  const fila={titulo:(d.titulo||'').trim().slice(0,200)||'Sin título',
+    calendario:d.calendario||'personal',
+    fecha_programada:ini,
+    fecha_fin:fin||_dtBoliviaToIso(d.fecha+'T'+_miaMasMin(d.hora||'09:00',MIA_DUR_DEFECTO)),
+    nota:(d.nota||'').trim()||null};
+  try{
+    if(id){
+      const{error}=await sb.from('agenda_personal').update(fila).eq('id',id);
+      if(error)throw error;
+      toast('✅ Evento actualizado');
+    }else{
+      const{error}=await sb.from('agenda_personal').insert(Object.assign({
+        colaborador:cu.nombre,tipo:'ceo',lead_id:null,visita_nro:null,
+        completada:false,activo:true,prioridad_hoy:false,
+        origen:d.origen||'manual',
+        created_at:new Date().toISOString()
+      },fila));
+      if(error)throw error;
+      toast('✅ Agendado');
+    }
+    miaCerrarPop();
+    await renderMiAgenda();
+    return true;
+  }catch(e){
+    toast('Error: '+((e&&e.message)||'no se pudo guardar'),'error');
+    return false;
+  }
+}
+/* Soft delete, siempre: activo=false. NUNCA completada=true, que en esta tabla
+   significa "ocurrió" y dispara triggers (ver el aviso de v208). */
+async function miaBorrar(id){
+  try{
+    const{error}=await sb.from('agenda_personal').update({activo:false}).eq('id',id);
+    if(error)throw error;
+    toast('Evento dado de baja');
+    miaCerrarPop();
+    await renderMiAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+
+/* ── POPOVER DE CREAR / EDITAR ───────────────────────────────────────────── */
+function miaCerrarPop(){
+  const p=document.getElementById('mia-pop');
+  if(p)p.remove();
+  document.removeEventListener('mousedown',_miaPopFuera,true);
+}
+function _miaPopFuera(e){
+  const p=document.getElementById('mia-pop');
+  if(p&&!p.contains(e.target))miaCerrarPop();
+}
+/* d: {id?, titulo, calendario, fecha, hora, horaFin, nota, x?, y?} */
+function miaAbrirPop(d){
+  miaCerrarPop();
+  d=d||{};
+  const esNuevo=!d.id;
+  const el=document.createElement('div');
+  el.id='mia-pop';
+  el.className='mia-pop';
+  el.innerHTML=
+    '<div class="mia-pop-h">'+(esNuevo?'Nuevo evento':'Editar evento')+
+      '<button type="button" class="mia-pop-x" onclick="miaCerrarPop()">✕</button></div>'+
+    '<input type="text" id="mia-p-tit" class="form-control" placeholder="Título" maxlength="200" value="'+_escPend(d.titulo||'')+'">'+
+    '<div class="mia-pop-cals">'+MIA_CALENDARIOS.map(function(c){
+        const on=(d.calendario||'personal')===c.k;
+        return '<button type="button" class="mia-pop-cal'+(on?' on':'')+'" data-k="'+c.k+'" '+
+          'onclick="_miaPopCal(\''+c.k+'\')" title="'+c.lbl+'">'+
+          '<span style="background:'+c.color+'"></span>'+c.lbl+'</button>';
+      }).join('')+'</div>'+
+    '<div class="mia-pop-row">'+
+      '<input type="date" id="mia-p-fec" class="form-control" value="'+_escPend(d.fecha||ymdBolivia(new Date()))+'">'+
+      '<input type="time" id="mia-p-h1" class="form-control" value="'+_escPend(d.hora||'09:00')+'" step="900">'+
+      '<span class="mia-pop-sep">→</span>'+
+      '<input type="time" id="mia-p-h2" class="form-control" value="'+_escPend(d.horaFin||_miaMasMin(d.hora||'09:00',MIA_DUR_DEFECTO))+'" step="900">'+
+    '</div>'+
+    '<textarea id="mia-p-nota" class="form-control" rows="2" placeholder="Nota (opcional)">'+_escPend(d.nota||'')+'</textarea>'+
+    '<div class="mia-pop-f">'+
+      (esNuevo?'':'<button type="button" class="btn-ghost" style="font-size:11px;color:var(--st-atrasado)" onclick="miaBorrar('+d.id+')">Dar de baja</button>')+
+      '<button type="button" class="btn-ghost" style="font-size:11px;margin-left:auto" onclick="miaCerrarPop()">Cancelar</button>'+
+      '<button type="button" class="mia-crear" onclick="miaGuardarPop('+(d.id||'null')+')">Guardar</button>'+
+    '</div>';
+  document.body.appendChild(el);
+  el.dataset.cal=d.calendario||'personal';
+  /* posicionado junto al clic, sin salirse de la pantalla */
+  const w=320, h=el.offsetHeight||300;
+  let x=(d.x==null?window.innerWidth/2-w/2:d.x+12);
+  let y=(d.y==null?110:d.y-20);
+  x=Math.max(10,Math.min(x,window.innerWidth-w-10));
+  y=Math.max(70,Math.min(y,window.innerHeight-h-14));
+  el.style.left=x+'px'; el.style.top=y+'px';
+  const t=document.getElementById('mia-p-tit'); if(t)t.focus();
+  setTimeout(function(){document.addEventListener('mousedown',_miaPopFuera,true);},0);
+}
+function _miaPopCal(k){
+  const el=document.getElementById('mia-pop'); if(!el)return;
+  el.dataset.cal=k;
+  el.querySelectorAll('.mia-pop-cal').forEach(function(b){
+    b.classList.toggle('on',b.getAttribute('data-k')===k);
+  });
+}
+async function miaGuardarPop(id){
+  const el=document.getElementById('mia-pop'); if(!el)return;
+  const g=function(i){const e=document.getElementById(i);return e?e.value:'';};
+  await _miaGuardar(id||null,{titulo:g('mia-p-tit'),calendario:el.dataset.cal||'personal',
+    fecha:g('mia-p-fec'),hora:g('mia-p-h1'),horaFin:g('mia-p-h2'),nota:g('mia-p-nota')});
+}
 function miaCrear(){
-  toast('La creación de eventos llega en la próxima versión');
+  miaAbrirPop({fecha:ymdBolivia(new Date()),hora:'09:00'});
+}
+function miaEditar(id,ev){
+  const e=_miaEventos.filter(function(x){return String(x.id)===String(id);})[0];
+  if(!e)return;
+  const p=_miaPartes(e.fecha_programada);
+  miaAbrirPop({id:e.id,titulo:e.titulo,calendario:e.calendario||'personal',
+    fecha:p.ymd,hora:_miaHhmm(e.fecha_programada),horaFin:_miaHhmm(_miaFin(e)),
+    nota:e.nota||'',x:ev?ev.clientX:null,y:ev?ev.clientY:null});
+}
+
+/* ── GRILLA DE HORAS (Día y Semana) ──────────────────────────────────────── */
+function _miaDiasDelRango(){
+  if(_miaVista==='dia')return[new Date(_miaRef)];
+  const l=_miaLunes(_miaRef);
+  return [0,1,2,3,4,5,6].map(function(i){return addDays(l,i);});
+}
+/* Bloques de un día, con reparto horizontal cuando se solapan. */
+function _miaBloquesDe(ymd){
+  const evs=_miaTodos().filter(function(e){return _miaPartes(e.fecha_programada).ymd===ymd;})
+    .sort(function(a,b){return _miaMin(a.fecha_programada)-_miaMin(b.fecha_programada);});
+  const cols=[];
+  return evs.map(function(e){
+    const ini=_miaMin(e.fecha_programada);
+    const fin=Math.max(ini+15,_miaMin(_miaFin(e)));
+    /* columna libre = la primera que ya terminó antes de que este empiece */
+    let c=0; while(cols[c]!=null&&cols[c]>ini)c++;
+    cols[c]=fin;
+    return{ev:e,ini:ini,fin:fin,col:c};
+  }).map(function(b,_i,arr){
+    const solapan=arr.filter(function(o){return o.ini<b.fin&&b.ini<o.fin;});
+    const n=Math.max.apply(null,solapan.map(function(o){return o.col+1;}));
+    return Object.assign(b,{n:n});
+  });
+}
+function _miaBloqueHtml(b){
+  const e=b.ev, cal=_miaCalDe(e);
+  const topMin=Math.max(b.ini,MIA_H_INI*60), finMin=Math.min(b.fin,MIA_H_FIN*60);
+  if(finMin<=topMin)return '';
+  const top=(topMin-MIA_H_INI*60)/60*MIA_PX_HORA;
+  const alto=Math.max(17,(finMin-topMin)/60*MIA_PX_HORA-2);
+  const w=100/Math.max(1,b.n), left=b.col*w;
+  const ro=!!e.ro;
+  const st='top:'+top.toFixed(1)+'px;height:'+alto.toFixed(1)+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);'+
+    'border-left:3px solid '+cal.color+';'+(ro?'':'background:'+cal.color+'1f;');
+  return '<div class="mia-ev'+(ro?' ro':'')+(e.completada?' hecho':'')+'" style="'+st+'" '+
+    'data-id="'+_escPend(String(e.id))+'"'+(ro?'':' onmousedown="_miaDragIni(event,\''+e.id+'\')" onclick="miaEditar('+e.id+',event)"')+
+    ' title="'+_escPend(_miaHhmm(e.fecha_programada)+'–'+_miaHhmm(_miaFin(e))+' · '+(e.titulo||''))+(ro?' (visita del equipo — solo lectura)':'')+'">'+
+    '<div class="mia-ev-h">'+_miaHhmm(e.fecha_programada)+'</div>'+
+    '<div class="mia-ev-t">'+_escPend(e.titulo||'(sin título)')+'</div>'+
+    (ro?'':'<div class="mia-ev-rz" onmousedown="_miaDragIni(event,\''+e.id+'\',\'duracion\')"></div>')+
+  '</div>';
+}
+function _miaGrilla(){
+  const dias=_miaDiasDelRango();
+  const hoy=ymdLocal(new Date());
+  const horas=[];
+  for(let h=MIA_H_INI;h<MIA_H_FIN;h++)horas.push(h);
+
+  const cab='<div class="mia-g-cab"><div class="mia-g-hcol"></div>'+
+    dias.map(function(d){
+      const ymd=ymdLocal(d);
+      const dow=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()];
+      return '<div class="mia-g-dia'+(ymd===hoy?' hoy':'')+'">'+
+        '<span class="dow">'+dow+'</span><span class="num">'+d.getDate()+'</span></div>';
+    }).join('')+'</div>';
+
+  const franjas=horas.map(function(h){
+    return '<div class="mia-g-fila" style="height:'+MIA_PX_HORA+'px">'+
+      '<div class="mia-g-hcol"><span>'+String(h).padStart(2,'0')+':00</span></div>'+
+      dias.map(function(){return '<div class="mia-g-celda"></div>';}).join('')+
+    '</div>';
+  }).join('');
+
+  /* Línea de la hora actual: solo si hoy está a la vista y cae dentro de la
+     franja dibujada. La posición sale de la hora BOLIVIANA, no del reloj local. */
+  const nowP=_miaPartes(new Date());
+  const nowMin=nowP.h*60+nowP.m;
+  let linea='';
+  const idxHoy=dias.map(ymdLocal).indexOf(hoy);
+  if(idxHoy>=0&&nowMin>=MIA_H_INI*60&&nowMin<=MIA_H_FIN*60){
+    const top=(nowMin-MIA_H_INI*60)/60*MIA_PX_HORA;
+    const w=100/dias.length;
+    linea='<div class="mia-ahora" style="top:'+top.toFixed(1)+'px;left:calc(52px + '+(idxHoy*w)+'% - '+(idxHoy*52/dias.length).toFixed(1)+'px);width:calc('+w+'% - '+(52/dias.length).toFixed(1)+'px)"><i></i></div>';
+  }
+
+  const capas=dias.map(function(d){
+    const ymd=ymdLocal(d);
+    return '<div class="mia-g-capa" data-ymd="'+ymd+'" onclick="_miaClicHueco(event,\''+ymd+'\')">'+
+      _miaBloquesDe(ymd).map(_miaBloqueHtml).join('')+'</div>';
+  }).join('');
+
+  return '<div class="mia-grilla'+(dias.length===1?' dia':'')+'" id="mia-grilla" style="--mia-cols:'+dias.length+'">'+
+    cab+
+    '<div class="mia-g-cuerpo" style="height:'+((MIA_H_FIN-MIA_H_INI)*MIA_PX_HORA)+'px">'+
+      franjas+
+      '<div class="mia-g-capas"><div class="mia-g-hcol"></div>'+capas+'</div>'+
+      linea+
+    '</div>'+
+  '</div>';
+}
+/* Clic en un hueco: abre el popover con la hora del punto donde tocó. */
+function _miaClicHueco(e,ymd){
+  if(_miaDrag)return;
+  if(e.target.closest('.mia-ev'))return;
+  const capa=e.currentTarget;
+  const y=e.clientY-capa.getBoundingClientRect().top;
+  let min=MIA_H_INI*60+Math.round((y/MIA_PX_HORA*60)/30)*30;
+  min=Math.max(MIA_H_INI*60,Math.min((MIA_H_FIN-1)*60,min));
+  const hh=String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');
+  miaAbrirPop({fecha:ymd,hora:hh,horaFin:_miaMasMin(hh,MIA_DUR_DEFECTO),x:e.clientX,y:e.clientY});
+}
+
+/* ── ARRASTRE: mover el evento o estirarlo desde el borde de abajo ───────── */
+function _miaDragIni(e,id,modo){
+  if(e.button!==0)return;
+  const ev=_miaEventos.filter(function(x){return String(x.id)===String(id);})[0];
+  if(!ev)return;
+  e.preventDefault(); e.stopPropagation();
+  _miaDrag={id:id,ev:ev,modo:modo||'mover',y0:e.clientY,x0:e.clientX,movido:false,
+    iniMin:_miaMin(ev.fecha_programada),finMin:_miaMin(_miaFin(ev)),ymd:_miaPartes(ev.fecha_programada).ymd};
+  document.addEventListener('mousemove',_miaDragMov);
+  document.addEventListener('mouseup',_miaDragFin);
+}
+function _miaDragMov(e){
+  if(!_miaDrag)return;
+  const dy=e.clientY-_miaDrag.y0, dx=e.clientX-_miaDrag.x0;
+  if(!_miaDrag.movido&&Math.abs(dy)<4&&Math.abs(dx)<4)return;
+  _miaDrag.movido=true;
+  const dMin=Math.round((dy/MIA_PX_HORA*60)/MIA_SNAP_MIN)*MIA_SNAP_MIN;
+  const el=document.querySelector('.mia-ev[data-id="'+_miaDrag.id+'"]');
+  if(!el)return;
+  if(_miaDrag.modo==='duracion'){
+    const alto=Math.max(17,(_miaDrag.finMin-_miaDrag.iniMin+dMin)/60*MIA_PX_HORA-2);
+    el.style.height=alto+'px';
+  }else{
+    el.style.top=((_miaDrag.iniMin+dMin-MIA_H_INI*60)/60*MIA_PX_HORA)+'px';
+  }
+  el.classList.add('arrastrando');
+}
+async function _miaDragFin(e){
+  document.removeEventListener('mousemove',_miaDragMov);
+  document.removeEventListener('mouseup',_miaDragFin);
+  const d=_miaDrag; _miaDrag=null;
+  if(!d||!d.movido)return;
+  const dy=e.clientY-d.y0;
+  const dMin=Math.round((dy/MIA_PX_HORA*60)/MIA_SNAP_MIN)*MIA_SNAP_MIN;
+  /* En Semana, correrse de columna cambia el DÍA. La columna se deduce de en
+     qué capa cayó el puntero, no de una cuenta de píxeles: así no se rompe si
+     cambia el ancho. */
+  let ymd=d.ymd;
+  const bajo=document.elementFromPoint(e.clientX,e.clientY);
+  const capa=bajo&&bajo.closest?bajo.closest('.mia-g-capa'):null;
+  if(capa&&capa.dataset.ymd)ymd=capa.dataset.ymd;
+
+  let ini=d.iniMin, fin=d.finMin;
+  if(d.modo==='duracion'){ fin=Math.max(ini+MIA_SNAP_MIN,fin+dMin); ymd=d.ymd; }
+  else { ini=ini+dMin; fin=fin+dMin; }
+  ini=Math.max(0,Math.min(23*60+45,ini));
+  if(fin<=ini)fin=ini+MIA_SNAP_MIN;
+  const hh=function(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');};
+  try{
+    const{error}=await sb.from('agenda_personal').update({
+      fecha_programada:_dtBoliviaToIso(ymd+'T'+hh(ini)),
+      fecha_fin:_dtBoliviaToIso(ymd+'T'+hh(fin))
+    }).eq('id',d.id);
+    if(error)throw error;
+    toast(d.modo==='duracion'?'Duración actualizada':'Evento movido');
+  }catch(err){toast('Error: '+((err&&err.message)||'no se pudo mover'),'error');}
+  await renderMiAgenda();
+}
+
+/* ── VISTA MES ───────────────────────────────────────────────────────────── */
+function _miaMes(){
+  const y=_miaRef.getFullYear(), m=_miaRef.getMonth();
+  const arranque=getMonday(new Date(y,m,1));
+  const hoy=ymdLocal(new Date());
+  let html='<div class="mia-mes-dow">'+['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
+    .map(function(d){return '<div>'+d+'</div>';}).join('')+'</div><div class="mia-mes">';
+  for(let i=0;i<42;i++){
+    const d=addDays(arranque,i);
+    const ymd=ymdLocal(d);
+    if(i>=35&&d.getMonth()!==m)break;
+    const evs=_miaTodos().filter(function(e){return _miaPartes(e.fecha_programada).ymd===ymd;})
+      .sort(function(a,b){return _miaMin(a.fecha_programada)-_miaMin(b.fecha_programada);});
+    const muestra=evs.slice(0,3).map(function(e){
+      const c=_miaCalDe(e);
+      return '<div class="mia-mes-ev"'+(e.ro?'':' onclick="event.stopPropagation();miaEditar('+e.id+',event)"')+'>'+
+        '<span class="dot" style="background:'+c.color+'"></span>'+
+        '<span class="h">'+_miaHhmm(e.fecha_programada)+'</span> '+_escPend(e.titulo||'')+'</div>';
+    }).join('');
+    html+='<div class="mia-mes-c'+(d.getMonth()!==m?' otro':'')+(ymd===hoy?' hoy':'')+'" onclick="miaAbrirPop({fecha:\''+ymd+'\',hora:\'09:00\'})">'+
+      '<div class="mia-mes-n">'+d.getDate()+'</div>'+muestra+
+      (evs.length>3?'<div class="mia-mes-mas" onclick="event.stopPropagation();_miaVerDia(\''+ymd+'\')">+'+(evs.length-3)+' más</div>':'')+
+    '</div>';
+  }
+  return html+'</div>';
+}
+function _miaVerDia(ymd){
+  miaIrA(ymd);
+  _miaVista='dia';
+  renderMiAgenda();
+}
+
+/* ── VISTA AGENDA ────────────────────────────────────────────────────────── */
+function _miaAgenda(){
+  const evs=_miaTodos().slice().sort(function(a,b){
+    return new Date(a.fecha_programada)-new Date(b.fecha_programada);
+  });
+  if(!evs.length)return '<div class="mia-hueco">Nada agendado en los próximos 30 días.</div>';
+  const porDia={};
+  evs.forEach(function(e){
+    const k=_miaPartes(e.fecha_programada).ymd;
+    (porDia[k]=porDia[k]||[]).push(e);
+  });
+  const hoy=ymdBolivia(new Date());
+  return '<div class="mia-lista">'+Object.keys(porDia).sort().map(function(k){
+    const p=k.split('-');
+    const d=new Date(+p[0],+p[1]-1,+p[2]);
+    const dow=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][d.getDay()];
+    return '<div class="mia-lista-dia'+(k===hoy?' hoy':'')+'">'+
+        '<span class="n">'+d.getDate()+'</span>'+
+        '<span class="d">'+dow+' · '+MIA_MESES[d.getMonth()].toLowerCase()+(k===hoy?' · hoy':'')+'</span>'+
+      '</div>'+
+      porDia[k].map(function(e){
+        const c=_miaCalDe(e);
+        return '<div class="mia-lista-ev"'+(e.ro?'':' onclick="miaEditar('+e.id+',event)"')+'>'+
+          '<span class="bar" style="background:'+c.color+'"></span>'+
+          '<span class="h">'+_miaHhmm(e.fecha_programada)+'–'+_miaHhmm(_miaFin(e))+'</span>'+
+          '<span class="t">'+_escPend(e.titulo||'')+'</span>'+
+          '<span class="c" style="color:'+c.color+'">'+c.lbl+(e.ro?' · solo lectura':'')+'</span>'+
+        '</div>';
+      }).join('');
+  }).join('')+'</div>';
+}
+
+/* ── RENDER ──────────────────────────────────────────────────────────────── */
+function _miaCuerpo(){
+  if(_miaVista==='mes')return _miaMes();
+  if(_miaVista==='agenda')return _miaAgenda();
+  return _miaGrilla();
 }
 
 async function renderMiAgenda(){
@@ -4252,7 +4931,22 @@ async function renderMiAgenda(){
   /* segundo cinturón: el gate real es _SCREEN_ROLES en switchTab, pero si algún
      día alguien llama a este render desde otro lado, no se dibuja igual. */
   if(!_miaEsCeo()||!_puedeVerPantalla('screen-mi-agenda')){body.innerHTML='';return;}
-  body.innerHTML=_miaCabecera()+_miaCuerpoPendiente();
+  if(_miaCargando)return;
+  _miaCargando=true;
+  if(!document.getElementById('mia-grilla')&&!document.querySelector('.mia-mes'))
+    body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando tu agenda...</div>';
+  try{
+    await _miaCargar();
+    body.innerHTML=_miaCabecera()+
+      '<div class="mia-wrap">'+_miaSidebar()+
+        '<div class="mia-main">'+_miaBarraRapida()+_miaCuerpo()+'</div>'+
+      '</div>';
+  }catch(e){
+    body.innerHTML=_miaCabecera()+
+      '<div class="mia-hueco" style="color:var(--st-atrasado)">No se pudo cargar la agenda: '+
+      _escPend((e&&e.message)||'error')+
+      ' <button type="button" class="btn btn-ghost btn-sm" onclick="renderMiAgenda()">Reintentar</button></div>';
+  }finally{_miaCargando=false;}
 }
 
 /* ════════════════════════════════════════
