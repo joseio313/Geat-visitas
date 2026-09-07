@@ -2032,7 +2032,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='235';
+  var CURRENT_VERSION='236';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -17405,6 +17405,21 @@ function _cvMenuToggle(id,ev){
 }
 function _cvMenuClose(){document.querySelectorAll('.cv-menu-pop').forEach(function(x){x.style.display='none';});}
 
+/* v236 — FIX 3: DE DONDE SE ABRE EL CV
+   archivo_url apunta al bucket rec-archivos de Supabase, que quedo vacio: los
+   205 links que hay ahi dan 404. Desde v175 el PDF vive en Google Drive y la
+   fila guarda cv_drive_url (193 de 224 postulaciones lo tienen; las 193 tienen
+   ademas el archivo_url roto, y ganaba el roto).
+   Orden: Drive primero, el viejo como respaldo para las 12 que solo tienen ese.
+   Devuelve tambien esDrive porque el truco de descarga (?download) es propio
+   del storage de Supabase: en Drive no aplica, la descarga la da su propia UI. */
+function _cvUrlCV(c){
+  const drive=String((c&&c.cv_drive_url)||'').trim();
+  if(drive)return{href:drive,esDrive:true};
+  const sb=String((c&&c.archivo_url)||'').trim();
+  return{href:sb,esDrive:false};
+}
+
 /* v155: fila compacta tipo inbox. Clic en la fila abre el modal; botones/dropdown no propagan. */
 function _cvRow(c){
   const p=Number(c.puntaje)||0;
@@ -17412,7 +17427,7 @@ function _cvRow(c){
   const id=_cvIdAttr(c.id);
   const esTop=_cvEsTop(c);
   const tel=_cvTelWa(c.telefono);
-  const arch=String(c.archivo_url||'').trim();
+  const arch=_cvUrlCV(c).href;   /* v236 — Drive primero, Supabase de respaldo */
   const mail=String(c.email||'').trim();
   const reciente=c.created_at&&(Date.now()-new Date(c.created_at).getTime())<86400000;
   const sc=p>=80?'var(--gold)':(p>=60?'var(--gray-200)':'var(--gray-400)');
@@ -17520,8 +17535,11 @@ function abrirCVModal(id){
   const idA=_cvIdAttr(c.id);
   // v146: separador " | " con espaciado variable; se aceptan links sin protocolo (se antepone https://)
   const links=String(c.links_detectados||'').split(/\s*\|\s*/).map(s=>s.trim()).filter(Boolean);
-  const archUrl=String(c.archivo_url||'').trim();
-  const archDl=archUrl?(archUrl+(archUrl.indexOf('?')>=0?'&':'?')+'download'):'';
+  const _cvU=_cvUrlCV(c);        /* v236 — Drive primero, Supabase de respaldo */
+  const archUrl=_cvU.href;
+  /* ?download solo sirve en el storage de Supabase; con Drive se descarga desde
+     su propia vista, asi que no se pinta el boton. */
+  const archDl=(archUrl&&!_cvU.esDrive)?(archUrl+(archUrl.indexOf('?')>=0?'&':'?')+'download'):'';
   document.getElementById('cv-modal-title').textContent='🎯 '+(c.nombre||'Postulación');
   document.getElementById('cv-modal-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
@@ -17531,7 +17549,7 @@ function abrirCVModal(id){
     ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
-    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${archUrl?`<a href="${_cvEsc(archUrl)}" target="_blank" rel="noopener" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a><a href="${_cvEsc(archDl)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
+    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${archUrl?`<a href="${_cvEsc(archUrl)}" target="_blank" rel="noopener" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a>${_cvU.esDrive?'<span style="font-size:10px;color:var(--gray-400)">(Drive)</span>':`<a href="${_cvEsc(archDl)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`}`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📎 Links / Portafolios</div>
     ${links.length?`
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
