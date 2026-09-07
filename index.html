@@ -480,6 +480,10 @@ body.mia-flotantes-izq #tareasPanel{right:auto !important;left:20px !important}
 .activity-card.done{background-color:var(--st-completo)!important;color:var(--st-completo-tx)!important}
 .activity-card.done .activity-client{text-decoration:line-through;opacity:0.85}
 .activity-card.late{background-color:var(--st-atrasado)!important;color:var(--st-atrasado-tx)!important;animation:pulse-red 2s ease-in-out infinite}
+/* v235 — la agendé yo, la atiende otro: ya la entregué, no es MI atraso.
+   Gris apagado y sin pulso rojo, gane o no la condición de "late". */
+.activity-card.delegada{background-color:var(--gray-600)!important;color:var(--gray-200)!important;animation:none!important;opacity:.75}
+.activity-card.delegada .activity-client{opacity:.92}
 @keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(211,47,47,0.5)}50%{box-shadow:0 0 0 5px rgba(211,47,47,0)}}
 
 .activity-state-tag{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;filter:brightness(0.82);background:currentColor}
@@ -2028,7 +2032,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='234';
+  var CURRENT_VERSION='235';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3707,6 +3711,12 @@ function _bdgAgendaScope(q){
   if(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'))return q;
   return _filtrarAgendaVisible(q);
 }
+/* v235 — alcance ESTRECHO: solo las filas que tengo que hacer yo. Lo usa el
+   badge amarillo de tareas atrasadas; los jefes siguen viendo todo. */
+function _bdgMisTareasScope(q){
+  if(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'))return q;
+  return _filtrarPorColaborador(q);
+}
 /* Para leads: los jefes ven todo, el resto solo lo suyo (captador o cerrador,
    igual que esLeadPropio). Comillas dobles porque los nombres llevan espacio. */
 function _bdgLeadsScope(q){
@@ -3736,8 +3746,13 @@ async function _bdgWeekRojo(){
 }
 async function _bdgWeekAma(){
   /* agenda_personal.tipo no tiene NULL (0 de 5.584), así que el .not(ilike) no
-     se come filas por ese lado. */
-  return _bdgN(_bdgAgendaScope(_sinCeo(
+     se come filas por ese lado.
+     v235 — FIX 1: el alcance ya NO es _bdgAgendaScope. Ese suma las filas donde
+     soy el captador aunque las atienda otro, y así la captadora contaba como
+     atraso propio lo que ya le entregó al cerrador. Acá va por colaborador, el
+     mismo criterio que el marcador "⚠️ Atrasadas" del día. El badge rojo
+     (visitas vencidas) sí sigue con el alcance ancho: ése es de supervisión. */
+  return _bdgN(_bdgMisTareasScope(_sinCeo(
     sb.from('agenda_personal').select('id',{count:'exact',head:true}))
       .eq('activo',true).eq('completada',false)
       .not('tipo','ilike','%visita%')
@@ -4311,6 +4326,13 @@ function renderCard(a,now){
     </div>
   </div>`;
 
+  /* v235 — FIX 1: la tarea que generé yo y atiende OTRO ya la entregué. Aunque
+     la fecha haya vencido no es mi atraso: se pinta gris ("asignada a X") y
+     nunca roja. Lo decide _esVisitaQueGenere, la misma función que ya la deja
+     en modo consulta más abajo. */
+  const _deleg=!isDone&&_esVisitaQueGenere(a);
+  if(_deleg)cls='delegada';
+  const _lateTxt=(isLate&&!_deleg)?lateLabel:'';
   const _xMode='';
   const _bd=estadoBorderColor(_estadoLeadMap[a.lead_id]);
   const _bdStyle=_bd?` style="border-left:4px solid ${_bd}"`:'';
@@ -4323,9 +4345,9 @@ function renderCard(a,now){
   const _open=_gen?`openLeadDetail(${a.lead_id},null,'readonly')`
                   :`openLeadDetail(${a.lead_id},${a.id}${_xMode?','+_xMode:''})`;
   return `<div class="activity-card ${cls}"${_bdStyle} onclick="${_open}">
-    <div class="card-tag-inner" style="background:${tagBg}">${lateLabel}${a.tipo||'—'}</div>
+    <div class="card-tag-inner" style="background:${tagBg}">${_lateTxt}${a.tipo||'—'}</div>
     <div class="activity-client">${a.titulo||'—'}${_esRes?' <span style="background:#43A047;color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 6px;vertical-align:middle;white-space:nowrap">💰 RESERVADO</span>':''}</div>
-    ${_gen?`<div style="font-size:8px;font-weight:800;letter-spacing:.03em;background:rgba(0,0,0,.28);border-radius:8px;padding:1px 6px;display:inline-block;margin-top:2px">👁️ LA AGENDASTE VOS · LA ATIENDE ${(a.colaborador||'').toUpperCase()}</div>`:''}
+    ${_gen?`<div style="font-size:8px;font-weight:800;letter-spacing:.03em;background:rgba(0,0,0,.28);border-radius:8px;padding:1px 6px;display:inline-block;margin-top:2px">${_deleg?'🤝 ASIGNADO A ':'👁️ LA AGENDASTE VOS · LA ATIENDE '}${(a.colaborador||'').toUpperCase()}</div>`:''}
     <div class="activity-meta"><span class="activity-who">${a.colaborador}</span></div>
     <div class="activity-times">
       <div><span style="font-weight:700;font-size:8px;text-transform:uppercase;letter-spacing:.04em">Prog:</span> ${fmtTime(fp)}</div>
@@ -13186,7 +13208,12 @@ async function renderParaHoy(){
   try{
     const hoy=ymdBolivia(new Date());
     let q=sb.from('leads')
-      .select('id,nombre,celular,grado_interes,proximo_contacto,captador,created_at,fecha_contacto_real,ultima_gestion')
+      /* v235 — FIX 1: se trae cerrador para poder marcar en gris el lead que ya
+         pasó al cierre. "Para hoy" ya deja fuera visita_agendada/realizada/
+         reservado, pero el lead que sigue en_seguimiento con cerrador asignado
+         seguía figurando como llamada pendiente de la captadora (12 de Genoveva,
+         medido el 07-sep-2026). */
+      .select('id,nombre,celular,grado_interes,proximo_contacto,captador,cerrador,created_at,fecha_contacto_real,ultima_gestion')
       /* archivado con .not(...is.true) en vez de un segundo .or(): así queda un
          solo `or` en la query y el filtro de proximo_contacto puede usarlo. */
       .not('archivado','is',true)
@@ -13226,6 +13253,18 @@ async function renderParaHoy(){
 function _paraHoyCard(l,actCount){
   const cel=(l.celular||'').replace(/\D/g,'');
   const nombre=l.nombre||'—';
+  /* v235 — FIX 1: ya lo entregó al cerrador. No se llama ni se escribe desde
+     acá; queda en gris, visible, para que sepa dónde está. */
+  const _cerr=(l.cerrador||'').trim();
+  if(_cerr){
+    return '<div style="border:1px solid var(--gray-600);border-radius:8px;padding:10px 12px;margin-bottom:6px;background:var(--gray-900);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:.6">'+
+      '<div style="flex:1;min-width:140px">'+
+        '<div style="font-weight:700;font-size:13px;color:var(--gray-200)">'+_escPend(nombre)+'</div>'+
+        '<div style="font-size:11px;color:var(--gray-400)">🤝 Asignado a '+_escPend(_cerr)+' · ya no es tu seguimiento</div>'+
+      '</div>'+
+      '<button type="button" class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openLeadDetail('+l.id+',null,\'readonly\')">📋 Ver</button>'+
+    '</div>';
+  }
   const grado=l.grado_interes||'';
   const gradoCol={'alto':'var(--st-atrasado)','medio':'var(--gold)','bajo':'var(--st-completo)'};
   const waMsgs=[
