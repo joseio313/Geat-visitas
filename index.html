@@ -2086,7 +2086,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='239';
+  var CURRENT_VERSION='240';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -6267,8 +6267,16 @@ async function renderReports(){
      una pantalla de error — todo lo demás (leads, embudo, motivos) no depende
      del dinero. */
   const _leadsSelect='id,captador,cerrador,estado,etapa,metros_cuadrados,nombre,celular,ciudad,medio_difusion,campana_id,motivo_perdida,motivo_perdida_id,visito_oficina,indagacion_completa,created_at';
+  /* v240 — geat-montos devuelve DOS cohortes: `leads` (creados en el rango) y
+     `cierres` (contratos FIRMADOS en el rango, por fecha_contrato). Se guardan
+     por separado porque miden cosas distintas y casi nunca coinciden. */
+  let _cierresPeriodo=[],_cierresSinFecha=0;
   const _pedirLeads=_montosCall({action:'reportes_leads',desde:rng.desde,hasta:rng.hasta})
-    .then(function(r){return{data:r.leads,error:null};})
+    .then(function(r){
+      _cierresPeriodo=r.cierres||[];
+      _cierresSinFecha=r.sin_fecha_contrato||0;
+      return{data:r.leads,error:null};
+    })
     .catch(function(){
       return sb.from('leads').select(_leadsSelect).gte('created_at',rng.desde).lt('created_at',rng.hasta);
     });
@@ -6292,10 +6300,16 @@ async function renderReports(){
   const _mesActualKey=ymdLocal(_hoy).slice(0,7);
 
   // CAMBIO 4 — KPI ventas (tabla ventas; fallback leads ganados del período)
+  /* v240 — los cierres del período son los del rango por fecha_contrato, NO
+     los leads del rango que hoy están en cerrado_ganado. Eran dos cosas
+     distintas y se mostraba la segunda: un contrato firmado en agosto de un
+     lead de marzo no aparecía en agosto, y uno de un lead creado en agosto que
+     firmó en octubre sí. La tabla `ventas` se sigue prefiriendo para el conteo
+     y los m² cuando tiene filas del período, porque es el registro de venta. */
   const _ventas=rVentas.data||[];
+  const _gan=_cierresPeriodo;
   let ventasCount=_ventas.length;
   let ventasM2=_ventas.reduce((s,v)=>s+(Number(v.metros_cuadrados)||0),0);
-  const _gan=leads.filter(l=>l.estado==='cerrado_ganado');
   if(ventasCount===0){
     ventasCount=_gan.length;
     ventasM2=_gan.reduce((s,l)=>s+(Number(l.metros_cuadrados)||0),0);
@@ -6316,18 +6330,32 @@ async function renderReports(){
     const p=_keyVendedor(l.captador||'Sin asignar');
     /* v237 — se acumula tambien el monto. Viene de geat-montos; si esa puerta
        falló, `monto_contrato` no está en la fila y el acumulador queda en 0,
-       que es exactamente lo que la tabla debe mostrar. */
+       que es exactamente lo que la tabla debe mostrar.
+       v240 — acá SOLO se cuentan los leads del período. Ganados, monto y m² se
+       suman aparte, sobre _cierresPeriodo (fecha_contrato). */
     if(!byPerson[p])byPerson[p]={leads:0,ganados:0,m2:0,monto:0};
     byPerson[p].leads++;
-    if(l.estado==='cerrado_ganado')byPerson[p].ganados++;
-    byPerson[p].m2+=(Number(l.metros_cuadrados)||0);
-    byPerson[p].monto+=(Number(l.monto_contrato)||0);
     // CAMBIO 2 — atribución por cerrador
     if(l.cerrador){
       const c=_keyVendedor(l.cerrador);
       if(!byCloser[c])byCloser[c]={leads:0,ganados:0,m2:0,monto:0};
       byCloser[c].leads++;
-      if(l.estado==='cerrado_ganado')byCloser[c].ganados++;
+    }
+  });
+  /* v240 — segunda pasada, sobre la cohorte de CIERRES (fecha_contrato). Un
+     contrato firmado este mes puede venir de un lead de cualquier mes, asi que
+     su captador/cerrador puede no estar en el bucle de arriba: por eso se
+     crean las filas que falten en vez de asumir que ya existen. */
+  _cierresPeriodo.forEach(function(l){
+    const p=_keyVendedor(l.captador||'Sin asignar');
+    if(!byPerson[p])byPerson[p]={leads:0,ganados:0,m2:0,monto:0};
+    byPerson[p].ganados++;
+    byPerson[p].m2+=(Number(l.metros_cuadrados)||0);
+    byPerson[p].monto+=(Number(l.monto_contrato)||0);
+    if(l.cerrador){
+      const c=_keyVendedor(l.cerrador);
+      if(!byCloser[c])byCloser[c]={leads:0,ganados:0,m2:0,monto:0};
+      byCloser[c].ganados++;
       byCloser[c].m2+=(Number(l.metros_cuadrados)||0);
       byCloser[c].monto+=(Number(l.monto_contrato)||0);
     }
@@ -6398,7 +6426,7 @@ async function renderReports(){
           <div><div style="font-size:26px;font-weight:800;color:var(--gold);line-height:1">${ventasM2>0?_mnBs(ventasMonto/ventasM2):'—'}</div>
             <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">por m²</div></div>
         </div>
-        <div style="font-size:10px;color:var(--gray-600);margin-top:4px">${_ventas.length>0?'Fuente: tabla ventas':'Fuente: leads ganados (ventas vacío)'}</div>
+        <div style="font-size:10px;color:var(--gray-600);margin-top:4px">${_ventas.length>0?'Fuente: tabla ventas':'Fuente: leads ganados (ventas vacío)'} · cierres por <strong>fecha de contrato</strong></div>
       </div>
       <div class="section">
         <div class="section-title">Resumen por vendedor</div>
@@ -6422,6 +6450,12 @@ async function renderReports(){
             }).join('')}
           </tbody>
         </table>
+        <div style="font-size:10px;color:var(--gray-600);margin-top:8px;line-height:1.5">
+          <strong>Leads</strong> son los creados en el período. <strong>Ganados, Monto y m²</strong> son
+          los contratos <strong>firmados</strong> en el período (por fecha de contrato), que casi siempre
+          vienen de leads de meses anteriores: por eso una fila puede tener 0 leads y un cierre.
+          ${_cierresSinFecha?('<br><span style="color:var(--st-atrasado)">'+_cierresSinFecha+' cierre(s) ganado(s) sin fecha de contrato — no entran en ningún mes.</span>'):''}
+        </div>
         <div style="margin-top:10px">
           <button class="btn-ghost" style="font-size:11px" onclick="verReporteVendedor()">🔍 Ver Reporte</button>
         </div>
@@ -7599,6 +7633,13 @@ function _renderMotivosPerdida(){
   '<div style="font-size:10px;color:var(--gray-600);margin-top:8px">Los motivos viejos en texto libre se agrupan al mostrar; en la base quedan tal cual se escribieron.</div>';
 }
 
+/* v240 — ESTE "Ganados" SÍ va por cohorte, no por fecha_contrato, y no es una
+   excepción olvidada. Un embudo sigue a UN grupo de leads a lo largo de su
+   vida: de los 294 que entraron en agosto, cuántos se ganaron (cuando sea que
+   se hayan firmado). Cortarlo por fecha de contrato mezclaría leads de otros
+   meses y el embudo dejaría de cerrar contra su propia primera barra.
+   Lo que SÍ va por fecha_contrato es todo reporte de CIERRES del período: el
+   KPI de ventas, el resumen por vendedor, Gerencia y Mis números. */
 function renderFunnel(leads){
   const total=leads.length||1;
   const fases=[
@@ -7741,28 +7782,33 @@ async function verReporteVendedor(){
        dinero se pide aparte a geat-montos, que revalida el rol. Si esa llamada
        falla, la columna Monto queda en Bs 0 y el reporte se abre igual. */
     const{data:leads}=await sb.from('leads').select('nombre,celular,ciudad,medio_difusion,captador,estado,etapa,metros_cuadrados,created_at').gte('created_at',rng.desde).lt('created_at',rng.hasta);
-    let _montoPorCapt={};
+    /* v240 — los cierres salen de `cierres` (fecha_contrato), no de filtrar
+       los leads del rango por estado. Ver la nota de renderReports. */
+    let _cierrePorCapt={};
     try{
       const _rm=await _montosCall({action:'reportes_leads',desde:rng.desde,hasta:rng.hasta});
-      (_rm.leads||[]).forEach(function(l){
-        if(l.estado!=='cerrado_ganado')return;
+      (_rm.cierres||[]).forEach(function(l){
         const k=_keyVendedor(l.captador||'Sin asignar');
-        _montoPorCapt[k]=(_montoPorCapt[k]||0)+(Number(l.monto_contrato)||0);
+        if(!_cierrePorCapt[k])_cierrePorCapt[k]={n:0,monto:0,m2:0};
+        _cierrePorCapt[k].n++;
+        _cierrePorCapt[k].monto+=(Number(l.monto_contrato)||0);
+        _cierrePorCapt[k].m2+=(Number(l.metros_cuadrados)||0);
       });
     }catch(_e){}
     const{data:acts}=await _sinCeo(sb.from('agenda_personal').select('colaborador,completada')).gte('fecha_programada',rng.desde).lt('fecha_programada',rng.hasta);
     // v128 — agrupa asistentes bajo su principal (excepción: admin ve desglose completo)
     const esAdmin=cu&&cu.rol==='admin';
     const byP={};const aByP={};
-    (leads||[]).forEach(l=>{const p=_keyVendedor(l.captador||'Sin asignar');if(!byP[p])byP[p]={leads:0,ganados:0,m2:0};byP[p].leads++;if(l.estado==='cerrado_ganado'){byP[p].ganados++;byP[p].m2+=(l.metros_cuadrados||0);}});
+    (leads||[]).forEach(l=>{const p=_keyVendedor(l.captador||'Sin asignar');if(!byP[p])byP[p]={leads:0,ganados:0,m2:0};byP[p].leads++;});
     (acts||[]).forEach(a=>{const co=_keyVendedor(a.colaborador);if(!aByP[co])aByP[co]={t:0,c:0};aByP[co].t++;if(a.completada)aByP[co].c++;});
     const html=`<table class="team-table" style="width:100%">
       <thead><tr><th>Colaborador</th><th>Leads</th><th>Actividades (comp/total)</th><th>Ganados</th><th>Monto</th><th>m² cerrados</th><th>Tasa cierre</th></tr></thead>
       <tbody>${colaboradores.filter(c=>c.activo&&(esAdmin||!c.asistente_de)).map(c=>{
         const p=byP[c.nombre]||{leads:0,ganados:0,m2:0};
         const a=aByP[c.nombre]||{t:0,c:0};
-        const tasa=p.leads?Math.round(p.ganados/p.leads*100):0;
-        return`<tr><td><strong>${c.nombre}</strong><br><span style="font-size:9px;color:var(--gray-400)">${c.rol}</span></td><td class="num">${p.leads}</td><td class="num">${a.c}/${a.t}</td><td class="num">${p.ganados}</td><td class="num">${_mnBs(_montoPorCapt[c.nombre]||0)}</td><td class="num">${p.m2} m²</td><td class="num">${tasa}%</td></tr>`;
+        const k=_cierrePorCapt[c.nombre]||{n:0,monto:0,m2:0};
+        const tasa=p.leads?Math.round(k.n/p.leads*100):0;
+        return`<tr><td><strong>${c.nombre}</strong><br><span style="font-size:9px;color:var(--gray-400)">${c.rol}</span></td><td class="num">${p.leads}</td><td class="num">${a.c}/${a.t}</td><td class="num">${k.n}</td><td class="num">${_mnBs(k.monto)}</td><td class="num">${k.m2} m²</td><td class="num">${tasa}%</td></tr>`;
       }).join('')}</tbody>
     </table>`;
     abrirReporteSeguro('Reporte por Vendedor · '+rng.label,html,'por_vendedor');
@@ -12419,7 +12465,7 @@ async function renderAdmin(){
   const mesFin=new Date(ahora.getFullYear(),ahora.getMonth()+1,1).toISOString();
 
   try{
-    const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas,rPend,rUsuarios]=await Promise.all([
+    const[rLogins,rAcciones,rLeadsMes,rActsMes,rAlternas,rPend,rUsuarios,rCierresMes]=await Promise.all([
       /* v197 — antes: sb.from('auditoria_logins').select('*'). Esa tabla guarda
          el PIN de los intentos fallidos y se leía con la anon key del HTML, o
          sea que era pública. Ahora pasa por geat-auth, que valida token +
@@ -12432,7 +12478,13 @@ async function renderAdmin(){
       _sinCeo(sb.from('agenda_personal').select('colaborador,completada,fecha_programada')).gte('fecha_programada',mesInicio).lt('fecha_programada',mesFin),
       sb.from('cerrador_alternancia').select('*').order('fecha_asignacion',{ascending:false}).limit(10),
       sb.from('asistente_pendientes').select('*').eq('activo',true).order('created_at',{ascending:false}),
-      authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')})
+      authCall({action:'admin_pins',token:localStorage.getItem('geat_session_token')}),
+      /* v240 — los cierres del mes por fecha_contrato. NO se filtran los leads
+         de arriba por estado: esos son los CREADOS este mes, y un contrato
+         firmado este mes casi siempre viene de un lead de otro. Si geat-montos
+         falla, la columna Monto queda en Bs 0 y el panel se dibuja igual. */
+      _montosCall({action:'reportes_leads',desde:mesInicio,hasta:mesFin})
+        .catch(function(){return{cierres:[]};})
     ]);
 
     /* v197 — la respuesta ahora viene de la Edge Function: {ok,logins}. Si el
@@ -12442,6 +12494,7 @@ async function renderAdmin(){
     const acciones=(rAcciones&&rAcciones.acciones)||[];
     if(rAcciones&&rAcciones.ok===false)toast('No se pudieron cargar las acciones: '+(rAcciones.error||'error'),'error');
     const leadsMes=rLeadsMes.data||[];
+    const cierresMes=(rCierresMes&&rCierresMes.cierres)||[];
     const actsMes=rActsMes.data||[];
     const alternas=rAlternas.data||[];
     const pendientes=rPend.data||[];
@@ -12464,10 +12517,16 @@ async function renderAdmin(){
       const atras=aCol.filter(a=>!a.completada&&new Date(a.fecha_programada)<ahora).length;
       const tasa=total?Math.round(comp/total*100):0;
       const lMes=leadsMes.filter(l=>l.captador===c.nombre).length;
-      const m2=leadsMes.filter(l=>l.captador===c.nombre&&l.estado==='cerrado_ganado').reduce((s,l)=>s+(l.metros_cuadrados||0),0);
+      /* v240 — monto y m² salen de los contratos FIRMADOS este mes, no de los
+         leads creados este mes que hoy figuran como ganados. Orden fijo de la
+         regla de montos: monto → m². */
+      const _misCierres=cierresMes.filter(l=>l.captador===c.nombre);
+      const cierres=_misCierres.length;
+      const monto=_misCierres.reduce((s,l)=>s+(Number(l.monto_contrato)||0),0);
+      const m2=_misCierres.reduce((s,l)=>s+(Number(l.metros_cuadrados)||0),0);
       const ultimoLogin=logins.find(l=>l.colaborador_nombre===c.nombre&&l.exitoso);
       const ultimoFmt=ultimoLogin?new Date(ultimoLogin.fecha_login).toLocaleString('es-BO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'Nunca';
-      return{nombre:c.nombre,rol:c.rol,total,comp,atras,tasa,lMes,m2,ultimoFmt};
+      return{nombre:c.nombre,rol:c.rol,total,comp,atras,tasa,lMes,cierres,monto,m2,ultimoFmt};
     });
 
     // D. Alertas
@@ -12481,9 +12540,15 @@ async function renderAdmin(){
       if(r.total>=5&&r.tasa<70){
         alertas.push({title:'Tasa cumplimiento baja',msg:r.nombre+' — '+r.tasa+'% ('+r.comp+'/'+r.total+')'});
       }
+      /* v240 — decía "tasa de cierre" y dividía METROS CUADRADOS por cantidad
+         de leads: 174,5 m² sobre 12 leads daba "1454%". No era una tasa de nada.
+         Ahora es cierres del mes sobre leads del mes. OJO: siguen siendo dos
+         cohortes distintas (los cierres son por fecha de contrato y los leads
+         por fecha de carga), así que es un indicador de ritmo, no una
+         conversión real — y el texto lo dice. */
       if((r.rol==='closer'||r.rol==='commercial_lead')&&r.lMes>0){
-        const ratio=Math.round(r.m2/(r.lMes||1)*100);
-        if(ratio<15)alertas.push({title:'Tasa cierre <15%',msg:r.nombre+' — '+ratio+'% en m²/leads'});
+        const ratio=Math.round(r.cierres/(r.lMes||1)*100);
+        if(ratio<15)alertas.push({title:'Ritmo de cierre <15%',msg:r.nombre+' — '+ratio+'% (cierres del mes / leads del mes)'});
       }
       if((r.rol==='field_capturer')&&r.atras>10){
         alertas.push({title:'>10 actividades atrasadas',msg:r.nombre+' — '+r.atras+' atrasadas'});
@@ -12649,7 +12714,7 @@ async function renderAdmin(){
       <div class="admin-section-title">📊 Productividad del equipo — ${new Date().toLocaleDateString('es-BO',{month:'long',year:'numeric'})}</div>
       <div style="overflow-x:auto">
         <table class="prod-table">
-          <thead><tr><th>Colaborador</th><th>Rol</th><th>Leads creados</th><th>Actividades (comp/total)</th><th>Tasa cumplim.</th><th>Atrasadas</th><th>m² cerrados</th><th>Último login</th></tr></thead>
+          <thead><tr><th>Colaborador</th><th>Rol</th><th>Leads creados</th><th>Actividades (comp/total)</th><th>Tasa cumplim.</th><th>Atrasadas</th><th>Monto cerrado</th><th>m² cerrados</th><th>Último login</th></tr></thead>
           <tbody>${prodRows.map(r=>`<tr>
             <td><strong>${r.nombre}</strong></td>
             <td style="font-size:9px;color:var(--gray-400)">${r.rol}</td>
@@ -12657,6 +12722,7 @@ async function renderAdmin(){
             <td class="num">${r.comp}/${r.total}</td>
             <td><div style="font-weight:700;font-size:12px;color:${r.tasa>=70?'var(--st-completo)':'var(--st-atrasado)'}">${r.tasa}%</div><div class="pct-bar"><div class="pct-fill" style="width:${r.tasa}%"></div></div></td>
             <td class="num" style="color:${r.atras>0?'var(--st-atrasado)':'var(--gray-400)'}">${r.atras}</td>
+            <td class="num">${_mnBs(r.monto)}</td>
             <td class="num">${r.m2} m²</td>
             <td style="font-size:10px;color:var(--gray-400)">${r.ultimoFmt}</td>
           </tr>`).join('')}</tbody>
@@ -14007,10 +14073,15 @@ function _gerM2(n){
   return Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:1})+' m²';
 }
 /* Mes de la venta: fecha_contrato es DATE ('YYYY-MM-DD') → se corta el string para
-   no cruzar zona horaria. Si falta, cae a created_at con ymdLocal (Bolivia UTC-4). */
+   no cruzar zona horaria.
+   v240 — SE CAYÓ EL FALLBACK A created_at. Un cierre se cuenta por la fecha del
+   contrato y por ninguna otra: la carga retroactiva es normal (el lead 7604 se
+   cargó el 2-sep con contrato del 22-ago) y el fallback lo metía en el mes en
+   que se cargó, no en el que se firmó. Un ganado sin fecha_contrato ahora cae
+   en "Sin fecha" — que es la verdad y además se ve, en vez de ensuciar un mes
+   real por lo bajo. */
 function _gerMes(l){
   if(l.fecha_contrato&&/^\d{4}-\d{2}/.test(l.fecha_contrato))return String(l.fecha_contrato).slice(0,7);
-  if(l.created_at){try{return ymdLocal(new Date(l.created_at)).slice(0,7);}catch(_e){}}
   return '—';
 }
 function _gerMesLbl(ym){
