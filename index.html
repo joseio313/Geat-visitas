@@ -3319,6 +3319,11 @@ async function loadCatalogs(){
          sugerida al marcar un motivo, así que el catálogo va para todos. */
       sb.from('radar_guiones').select('id,motivo_id,titulo,keyword,respuesta_whatsapp,estado,activo').eq('activo',true)
     ]);
+    /* v239 — el tipo de cambio es catálogo como cualquier otro: se lee una vez
+       y lo usan Gerencia, Cobranzas, Reportes y Mis números. Va sin await en
+       Promise.all porque su fallo NO puede voltear el catálogo: si no llega,
+       los importes se muestran solo en Bs. */
+    await cargarTipoCambio();
     itemsSeg=seg.data||[];
     motivosPerdida=mPerd.data||[];
     motivosGanado=mGan.data||[];
@@ -5946,6 +5951,54 @@ async function _mnTodas(fabrica){
 
 function _mnNum(n){return Number(n||0).toLocaleString('es-BO');}
 function _mnBs(n){return 'Bs '+Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:0});}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v239 · UNA SOLA FUENTE DE TIPO DE CAMBIO                             ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Regla del CEO (9-sep-2026): **Bs es la moneda principal** y el equivalente
+   en USD va entre paréntesis, siempre con app_config.tipo_cambio_usd_bs y
+   NUNCA con una constante en el código.
+
+   Lo que había: `_cobTC()` decía en su comentario "SIEMPRE de app_config,
+   nunca una constante" y leía `_cobCfg.tipo_cambio_usd_bs`... pero _cobCfg se
+   llena con `.like('key','cobranza%')`, que NO matchea `tipo_cambio_usd_bs`.
+   O sea que la clave nunca llegaba y todo el panel de Cobranzas venía usando
+   el `||6.96` hardcodeado del fallback. El comentario describía una intención,
+   no el código.
+
+   Ahora: se lee una vez al arrancar, para todo el CRM, y **sin fallback**. Si
+   no se pudo leer, `_TC` queda en null y NINGÚN importe muestra equivalente en
+   USD — se ve solo el Bs, que es el dato real. Inventar una conversión con un
+   número viejo es peor que no mostrarla: el CEO decide sobre esos importes. */
+let _TC=null;                  /* Bs por 1 USD. null = no se pudo leer. */
+async function cargarTipoCambio(){
+  try{
+    const{data,error}=await sb.from('app_config').select('value').eq('key','tipo_cambio_usd_bs').single();
+    if(error)throw error;
+    const v=Number(data&&data.value);
+    _TC=(v>0)?v:null;
+  }catch(_e){_TC=null;}
+  return _TC;
+}
+/* Bs con el equivalente en USD entre paréntesis. `dec` = decimales del Bs
+   (Cobranzas trabaja con 2, el resto con 0). */
+function fmtBsUsd(nBs,dec){
+  const d=(dec==null?0:dec);
+  const txt='Bs '+Number(nBs||0).toLocaleString('es-BO',{minimumFractionDigits:d,maximumFractionDigits:d});
+  if(!_TC)return txt;
+  /* font-size relativo: dentro de un KPI de 22px el equivalente sale chico y
+     en línea; dentro de un texto de 11px sale casi igual. Sin esto el "(≈ USD)"
+     hereda el tamaño del número grande y parte la tarjeta en dos renglones. */
+  return txt+' <span style="font-size:.62em;color:var(--gray-400);font-weight:600;white-space:nowrap">(≈ USD '+
+    (Number(nBs||0)/_TC).toLocaleString('es-BO',{maximumFractionDigits:0})+')</span>';
+}
+/* Version sin HTML, para toasts y confirmaciones. */
+function fmtBsUsdTxt(nBs,dec){
+  const d=(dec==null?0:dec);
+  const txt='Bs '+Number(nBs||0).toLocaleString('es-BO',{minimumFractionDigits:d,maximumFractionDigits:d});
+  if(!_TC)return txt;
+  return txt+' (≈ USD '+(Number(nBs||0)/_TC).toLocaleString('es-BO',{maximumFractionDigits:0})+')';
+}
 function _mnM2(n){return Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:1})+' m²';}
 function _mnPct(n,d){return d?Math.round(n/d*100)+'%':'—';}
 /* Horas hasta las 48; de ahí en más días, que es como lo piensa el equipo. */
@@ -6102,10 +6155,12 @@ function _mnPintar(r,quien,a,p,sinGestion){
     _mnKpi('Cierres',_mnNum(a.cierres),_mnDelta(a.cierres,p.cierres),
       a.errMontos?'<span class="warn">montos: '+_escPend(a.errMontos)+'</span>'
         :(a.sinFecha?'<span class="warn">'+_mnNum(a.sinFecha)+' ganados sin fecha de contrato — no entran en ningún período</span>':'por fecha de contrato')),
-    _mnKpi('Monto de contratos',_mnBs(a.monto),_mnDelta(a.monto,p.monto),'del contrato, sin comisiones'),
+    _mnKpi('Monto de contratos',_mnBs(a.monto),_mnDelta(a.monto,p.monto),
+      'del contrato, sin comisiones'+(_TC?(' · ≈ USD '+_mnNum(Math.round(a.monto/_TC))):'')),
     _mnKpi('m² cerrados',_mnM2(a.m2),_mnDelta(a.m2,p.m2),'&nbsp;'),
     _mnKpi('Precio por m²',a.precioM2==null?'—':_mnBs(a.precioM2),
-      _mnDelta(a.precioM2,p.precioM2),'&nbsp;'),
+      _mnDelta(a.precioM2,p.precioM2),
+      (a.precioM2!=null&&_TC)?('≈ USD '+_mnNum(Math.round(a.precioM2/_TC))+'/m²'):'&nbsp;'),
     _mnKpi('Lead → 1er contacto',_mnDur(a.horas),_mnDelta(a.horas,p.horas,true),
       a.medidos?('promedio sobre '+_mnNum(a.medidos)+' leads'):'sin tareas completadas para medir'),
     _mnKpi('Sin gestión +'+MN_SIN_GESTION_DIAS+' días',_mnNum(sinGestion),'',
@@ -6330,7 +6385,7 @@ async function renderReports(){
           <div><div style="font-size:34px;font-weight:800;color:var(--st-completo);line-height:1">${ventasCount}</div>
             <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">ventas</div></div>
           <div><div style="font-size:26px;font-weight:800;color:var(--gold);line-height:1">${_mnBs(ventasMonto)}</div>
-            <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">monto</div></div>
+            <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">monto${_TC?' · ≈ USD '+_mnNum(Math.round(ventasMonto/_TC)):''}</div></div>
           <div><div style="font-size:34px;font-weight:800;color:var(--gold);line-height:1">${ventasM2}</div>
             <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">m² vendidos</div></div>
           <div><div style="font-size:26px;font-weight:800;color:var(--gold);line-height:1">${ventasM2>0?_mnBs(ventasMonto/ventasM2):'—'}</div>
@@ -13854,9 +13909,19 @@ function _toggleEnCierre(){
 function _esGerencia(){
   return !!(cu&&cu.rol==='admin');
 }
-function _gerUSD(n){
-  return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
-}
+/* ── v239 · GERENCIA MOSTRABA PESOS BOLIVIANOS CON UN "$" ────────────────
+   `leads.monto_contrato` está en Bs — medido contra los contratos firmados:
+   559.384 por 174,5 m² son 3.206 por m², que en USD sería un precio imposible
+   para construcción en Bolivia. El panel lo formateaba con
+   `'$'+toLocaleString('en-US')`, así que el CEO leía "$559,384" sobre un
+   número que son bolivianos. No era un decimal mal puesto: era un factor de
+   ~7 en la lectura de todo el panel.
+   Ahora: Bs principal + equivalente en USD entre paréntesis, con el tipo de
+   cambio de app_config (ver fmtBsUsd). El nombre `_gerUSD` se retira para que
+   nadie lo vuelva a llamar creyendo que formatea dólares. */
+function _gerBs(n){return fmtBsUsd(n,0);}
+/* Sin HTML: va dentro de confirm() y de toast(). */
+function _gerBsTxt(n){return fmtBsUsdTxt(n,0);}
 function _gerM2(n){
   return Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:1})+' m²';
 }
@@ -13878,6 +13943,11 @@ let _gerCache=[];
 /* v157 — un cierre ganado por debajo de este monto casi seguro es carga errónea
    (caso real: Yasmany Lopez con $18.66). Entra a "Completar históricos" como
    REVISAR aunque tenga monto y m², y al guardar pide confirmación explícita. */
+/* v239 — el umbral SIEMPRE fue de 100 unidades de `monto_contrato`, o sea
+   100 Bs. Lo que estaba mal era el rótulo ("$100"), no el número: 100 Bs para
+   un cierre sigue siendo, con seguridad, un error de carga. Se deja igual y se
+   rotula bien. El caso real que lo justifica es el lead 5610, cargado con
+   18,66. */
 const GER_MONTO_SOSPECHOSO=100;
 
 function _gerFaltaDato(l){
@@ -13946,15 +14016,15 @@ function _gerPintar(){
     (filas.length?'<table class="ger-tbl"><thead><tr><th>'+col1+'</th><th class="num">Ventas</th>'+
       '<th class="num">Monto</th><th class="num">m²</th></tr></thead><tbody>'+
       filas.map(f=>'<tr><td>'+_escPend(f.k==='—'?'Sin fecha':f.k)+'</td><td class="num">'+f.n+'</td>'+
-        '<td class="num">'+_gerUSD(f.monto)+'</td><td class="num">'+_gerM2(f.m2)+'</td></tr>').join('')+
+        '<td class="num">'+_gerBs(f.monto)+'</td><td class="num">'+_gerM2(f.m2)+'</td></tr>').join('')+
       '</tbody></table>'
       :'<div style="color:var(--gray-400);font-size:12px">Sin datos.</div>')+'</div>';
 
   cont.innerHTML=
     '<div class="ger-kpis">'+
-      '<div class="ger-kpi"><div class="lbl">Total vendido</div><div class="val" id="ger-kpi-total">'+_gerUSD(total)+'</div></div>'+
+      '<div class="ger-kpi"><div class="lbl">Total vendido</div><div class="val" id="ger-kpi-total">'+_gerBs(total)+'</div></div>'+
       '<div class="ger-kpi"><div class="lbl">Total m²</div><div class="val" id="ger-kpi-m2">'+_gerM2(totalM2)+'</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">Ticket promedio</div><div class="val" id="ger-kpi-ticket">'+_gerUSD(ticket)+'</div>'+
+      '<div class="ger-kpi"><div class="lbl">Ticket promedio</div><div class="val" id="ger-kpi-ticket">'+_gerBs(ticket)+'</div>'+
         '<div style="font-size:9px;color:var(--gray-400);margin-top:4px" id="ger-kpi-ticket-nota">sobre '+conMonto.length+' con monto cargado</div></div>'+
       '<div class="ger-kpi"><div class="lbl">Cantidad de ventas</div><div class="val" id="ger-kpi-n">'+L.length+'</div></div>'+
     '</div>'+
@@ -13980,12 +14050,26 @@ function _gerPintar(){
      FIRMADO SIN DESEMBOLSAR → el banco no desembolsó, NO se paga
      DESEMBOLSADO POR PAGAR  → se debe hoy
      PAGADO                  → ya salió
-   Todo en BOLIVIANOS. Es el único lugar del CRM donde se muestran Bs.
+   Todo en BOLIVIANOS. (v239 — ya NO es el único lugar: desde el cambio de
+   regla, Bs es la moneda principal de todo el CRM y el equivalente en USD va
+   entre paréntesis. Ver fmtBsUsd.)
 ════════════════════════════════════════ */
 let _gerCom={gestores:[],tarifas:[],comisiones:[]};
 
-function _gerBs(n){
+/* v239 — se llamaba `_gerBs` y chocaba de nombre con el formateador de montos
+   de venta que se agregó arriba (dos `function _gerBs` en el mismo scope: la
+   segunda pisaba a la primera en silencio). Es OTRA cosa: las comisiones del
+   gestor bancario, que van con 2 decimales. Los totales del bloque sí llevan
+   el equivalente en USD; las celdas de la tabla no, porque no entra. */
+function _gerComBs(n){
   return 'Bs '+Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:0,maximumFractionDigits:2});
+}
+/* El equivalente en USD va en la línea chica: dentro del .val (22px) no entra
+   y parte la tarjeta. En las celdas de la tabla no se muestra, por lo mismo. */
+function _gerComUsd(n){
+  if(!_TC)return '';
+  return '<div style="font-size:9px;color:var(--gray-400);margin-top:2px">≈ USD '+
+    Number((Number(n)||0)/_TC).toLocaleString('es-BO',{maximumFractionDigits:0})+'</div>';
 }
 /* Tarifa vigente hoy para un gestor: la de mayor vigente_desde que ya arrancó y
    no está cerrada. Espejo de fn_tarifa_gestor, solo para mostrar. */
@@ -14019,12 +14103,12 @@ function _gerComHtml(){
   const tPagado =C.filter(c=>c.estado==='pagado').reduce((s,c)=>s+Number(c.monto_bs||0),0);
 
   h+='<div class="ger-kpis" style="margin-bottom:12px">'+
-      '<div class="ger-kpi"><div class="lbl">🟡 Firmado sin desembolsar</div><div class="val">'+_gerBs(tFirmado)+'</div>'+
+      '<div class="ger-kpi"><div class="lbl">🟡 Firmado sin desembolsar</div><div class="val">'+_gerComBs(tFirmado)+'</div>'+_gerComUsd(tFirmado)+
         '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">NO se paga todavía</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">🟢 Desembolsado por pagar</div><div class="val">'+_gerBs(tDesemb)+'</div>'+
+      '<div class="ger-kpi"><div class="lbl">🟢 Desembolsado por pagar</div><div class="val">'+_gerComBs(tDesemb)+'</div>'+_gerComUsd(tDesemb)+
         '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">se debe hoy</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">✅ Pagado</div><div class="val">'+_gerBs(tPagado)+'</div></div>'+
-      '<div class="ger-kpi"><div class="lbl">Total comprometido</div><div class="val">'+_gerBs(tFirmado+tDesemb+tPagado)+'</div>'+
+      '<div class="ger-kpi"><div class="lbl">✅ Pagado</div><div class="val">'+_gerComBs(tPagado)+'</div>'+_gerComUsd(tPagado)+'</div>'+
+      '<div class="ger-kpi"><div class="lbl">Total comprometido</div><div class="val">'+_gerComBs(tFirmado+tDesemb+tPagado)+'</div>'+_gerComUsd(tFirmado+tDesemb+tPagado)+
         '<div style="font-size:9px;color:var(--gray-400);margin-top:4px">'+C.length+' comisión(es)</div></div>'+
     '</div>';
 
@@ -14041,11 +14125,11 @@ function _gerComHtml(){
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px">'+
         '<strong style="font-size:13px">'+_escPend(g.nombre)+(g.activo?'':' <span style="color:var(--gray-400);font-size:10px">(inactivo)</span>')+'</strong>'+
         '<span style="font-size:11px;color:var(--gray-400)">Tarifa vigente: '+
-          (tv?('<strong style="color:var(--gold)">'+_gerBs(tv.tarifa_bs)+'</strong> desde '+_escPend(tv.vigente_desde)):'<span style="color:var(--st-atrasado)">sin tarifa vigente</span>')+
+          (tv?('<strong style="color:var(--gold)">'+_gerComBs(tv.tarifa_bs)+'</strong> desde '+_escPend(tv.vigente_desde)):'<span style="color:var(--st-atrasado)">sin tarifa vigente</span>')+
         '</span>'+
       '</div>'+
       '<div style="font-size:11px;margin-bottom:8px">'+
-        '🟡 '+_gerBs(sub('firmado'))+' &nbsp;·&nbsp; 🟢 '+_gerBs(sub('desembolsado'))+' &nbsp;·&nbsp; ✅ '+_gerBs(sub('pagado'))+
+        '🟡 '+_gerComBs(sub('firmado'))+' &nbsp;·&nbsp; 🟢 '+_gerComBs(sub('desembolsado'))+' &nbsp;·&nbsp; ✅ '+_gerComBs(sub('pagado'))+
       '</div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+
         '<button type="button" class="btn btn-ghost" style="font-size:11px" onclick="_gerTarifaNueva('+g.id+')">💲 Nueva tarifa</button>'+
@@ -14064,7 +14148,7 @@ function _gerComHtml(){
           return '<tr><td>'+_escPend(c.cliente_nombre||'—')+(c.lead_id?' <span style="color:var(--gray-400);font-size:10px">#'+c.lead_id+'</span>':'')+'</td>'+
             '<td>'+_escPend(c.fecha_firma||'—')+'</td>'+
             '<td>'+_gerComEstadoLbl(c.estado)+'</td>'+
-            '<td class="num">'+_gerBs(c.monto_bs)+'</td>'+
+            '<td class="num">'+_gerComBs(c.monto_bs)+'</td>'+
             '<td>'+acc+'</td></tr>';
         }).join('')+'</tbody></table>';
     }
@@ -14153,7 +14237,7 @@ function _gerHistoricosHtml(incompletos){
       '<div class="admin-section-title" style="margin:0">📝 Completar históricos (<span id="ger-hist-n">'+incompletos.length+'</span>)</div>'+
       '<button type="button" class="btn btn-ghost btn-sm" onclick="_gerGuardarTodos()">💾 Guardar todos</button>'+
     '</div>'+
-    '<div style="font-size:11px;color:var(--gray-400);margin:8px 0 10px">Cierres ganados sin monto, sin m², o con un monto sospechosamente bajo (menos de '+_gerUSD(GER_MONTO_SOSPECHOSO)+', casi siempre un error de carga).</div>'+
+    '<div style="font-size:11px;color:var(--gray-400);margin:8px 0 10px">Cierres ganados sin monto, sin m², o con un monto sospechosamente bajo (menos de '+_gerBs(GER_MONTO_SOSPECHOSO)+', casi siempre un error de carga).</div>'+
     '<div id="ger-hist-filas">'+incompletos.map(_gerHistFilaHtml).join('')+'</div>'+
   '</div>';
 }
@@ -14164,7 +14248,7 @@ function _gerHistFilaHtml(l){
     '<span class="nom">'+_escPend(l.nombre||('Lead #'+l.id))+
       (sosp?' <span style="font-size:9px;font-weight:800;color:#000;background:var(--gold);padding:2px 7px;border-radius:9px;vertical-align:middle">⚠️ REVISAR</span>':'')+
     '</span>'+
-    '<input type="number" id="gh-monto-'+l.id+'" placeholder="Monto $" min="0" step="any" value="'+(Number(l.monto_contrato)>0?l.monto_contrato:'')+'">'+
+    '<input type="number" id="gh-monto-'+l.id+'" placeholder="Monto Bs" min="0" step="any" value="'+(Number(l.monto_contrato)>0?l.monto_contrato:'')+'">'+
     '<input type="number" id="gh-m2-'+l.id+'" placeholder="m²" min="0" step="any" value="'+(Number(l.metros_cuadrados)>0?l.metros_cuadrados:'')+'">'+
     '<button type="button" class="btn btn-primary btn-sm" id="gh-btn-'+l.id+'" onclick="_gerGuardarHistorico('+l.id+')">Guardar</button>'+
   '</div>';
@@ -14178,9 +14262,9 @@ function _gerActualizarKpis(){
   const totalM2=L.reduce((s,l)=>s+Number(l.metros_cuadrados||0),0);
   const ticket=conMonto.length?total/conMonto.length:0;
   const set=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
-  set('ger-kpi-total',_gerUSD(total));
+  set('ger-kpi-total',_gerBs(total));
   set('ger-kpi-m2',_gerM2(totalM2));
-  set('ger-kpi-ticket',_gerUSD(ticket));
+  set('ger-kpi-ticket',_gerBs(ticket));
   set('ger-kpi-ticket-nota','sobre '+conMonto.length+' con monto cargado');
   set('ger-kpi-n',String(L.length));
   const pendientes=_gerIncompletos().length;
@@ -14204,7 +14288,7 @@ async function _gerGuardarHistorico(id,opts){
   if(!(monto>0)||!(m2>0)){toast('Cargá monto y m² (mayores a 0)','error');return false;}
   if(monto<GER_MONTO_SOSPECHOSO&&!opts.sinConfirmar){
     const l=_gerCache.find(x=>Number(x.id)===Number(id));
-    if(!confirm('¿Seguro? '+_gerUSD(monto)+' parece muy bajo para un cierre'+
+    if(!confirm('¿Seguro? '+_gerBsTxt(monto)+' parece muy bajo para un cierre'+
       ((l&&l.nombre)?' de '+l.nombre:'')+'.\n\nAceptá solo si el monto es correcto.'))return false;
   }
   const btn=document.getElementById('gh-btn-'+id);
@@ -14223,7 +14307,7 @@ async function _gerGuardarHistorico(id,opts){
     _gerActualizarKpis();
     /* v158 — confirmación explícita: quién, cuánto y cuántos m². El mensaje
        genérico no alcanzaba, el usuario no sabía si había guardado. */
-    if(!opts.sinConfirmar)toast('✅ '+_nom+' guardado — '+_gerUSD(monto)+' · '+_gerM2(m2));
+    if(!opts.sinConfirmar)toast('✅ '+_nom+' guardado — '+_gerBsTxt(monto)+' · '+_gerM2(m2));
     return true;
   }catch(e){
     toast('Error: '+e.message,'error');
@@ -14241,7 +14325,7 @@ function _gerMarcarFilaGuardada(id,nombre,monto,m2){
   row.innerHTML='<span class="nom" style="color:var(--st-completo);font-weight:800">'+
     '✓ '+_escPend(nombre||'')+' guardado</span>'+
     '<span style="font-size:12px;font-weight:700;color:var(--st-completo);white-space:nowrap">'+
-    _gerUSD(monto)+' · '+_gerM2(m2)+'</span>';
+    _gerBs(monto)+' · '+_gerM2(m2)+'</span>';
   row.style.transition='opacity .5s ease';
   setTimeout(()=>{try{row.style.opacity='0';}catch(_e){}},1100);
   setTimeout(()=>{try{row.remove();}catch(_e){}},1600);
@@ -14260,7 +14344,7 @@ async function _gerGuardarTodos(){
   const bajos=listos.filter(l=>parseFloat(document.getElementById('gh-monto-'+l.id).value)<GER_MONTO_SOSPECHOSO);
   if(bajos.length){
     const detalle=bajos.map(l=>'· '+(l.nombre||('Lead #'+l.id))+': '+
-      _gerUSD(parseFloat(document.getElementById('gh-monto-'+l.id).value))).join('\n');
+      _gerBsTxt(parseFloat(document.getElementById('gh-monto-'+l.id).value))).join('\n');
     if(!confirm('¿Seguro? Estos montos parecen muy bajos para un cierre:\n\n'+detalle+
       '\n\nAceptá solo si son correctos.'))return;
   }
@@ -14345,6 +14429,11 @@ let _cobObras=[],_cobObrasConContrato=[],_cobLeido=null,_cobLeadsGanados=[];
 /* v181 — el eje es horizontal y el rango se autocalcula; _cobTlAbierto es la
    clave del bloque con el popover abierto ('c:<idPago>' o 'p:<período>') */
 let _cobTlGranu='mensual',_cobTlAbierto=null;
+/* v239 — moneda del contrato del hito que está abierto en el modal de cobro.
+   El monto cobrado y su comisión salen en ESA moneda. Va en una variable
+   propia y no como campo de la fila de _cobPagos: la fila es el dato de la
+   base y no se le cuelgan cosas de pantalla. */
+let _cobCobroMoneda='BS';
 /* v181 — alta automática en background: corre UNA vez por carga del panel */
 let _cobAltaHecha=false,_cobAltaEstado=null;
 const COB_MAX_INTENTOS=3;
@@ -14355,14 +14444,52 @@ const COB_MAX_INTENTOS=3;
 function _cobSimb(moneda){return String(moneda||'BS').toUpperCase()==='USD'?'USD ':'Bs ';}
 function _cobBs(n,moneda){return _cobSimb(moneda)+(Number(n)||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});}
 /* Tipo de cambio: SIEMPRE de app_config, nunca una constante en el codigo.
-   El dia que cambie se toca esa fila y nada mas. */
-function _cobTC(){return Number(_cobCfg.tipo_cambio_usd_bs)||6.96;}
-/* Convierte un importe entre BS y USD. */
+   El dia que cambie se toca esa fila y nada mas.
+   v239 — ESO ERA LA INTENCION, NO EL CODIGO. `_cobCfg` se llena con
+   `.like('key','cobranza%')`, que no matchea `tipo_cambio_usd_bs`: la clave
+   nunca llegaba y todo el panel venia usando el `||6.96` del fallback. Ahora
+   sale del global `_TC` (cargado una vez en loadCatalogs) y **sin fallback**:
+   si no se pudo leer devuelve null y el que convierte decide qué hacer. */
+function _cobTC(){return _TC;}
+/* Convierte un importe entre BS y USD. Devuelve null si hace falta el tipo de
+   cambio y no se pudo leer: null se propaga y el panel muestra "—" en vez de
+   un numero conjurado con una cotizacion inventada. */
 function _cobConv(n,de,a){
   const D=String(de||'BS').toUpperCase(),A=String(a||'BS').toUpperCase();
   const v=Number(n)||0;
   if(D===A)return v;
-  return D==='USD'?v*_cobTC():v/_cobTC();
+  const tc=_cobTC();
+  if(!tc)return null;
+  return D==='USD'?v*tc:v/tc;
+}
+/* ── v239 · TODA SUMA QUE CRUCE CONTRATOS VA EN Bs ───────────────────────
+   El panel sumaba `q.monto` de todos los contratos sin mirar la moneda. Con el
+   contrato de Javier en USD (OJ-2026-006) eso apilaba 204.190 USD sobre
+   1.524.741 Bs y mostraba el resultado como si fuera una sola cifra. No era un
+   rotulo mal puesto: el TOTAL del eje, el "cierto/estimado" y el "% cobrado"
+   salian de esa suma.
+   Regla: lo de UN contrato se muestra en la moneda del contrato; todo lo que
+   agregue MAS DE UN contrato se normaliza a Bs primero. */
+function _cobABs(n,moneda){return _cobConv(n,moneda,'BS');}
+/* Suma en Bs una lista de {monto,moneda}. Si algo no se pudo convertir (sin
+   tipo de cambio) devuelve null: mejor un "—" que un total que miente. */
+function _cobSumaBs(items){
+  let t=0;
+  for(let i=0;i<items.length;i++){
+    const v=_cobABs(items[i].monto,items[i].moneda);
+    if(v===null)return null;
+    t+=v;
+  }
+  return t;
+}
+/* Formato de un agregado multi-contrato: Bs principal + USD entre parentesis. */
+function _cobTotBs(n){return (n===null||n===undefined)?'—':fmtBsUsd(n,2);}
+function _cobTotBsCorto(n){
+  if(n===null||n===undefined)return '—';
+  const v=Math.abs(Number(n)||0);
+  if(v>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
+  if(v>=1000)return Math.round(v/1000)+'k';
+  return String(Math.round(v));
 }
 /* v206 — TOPE: la mora de una cuota nunca supera el 20% de esa cuota.
    El tope vive en la moneda de la CUOTA; solo se convierte para comparar
@@ -14478,7 +14605,11 @@ function _cobEstadoHito(p,c){
                  aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:true};
   return{cod:'pendiente',icono:'🏗️',label:'Estimado en '+Math.abs(d)+' día(s)',aviso:f.fecha,mora:0,moraMoneda:mm,topeada:false,estimada:true};
 }
-/* FUNCIÓN 7 — comisión informativa del cobro. Nunca se expone al equipo. */
+/* FUNCIÓN 7 — comisión informativa del cobro. Nunca se expone al equipo.
+   v239 — la comisión es un PORCENTAJE, así que sale en la MISMA moneda que el
+   cobro: 1,27% de 20.000 USD son 254 USD, no 254 Bs. La función no convierte
+   nada (no hace falta) pero quien la muestra tiene que pasar la moneda del
+   contrato a _cobBs; antes ninguno la pasaba y todo salía rotulado "Bs". */
 function _cobComision(monto){
   const pct=Number(_cobCfg.cobranza_comision_pct||1.27)/100;
   const sc=Number(_cobCfg.cobranza_comision_split_captador||50)/100;
@@ -14798,11 +14929,14 @@ const COB_RAYADO='repeating-linear-gradient(45deg,#3A3526 0,#3A3526 5px,#FAC305 
 const COB_TL_BLOQUE=48;     /* ancho del bloque de una cuota */
 const COB_TL_MINPER={mensual:62,trimestral:88,anual:114};
 
+/* v239 — recibia `moneda` y la ignoraba, asi que un bloque de 20.000 USD se
+   veia igual que uno de 20.000 Bs. Ahora el bloque en USD lleva el prefijo. */
 function _cobBsCorto(n,moneda){
   const v=Math.abs(Number(n)||0);
-  if(v>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
-  if(v>=1000)return Math.round(v/1000)+'k';
-  return String(Math.round(v));
+  const pre=String(moneda||'BS').toUpperCase()==='USD'?'$':'';
+  if(v>=1000000)return pre+(v/1000000).toFixed(1).replace('.',',')+'M';
+  if(v>=1000)return pre+Math.round(v/1000)+'k';
+  return pre+String(Math.round(v));
 }
 
 /* ── períodos ────────────────────────────────────────────────────────
@@ -14843,7 +14977,11 @@ function _cobTlSetGranu(g){_cobTlGranu=g;_cobTlAbierto=null;_cobPintar();}
 function _cobCuotasDeContrato(c){
   return _cobPagos.filter(function(p){return p.contrato_id===c.id;}).map(function(p){
     const f=_cobFechaHito(p,c);
+    /* v239 — `monto` queda en la moneda del contrato (es lo que dice el papel)
+       y `montoBs` es el mismo importe normalizado, que es lo unico que se puede
+       sumar entre contratos de monedas distintas. */
     return{c:c,p:p,fecha:f.fecha,estimada:f.estimada,monto:Number(p.monto_bs)||0,
+           montoBs:_cobABs(Number(p.monto_bs)||0,c.moneda),
            cobrada:_cobEsCobrado(p)};
   }).sort(function(a,b){return (a.fecha||'9999').localeCompare(b.fecha||'9999');});
 }
@@ -14880,6 +15018,39 @@ function _cobTlCuando(q){
            (av?' <span style="color:'+(av.atrasada?COB_C.oro:COB_C.txt2)+'">(hoy '+av.real+'%)</span>':'');
   }
   return (q.estimada?'~':'')+_escPend(q.fecha||'sin fecha');
+}
+/* ── v239 · ¿LAS CUOTAS CUADRAN CON EL PRECIO DEL CONTRATO? ──────────────
+   Verificación pedida por el CEO al arreglar las monedas. Sobre los 5
+   contratos vivos hoy:
+     · OJ-2026-006 (Javier, USD) — precio 83.990, cuotas 204.190. Diferencia
+       120.200. El 1er y el 2do pago están cargados como 140.000 y 20.000, que
+       son cifras de bolivianos metidas en un contrato en dólares. No se puede
+       deducir el valor correcto desde acá: hay que mirar el contrato.
+     · OG-2026-001 y OM-2026-002 — diferencia de exactamente 1.400, que es la
+       reserva. Su descripción dice "ya pagada e imputada al primer pago", así
+       que cargarla ADEMÁS como cuota propia la cuenta dos veces. En
+       ON-2026-001 y OF-2026-001 la misma reserva sí está descontada del primer
+       pago y la diferencia da 0. O sea: no hay un criterio único de carga.
+   Ninguno de los dos se corrige por código —son datos, y adivinarlos sería
+   peor—, pero el panel deja de disimularlos: el descuadre se muestra al lado
+   del cliente y el % cobrado deja de calcularse contra un total que no cierra.
+   La tolerancia de 1 es por los centavos del redondeo de los porcentajes. */
+const COB_TOLERANCIA_DESCUADRE=1;
+function _cobDescuadre(c,qs){
+  const precio=Number(c.precio_total_bs)||0;
+  if(!precio)return null;
+  const suma=(qs||[]).reduce(function(t,q){return t+(Number(q.monto)||0);},0);
+  const d=suma-precio;
+  return Math.abs(d)>COB_TOLERANCIA_DESCUADRE?{dif:d,suma:suma,precio:precio}:null;
+}
+function _cobBadgeDescuadre(c,qs){
+  const x=_cobDescuadre(c,qs);
+  if(!x)return '';
+  return ' <span title="Las cuotas suman '+_cobBs(x.suma,c.moneda)+
+    ' y el contrato dice '+_cobBs(x.precio,c.moneda)+'" '+
+    'style="font-size:9px;font-weight:700;color:'+COB_C.rojo+';border:1px solid '+COB_C.rojo+
+    ';border-radius:4px;padding:0 4px;vertical-align:1px">descuadre '+
+    (x.dif>0?'+':'')+_cobBsCorto(x.dif,c.moneda)+'</span>';
 }
 function _cobBadgeRevisar(c){
   if(c.revisado)return '';
@@ -14960,14 +15131,15 @@ function _cobHtmlTimeline(){
         (cierto?('background:'+COB_C.verde):('background:'+COB_RAYADO))+
         (abierto?';outline:2px solid '+COB_C.oro:'')+'">'+
         (cierto
-          ? '<span style="font-size:10px;font-weight:800;color:'+COB_C.verdeTxt+'">'+_cobBsCorto(q.monto)+'</span>'
+          ? '<span style="font-size:10px;font-weight:800;color:'+COB_C.verdeTxt+'">'+_cobBsCorto(q.monto,q.c.moneda)+'</span>'
           : '<span style="font-size:10px;font-weight:800;color:'+COB_C.oro+';background:'+COB_C.oroFondo+
-            ';padding:0 3px;border-radius:2px">'+_cobBsCorto(q.monto)+'</span>')+
+            ';padding:0 3px;border-radius:2px">'+_cobBsCorto(q.monto,q.c.moneda)+'</span>')+
       '</div>';
     }).join('');
     return '<div style="margin-bottom:12px">'+
       '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:3px">'+
-        '<span style="font-size:11px;font-weight:700">'+_escPend(c.cliente_nombre||'—')+_cobBadgeRevisar(c)+'</span>'+
+        '<span style="font-size:11px;font-weight:700">'+_escPend(c.cliente_nombre||'—')+
+          _cobBadgeDescuadre(c,f.qs)+_cobBadgeRevisar(c)+'</span>'+
         '<span style="font-size:11px;color:'+COB_C.txt2+'">'+_cobBs(total,c.moneda)+'</span>'+
       '</div>'+
       '<div style="position:relative;height:30px;background:'+COB_C.barra+';border-radius:5px">'+bloques+'</div>'+
@@ -14983,37 +15155,48 @@ function _cobHtmlTimeline(){
   }).join('');
 
   /* 4 · fila total — agrega todas las obras por período */
+  /* v239 — TODO lo de esta fila cruza contratos, asi que va en Bs (ver
+     _cobABs). Antes sumaba `q.monto` crudo y apilaba los USD de Javier sobre
+     los Bs del resto. `null` significa "hay un importe que no se pudo
+     convertir porque falta el tipo de cambio": se propaga y se muestra "—",
+     nunca un total a medias. */
   const porPer={};
   per.forEach(function(k){porPer[k]={cierto:0,estimado:0,items:[]};});
   todas.forEach(function(q){
     const k=_cobPerClave(q.fecha);
     if(!porPer[k])return;
-    porPer[k][(q.cobrada||!q.estimada)?'cierto':'estimado']+=q.monto;
-    porPer[k].items.push(q);
+    const b=porPer[k],campo=(q.cobrada||!q.estimada)?'cierto':'estimado';
+    if(b[campo]!==null)b[campo]=(q.montoBs===null)?null:b[campo]+q.montoBs;
+    b.items.push(q);
   });
-  let totC=0,totE=0,totCobrado=0,totContratado=0;
-  per.forEach(function(k){totC+=porPer[k].cierto;totE+=porPer[k].estimado;});
-  _cobContratos.forEach(function(c){totContratado+=Number(c.precio_total_bs)||0;});
-  todas.forEach(function(q){if(q.cobrada)totCobrado+=q.monto;});
-  const pctTot=totContratado?Math.min(100,Math.round(totCobrado/totContratado*100)):0;
+  let totC=0,totE=0;
+  per.forEach(function(k){
+    if(totC!==null)totC=(porPer[k].cierto===null)?null:totC+porPer[k].cierto;
+    if(totE!==null)totE=(porPer[k].estimado===null)?null:totE+porPer[k].estimado;
+  });
+  const totContratado=_cobSumaBs(_cobContratos.map(function(c){
+    return{monto:Number(c.precio_total_bs)||0,moneda:c.moneda};}));
+  const totCobrado=_cobSumaBs(todas.filter(function(q){return q.cobrada;})
+    .map(function(q){return{monto:q.monto,moneda:q.c.moneda};}));
+  const pctTot=(totContratado&&totCobrado!==null)?Math.min(100,Math.round(totCobrado/totContratado*100)):0;
 
   const bloquesTot=per.map(function(k){
     const b=porPer[k];
     if(!b.items.length)return '';
     const x0=X(_cobPerIni(k)),x1=X(_cobPerIni(_cobPerSig(k)));
     const w=Math.max(30,x1-x0-4);
-    const t=b.cierto+b.estimado;
-    const wC=t?Math.round(b.cierto/t*100):0;
+    const t=(b.cierto||0)+(b.estimado||0);
+    const wC=t?Math.round((b.cierto||0)/t*100):0;
     const abierto=(_cobTlAbierto==='p:'+k);
     return '<div data-cobtl="1" onclick="_cobTlToggle(\'p:'+k+'\')" title="'+_cobPerLbl(k)+'" '+
       'style="position:absolute;left:'+(x0+2)+'px;top:3px;width:'+w+'px;height:32px;border-radius:4px;'+
       'overflow:hidden;display:flex;cursor:pointer'+(abierto?';outline:2px solid '+COB_C.oro:'')+'">'+
       (b.cierto>0?'<div style="width:'+(b.estimado>0?wC+'%':'100%')+';background:'+COB_C.verde+';display:flex;'+
         'align-items:center;justify-content:center;font-size:10px;font-weight:800;color:'+COB_C.verdeTxt+'">'+
-        _cobBsCorto(b.cierto)+'</div>':'')+
+        _cobTotBsCorto(b.cierto)+'</div>':'')+
       (b.estimado>0?'<div style="flex:1;background:'+COB_RAYADO+';display:flex;align-items:center;justify-content:center">'+
         '<span style="font-size:10px;font-weight:800;color:'+COB_C.oro+';background:'+COB_C.oroFondo+
-        ';padding:0 3px;border-radius:2px">'+_cobBsCorto(b.estimado)+'</span></div>':'')+
+        ';padding:0 3px;border-radius:2px">'+_cobTotBsCorto(b.estimado)+'</span></div>':'')+
     '</div>';
   }).join('');
 
@@ -15021,7 +15204,7 @@ function _cobHtmlTimeline(){
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:3px">'+
       '<span style="font-size:12px;font-weight:800;color:'+COB_C.oro+'">TOTAL</span>'+
       '<span style="font-size:11px;color:'+COB_C.txt2+'">cierto <strong style="color:'+COB_C.verde+'">'+
-        _cobBs(totC)+'</strong> · estimado <strong style="color:'+COB_C.oro+'">'+_cobBs(totE)+'</strong></span>'+
+        _cobTotBs(totC)+'</strong> · estimado <strong style="color:'+COB_C.oro+'">'+_cobTotBs(totE)+'</strong></span>'+
     '</div>'+
     '<div style="position:relative;height:38px;background:'+COB_C.barra+';border-radius:5px">'+bloquesTot+'</div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
@@ -15053,8 +15236,10 @@ function _cobHtmlTimeline(){
     }
     if(items.length){
       const px=Math.max(0,Math.min(W-320,ancla-160));
-      const cierto=items.filter(function(q){return q.cobrada||!q.estimada;}).reduce(function(s,q){return s+q.monto;},0);
-      const estim=items.filter(function(q){return !(q.cobrada||!q.estimada);}).reduce(function(s,q){return s+q.monto;},0);
+      /* v239 — un periodo junta cuotas de varios contratos: se suma en Bs. */
+      const _aBs=function(l){return _cobSumaBs(l.map(function(q){return{monto:q.monto,moneda:q.c.moneda};}));};
+      const cierto=_aBs(items.filter(function(q){return q.cobrada||!q.estimada;}));
+      const estim=_aBs(items.filter(function(q){return !(q.cobrada||!q.estimada);}));
       popHtml='<div id="cob-tl-pop" style="width:320px;max-width:320px;margin:8px 0 0 '+px+'px;'+
         'background:var(--gray-900);border:1px solid '+COB_C.sep+';border-radius:10px;padding:10px;'+
         'box-shadow:0 10px 30px rgba(0,0,0,0.5)">'+
@@ -15075,8 +15260,8 @@ function _cobHtmlTimeline(){
           '</div>';
         }).join('')+'</div>'+
         '<div style="display:flex;justify-content:space-between;font-size:10px;padding-top:6px;color:'+COB_C.txt2+'">'+
-          '<span>Cierto <strong style="color:'+COB_C.verde+'">'+_cobBs(cierto)+'</strong></span>'+
-          '<span>Estimado <strong style="color:'+COB_C.oro+'">'+_cobBs(estim)+'</strong></span></div>'+
+          '<span>Cierto <strong style="color:'+COB_C.verde+'">'+_cobTotBs(cierto)+'</strong></span>'+
+          '<span>Estimado <strong style="color:'+COB_C.oro+'">'+_cobTotBs(estim)+'</strong></span></div>'+
       '</div>';
     }
   }
@@ -15153,7 +15338,7 @@ function _cobPintar(){
          '<div style="font-size:12px;margin:4px 0">'+_escPend(t.c.cliente_nombre||'—')+
            ' · obra '+_escPend(t.h.obra.nombre||'—')+' ('+_escPend(t.h.obra.codigo||'sin código')+')</div>'+
          '<div style="font-size:12px;color:var(--gray-400);margin-bottom:6px">Avance real '+t.h.avance+
-           '% ≥ '+t.h.pactado+'% pactado · '+_escPend(_cobNomCuota(t.h.pago))+' '+_cobBs(t.h.pago.monto_bs)+' pendiente</div>'+
+           '% ≥ '+t.h.pactado+'% pactado · '+_escPend(_cobNomCuota(t.h.pago))+' '+_cobBs(t.h.pago.monto_bs,t.c.moneda)+' pendiente</div>'+
          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
            '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_cobPedirAvanceFatima('+t.c.id+','+t.h.pago.numero_pago+')">📲 Pedir avance a Fátima</button>'+
            '<button class="btn-primary btn-sm" style="font-size:11px" onclick="_cobAbrirCobro('+t.h.pago.id+')">✓ Registrar cobro</button>'+
@@ -15285,9 +15470,12 @@ function _cobPreviewHitos(){
   const suma=h.reduce(function(s,x){return s+x[1];},0);
   cont.innerHTML='<div style="border:1px solid var(--gray-600);border-radius:6px;padding:8px;background:var(--gray-800)">'+
     '<div style="font-size:10px;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Hitos que se van a generar</div>'+
-    h.map(function(x){return '<div style="display:flex;justify-content:space-between;font-size:12px"><span>'+x[0]+'</span><strong>'+_cobBs(x[1])+'</strong></div>';}).join('')+
+    /* v239 — el alta no tiene selector de moneda: todo contrato nuevo nace en
+       Bs (es lo que guarda _cobGuardarContrato). Se rotula explícito para que
+       el día que se agregue el selector salte que hay que pasarlo acá. */
+    h.map(function(x){return '<div style="display:flex;justify-content:space-between;font-size:12px"><span>'+x[0]+'</span><strong>'+_cobBs(x[1],'BS')+'</strong></div>';}).join('')+
     '<div style="display:flex;justify-content:space-between;font-size:12px;border-top:1px solid var(--gray-600);margin-top:4px;padding-top:4px;color:'+
-      (Math.abs(suma-P)<0.01?'var(--st-completo)':'var(--st-atrasado)')+'"><span>Suma</span><strong>'+_cobBs(suma)+'</strong></div></div>';
+      (Math.abs(suma-P)<0.01?'var(--st-completo)':'var(--st-atrasado)')+'"><span>Suma</span><strong>'+_cobBs(suma,'BS')+'</strong></div></div>';
 }
 
 async function _cobGuardarContrato(){
@@ -15356,9 +15544,10 @@ function _cobAbrirCobro(pagoId){
   const p=_cobPagos.find(function(x){return x.id===pagoId;}); if(!p)return;
   const c=_cobContratos.find(function(x){return x.id===p.contrato_id;})||{};
   _cobPagoActual=p;
+  _cobCobroMoneda=c.moneda||'BS';
   const inf=document.getElementById('cob-co-info');
   if(inf)inf.innerHTML='<strong>'+_escPend(c.cliente_nombre||'—')+'</strong> · '+_escPend(c.contrato_codigo||'sin código')+
-    '<br>'+_escPend(_cobNomCuota(p))+' — previsto '+_cobBs(p.monto_bs);
+    '<br>'+_escPend(_cobNomCuota(p))+' — previsto '+_cobBs(p.monto_bs,c.moneda);
   const m=document.getElementById('cob-co-monto'); if(m)m.value=Number(p.monto_bs)||0;
   const f=document.getElementById('cob-co-fecha'); if(f)f.value=ymdLocal(new Date());
   const cp=document.getElementById('cob-co-comp'); if(cp)cp.value='';
@@ -15369,9 +15558,11 @@ function _cobPreviewComision(){
   const cont=document.getElementById('cob-co-comision'); if(!cont)return;
   const m=Number((document.getElementById('cob-co-monto')||{}).value)||0;
   const k=_cobComision(m);
-  cont.innerHTML='Comisión de este cobro: <strong>'+_cobBs(k.total)+'</strong> '+
+  /* v239 — la moneda sale del contrato del hito abierto, no de un literal. */
+  const _mon=_cobCobroMoneda;
+  cont.innerHTML='Comisión de este cobro: <strong>'+_cobBs(k.total,_mon)+'</strong> '+
     '<span style="color:var(--gray-400);font-size:11px">('+(_cobCfg.cobranza_comision_pct||'1.27')+'% — captador '+
-    _cobBs(k.captador)+' / cerrador '+_cobBs(k.cerrador)+')</span>';
+    _cobBs(k.captador,_mon)+' / cerrador '+_cobBs(k.cerrador,_mon)+')</span>';
 }
 async function _cobConfirmarCobro(){
   const p=_cobPagoActual; if(!p){toast('Sin hito seleccionado','error');return;}
@@ -15406,7 +15597,7 @@ async function _cobConfirmarCobro(){
     }});
     const k=_cobComision(monto);
     closeModal('modalCobCobro');
-    toast('✅ Cobro registrado · comisión '+_cobBs(k.total)+
+    toast('✅ Cobro registrado · comisión '+_cobBs(k.total,_cobCobroMoneda)+
       (_moraSellada>0?' · mora sellada '+_cobBs(_moraSellada,_cobMoraMoneda(_cSel)):''),'ok');
     try{await registrarAuditoria('registrar_cobro','pagos_cliente',p.id,{monto_bs:monto,fecha:fecha});}catch(e){}
     await renderCobranzas();
