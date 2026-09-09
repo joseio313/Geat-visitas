@@ -1889,6 +1889,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <label class="form-label">¿Cómo salió la visita? <span style="color:var(--st-atrasado)">*</span></label>
         <div id="rv-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       </div>
+      <!-- v239 — solo se muestra al elegir "No asistió": es la única opción
+           que además mueve el lead y da de baja la visita. -->
+      <div id="rv-aviso" style="display:none;font-size:11px;line-height:1.5;color:var(--gray-300);background:var(--gray-800);border:1px solid var(--gold);border-radius:8px;padding:9px 10px;margin-bottom:12px">
+        🚫 <strong>No asistió</strong> — la visita se da de baja (no se marca como
+        realizada), el lead vuelve a <strong>en seguimiento</strong> y no queda
+        registrado que visitó la oficina. Acordate de agendarle el próximo paso.
+      </div>
       <div class="form-group">
         <label class="form-label">Detalle (opcional)</label>
         <textarea class="form-control" id="rv-detalle" rows="2" placeholder="Qué se conversó, próximos pasos..."></textarea>
@@ -2079,7 +2086,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='238';
+  var CURRENT_VERSION='239';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -9027,11 +9034,40 @@ async function guardarIndagacionYContinuar(){
   }
 }
 /* ── v140 (orden v134-A/B): reserva y resultado de visita ── */
+/* ── v239 · "NO ASISTIÓ" ────────────────────────────────────────────
+   Faltaba la única salida que necesitaba la visita que no ocurrió. Sin ella,
+   una visita a la que el cliente no vino se quedaba abierta para siempre:
+   marcarla completada la habría dado por ATENDIDA (el trigger
+   fn_registrar_visita_atendida pone visito_oficina=true y pasa el lead a
+   visita_realizada), y darla de baja a mano no dejaba rastro de por qué. Por
+   eso hay 41 visitas vencidas sin resultado hoy.
+
+   Qué hace, exactamente:
+     leads            → resultado_estado='no_asistio', visito_oficina=false,
+                        estado='en_seguimiento' (el lead VUELVE al circuito)
+     agenda_personal  → activo=false en la visita vencida. NUNCA completada=true.
+
+   Por qué activo=false y no completada=true (regla de CLAUDE.md): completada
+   significa "ocurrió". Sobre una fila de visita dispara la cadena que marca
+   visito_oficina y fecha_visita_oficina; ya pasó dos veces (leads 7522 y 5865).
+   Acá la visita justamente NO ocurrió.
+
+   Triggers verificados antes de escribir esto:
+     · fn_exigir_siguiente_paso y fn_sync_estado_lead_por_tarea arrancan los dos
+       con `completada=true AND OLD.completada=false`. Con activo=false no se
+       disparan, así que la baja no exige otra tarea abierta ni mueve el estado
+       por su cuenta.
+     · asignar_cerrador_alternancia solo corre si el estado nuevo hace ILIKE
+       '%visita%'. 'en_seguimiento' no matchea: no reasigna cerrador.
+     · sincronizar_visita_grupal solo corre si cambia visita_fecha, que acá no
+       se toca (queda como registro de cuándo se había citado). */
+const RV_NO_ASISTIO='no_asistio';
 const RV_OPCIONES=[
   ['interesado','😃 Interesado'],
   ['evaluando_financiamiento','🏦 Evaluando financiamiento'],
   ['precio_alto','💸 Precio alto'],
   ['no_convencio','😐 No convenció'],
+  [RV_NO_ASISTIO,'🚫 No asistió'],
   ['perdido','❌ Perdido']
 ];
 let _rvSel=null;
@@ -9040,6 +9076,7 @@ function abrirResultadoVisita(){
   _rvSel=null;
   document.getElementById('rv-lead-id').value=currentLeadId;
   document.getElementById('rv-detalle').value='';
+  const _av=document.getElementById('rv-aviso'); if(_av)_av.style.display='none';
   _rvRenderChips();
   openModal('modalResultadoVisita');
 }
@@ -9049,7 +9086,14 @@ function _rvRenderChips(){
     return '<button type="button" class="'+(_rvSel===o[0]?'btn-primary':'btn-ghost')+' btn-sm" style="font-size:11px" onclick="_rvPick(\''+o[0]+'\')">'+o[1]+'</button>';
   }).join('');
 }
-function _rvPick(k){_rvSel=k;_rvRenderChips();}
+function _rvPick(k){
+  _rvSel=k;
+  _rvRenderChips();
+  /* El aviso aparece solo con "No asistió": es la única opción que además de
+     registrar el resultado mueve el lead y da de baja la visita. */
+  const av=document.getElementById('rv-aviso');
+  if(av)av.style.display=(k===RV_NO_ASISTIO)?'':'none';
+}
 async function guardarResultadoVisita(){
   const id=Number(document.getElementById('rv-lead-id').value);
   if(!id){toast('Lead inválido','error');return;}
@@ -9060,16 +9104,53 @@ async function guardarResultadoVisita(){
   const btn=document.getElementById('rv-btn');
   if(btn)btn.disabled=true;
   try{
-    const{error}=await sb.from('leads').update({resultado_estado:_rvSel,resultado_reunion:texto}).eq('id',id);
+    const _noVino=(_rvSel===RV_NO_ASISTIO);
+    const _campos={resultado_estado:_rvSel,resultado_reunion:texto};
+    if(_noVino){
+      /* El lead vuelve al circuito de seguimiento y NO queda marcado como que
+         pisó la oficina. */
+      _campos.estado='en_seguimiento';
+      _campos.visito_oficina=false;
+    }
+    const{error}=await sb.from('leads').update(_campos).eq('id',id);
     if(error)throw error;
+    let _bajas=0;
+    if(_noVino){
+      /* Baja de la visita que no ocurrió: SOLO activo=false.
+         Se acota a las que ya vencieron (fecha_programada < ahora): si el
+         cliente no vino el martes y ya hay otra visita agendada para el
+         viernes, esa segunda tiene que seguir viva.
+         Se pide .select('id') a propósito: con la anon key un UPDATE que no
+         alcanza ninguna fila NO devuelve error, así que la única forma de
+         saber si hizo algo es contar las filas que volvieron. */
+      const{data:_bajadas,error:eB}=await sb.from('agenda_personal')
+        .update({activo:false})
+        .eq('lead_id',id).eq('activo',true).eq('completada',false)
+        .ilike('tipo','%visita%')
+        .lt('fecha_programada',new Date().toISOString())
+        .select('id');
+      if(eB)throw eB;
+      _bajas=(_bajadas||[]).length;
+    }
     try{
       await sb.from('historial_lead').insert({lead_id:id,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',
         tipo_actividad:'resultado_visita',resultado:_rvSel,nota:'📝 Resultado de visita: '+texto,
         fecha_actividad:new Date().toISOString()});
     }catch(eH){}
-    toast('✅ Resultado de visita registrado');
+    toast(_noVino
+      ? ('🚫 No asistió — lead de vuelta en seguimiento'+(_bajas?(' · '+_bajas+' visita(s) dada(s) de baja'):' · no había visita vencida que dar de baja'))
+      : '✅ Resultado de visita registrado');
     closeModal('modalResultadoVisita');
     _searchAlertaVisitas();
+    /* El badge de "visitas vencidas" y la agenda leen agenda_personal, así que
+       después de la baja hay que repintarlos o el número queda viejo. */
+    try{if(typeof refrescarBadges==='function')refrescarBadges();}catch(_eb){}
+    try{if(_noVino){await cargarAgendaPersonal();renderWeek();}}catch(_ea){}
+    /* La ficha queda abierta detras del modal: sin este re-render seguia
+       mostrando ESTADO=visita_agendada y "Visito oficina" tildado sobre un
+       lead que en la base ya cambio. Se vio al probarlo. Mismo patron que usa
+       el editor de origen (openLeadDetail con el agendaId y el modo actuales). */
+    try{if(_noVino&&Number(currentLeadId)===Number(id))await openLeadDetail(id,currentAgendaId,currentLeadMode);}catch(_el){}
   }catch(e){toast('Error: '+e.message,'error');}
   finally{if(btn)btn.disabled=false;}
 }
