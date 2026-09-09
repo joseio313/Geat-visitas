@@ -106,9 +106,34 @@ Lo que **no** cambio es por donde viaja el dinero:
 - Cambiar QUIEN ve un monto = tocar la lista de acciones de geat-montos.
   Nunca el GRANT de la columna.
 
-`monto_contrato` esta en **Bs** (medido: 559.384 por 174,5 m2 = 3.206/m2). OJO: el
-panel de Gerencia lo formatea con `_gerUSD()` y lo rotula "$" — es un rotulo
-equivocado, reportado y todavia sin corregir.
+`monto_contrato` esta en **Bs** (medido: 559.384 por 174,5 m2 = 3.206/m2).
+**Bs es la moneda principal de todo el CRM** y el equivalente en USD va entre
+parentesis, con `app_config.tipo_cambio_usd_bs` y NUNCA una constante:
+- `fmtBsUsd(n,dec)` / `fmtBsUsdTxt(n,dec)` — formateadores globales (v239).
+- El TC se lee UNA vez en `loadCatalogs` y queda en `_TC`. **Sin fallback**: si no
+  se pudo leer, `_TC` es null y no se muestra equivalente. No inventar una
+  cotizacion. (Cuidado: hasta v239 `_cobTC()` decia leerlo de app_config pero el
+  `.like('key','cobranza%')` nunca lo traia y usaba el 6.96 del fallback.)
+- En Cobranzas: lo de UN contrato va en la moneda del contrato; **todo agregado
+  que cruce contratos se normaliza a Bs primero** (`_cobABs`/`_cobSumaBs`).
+  Hay contratos en USD (OJ-2026-006).
+
+## CIERRES: SIEMPRE POR fecha_contrato (v240)
+La carga retroactiva de contratos es correcta y va a seguir pasando. **Todo
+reporte mensual de cierres se corta por `fecha_contrato`, nunca por
+`created_at`.** Aplica a Gerencia (`_gerMes`, sin fallback), al KPI y al resumen
+por vendedor de Reportes, al reporte por vendedor del modal, a Mis numeros y a la
+tabla de productividad de Admin. `reportes_leads` de geat-montos devuelve las dos
+cohortes por separado: `leads` (creados) y `cierres` (firmados).
+
+**La excepcion es el EMBUDO** (`renderFunnel` y el de Mis numeros): un embudo
+sigue a UNA cohorte de leads a lo largo de su vida, asi que ahi "Ganados" va por
+cohorte de creacion. No "arreglarlo".
+
+## VISITA QUE NO OCURRIO (v239)
+El chip "🚫 No asistio" de `modalResultadoVisita` es la unica salida correcta:
+`resultado_estado='no_asistio'`, `visito_oficina=false`, `estado='en_seguimiento'`
+y la fila de agenda **solo `activo=false`**. Ver la regla de baja mas arriba.
 
 ## NUNCA:
 - Hardcodear API keys
