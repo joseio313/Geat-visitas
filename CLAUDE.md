@@ -89,9 +89,30 @@ Vale igual para el código y para la limpieza a mano desde el SQL editor.
 El aviso está en index.html (bloque v208, arriba de la sección de visitas) y como
 COMMENT en la tabla y en las columnas `completada` / `activo`.
 
+## MONTOS — REGLA VIGENTE DESDE EL 8-SEP-2026 (v237)
+La regla vieja era "al equipo se le muestra m2, nunca dinero". **Ya no.** Los montos
+SI se muestran en los paneles de equipo, y en toda metrica de ventas el orden es
+fijo: **monto -> m2 -> precio/m2**. Aplicado en Mis numeros, Reportes
+(KPI + resumen por vendedor + reporte por vendedor) y celebraciones.
+
+Lo que **no** cambio es por donde viaja el dinero:
+- `leads.monto_contrato` y `monto_reserva` siguen SIN SELECT para anon (v202b/v203).
+  Un `curl` con la anon key sigue devolviendo 42501. **No revertir ese GRANT.**
+- Todo monto que ve el front pasa por **geat-montos**, que revalida el token de
+  sesion y recorta el alcance con el nombre del TOKEN, nunca con el del body.
+- Tampoco se copia un monto a una tabla que anon pueda leer (`celebraciones` tiene
+  la columna `monto` y sigue sin escribirse: el importe se pide con la accion
+  `montos_de_leads`).
+- Cambiar QUIEN ve un monto = tocar la lista de acciones de geat-montos.
+  Nunca el GRANT de la columna.
+
+`monto_contrato` esta en **Bs** (medido: 559.384 por 174,5 m2 = 3.206/m2). OJO: el
+panel de Gerencia lo formatea con `_gerUSD()` y lo rotula "$" — es un rotulo
+equivocado, reportado y todavia sin corregir.
+
 ## NUNCA:
 - Hardcodear API keys
-- Mostrar montos USD al equipo (solo m²)
+- Devolverle a anon el SELECT de monto_contrato / monto_reserva (ver la regla de montos)
 - Dejar console.log en producción
 - Usar .catch() directo en sb.from()
 - Usar new Date().toISOString().slice(0,10) para comparar/mostrar fechas — usar ymdLocal()
