@@ -826,6 +826,26 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .ger-kpi{background:var(--gray-900);border:1px solid var(--gray-600);border-radius:10px;padding:14px}
 .ger-kpi .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400)}
 .ger-kpi .val{font-size:22px;font-weight:900;color:var(--gold);margin-top:6px;line-height:1.1}
+/* v237 — panel "Mis números" (todos los roles). Mismo lenguaje visual que
+   .ger-kpi, pero cada tarjeta lleva delta contra el período anterior y una
+   línea de contexto abajo del número grande. */
+.mn-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:10px;margin-bottom:14px}
+.mn-kpi{background:var(--gray-900);border:1px solid var(--gray-600);border-radius:10px;padding:14px}
+.mn-kpi .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400)}
+.mn-kpi .val{font-size:26px;font-weight:900;color:var(--gold);margin-top:6px;line-height:1.05;font-variant-numeric:tabular-nums}
+.mn-kpi .sub{font-size:10px;color:var(--gray-400);margin-top:5px;line-height:1.45}
+.mn-kpi .sub .warn{color:var(--st-atrasado)}
+.mn-delta{display:inline-block;font-size:11px;font-weight:800;margin-left:8px;vertical-align:middle}
+.mn-delta.up{color:var(--st-completo)}
+.mn-delta.down{color:var(--st-atrasado)}
+.mn-delta.flat{color:var(--gray-400)}
+.mn-fase{display:grid;grid-template-columns:120px 1fr 92px;align-items:center;gap:9px;margin-bottom:7px;font-size:11px}
+.mn-fase .nom{color:var(--white);font-weight:700}
+.mn-fase .bar{background:var(--gray-800);border-radius:5px;height:14px;overflow:hidden}
+.mn-fase .bar i{display:block;height:100%;background:var(--gold);border-radius:5px}
+.mn-fase .cnt{text-align:right;color:var(--gold);font-weight:800;font-variant-numeric:tabular-nums}
+.mn-fase .cnt small{color:var(--gray-400);font-weight:700;margin-left:5px}
+.mn-nota{font-size:10px;color:var(--gray-600);margin-top:8px;line-height:1.5}
 .ger-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .ger-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);padding:7px 8px;border-bottom:1px solid var(--gray-600)}
 .ger-tbl td{padding:7px 8px;border-bottom:1px solid var(--gray-800);color:var(--white)}
@@ -971,6 +991,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
          "Sin asignar" era solo monitoreo desde v220. Las <section> y sus funciones
          (renderMonth, navMonth, renderOrphans, asignarCaptador) siguen en el archivo
          pero YA NO ESTAN CABLEADAS: ver _SCREEN_RETIRADAS en switchTab. -->
+    <!-- v237 — "Mis números" la ve TODO el equipo: no lleva style="display:none"
+         ni entra en _SCREEN_ROLES. Quién ve los números de quién lo decide el
+         servidor (geat-montos, acción mis_numeros_cierres), no esta pestaña. -->
+    <div class="nav-tab" id="tab-misnumeros" onclick="switchTab(this,'screen-misnumeros');renderMisNumeros()">📈 Mis números</div>
     <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
     <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
     <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
@@ -1093,6 +1117,29 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
        y visita_nro en NULL para que no las toque ningún trigger de leads. ══ -->
   <section id="screen-mi-agenda" class="screen">
     <div id="mia-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+
+  <!-- ══ SCREEN: MIS NÚMEROS (v237) — todos los roles ══
+       Cada asesor ve LO SUYO sin pedírselo a nadie. admin y commercial_lead
+       tienen además el selector de asesor y el total del equipo. -->
+  <section id="screen-misnumeros" class="screen">
+    <div class="screen-title">
+      <h1>Mis <span class="gold">números</span></h1>
+    </div>
+    <div class="filter-bar" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Período:</label>
+      <select class="form-control" id="mn-periodo" onchange="renderMisNumeros()" style="width:auto;padding:6px 10px;font-size:12px">
+        <option value="mes">Mes actual</option>
+        <option value="mes_ant">Mes anterior</option>
+        <option value="d90">Últimos 90 días</option>
+      </select>
+      <!-- Solo jefes: lo prende renderMisNumeros() -->
+      <span id="mn-asesor-wrap" style="display:none;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Asesor:</label>
+        <select class="form-control" id="mn-asesor" onchange="renderMisNumeros()" style="width:auto;padding:6px 10px;font-size:12px"></select>
+      </span>
+    </div>
+    <div id="mn-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
 
   <!-- ══ SCREEN: REPORTES ══ -->
@@ -2032,7 +2079,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='236';
+  var CURRENT_VERSION='237';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5732,6 +5779,366 @@ function onReportRangeChange(){
     label:`${desde}_a_${hasta}`
   };
   renderReports();
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v237 · PANEL "MIS NÚMEROS"                                           ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Lo que lo motivó: Genoveva reportó 150 leads en agosto y el sistema decía
+   287. Medido: agosto tuvo 294 leads en total (equipo) y 253 de Genoveva, y de
+   esos 253 solo 147 tienen fecha_contacto_real. Ninguno de los dos estaba
+   mintiendo — ella cuenta los que la contactaron, el sistema cuenta los
+   cargados. Por eso la tarjeta de "Leads recibidos" muestra LOS DOS números:
+   discutir sobre un número que cada uno define distinto no se arregla con un
+   reporte más, se arregla mostrando la definición al lado del número.
+
+   QUIÉN VE QUÉ
+   · La pestaña la abre TODO el equipo (no está en _SCREEN_ROLES).
+   · Cada uno ve lo suyo. admin y commercial_lead tienen selector de asesor y
+     la opción "todo el equipo".
+   · El alcance NO lo decide esta pantalla: para los montos lo decide
+     geat-montos con el nombre del TOKEN (v237), y el selector que manda el
+     navegador se ignora si el que pregunta no es jefe.
+
+   MONTOS — CAMBIO DE REGLA (CEO, 8-sep-2026)
+   Hasta v236 la regla era "al equipo se le muestra m², nunca dinero". Ya no:
+   los montos se muestran, y en TODA métrica de ventas el orden es
+   monto → m² → precio/m². Lo que NO cambió es por dónde viajan: la anon key
+   sigue sin poder leer leads.monto_contrato (v202b/v203), así que los cierres
+   entran por geat-montos y no por sb.from('leads').
+
+   CÓMO SE CUENTA (y por qué así)
+   1. Todo lo que es un conteo va con {count:'exact',head:true}. Son números,
+      no filas: leads tiene 7.5k y agenda_personal 5.5k, y traerlas chocaría
+      contra el corte silencioso de 1000 de PostgREST (v195).
+   2. Las DOS excepciones traen filas, y no por comodidad: el embudo usa
+      _leadEmbudo()/_leadRank() y el gate de indagación usa _avReqFaltantes(),
+      que son JavaScript y no se pueden escribir como filtro de PostgREST. La
+      alternativa era duplicar _ETAPA_RANK como listas de etapas crudas en el
+      filtro — dos listas que se despegan en la primera etapa nueva. Se trae
+      la fila y se reusa la función que ya está probada. Van paginadas de a
+      1000 por _mnTodas(), justamente por el corte de v195.
+   3. Sin polling: se calcula al entrar a la pestaña y al cambiar un filtro.
+   4. Las filas del CEO (tipo 'ceo'/'ceo_tarea') salen por _sinCeo(), igual que
+      en el resto del CRM.
+   5. Cortes de día con ymdLocal() y offset -04:00, nunca toISOString().slice().
+
+   LO QUE HOY DA CERO Y NO ES UN BUG DEL PANEL
+   · No-shows. El CEO pidió resultado_estado='no_asistio'. Ese valor existe en
+     2 filas de 7.557 y NINGUNA línea del front lo escribe (la cadena no
+     aparece en index.html). El número va a ser 0 hasta que alguien cargue el
+     dato, así que la tarjeta lo dice en vez de fingir precisión. La opción de
+     derivarlo de agenda_personal (visita activo=false sin completada) se
+     descartó: eso mezcla no-shows con reprogramaciones y bajas.
+   · Cierres del período. Se cortan por fecha_contrato, que es cuando el
+     cierre ocurrió. Hoy 9 de los 14 cerrado_ganado no la tienen cargada y no
+     caen en ningún período; geat-montos los devuelve aparte en
+     sin_fecha_contrato y la tarjeta lo avisa. */
+
+const MN_SIN_GESTION_DIAS=7;
+
+function _mnEsJefe(){return !!(cu&&(cu.rol==='admin'||cu.rol==='commercial_lead'));}
+/* Nombres que forman el alcance de una persona: ella y, si es asistente, su
+   principal — mismo criterio que _filtrarAgendaVisible y _bdgLeadsScope. */
+function _mnNombres(nombre){
+  const c=(colaboradores||[]).find(function(x){return x.nombre===nombre;});
+  return (c&&c.asistente_de)?[nombre,c.asistente_de]:[nombre];
+}
+/* Comillas dobles: los nombres llevan espacio y sin ellas PostgREST corta el in.(...) */
+function _mnLista(nombre){return '("'+_mnNombres(nombre).join('","')+'")';}
+/* A quién está mirando la pantalla. '' = equipo entero, y solo un jefe llega ahí. */
+function _mnAsesor(){
+  if(!_mnEsJefe())return (cu&&cu.nombre)||'';
+  const s=document.getElementById('mn-asesor');
+  return (s&&s.value)||'';
+}
+/* Leads del asesor: captador O cerrador, el mismo criterio que esLeadPropio
+   (v127) y _bdgLeadsScope. Un cerrador no capta, así que si se filtrara solo
+   por captador su panel entero daría cero. */
+function _mnScopeLeads(q,quien){
+  if(!quien)return q;
+  const l=_mnLista(quien);
+  return q.or('captador.in.'+l+',cerrador.in.'+l);
+}
+/* Agenda: la visita la ATIENDE el cerrador (colaborador) y la GENERA la
+   captadora (captador). Se mira por las dos puntas, igual que v208. */
+function _mnScopeAgenda(q,quien){
+  if(!quien)return q;
+  const l=_mnLista(quien);
+  return q.or('colaborador.in.'+l+',captador.in.'+l);
+}
+
+/* Período elegido + el período inmediatamente anterior, que es contra el que
+   se compara cada número. Todo en YMD de Bolivia. `hasta` es EXCLUSIVO. */
+function _mnRango(){
+  const modo=(document.getElementById('mn-periodo')||{}).value||'mes';
+  const h=new Date();
+  const mes=function(d){return ymdLocal(new Date(h.getFullYear(),h.getMonth()+d,1));};
+  const dia=function(n){const x=new Date();x.setDate(x.getDate()-n);return ymdLocal(x);};
+  if(modo==='d90')
+    return{desde:dia(90),hasta:dia(-1),desdePrev:dia(180),hastaPrev:dia(90),
+           lbl:'últimos 90 días',lblPrev:'90 días previos'};
+  if(modo==='mes_ant')
+    return{desde:mes(-1),hasta:mes(0),desdePrev:mes(-2),hastaPrev:mes(-1),
+           lbl:'mes anterior',lblPrev:'el mes previo'};
+  return{desde:mes(0),hasta:mes(1),desdePrev:mes(-1),hastaPrev:mes(0),
+         lbl:'mes actual',lblPrev:'el mes anterior'};
+}
+/* Las columnas timestamptz se cortan con el offset de Bolivia, no con Z. */
+function _mnIso(ymd){return ymd+'T00:00:00-04:00';}
+
+async function _mnCount(q){
+  const{count,error}=await q;
+  if(error)throw error;
+  return count||0;
+}
+/* Trae TODAS las filas paginando de a 1000. PostgREST corta en 1000 sin avisar
+   y sin error (v195: así se escondió el 79% de la agenda de la captadora). */
+async function _mnTodas(fabrica){
+  const PASO=1000;
+  let out=[],desde=0;
+  for(;;){
+    const{data,error}=await fabrica().range(desde,desde+PASO-1);
+    if(error)throw error;
+    const f=data||[];
+    out=out.concat(f);
+    if(f.length<PASO)break;
+    desde+=PASO;
+    if(desde>=20000)break;            /* cinturón: nunca debería llegar acá */
+  }
+  return out;
+}
+
+function _mnNum(n){return Number(n||0).toLocaleString('es-BO');}
+function _mnBs(n){return 'Bs '+Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:0});}
+function _mnM2(n){return Number(n||0).toLocaleString('es-BO',{maximumFractionDigits:1})+' m²';}
+function _mnPct(n,d){return d?Math.round(n/d*100)+'%':'—';}
+/* Horas hasta las 48; de ahí en más días, que es como lo piensa el equipo. */
+function _mnDur(h){
+  if(h==null)return'—';
+  return h<48?(Math.round(h*10)/10)+' h':(Math.round(h/24*10)/10)+' d';
+}
+/* Comparación contra el período anterior. `menosEsMejor` invierte el color:
+   que suba el tiempo de respuesta o los no-shows no es una buena noticia. */
+function _mnDelta(actual,previo,menosEsMejor){
+  if(actual==null||previo==null)return'';
+  /* De 0 a algo no hay porcentaje que calcular. "nuevo" igual se pinta según
+     si es buena noticia: pasar de 0 a 2 no-shows no es un logro. */
+  if(!previo)return actual?'<span class="mn-delta '+(menosEsMejor?'down':'up')+'">nuevo</span>':'';
+  const p=Math.round((actual-previo)/previo*100);
+  if(p===0)return'<span class="mn-delta flat">= 0%</span>';
+  const bueno=menosEsMejor?(p<0):(p>0);
+  return'<span class="mn-delta '+(bueno?'up':'down')+'">'+(p>0?'↑':'↓')+' '+Math.abs(p)+'%</span>';
+}
+function _mnKpi(lbl,val,delta,sub){
+  return'<div class="mn-kpi"><div class="lbl">'+lbl+'</div>'+
+    '<div class="val">'+val+(delta||'')+'</div>'+
+    (sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+}
+
+/* Leads sin gestionar hace más de MN_SIN_GESTION_DIAS días. No depende del
+   período: es una foto de HOY, y por eso no lleva comparación.
+   Van dos conteos en vez de un .or() anidado porque _mnScopeLeads ya gastó el
+   .or() de la query, y un lead recién cargado que nunca se gestionó tiene
+   ultima_gestion en NULL — que `.lt()` deja afuera en silencio (v182). */
+async function _mnSinGestion(quien){
+  const corte=ymdLocal(new Date(Date.now()-MN_SIN_GESTION_DIAS*86400000));
+  const base=function(){
+    return _mnScopeLeads(sb.from('leads').select('id',{count:'exact',head:true}),quien)
+      .not('estado','in','(cerrado_ganado,cerrado_perdido)')
+      .not('archivado','is',true);
+  };
+  const[conGestion,nunca]=await Promise.all([
+    _mnCount(base().lt('ultima_gestion',corte)),
+    _mnCount(base().is('ultima_gestion',null).lt('created_at',_mnIso(corte)))
+  ]);
+  return conGestion+nunca;
+}
+
+/* Todos los números de un período. Se llama dos veces: el período elegido y el
+   anterior, que es contra el que se compara. */
+async function _mnBloque(quien,desde,hasta){
+  const dIso=_mnIso(desde),hIso=_mnIso(hasta);
+  /* Las columnas del embudo y del gate de indagación. IND_CAMPOS_REQ sale del
+     array, no de una lista a mano: si mañana el gate baja o sube de 5 campos,
+     este panel lo sigue solo (v196). */
+  const cols='id,etapa,estado,indagacion_completa,visito_oficina,created_at,fecha_contacto_real,'+
+    IND_CAMPOS_REQ.map(function(c){return c.key;}).join(',');
+
+  const agenda=function(){
+    return _sinCeo(_mnScopeAgenda(sb.from('agenda_personal').select('id',{count:'exact',head:true}),quien))
+      .ilike('tipo','%visita%').eq('activo',true)
+      .gte('fecha_programada',dIso).lt('fecha_programada',hIso);
+  };
+
+  const[leads,vAgendadas,vEfectivas,noShows]=await Promise.all([
+    _mnTodas(function(){
+      return _mnScopeLeads(sb.from('leads').select(cols),quien)
+        .gte('created_at',dIso).lt('created_at',hIso).order('id');
+    }),
+    _mnCount(agenda()),
+    _mnCount(agenda().eq('completada',true)),
+    _mnCount(_mnScopeLeads(sb.from('leads').select('id',{count:'exact',head:true}),quien)
+      .eq('resultado_estado','no_asistio').gte('visita_fecha',dIso).lt('visita_fecha',hIso))
+  ]);
+
+  /* Embudo por las 5 fases del protocolo GEAT, acumulativo: llegar a Visita
+     cuenta también en Indagación y Envío info, aunque el lead después se haya
+     perdido. Sale de _leadEmbudo()/_leadRank() (v190), que es lo mismo que usa
+     el embudo de Reportes — no hay una segunda escala que se pueda despegar. */
+  const fases=[{k:'F1 Presentación',n:leads.length},
+               {k:'F2 Indagación',n:0},{k:'F3 Envío info',n:0},
+               {k:'F4 Visita',n:0},{k:'F5 Cierre',n:0}];
+  let indOk=0,conContacto=0;
+  leads.forEach(function(l){
+    const e=_leadEmbudo(l);
+    if(e.indagacion)fases[1].n++;
+    if(e.envio)fases[2].n++;
+    if(e.vAgendada)fases[3].n++;
+    if(_leadRank(l)>=6)fases[4].n++;
+    if(_avReqFaltantes(l).length===0)indOk++;
+    if(l.fecha_contacto_real)conContacto++;
+  });
+
+  /* Tiempo de lead a PRIMER contacto: del momento en que el lead entró hasta
+     la primera tarea suya que se completó. No se usa intento1_fecha — está en
+     NULL en los 253 leads de agosto — ni ultima_gestion, que es la última.
+     Los ids van de a 150 porque `.in()` también entra en el corte de 1000. */
+  const ids=leads.map(function(l){return l.id;});
+  const primera={};
+  for(let i=0;i<ids.length;i+=150){
+    const trozo=ids.slice(i,i+150);
+    const filas=await _mnTodas(function(){
+      return _sinCeo(sb.from('agenda_personal').select('lead_id,completada_en'))
+        .in('lead_id',trozo).eq('completada',true)
+        .not('completada_en','is',null).order('lead_id');
+    });
+    filas.forEach(function(f){
+      const t=new Date(f.completada_en).getTime();
+      if(isNaN(t))return;
+      if(primera[f.lead_id]==null||t<primera[f.lead_id])primera[f.lead_id]=t;
+    });
+  }
+  let suma=0,medidos=0;
+  leads.forEach(function(l){
+    const p=primera[l.id];
+    if(p==null)return;
+    const base=leadFechaContacto(l);
+    if(!base)return;
+    const h=(p-base.getTime())/3600000;
+    if(h>=0){suma+=h;medidos++;}
+  });
+
+  /* Cierres: por geat-montos, nunca por la anon key (v202b/v203/v237). Si la
+     puerta falla, el panel no se cae entero: el resto de los números ya está y
+     la tarjeta muestra el error. */
+  let cierres=[],sinFecha=0,errMontos='';
+  try{
+    const r=await _montosCall({action:'mis_numeros_cierres',desde:desde,hasta:hasta,asesor:quien||''});
+    cierres=r.cierres||[];
+    sinFecha=r.sin_fecha_contrato||0;
+  }catch(e){errMontos=e.message||'error';}
+  const monto=cierres.reduce(function(s,c){return s+Number(c.monto_contrato||0);},0);
+  const m2=cierres.reduce(function(s,c){return s+Number(c.metros_cuadrados||0);},0);
+
+  return{leads:leads.length,conContacto:conContacto,fases:fases,indOk:indOk,
+    vAgendadas:vAgendadas,vEfectivas:vEfectivas,noShows:noShows,
+    horas:medidos?suma/medidos:null,medidos:medidos,
+    cierres:cierres.length,monto:monto,m2:m2,
+    precioM2:m2>0?monto/m2:null,sinFecha:sinFecha,errMontos:errMontos};
+}
+
+function _mnPintar(r,quien,a,p,sinGestion){
+  const titulo=quien?_escPend(quien):'Todo el equipo';
+  /* Orden fijo de toda métrica de ventas (regla del CEO, v237):
+     monto → m² → precio/m². Acá y en cualquier panel nuevo. */
+  const kpis=[
+    _mnKpi('Leads recibidos',_mnNum(a.leads),_mnDelta(a.leads,p.leads),
+      _mnNum(a.conContacto)+' con contacto real · '+_mnNum(a.leads-a.conContacto)+' sin esa fecha'),
+    _mnKpi('Indagación completa',_mnPct(a.indOk,a.leads),
+      _mnDelta(a.leads?a.indOk/a.leads:null,p.leads?p.indOk/p.leads:null),
+      _mnNum(a.indOk)+' de '+_mnNum(a.leads)+' con los '+IND_CAMPOS_REQ.length+' campos obligatorios'),
+    _mnKpi('Visitas agendadas',_mnNum(a.vAgendadas),_mnDelta(a.vAgendadas,p.vAgendadas),
+      'agendadas por vos o a tu nombre'),
+    _mnKpi('Visitas efectivas',_mnNum(a.vEfectivas),_mnDelta(a.vEfectivas,p.vEfectivas),
+      _mnPct(a.vEfectivas,a.vAgendadas)+' de las agendadas'),
+    _mnKpi('No-shows',_mnNum(a.noShows),_mnDelta(a.noShows,p.noShows,true),
+      '<span class="warn">⚠ nadie carga este dato todavía</span>'),
+    _mnKpi('Cierres',_mnNum(a.cierres),_mnDelta(a.cierres,p.cierres),
+      a.errMontos?'<span class="warn">montos: '+_escPend(a.errMontos)+'</span>'
+        :(a.sinFecha?'<span class="warn">'+_mnNum(a.sinFecha)+' ganados sin fecha de contrato — no entran en ningún período</span>':'por fecha de contrato')),
+    _mnKpi('Monto de contratos',_mnBs(a.monto),_mnDelta(a.monto,p.monto),'del contrato, sin comisiones'),
+    _mnKpi('m² cerrados',_mnM2(a.m2),_mnDelta(a.m2,p.m2),'&nbsp;'),
+    _mnKpi('Precio por m²',a.precioM2==null?'—':_mnBs(a.precioM2),
+      _mnDelta(a.precioM2,p.precioM2),'&nbsp;'),
+    _mnKpi('Lead → 1er contacto',_mnDur(a.horas),_mnDelta(a.horas,p.horas,true),
+      a.medidos?('promedio sobre '+_mnNum(a.medidos)+' leads'):'sin tareas completadas para medir'),
+    _mnKpi('Sin gestión +'+MN_SIN_GESTION_DIAS+' días',_mnNum(sinGestion),'',
+      'foto de hoy, no del período')
+  ].join('');
+
+  const tope=Math.max(1,a.fases[0].n);
+  const embudo=a.fases.map(function(f,i){
+    const prev=i?a.fases[i-1].n:null;
+    return'<div class="mn-fase"><span class="nom">'+f.k+'</span>'+
+      '<span class="bar"><i style="width:'+Math.round(f.n/tope*100)+'%"></i></span>'+
+      '<span class="cnt">'+_mnNum(f.n)+
+      (prev!=null?'<small>'+_mnPct(f.n,prev)+'</small>':'')+'</span></div>';
+  }).join('');
+
+  return'<div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">'+
+      '<strong style="color:var(--gold)">'+titulo+'</strong> · '+r.lbl+
+      ' ('+r.desde+' → '+r.hasta+', exclusivo) · comparado contra '+r.lblPrev+
+    '</div>'+
+    '<div class="mn-kpis">'+kpis+'</div>'+
+    '<div class="section"><div class="section-title">Embudo por fase</div>'+embudo+
+      '<div class="mn-nota">Acumulativo: un lead que llegó a Visita cuenta también en Indagación y Envío info, aunque después se haya perdido. El porcentaje chico es cuánto pasó de la fase anterior. Escala de _leadRank() (v190), la misma del embudo de Reportes.<br>El embudo sigue a los leads <strong>recibidos</strong> en el período; la tarjeta de Cierres cuenta los contratos <strong>firmados</strong> en el período, que casi siempre vienen de leads de meses anteriores. Por eso F5 puede dar 0 con cierres &gt; 0, y no es un error.</div>'+
+    '</div>';
+}
+
+/* Un refresco completo tarda unos segundos (12 consultas), así que el usuario
+   alcanza a tocar otro filtro mientras corre. Un `if(corriendo)return` sería lo
+   fácil y estaría MAL: descarta el clic nuevo y la pantalla se queda mostrando
+   el filtro viejo, que es exactamente lo que pasó al probarlo (se eligió "mes
+   anterior" y siguió pintando el mes actual). Con un número de orden gana
+   siempre la ÚLTIMA pedida, sin importar cuál termine primero. */
+let _mnSeq=0;
+async function renderMisNumeros(){
+  const body=document.getElementById('mn-body');
+  if(!body||!cu)return;
+  _mnPoblarAsesores();
+  const mio=++_mnSeq;
+  /* Los filtros se leen ACÁ: son los de esta llamada, no los que haya cuando
+     vuelvan las respuestas. */
+  const r=_mnRango();
+  const quien=_mnAsesor();
+  body.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    const[act,prev,sinGestion]=await Promise.all([
+      _mnBloque(quien,r.desde,r.hasta),
+      _mnBloque(quien,r.desdePrev,r.hastaPrev),
+      _mnSinGestion(quien)
+    ]);
+    if(mio!==_mnSeq)return;                 /* llegó tarde: ya hay otra pedida */
+    body.innerHTML=_mnPintar(r,quien,act,prev,sinGestion);
+  }catch(e){
+    if(mio!==_mnSeq)return;
+    body.innerHTML='<div style="color:var(--st-atrasado);font-size:12px;padding:10px">Error: '+_escPend(e.message||'error')+'</div>';
+  }
+}
+/* El selector de asesor es solo de jefes. Para el resto ni se dibuja: no es
+   que esté escondido, es que su valor no se usa — el alcance de los montos lo
+   recorta geat-montos con el nombre del token. */
+function _mnPoblarAsesores(){
+  const wrap=document.getElementById('mn-asesor-wrap');
+  const sel=document.getElementById('mn-asesor');
+  if(!wrap||!sel)return;
+  if(!_mnEsJefe()){wrap.style.display='none';return;}
+  wrap.style.display='inline-flex';
+  if(sel.options.length)return;
+  sel.innerHTML='<option value="">👥 Todo el equipo</option>'+
+    (colaboradores||[]).filter(function(c){return c.activo;})
+      .map(function(c){return'<option value="'+_escPend(c.nombre)+'">'+_escPend(c.nombre)+'</option>';}).join('');
 }
 
 async function renderReports(){
