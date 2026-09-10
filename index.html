@@ -2097,7 +2097,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='242';
+  var CURRENT_VERSION='243';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -6144,14 +6144,20 @@ async function _mnBloque(quien,desde,hasta){
      los campos; la tarea sola no prueba nada. Desde v242 el gate impide que se
      vuelvan a separar, y las cerradas con "no quiso responder" se cuentan
      aparte para que no ensucien ni un lado ni el otro.
-     OJO: se cuenta por `tipo='Indagación'`, y saveSeguimiento pisa `tipo` con
-     lo elegido en "Lo que pasó ahora" al cerrar. O sea que este conteo son las
-     que quedaron ROTULADAS como indagación, que es lo mismo que ve cualquier
-     reporte que filtre por tipo. Es el número comparable, no una estimación
-     del total real de indagaciones hechas. */
+     v243 — se cuenta por `tipo_original`, NO por `tipo`: saveSeguimiento pisa
+     `tipo` con lo elegido en "Lo que pasó ahora" al cerrar, así que después de
+     cerrada `tipo` dice el RESULTADO y no lo que la tarea era. Hasta v242 el
+     conteo salía de `tipo` y por eso sólo veía las que quedaron rotuladas como
+     indagación. Las filas anteriores a v243 tienen tipo_original en NULL y se
+     leen por `tipo`, que es lo que había: el número histórico no se mueve. */
+  const _filtroInd='tipo_original.eq.Indagación,and(tipo_original.is.null,tipo.eq.Indagación)';
+  /* El día que la columna empezó a poblarse. Va al pie del indicador: sin eso,
+     alguien compara un número nuevo contra el histórico creyendo que miden lo
+     mismo, y no lo miden — antes del corte se lee `tipo`, que en una tarea
+     cerrada dice el RESULTADO. */
   const indTareas=await _mnTodas(function(){
     return _sinCeo(_mnScopeAgenda(sb.from('agenda_personal').select('lead_id,ind_sin_respuesta'),quien))
-      .eq('tipo','Indagación').eq('completada',true)
+      .or(_filtroInd).eq('completada',true)
       .gte('completada_en',dIso).lt('completada_en',hIso).order('lead_id');
   });
   const indSinResp=indTareas.filter(function(t){return t.ind_sin_respuesta===true;}).length;
@@ -6201,14 +6207,21 @@ function _mnPintar(r,quien,a,p,sinGestion){
     _mnKpi('Indagación completa',_mnPct(a.indOk,a.leads),
       _mnDelta(a.leads?a.indOk/a.leads:null,p.leads?p.indOk/p.leads:null),
       _mnNum(a.indOk)+' de '+_mnNum(a.leads)+' con los '+IND_CAMPOS_REQ.length+' campos obligatorios'),
-    /* v242 — las dos indagaciones, una al lado de la otra a propósito: la
-       tarea dada por hecha y la que dejó el dato. Históricamente 346 contra 16. */
-    _mnKpi('Indagaciones completadas',_mnNum(a.indHechas),_mnDelta(a.indHechas,p.indHechas),
-      'tareas marcadas como hechas'+(a.indSinResp?' · '+_mnNum(a.indSinResp)+' cerradas sin datos aparte':'')),
+    /* v242/v243 — las dos indagaciones, una al lado de la otra a propósito: la
+       tarea que alguien cerró y la que dejó el dato. Las dos miden la MISMA
+       población (las cerradas en el período), así que la resta significa algo:
+       lo que falta es lo que se cerró sin dato. Históricamente 347 contra 16.
+       No confundir con "leads con los 5 campos" en toda la base, que da 25:
+       ésos incluyen 9 leads donde el dato entró por la ficha o por el gate de
+       agendar visita, sin tarea de indagación cerrada. Otra pregunta. */
+    _mnKpi('Indagaciones cerradas',_mnNum(a.indHechas),_mnDelta(a.indHechas,p.indHechas),
+      'tareas que alguien dio por cerradas'+(a.indSinResp?' · '+_mnNum(a.indSinResp)+' sin datos, contadas aparte':'')+
+      '<br><span class="warn">por tipo de apertura desde el '+TIPO_ORIGINAL_DESDE+
+      '; antes, por el tipo con el que quedaron al cerrarse</span>'),
     _mnKpi('Indagaciones con los '+IND_CAMPOS_REQ.length+' campos',_mnNum(a.indConCampos),
       _mnDelta(a.indConCampos,p.indConCampos),
       a.indHechas
-        ? _mnPct(a.indConCampos,a.indHechas)+' de las completadas dejó el dato cargado'
+        ? _mnPct(a.indConCampos,a.indHechas)+' de las cerradas dejó el dato cargado'
           +(a.indConCampos<a.indHechas?' · <span class="warn">'+_mnNum(a.indHechas-a.indConCampos)+' sin dato</span>':'')
         : 'sin indagaciones cerradas en el período'),
     _mnKpi('Visitas agendadas',_mnNum(a.vAgendadas),_mnDelta(a.vAgendadas,p.vAgendadas),
@@ -9036,6 +9049,10 @@ const IND_CAMPOS=[
    puedan quedar desincronizadas. */
 const IND_CAMPOS_REQ=IND_CAMPOS.filter(function(c){return c.req;});
 const IND_CAMPOS_SEL=IND_CAMPOS.map(function(c){return c.key;}).join(',');
+/* v243 — desde acá agenda_personal.tipo_original tiene dato. Antes es NULL y
+   el conteo cae en `tipo`. Si algún día se backfillea, se borra esta constante
+   y la aclaración del indicador; hasta entonces el número tiene que decirlo. */
+const TIPO_ORIGINAL_DESDE='10-sep-2026';
 function _avVacio(lf,c){
   const v=lf?lf[c.key]:null;
   return v===null||v===undefined||v==='';
