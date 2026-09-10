@@ -1407,6 +1407,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <button class="modal-close" onclick="closeModal('modalFinalize')">×</button>
     </div>
     <div class="modal-body">
+      <!-- v242 · GATE DE INDAGACIÓN — solo si la tarea que se está cerrando es
+           tipo='Indagación'. Lo llena _finPintarGateInd() en prepareFinalize. -->
+      <div id="fin-ind-gate" class="conditional-block" style="border-color:var(--st-atrasado);background:rgba(220,53,69,0.06)">
+        <div class="section-title">🧭 Indagación incompleta</div>
+        <div id="fin-ind-faltan" style="font-size:12px;line-height:1.7;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn-secondary" onclick="cerrarFinalizeYAbrirFicha()" style="font-size:11px">✏️ Cargar en la ficha</button>
+          <button type="button" class="btn-ghost" id="fin-ind-norespondio" onclick="indNoQuisoResponder()" style="font-size:11px;border-color:var(--st-atrasado)">🚫 El cliente no quiso responder</button>
+        </div>
+        <div class="form-help">Cerrar por "no quiso responder" deja la tarea hecha pero NO cuenta como indagación en los reportes.</div>
+      </div>
       <div class="section">
         <div class="section-title">Lo que pasó ahora</div>
         <div class="form-row">
@@ -2086,7 +2097,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='241';
+  var CURRENT_VERSION='242';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2228,6 +2239,7 @@ let agendaData=[];
 let currentWeekStart=getMonday(new Date());
 let currentMonthDate=new Date();
 let currentAgendaId=null;
+let _finTarea=null;      /* v242 — la fila de agenda_personal que se está cerrando */
 let currentLeadId=null;
 let outcomeMode='continue';
 let searchMode='search';
@@ -6125,6 +6137,40 @@ async function _mnBloque(quien,desde,hasta){
     if(h>=0){suma+=h;medidos++;}
   });
 
+  /* ── v242 · LAS DOS INDAGACIONES, QUE NO SON LO MISMO ──────────────────
+     "Completadas" son TAREAS que alguien dio por hechas. "Con los 5 campos"
+     son las que dejaron el dato cargado. Medido el 10-sep-2026 sobre todo el
+     histórico: 346 tareas contra 16 con los campos. Los reportes miden SIEMPRE
+     los campos; la tarea sola no prueba nada. Desde v242 el gate impide que se
+     vuelvan a separar, y las cerradas con "no quiso responder" se cuentan
+     aparte para que no ensucien ni un lado ni el otro.
+     OJO: se cuenta por `tipo='Indagación'`, y saveSeguimiento pisa `tipo` con
+     lo elegido en "Lo que pasó ahora" al cerrar. O sea que este conteo son las
+     que quedaron ROTULADAS como indagación, que es lo mismo que ve cualquier
+     reporte que filtre por tipo. Es el número comparable, no una estimación
+     del total real de indagaciones hechas. */
+  const indTareas=await _mnTodas(function(){
+    return _sinCeo(_mnScopeAgenda(sb.from('agenda_personal').select('lead_id,ind_sin_respuesta'),quien))
+      .eq('tipo','Indagación').eq('completada',true)
+      .gte('completada_en',dIso).lt('completada_en',hIso).order('lead_id');
+  });
+  const indSinResp=indTareas.filter(function(t){return t.ind_sin_respuesta===true;}).length;
+  const indHechas=indTareas.length-indSinResp;
+  /* De esas tareas, cuántas dejaron los 5 campos en el lead. Los ids van de a
+     150: `.in()` también entra en el corte de 1000 de PostgREST (v195). */
+  const _idsInd=Array.from(new Set(indTareas
+    .filter(function(t){return t.ind_sin_respuesta!==true&&t.lead_id;})
+    .map(function(t){return t.lead_id;})));
+  let indConCampos=0;
+  for(let i=0;i<_idsInd.length;i+=150){
+    const trozo=_idsInd.slice(i,i+150);
+    const filas=await _mnTodas(function(){
+      return sb.from('leads').select('id,'+IND_CAMPOS_REQ.map(function(c){return c.key;}).join(','))
+        .in('id',trozo).order('id');
+    });
+    filas.forEach(function(l){if(_avReqFaltantes(l).length===0)indConCampos++;});
+  }
+
   /* Cierres: por geat-montos, nunca por la anon key (v202b/v203/v237). Si la
      puerta falla, el panel no se cae entero: el resto de los números ya está y
      la tarjeta muestra el error. */
@@ -6138,6 +6184,7 @@ async function _mnBloque(quien,desde,hasta){
   const m2=cierres.reduce(function(s,c){return s+Number(c.metros_cuadrados||0);},0);
 
   return{leads:leads.length,conContacto:conContacto,fases:fases,indOk:indOk,
+    indHechas:indHechas,indConCampos:indConCampos,indSinResp:indSinResp,
     vAgendadas:vAgendadas,vEfectivas:vEfectivas,noShows:noShows,
     horas:medidos?suma/medidos:null,medidos:medidos,
     cierres:cierres.length,monto:monto,m2:m2,
@@ -6154,6 +6201,16 @@ function _mnPintar(r,quien,a,p,sinGestion){
     _mnKpi('Indagación completa',_mnPct(a.indOk,a.leads),
       _mnDelta(a.leads?a.indOk/a.leads:null,p.leads?p.indOk/p.leads:null),
       _mnNum(a.indOk)+' de '+_mnNum(a.leads)+' con los '+IND_CAMPOS_REQ.length+' campos obligatorios'),
+    /* v242 — las dos indagaciones, una al lado de la otra a propósito: la
+       tarea dada por hecha y la que dejó el dato. Históricamente 346 contra 16. */
+    _mnKpi('Indagaciones completadas',_mnNum(a.indHechas),_mnDelta(a.indHechas,p.indHechas),
+      'tareas marcadas como hechas'+(a.indSinResp?' · '+_mnNum(a.indSinResp)+' cerradas sin datos aparte':'')),
+    _mnKpi('Indagaciones con los '+IND_CAMPOS_REQ.length+' campos',_mnNum(a.indConCampos),
+      _mnDelta(a.indConCampos,p.indConCampos),
+      a.indHechas
+        ? _mnPct(a.indConCampos,a.indHechas)+' de las completadas dejó el dato cargado'
+          +(a.indConCampos<a.indHechas?' · <span class="warn">'+_mnNum(a.indHechas-a.indConCampos)+' sin dato</span>':'')
+        : 'sin indagaciones cerradas en el período'),
     _mnKpi('Visitas agendadas',_mnNum(a.vAgendadas),_mnDelta(a.vAgendadas,p.vAgendadas),
       'agendadas por vos o a tu nombre'),
     _mnKpi('Visitas efectivas',_mnNum(a.vEfectivas),_mnDelta(a.vEfectivas,p.vEfectivas),
@@ -7949,6 +8006,11 @@ async function openLeadDetail(leadId,agendaId,mode){
 
   const current=history.find(h=>h.id===agendaId)||history.find(h=>!h.completada)||history[history.length-1];
   if(!currentAgendaId&&current&&!current.completada)currentAgendaId=current.id;
+  /* v242 — hasta acá solo se guardaba el id. El gate de indagación necesita el
+     TIPO de la tarea que se está por cerrar, y no se puede leer de #fin-estado:
+     ese select dice "lo que pasó ahora" y saveSeguimiento lo escribe encima del
+     tipo original en el mismo UPDATE. Por eso el trigger mira OLD.tipo. */
+  _finTarea=(current&&currentAgendaId&&current.id===currentAgendaId)?current:null;
 
   document.getElementById('modal-lead-body').innerHTML=`
     ${currentLeadMode==='readonly'?`<div class="mobile-note">👁️ <strong>Modo consulta</strong> — solo lectura. Para operar el lead abrilo desde la agenda.${_puedeRep?' <strong>Esta visita la agendaste vos:</strong> podés moverla de fecha con 🔄 Reprogramar visita, ahí arriba. No cambia el cerrador ni la marca como realizada.':''}</div>`:''}
@@ -11221,6 +11283,77 @@ function _diasProximoContacto(etapa){
   return map[e]!=null?map[e]:2; // default +2 días
 }
 
+/* ════════════════════════════════════════
+   v242 · GATE DE INDAGACIÓN — no se cierra una Indagación sin los 5 campos
+   Medido al hacerlo: de 346 tareas tipo='Indagación' completadas, 330 tenían
+   los 5 campos VACÍOS. No fue culpa de ningún trigger (solo 30 llevan firma
+   automática): el front dejaba marcarla hecha sin validar nada. Por eso la
+   indagación figuraba vacía en todos los reportes.
+   Se valida en los DOS lados: acá para que la persona vea QUÉ falta, y en la
+   base con trg_exigir_indagacion_completa, que es el que manda — un CRM viejo
+   cacheado en el PWA se saltearía este chequeo (es lo que pasó con el gate de
+   v130, ver el 0/41 de v140).
+   La única salida sin los campos es "El cliente no quiso responder": cierra la
+   tarea con ind_sin_respuesta=true y NO cuenta como indagación en los reportes.
+════════════════════════════════════════ */
+var _finIndSinResp=false;   /* v242 — la persona usó la salida "no quiso responder" */
+function _finEsIndagacion(){
+  return !!(_finTarea&&(_finTarea.tipo||'')==='Indagación');
+}
+/* Los 5 que bloquean salen de IND_CAMPOS_REQ, nunca de una lista aparte: el
+   frontend y el trigger bloquear_visita_sin_indagacion se mueven juntos (v196). */
+async function _finFaltantesInd(){
+  try{
+    const{data:lf,error}=await sb.from('leads').select(IND_CAMPOS_SEL).eq('id',currentLeadId).single();
+    if(error)throw error;
+    return _avReqFaltantes(lf);
+  }catch(e){return null;}   /* null = no se pudo leer; no se inventa un veredicto */
+}
+async function _finPintarGateInd(){
+  const box=document.getElementById('fin-ind-gate');
+  if(!box)return;
+  const b=document.getElementById('fin-ind-norespondio');
+  if(b){b.disabled=false;b.style.opacity='1';b.innerHTML='🚫 El cliente no quiso responder';}
+  box.style.borderStyle='';
+  /* .conditional-block es display:none por CSS y se abre con la clase .show,
+     igual que block-continue/won/lost. Con style.display='' el bloque quedaba
+     invisible aunque el código creyera haberlo mostrado. */
+  box.classList.remove('show');
+  if(!_finEsIndagacion())return;
+  const faltan=await _finFaltantesInd();
+  if(faltan===null||!faltan.length)return;
+  document.getElementById('fin-ind-faltan').innerHTML=
+    'Esta tarea es una <strong>Indagación</strong> y no se puede dar por hecha sin estos '+
+    faltan.length+' campo'+(faltan.length===1?'':'s')+':<br>'+
+    faltan.map(function(c){return '• <strong>'+c.label+'</strong>';}).join('<br>');
+  box.classList.add('show');
+}
+function cerrarFinalizeYAbrirFicha(){
+  const id=currentLeadId;
+  closeModal('modalFinalize');
+  try{if(id)openLeadDetail(id,currentAgendaId,'normal');}catch(e){}
+}
+/* La salida declarada. NO cierra la tarea por su cuenta: la primera versión lo
+   hacía y la base la rebotó con "Programá el siguiente seguimiento o marcá el
+   lead como ganado/perdido antes de completar" — fn_exigir_siguiente_paso
+   (v144) no deja cerrar nada si el lead queda sin un paso abierto, y tiene
+   razón. Así que este botón DESTRABA el guardado normal: marca la indagación
+   como "sin datos" y la persona sigue eligiendo el siguiente paso como
+   siempre. La tarea se cierra en saveSeguimiento con ind_sin_respuesta=true. */
+function indNoQuisoResponder(){
+  if(!currentAgendaId||!currentLeadId){toast('Sin tarea para cerrar','error');return;}
+  _finIndSinResp=true;
+  const box=document.getElementById('fin-ind-gate');
+  const txt=document.getElementById('fin-ind-faltan');
+  if(txt)txt.innerHTML='🚫 <strong>El cliente no quiso responder.</strong><br>'+
+    'La indagación se va a cerrar sin datos y <strong>no va a contar</strong> como '+
+    'indagación en los reportes.<br>Elegí abajo el siguiente paso y guardá.';
+  const b=document.getElementById('fin-ind-norespondio');
+  if(b){b.disabled=true;b.style.opacity='.5';b.innerHTML='🚫 Marcada sin datos';}
+  if(box){box.style.borderStyle='solid';}
+  toast('Indagación marcada sin datos — elegí el siguiente paso y guardá');
+}
+
 async function prepareFinalize(){
   closeModal('modalLead');
   outcomeMode='continue';
@@ -11253,7 +11386,11 @@ async function prepareFinalize(){
   // v119 — resetear campo "Otro" de motivo perdida
   const _ow=document.getElementById('lost-otro-wrap');if(_ow)_ow.style.display='none';
   const _ot=document.getElementById('lost-otro-texto');if(_ot)_ot.value='';
+  _finIndSinResp=false;
   openModal('modalFinalize');
+  /* v242 — después de openModal: si la tarea es una Indagación sin los 5
+     campos, el aviso aparece arriba de todo con la lista de lo que falta. */
+  try{await _finPintarGateInd();}catch(e){}
 }
 
 function setOutcome(el,mode){
@@ -11344,6 +11481,45 @@ async function saveSeguimiento(){
   const estado=document.getElementById('fin-estado').value;
   const nota=document.getElementById('fin-nota').value;
   const now=new Date().toISOString();
+
+  /* ── v242 · GATE DE INDAGACIÓN — antes de escribir NADA ───────────────────
+     Va arriba de todo, no junto al UPDATE que completa. Se probó al revés y
+     estaba mal: el orden de v144 guarda el siguiente paso PRIMERO, así que
+     frenar más abajo dejaba igual una tarea nueva colgada en el lead (probado
+     con 7711: quedó una "Envío de información" para Carolina en el lead 7704).
+     Acá no se escribe una sola fila: la Indagación sigue abierta tal cual.
+     El trigger trg_exigir_indagacion_completa lo vuelve a exigir server-side —
+     esto es para que la persona vea QUÉ campo falta en vez de un error crudo
+     de Postgres, y porque un CRM viejo cacheado en el PWA se saltearía el
+     front (el 0/41 del gate de v130, ver v140). */
+  let _indSinResp=false;
+  if(_finEsIndagacion()&&!_finIndSinResp){
+    const _faltanInd=await _finFaltantesInd();
+    if(_faltanInd===null){
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+      _modalBodyLock('modalFinalize',false);
+      toast('No se pudo verificar la indagación. Reintentá.','error');return;
+    }
+    if(_faltanInd.length){
+      /* PERDIDO no se bloquea. Cerrar un lead que nunca contestó no es
+         declarar "indagué", es exactamente lo contrario — y es el caso más
+         común ("DEJO DE RESPONDER SEGUIMIENTO"). La tarea se cierra con el
+         mismo flag que la salida manual, así que NO cuenta como indagación en
+         ningún reporte. Bloquearlo acá dejaría al equipo sin poder perder un
+         lead mudo. */
+      if(outcomeMode==='lost'){
+        _indSinResp=true;
+      }else{
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        _modalBodyLock('modalFinalize',false);
+        try{await _finPintarGateInd();}catch(e){}
+        toast('Falta la indagación: '+_faltanInd.map(function(c){return c.label;}).join(', '),'error');
+        return;
+      }
+    }
+  }
+
+  if(_finIndSinResp)_indSinResp=true;
 
   try{
     let wonData=null;
@@ -11538,9 +11714,13 @@ async function saveSeguimiento(){
     /* v144 — completar la tarea actual AL FINAL: el siguiente paso (o el
        cierre) ya quedó guardado, así el lead nunca queda sin paso abierto. */
     if(currentAgendaId){
-      const{error:e1}=await sb.from('agenda_personal').update({
-        completada:true,completada_en:now,nota_resultado:nota,tipo:estado
-      }).eq('id',currentAgendaId);
+      const _upTarea={completada:true,completada_en:now,nota_resultado:nota,tipo:estado};
+      if(_indSinResp){
+        _upTarea.ind_sin_respuesta=true;
+        _upTarea.nota_resultado='🚫 Indagación sin datos — '+
+          (outcomeMode==='lost'?'lead perdido':'el cliente no quiso responder')+(nota?' — '+nota:'');
+      }
+      const{error:e1}=await sb.from('agenda_personal').update(_upTarea).eq('id',currentAgendaId);
       if(e1)throw e1;
     }else{
       // v126 — sin seguimiento activo: crear la actividad ya completada desde cero
