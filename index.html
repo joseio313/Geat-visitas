@@ -2086,7 +2086,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='240';
+  var CURRENT_VERSION='241';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4081,7 +4081,8 @@ function _bdgScroll(id){
    del Día SÍ tiene la lista exacta — y desde v227 cuenta lo mismo que el badge
    (las dos leen agenda_personal con la misma consulta), así que tocar el badge
    abre ese detalle. Antes no lo hacía: el Parte decía 36 y el badge 42 porque
-   el Parte salía de leads.visita_fecha, que queda vieja al reprogramar (v217).
+   el Parte salía de leads.visita_fecha, que quedaba vieja al reprogramar
+   (v217; desde v241 reprogramar sí la sincroniza).
    El Parte es solo del admin; para el resto el badge abre la pestaña y nada más. */
 function _bdgIrWeek(clave){
   _bdgIrPestana('tab-week');
@@ -9719,12 +9720,22 @@ async function copiarVisitaWaLead(leadId,btn){
      · visita_nro  → un reagendamiento CONSERVA su número; el equipo lleva la
                      cuenta del mes con él (mismo criterio que v194).
      · activo      → sigue viva; dar de baja es otra cosa.
-   Y sobre todo NO pasa por leads.visita_fecha: ese UPDATE dispara
-   trg_sincronizar_visita → sincronizar_visita_grupal(), que borra los espejos
-   e INSERTA una fila 'visita_captador' nueva. La visita quedaría duplicada en
-   el calendario del grupo. Se escribe derecho en las dos tablas:
-   agenda_personal.fecha_programada y agenda_grupal.fecha_inicio.
-   Un UPDATE sobre esas dos tablas no dispara ningún trigger: los 4 de
+   Escribe en TRES tablas, y el orden importa:
+     1. agenda_personal.fecha_programada
+     2. agenda_grupal.fecha_inicio  (el espejo que ve el equipo)
+     3. leads.visita_fecha          (v241 — AL FINAL, nunca antes)
+   Hasta v240 el paso 3 no existía: leads.visita_fecha quedaba con la fecha
+   VIEJA y dos alertas cantaban "visita vencida sin resultado" sobre una visita
+   ya movida a futuro (_searchAlertaVisitas y el bloque `vencidas` del panel del
+   CEO). No se tocaba porque ese UPDATE dispara trg_sincronizar_visita →
+   sincronizar_visita_grupal(), que borraba los espejos e INSERTABA una fila
+   'visita_captador' nueva — visita duplicada en el calendario del grupo, y ese
+   INSERT además pasa por fn_visita_grupal_marca_oficina. v241 arregló el
+   trigger: el DELETE ya no toca el espejo que está en la fecha nueva, y el
+   guard de v208 ahora incluye 'visita_captador'. Por eso el paso 3 va ÚLTIMO:
+   cuando corre, el calendario del grupo ya tiene la visita en la fecha nueva y
+   el trigger corta antes de insertar. Invertir el orden vuelve a duplicar.
+   Un UPDATE sobre las dos primeras no dispara ningún trigger: los 4 de
    agenda_grupal son de INSERT, y los AFTER UPDATE de agenda_personal
    (fn_registrar_visita_atendida, fn_sync_estado_lead_por_tarea) arrancan todos
    con "completada = true AND OLD.completada = false", que acá no pasa.
@@ -9834,6 +9845,20 @@ async function guardarReprogramarVisita(){
       }
     }catch(eG){agAviso=(eG&&eG.message)||'error';}
     if(agAviso)toast('Visita movida, pero el calendario del grupo no se actualizó: '+agAviso,'error');
+    /* 3) leads.visita_fecha — v241. Hasta v240 NO se tocaba y quedaba con la
+       fecha vieja: _searchAlertaVisitas() y el bloque `vencidas` del panel del
+       CEO leen esa columna y cantaban "visita vencida sin resultado" sobre una
+       visita ya movida a futuro. Va AL FINAL, después del espejo, a propósito:
+       sincronizar_visita_grupal() corta antes de insertar cuando el calendario
+       del grupo ya tiene la visita en esta misma fecha (guard de v241, que
+       ahora incluye 'visita_captador'), así que no se duplica nada. Si el lead
+       no tenía fila grupal, el trigger crea el espejo que faltaba.
+       No se corta el flujo si falla: la visita ya quedó movida donde importa. */
+    try{
+      const{error:eLf}=await sb.from('leads').update({visita_fecha:iso}).eq('id',_rpVis.lead_id);
+      if(eLf)toast('Visita movida, pero la alerta de vencidas puede tardar en actualizarse: '+eLf.message,'error');
+      else if(_rpLead)_rpLead.visita_fecha=iso;
+    }catch(eLf2){}
     /* El número: casi siempre ya está. Una visita que entró por el flujo de
        seguimiento no lo tiene, y ésta es la primera vez que se anuncia — se le
        asigna uno, igual que en copiarVisitaWaLead(). No es un renumerado. */
@@ -16315,9 +16340,10 @@ async function renderParteDia(){
       /* ── v227 · LAS VISITAS VENCIDAS SE LEEN DE agenda_personal ──────────
          Hasta v226 esto salía de leads.visita_fecha + resultado_reunion, y daba
          36 mientras el badge de la barra daba 42 sobre la misma pregunta.
-         leads.visita_fecha queda VIEJA por diseño desde v217: reprogramar
-         escribe en agenda_personal y en agenda_grupal, no en el lead. O sea que
-         la columna del lead no es la fuente, es una copia desactualizada.
+         Entre v217 y v240 leads.visita_fecha quedaba VIEJA al reprogramar
+         (se escribía en agenda_personal y agenda_grupal, no en el lead); v241
+         la sincroniza. Aun así la fuente sigue siendo agenda_personal: la
+         columna del lead es una copia, y una copia no es la fuente.
          Esta consulta es carácter por carácter la de _bdgWeekRojo() (menos el
          alcance por rol, que acá no aplica: el Parte es solo del admin y ve
          todo). Si se toca una, se tocan las dos. */
