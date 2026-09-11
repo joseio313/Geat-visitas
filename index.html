@@ -2097,7 +2097,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='243';
+  var CURRENT_VERSION='244';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -18469,6 +18469,46 @@ function _cvUrlCV(c){
   return{href:sb,esDrive:false};
 }
 
+/* v244 — EL CV SE ABRE POR EL SERVIDOR, NUNCA POR UN LINK PÚBLICO.
+   Los 193 PDFs de Drive los subió geat-cvs-drive con la credencial
+   google_oauth_json (cuenta registrograbaciones2026) y son PRIVADOS de esa
+   cuenta: anónimo da 401 y otra cuenta de Google da "Necesitás acceso". Hasta
+   v243 el panel abría cv_drive_url directo, así que el 404 viejo se cambió por
+   una pantalla de permiso de Google.
+   Ahora el PDF lo baja geat-cv-panel v9 (acción cv_archivo, sesión por token,
+   rol admin o técnico) y llega acá como blob: abre en cualquier navegador, esté
+   logueado en Google o no, y el CV NO queda público — tiene datos personales
+   de terceros.
+   Los 12 que solo tienen archivo_url siguen yendo directo al bucket (200 OK).
+   OJO: la pestaña se abre ANTES del await; si se abriera después, el bloqueador
+   de pop-ups la mata. */
+async function cvVerCV(id){
+  const c=(((_cvData&&_cvData.cvs)||[])).find(x=>String(x.id)===String(id));
+  if(!c){toast('Postulación no encontrada','error');return;}
+  const u=_cvUrlCV(c);
+  if(!u.href){toast('Esta postulación no tiene CV','error');return;}
+  if(!u.esDrive){window.open(u.href,'_blank','noopener');return;}
+  const w=window.open('','_blank');
+  if(w){try{w.document.write('<title>Abriendo CV…</title><body style="background:#151513;color:#F5F4EF;font-family:system-ui,sans-serif;padding:28px">Abriendo el CV…</body>');}catch(e){}}
+  try{
+    const tk=localStorage.getItem('geat_session_token')||'';
+    const r=await fetch(CV_PANEL_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify({accion:'cv_archivo',id:c.id,token:tk})});
+    if(!r.ok){
+      let msg='';
+      try{msg=(await r.json()).error||'';}catch(e){}
+      if(w)w.close();
+      toast('No se pudo abrir el CV: '+(msg||('HTTP '+r.status)),'error');
+      return;
+    }
+    const url=URL.createObjectURL(await r.blob());
+    if(w)w.location.href=url;else window.open(url,'_blank','noopener');
+    setTimeout(function(){URL.revokeObjectURL(url);},120000);
+  }catch(e){
+    if(w)w.close();
+    toast('No se pudo abrir el CV: '+(e&&e.message?e.message:e),'error');
+  }
+}
+
 /* v155: fila compacta tipo inbox. Clic en la fila abre el modal; botones/dropdown no propagan. */
 function _cvRow(c){
   const p=Number(c.puntaje)||0;
@@ -18505,7 +18545,7 @@ function _cvRow(c){
         <button type="button" class="cv-ic" title="Más" onclick="_cvMenuToggle('${id}',event)">⋯</button>
         <div class="cv-menu-pop" id="cv-menu-${id}">
           ${mail?`<a href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mail)}" target="_blank" rel="noopener" onclick="event.stopPropagation();_cvMenuClose()">📧 Email</a>`:''}
-          ${arch?`<a href="${_cvEsc(arch)}" target="_blank" rel="noopener" onclick="event.stopPropagation();_cvMenuClose()">📄 Ver CV</a>`:''}
+          ${arch?`<a href="#" onclick="event.preventDefault();event.stopPropagation();_cvMenuClose();cvVerCV('${id}')">📄 Ver CV</a>`:''}
           ${links.map(l=>`<a href="${_cvEsc(l.href)}" target="_blank" rel="noopener" title="${_cvEsc(l.href)}" onclick="event.stopPropagation();_cvMenuClose()">🔗 ${_cvEsc(l.dom)}</a>`).join('')}
           ${sinExtra?'<div style="padding:8px 10px;font-size:11px;color:var(--gray-400)">Sin acciones extra</div>':''}
         </div>
@@ -18598,7 +18638,7 @@ function abrirCVModal(id){
     ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
-    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${archUrl?`<a href="${_cvEsc(archUrl)}" target="_blank" rel="noopener" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a>${_cvU.esDrive?'<span style="font-size:10px;color:var(--gray-400)">(Drive)</span>':`<a href="${_cvEsc(archDl)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`}`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
+    ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${archUrl?`<a href="#" onclick="event.preventDefault();cvVerCV('${idA}')" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a>${_cvU.esDrive?'<span style="font-size:10px;color:var(--gray-400)">(Drive)</span>':`<a href="${_cvEsc(archDl)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`}`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px">📎 Links / Portafolios</div>
     ${links.length?`
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
