@@ -2097,7 +2097,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='244';
+  var CURRENT_VERSION='245';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3177,7 +3177,7 @@ async function checkPin(){
   cu=r.usuario;colaboradores=r.equipo||[];
   // v145: el PIN queda SOLO en memoria (nunca en localStorage) para geat-cv-panel;
   // si la sesión se restaura por token, el panel Reclutamiento lo vuelve a pedir.
-  if(cu&&cu.rol==='admin')_cvPin=pinVal;
+  if(cu&&(cu.rol==='admin'||cu.rol==='tecnico'))_cvPin=pinVal;   // v245: tecnico tambien opera Reclutamiento
   localStorage.setItem('geat_session_token',r.token);
   startApp();
 }
@@ -3245,6 +3245,15 @@ function startApp(){
     /* v91: botón de captura de audio del sistema — solo si el navegador lo soporta (Chrome desktop) */
     const cab=document.getElementById('capAudioBtn');
     if(cab&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)cab.style.display='inline-flex';
+  }
+  /* v245 — Reclutamiento para el rol tecnico (Carolina administra las pruebas
+     técnicas y tiene que poder abrir los CVs). Es la ÚNICA pestaña que se le
+     abre: Admin, Cobranzas, Gerencia y Mi agenda siguen siendo del CEO.
+     Mismo criterio que _SCREEN_ROLES['screen-reclutamiento']: si se cambia uno,
+     se cambia el otro. */
+  if(cu.rol==='tecnico'){
+    const tabRecT=document.getElementById('tab-reclutamiento');
+    if(tabRecT)tabRecT.style.display='';
   }
   /* v199 — Gerencia: SOLO admin. Antes era admin + es_socio; ver _esGerencia(). */
   if(_esGerencia()){
@@ -3674,7 +3683,7 @@ const _SCREEN_ROLES={
   'screen-gerencia'     :['admin'],
   'screen-cobranzas'    :['admin'],
   'screen-admin'        :['admin'],
-  'screen-reclutamiento':['admin'],
+  'screen-reclutamiento':['admin','tecnico'],   /* v245 — Carolina (tecnico) administra las pruebas tecnicas */
   'screen-miregistro'   :['admin','field_capturer','commercial_lead'],
   'screen-reports'      :['admin','commercial_lead','closer','tecnico'],
   /* v228 — 'screen-zonas' ya no está acá: la pantalla se retiró y pasó a
@@ -18038,7 +18047,7 @@ async function _cvCall(payload,timeoutMs){
 }
 
 function renderReclutamiento(){
-  if(!cu||cu.rol!=='admin'){toast('Solo administración','error');return;}
+  if(!_cvPuedePanel()){toast('Solo administración','error');return;}
   const box=document.getElementById('rec-body');
   if(!box)return;
   if(!_cvPin){
@@ -18165,6 +18174,11 @@ let _critCamp='',_critRub=null,_critDraft='',_critHist=[];
 let _critAbierto=false,_critCargando=false,_critCorriendo=false,_critProgSt=null;
 
 function _cvEsAdmin(){return !!cu&&(cu.rol==='admin'||cu.rol==='ceo');}
+/* v245 — quien OPERA el panel de Reclutamiento. Se separo de _cvEsAdmin porque
+   ahora incluye el rol tecnico (Carolina administra las pruebas tecnicas y tiene
+   que poder abrir los CVs). geat-cv-panel v10 valida los mismos tres roles
+   server-side: este gate es solo para no pintar botones que van a dar 403. */
+function _cvPuedePanel(){return !!cu&&(cu.rol==='admin'||cu.rol==='ceo'||cu.rol==='tecnico');}
 
 /* Campaña que edita el bloque: la que ya estaba elegida, si no la del filtro,
    si no la primera. Nunca queda apuntando a una campaña inexistente. */
@@ -18191,7 +18205,7 @@ function _critFecha(iso){
 
 /* Banner sobre el listado cuando quedaron CVs con la rúbrica vieja. */
 function _cvWarnHTML(){
-  if(!_cvEsAdmin())return '';
+  if(!_cvPuedePanel())return '';
   const n=_critPendientes();
   if(!n)return '';
   return `<div class="crit-warn">
@@ -18201,7 +18215,7 @@ function _cvWarnHTML(){
 }
 
 function _cvCritHTML(camps){
-  if(!_cvEsAdmin())return '';
+  if(!_cvPuedePanel())return '';
   camps=camps||[];
   _critCamp=_critCampActiva(camps);
   return `
@@ -18289,7 +18303,7 @@ function cvCritToggle(){
 }
 
 async function _cvCritCargar(){
-  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPuedePanel()){toast('Solo administración','error');return;}
   if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
   if(!_critCamp){toast('No hay campañas configuradas','error');return;}
   _critCargando=true;_critPintar();
@@ -18328,7 +18342,7 @@ function cvCritRevertir(){
 }
 
 async function cvCritGuardar(){
-  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPuedePanel()){toast('Solo administración','error');return;}
   if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
   const ta=document.getElementById('crit-ta');
   const val=ta?ta.value:_critDraft;
@@ -18357,7 +18371,7 @@ function cvCritRestaurar(i){
 
 /* Marca toda la campaña y arranca el re-puntaje. */
 async function cvCritRepuntuar(){
-  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPuedePanel()){toast('Solo administración','error');return;}
   if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
   if(_critCorriendo){toast('Ya hay un re-puntaje en curso','error');return;}
   if(_critRub!==null&&_critDraft!==_critRub){toast('Guardá los criterios antes de re-puntuar','error');return;}
@@ -18384,7 +18398,7 @@ async function cvCritRepuntuar(){
 
 /* Retoma los que ya están marcados (banner amarillo), sin volver a marcar. */
 async function cvCritReanudar(){
-  if(!_cvEsAdmin()){toast('Solo administración','error');return;}
+  if(!_cvPuedePanel()){toast('Solo administración','error');return;}
   if(!_cvPin){toast('Reingresá tu PIN para operar','error');renderReclutamiento();return;}
   if(_critCorriendo){toast('Ya hay un re-puntaje en curso','error');return;}
   const n=_critPendientes();
