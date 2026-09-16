@@ -2097,7 +2097,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='245';
+  var CURRENT_VERSION='246';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -18523,6 +18523,15 @@ async function cvVerCV(id){
   }
 }
 
+/* v246: el trigger de la base antepone a cv_postulaciones.notas la linea
+   "🚩 REPOSTULACION: ...". Devuelve esa primera linea, o '' si no aplica. */
+function _cvRepost(c){
+  const n=String(c.notas||'');
+  if(!n.startsWith('🚩 REPOSTULACIÓN'))return '';
+  const i=n.indexOf(String.fromCharCode(10));
+  return (i<0?n:n.slice(0,i)).trim();
+}
+
 /* v155: fila compacta tipo inbox. Clic en la fila abre el modal; botones/dropdown no propagan. */
 function _cvRow(c){
   const p=Number(c.puntaje)||0;
@@ -18538,7 +18547,8 @@ function _cvRow(c){
   const meta=[_cvEsc(c.ciudad||'—'),
     (c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+'a obra':'s/obra'),
     _cvEsc(c.perfil||'—')].concat(reciente?['🕐']:[]).join(' · ')
-    +(c.bandera?' · <span class="cv-flag">🚩 '+_cvEsc(c.bandera)+'</span>':'');
+    +(c.bandera?' · <span class="cv-flag">🚩 '+_cvEsc(c.bandera)+'</span>':'')
+    +(_cvRepost(c)?' · <span class="cv-flag">🔁 Repostulación</span>':'');
   const links=_cvParseLinks(c.links_detectados).slice(0,2);
   const sinExtra=!mail&&!arch&&links.length===0;
   return `
@@ -18649,6 +18659,7 @@ function abrirCVModal(id){
       <div style="font-size:12px;color:var(--gray-400)">📍 ${_cvEsc(c.ciudad||'—')} · 🏗 ${c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+' años':'—'} · ${_cvEsc(c.perfil||'—')} · 💰 ${c.pretension_bs?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')} ${c.email?' · ✉️ '+_cvEsc(c.email):''}</div>
       <div style="font-size:30px;font-weight:800;color:${(Number(c.puntaje)||0)>=70?'var(--gold)':'var(--gray-400)'};flex-shrink:0">${Number(c.puntaje)||0}</div>
     </div>
+    ${_cvRepost(c)?`<div style="font-size:12px;font-weight:700;color:#FF5A4A;margin-bottom:10px">${_cvEsc(_cvRepost(c))}</div>`:''}
     ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
