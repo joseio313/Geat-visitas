@@ -2125,7 +2125,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='248';
+  var CURRENT_VERSION='249';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -9759,7 +9759,13 @@ async function guardarAgendarVisita(){
        El guard del trigger (NOT EXISTS tarea abierta del cerrador) no alcanza:
        cuando corre, nuestra fila todavía no existe. Así que en vez de insertar,
        ADOPTAMOS la fila que dejó el trigger y le escribimos encima el tipo real
-       + el nº. Queda UNA sola fila, la del tipo elegido en el modal. */
+       + el nº. Queda UNA sola fila, la del tipo elegido en el modal.
+       v249 — la cadena sigue igual, pero el cerrador ya NO se asigna por el
+       cambio de estado: asignar_cerrador_alternancia ahora exige
+       visita_fecha, que sincronizar_estado_lead_visita escribe en el UPDATE
+       anterior. La adopción de la fila sigue funcionando porque matchea por la
+       nota ('automáticamente al asignarte el lead como cerrador'), no por el
+       tipo. Ver sql/v249_cerrador_por_visita_real.sql. */
     let apDestId=visPrev?visPrev.id:null;
     if(!apDestId){
       try{
@@ -11785,7 +11791,12 @@ async function saveSeguimiento(){
          v166 BUG 2: antes solo se movía `etapa` y `estado` quedaba clavado en
          'nuevo'. Así el lead 7046 llegó a "Visita terreno" con estado='nuevo' y
          cerrador=null: asignar_cerrador_alternancia solo asigna cuando el estado
-         pasa a algo ILIKE '%visita%', y ese cambio nunca ocurría. */
+         pasa a algo ILIKE '%visita%', y ese cambio nunca ocurría.
+         v249 — ese estado='visita_agendada' YA NO asigna cerrador: elegir un
+         próximo paso llamado "Visita ..." no es una visita agendada. El
+         cerrador entra recién cuando hay visita_fecha, o sea cuando la visita
+         se carga de verdad desde el modal. Era la causa de los perdidos con
+         cerrador y sin visita (barrido del 22-sep-2026). */
       /* v182 — ultima_gestion es la base de "días sin gestión": si solo se
          escribiera en el alta, todo lead trabajado seguiría contando desde su
          primer contacto. Se sella acá, que es donde el seguimiento se completa. */
