@@ -1554,6 +1554,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <div id="lost-otro-wrap" style="display:none;margin-top:6px">
             <input class="form-control" type="text" id="lost-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off">
           </div>
+          <!-- v247 — "Es de otro departamento" no pierde a quien construiría acá -->
+          <div id="lost-dep-wrap" data-resp="" style="display:none;margin-top:8px;background:rgba(212,175,55,0.08);border:1px solid var(--gray-600);border-radius:6px;padding:9px 11px">
+            <div style="font-size:12px;color:var(--gray-100);margin-bottom:7px">🏗️ ¿Tiene o compraría terreno en Santa Cruz?</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn-secondary" id="lost-dep-si" onclick="_depGateResp('lost-dep-wrap','si')" style="font-size:11px">Sí</button>
+              <button type="button" class="btn-secondary" id="lost-dep-no" onclick="_depGateResp('lost-dep-wrap','no')" style="font-size:11px">No</button>
+            </div>
+            <div id="lost-dep-msg" style="font-size:11px;color:var(--gray-400);margin-top:7px"></div>
+          </div>
           <!-- v224 — respuesta de WhatsApp del guion que responde este motivo -->
           <div id="lost-wa-wrap"></div>
         </div>
@@ -1741,6 +1750,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         <button type="button" class="btn btn-red btn-sm" onclick="saveLeadPerdido()">Confirmar pérdida</button>
         <div id="nl-perdido-otro-wrap" style="display:none;flex:0 0 100%">
           <input type="text" id="nl-perdido-otro-texto" placeholder="¿Cuál fue el motivo?" autocomplete="off" style="width:100%;box-sizing:border-box;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
+        </div>
+        <!-- v247 — mismo gate que en finalizar: ubicación no pierde un lead -->
+        <div id="nl-perdido-dep-wrap" data-resp="" style="display:none;flex:0 0 100%;background:rgba(212,175,55,0.08);border:1px solid var(--gray-600);border-radius:6px;padding:9px 11px">
+          <div style="font-size:12px;color:var(--gray-100);margin-bottom:7px">🏗️ ¿Tiene o compraría terreno en Santa Cruz?</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn-secondary" id="nl-perdido-dep-si" onclick="_depGateResp('nl-perdido-dep-wrap','si')" style="font-size:11px">Sí</button>
+            <button type="button" class="btn-secondary" id="nl-perdido-dep-no" onclick="_depGateResp('nl-perdido-dep-wrap','no')" style="font-size:11px">No</button>
+          </div>
+          <div id="nl-perdido-dep-msg" style="font-size:11px;color:var(--gray-400);margin-top:7px"></div>
         </div>
         <div id="nl-perdido-wa-wrap" style="flex:0 0 100%"></div>
       </div>
@@ -2097,7 +2115,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='246';
+  var CURRENT_VERSION='247';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3399,6 +3417,44 @@ function _motivoEsOtro(id){
   const m=_motivoById(id);
   return !!(m&&_cvNorm(m.nombre)==='otro');
 }
+/* ── v247 · "ES DE OTRO DEPARTAMENTO" NO ES UNA PÉRDIDA ────────────────
+   670 leads cerrados con este motivo (418 en 1er intento): se pierde por dónde
+   VIVE el cliente, sin preguntar dónde va a construir. GEAT construye en Santa
+   Cruz; un cliente de Cochabamba con terreno acá es un lead válido.
+   Se reconoce por nombre y no por el id 5, igual que "Otro": si Chat renumera
+   el catálogo, el gate no se apaga solo.
+   OJO: _cvNorm no colapsa espacios (rompió 1.576 leads en v193), por eso el
+   replace — "es de  otro departamento" tiene que entrar igual. */
+function _motivoEsOtroDepto(id){
+  const m=_motivoById(id);
+  if(!m)return false;
+  return _cvNorm(m.nombre).replace(/\s+/g,' ').trim()==='es de otro departamento';
+}
+const _DEP_TERRENO_SI='Santa Cruz (confirmado)';
+const _DEP_TERRENO_NO='No tiene terreno en Santa Cruz';
+/* Respuesta del gate. Vive en el data-resp del wrap: no hay global que quede
+   pegada entre dos leads, y cambiar de motivo la borra (ver _lostMotivoChange).
+   Sin respuesta no se guarda — cerrar el modal no es un atajo. */
+function _depGateResp(wrapId,resp){
+  const w=document.getElementById(wrapId);
+  if(!w)return;
+  w.dataset.resp=(resp==='si'||resp==='no')?resp:'';
+  const base=wrapId.replace(/-wrap$/,'');
+  const _mark=function(sufijo,on){
+    const b=document.getElementById(base+sufijo);
+    if(!b)return;
+    b.style.outline=on?'2px solid var(--gold)':'';
+    b.style.opacity=on?'1':'0.65';
+  };
+  _mark('-si',w.dataset.resp==='si');
+  _mark('-no',w.dataset.resp==='no');
+  const m=document.getElementById(base+'-msg');
+  if(m){
+    if(w.dataset.resp==='si')m.innerHTML='<span style="color:var(--st-atrasado)">🚫 Este lead sigue en protocolo, no se pierde por ubicación.</span>';
+    else if(w.dataset.resp==='no')m.innerHTML='Se cierra como perdido y queda registrado que no tiene terreno en Santa Cruz.';
+    else m.innerHTML='';
+  }
+}
 function _populateLostMotivos(){
   const act=_motivosActivos();
   let html='<option value="">— Motivo —</option>';
@@ -3588,6 +3644,15 @@ function _lostMotivoChange(sel,wrapId){
   const waId=wrapId==='lost-otro-wrap'?'lost-wa-wrap':'nl-perdido-wa-wrap';
   const wa=document.getElementById(waId);
   if(wa)wa.innerHTML=sel.value?_radarWaHtml(sel.value):'';
+  /* v247 — gate de terreno. La respuesta se borra en CADA cambio de motivo:
+     elegir "otro departamento", responder No, cambiar a otro motivo y volver
+     no puede arrastrar el "No" de antes. */
+  const depId=wrapId==='lost-otro-wrap'?'lost-dep-wrap':'nl-perdido-dep-wrap';
+  const dw=document.getElementById(depId);
+  if(dw){
+    dw.style.display=_motivoEsOtroDepto(sel.value)?'block':'none';
+    _depGateResp(depId,'');
+  }
 }
 function populateCatalogSelects(){
   // Filtro estado en semana
@@ -11412,6 +11477,14 @@ async function prepareFinalize(){
   // v119 — resetear campo "Otro" de motivo perdida
   const _ow=document.getElementById('lost-otro-wrap');if(_ow)_ow.style.display='none';
   const _ot=document.getElementById('lost-otro-texto');if(_ot)_ot.value='';
+  /* v247 — el gate de "otro departamento" arranca SIEMPRE sin respuesta. Se
+     muestra según el motivo que tenga el select: a diferencia del campo "Otro",
+     este bloquea el guardado, así que esconderlo con el motivo elegido dejaría
+     un botón que no guarda y no dice por qué. */
+  const _lm0=document.getElementById('lost-motivo');
+  const _dw0=document.getElementById('lost-dep-wrap');
+  if(_dw0)_dw0.style.display=(_lm0&&_motivoEsOtroDepto(_lm0.value))?'block':'none';
+  _depGateResp('lost-dep-wrap','');
   _finIndSinResp=false;
   openModal('modalFinalize');
   /* v242 — después de openModal: si la tarea es una Indagación sin los 5
@@ -11546,6 +11619,42 @@ async function saveSeguimiento(){
   }
 
   if(_finIndSinResp)_indSinResp=true;
+
+  /* ── v247 · GATE "ES DE OTRO DEPARTAMENTO" ────────────────────────
+     Va acá arriba por lo mismo que el gate de indagación (v242): más abajo ya
+     se escribió el siguiente paso, y frenar después deja una tarea colgada.
+     "Sí" → no se pierde: se guarda el lugar del terreno y el lead queda tal
+     cual estaba (misma etapa, mismo estado, sin archivar).
+     "No" → se pierde como siempre, pero el dato queda escrito. */
+  let _depNoTerreno=false;
+  if(outcomeMode==='lost'&&_motivoEsOtroDepto(document.getElementById('lost-motivo').value)){
+    const _dw=document.getElementById('lost-dep-wrap');
+    const _resp=(_dw&&_dw.dataset.resp)||'';
+    if(_resp!=='si'&&_resp!=='no'){
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+      _modalBodyLock('modalFinalize',false);
+      /* Se suelta el anti-dup: la persona responde el gate y vuelve a darle
+         Guardar en menos de 5 s, y sin esto se comía un "Ya se está guardando". */
+      _antiDupLock.delete(lockKey);
+      toast('Respondé si tiene o compraría terreno en Santa Cruz','error');return;
+    }
+    if(_resp==='si'){
+      try{
+        const{error:eDep}=await sb.from('leads')
+          .update({ind_lugar_terreno:_DEP_TERRENO_SI,updated_at:now}).eq('id',currentLeadId);
+        if(eDep)throw eDep;
+        try{await registrarAuditoria('gate_otro_departamento','leads',currentLeadId,{terreno_santa_cruz:true});}catch(e){}
+        toast('🚫 Este lead sigue en protocolo, no se pierde por ubicación','error');
+      }catch(eDep){
+        toast('Error al guardar el lugar del terreno: '+eDep.message,'error');
+      }
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+      _modalBodyLock('modalFinalize',false);
+      _antiDupLock.delete(lockKey);
+      return;
+    }
+    _depNoTerreno=true;
+  }
 
   try{
     let wonData=null;
@@ -11729,10 +11838,14 @@ async function saveSeguimiento(){
          el nombre (lo que leen los exports y los reportes viejos). */
       const notaLost=document.getElementById('lost-nota').value;
       const _detLost=[_otroTxt,notaLost].filter(function(s){return(s||'').trim();}).join(' — ');
-      const{error:e4}=await sb.from('leads').update({
+      const _updLost={
         estado:'cerrado_perdido',motivo_perdida:_mo.nombre,motivo_perdida_id:_mo.id,
         motivo_perdida_detalle:_detLost,updated_at:now
-      }).eq('id',currentLeadId);
+      };
+      /* v247 — el "No" del gate de otro departamento no se tira: queda escrito
+         para el día que el lead se reactive por "Nueva Oportunidad". */
+      if(_depNoTerreno)_updLost.ind_lugar_terreno=_DEP_TERRENO_NO;
+      const{error:e4}=await sb.from('leads').update(_updLost).eq('id',currentLeadId);
       if(e4)throw e4;
       registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo:_mo.nombre,motivo_id:_mo.id,nota:notaLost});
     }
@@ -11927,6 +12040,8 @@ async function saveLead(){
          esperando, y así lo cuenta leadDiasSinGestion(). */
       ultima_gestion:_fc.ymd,      // columna `date`: va el día boliviano
       fecha_contacto_real:_fc.ts,  // v186 timestamptz: instante UTC
+      // v247 — viene del gate de "otro departamento": confirmó terreno en SC
+      ind_lugar_terreno:_nlTerrenoSC||null,
       fecha_ingreso:ymdLocal(new Date()),created_at:now,updated_at:now
     }).select('id,nombre').single();
     if(e1)throw e1;
@@ -11984,6 +12099,7 @@ async function saveLead(){
        siempre. */
     ['nl-nombre','nl-celular','nl-nota','nl-correo','nl-grado-interes','nl-metodo-pago','nl-banco-pref','nl-ocupacion-extra','nl-fnac-extra','nl-campana'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     _nlResetFechaContacto();
+    _nlTerrenoSC='';
     document.getElementById('dupWarning').classList.remove('show');
     _modalBodyLock('modalNewLead',false);
     renderWeek();
@@ -12000,6 +12116,9 @@ async function saveLead(){
 /* ════════════════════════════════════════
    CREAR LEAD COMO PERDIDO
 ════════════════════════════════════════ */
+/* v247 — puente entre el alta-como-perdido frenada por el gate y el alta
+   normal: se limpia al cerrar el modal y después de crear el lead. */
+let _nlTerrenoSC='';
 function toggleNLPerdido(){
   const w=document.getElementById('nl-perdido-wrap');
   if(w)w.style.display=w.style.display==='none'?'flex':'none';
@@ -12028,6 +12147,23 @@ async function saveLeadPerdido(){
      importa saber qué pauta trajo un lead que no sirvió. */
   const _origenNLP=_nlOrigen();
   if(!_origenNLP){toast('Elegí de dónde vino el lead: campaña, Referido, Vino solo u Otro','error');document.getElementById('nl-campana')?.focus();return;}
+  /* v247 — mismo gate que en finalizar. Acá el lead todavía no existe, así que
+     un "Sí" no puede guardar nada: frena el alta como perdido y el dato viaja
+     en _nlTerrenoSC hasta el alta normal, que es la salida correcta. */
+  let _depNoTerrenoNl=false;
+  if(_motivoEsOtroDepto(_motivoIdNl)){
+    const _dwNl=document.getElementById('nl-perdido-dep-wrap');
+    const _respNl=(_dwNl&&_dwNl.dataset.resp)||'';
+    if(_respNl!=='si'&&_respNl!=='no'){
+      toast('Respondé si tiene o compraría terreno en Santa Cruz','error');return;
+    }
+    if(_respNl==='si'){
+      _nlTerrenoSC=_DEP_TERRENO_SI;
+      toast('🚫 Este lead sigue en protocolo, no se pierde por ubicación — guardalo con "Guardar y programar 1er intento"','error');
+      return;
+    }
+    _depNoTerrenoNl=true;
+  }
   const medio=document.getElementById('nl-medio')?.value||null;
   const esCaptadora=cu.rol==='field_capturer';
   const captador=esCaptadora?cu.nombre:(document.getElementById('nl-captador-sel')?.value||cu.nombre);
@@ -12043,6 +12179,8 @@ async function saveLeadPerdido(){
       campana_id:_origenNLP.campana_id,campana:_origenNLP.campana,
       estado:'cerrado_perdido',motivo_perdida:_moNl.nombre,motivo_perdida_id:_moNl.id,
       motivo_perdida_detalle:_otroTxtNl||null,
+      // v247 — dijo que no tiene terreno en Santa Cruz: el dato queda guardado
+      ind_lugar_terreno:_depNoTerrenoNl?_DEP_TERRENO_NO:null,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
          para que el CPL y el tiempo de respuesta lo cuenten. */
@@ -12108,6 +12246,11 @@ function closeModal(id){
     const _pm=document.getElementById('nl-perdido-motivo');if(_pm)_pm.value='';
     const _pow=document.getElementById('nl-perdido-otro-wrap');if(_pow)_pow.style.display='none';
     const _pot=document.getElementById('nl-perdido-otro-texto');if(_pot)_pot.value='';
+    /* v247 — el gate de terreno vuelve a cero al cerrar: sin respuesta no hay
+       guardado, y el "Sí" de un lead no puede viajar al siguiente. */
+    const _pdw=document.getElementById('nl-perdido-dep-wrap');if(_pdw)_pdw.style.display='none';
+    _depGateResp('nl-perdido-dep-wrap','');
+    _nlTerrenoSC='';
     const _nip=document.getElementById('nl-ind-preview');if(_nip)_nip.remove();
   }
 }
