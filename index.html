@@ -1561,6 +1561,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
               <button type="button" class="btn-secondary" id="lost-dep-si" onclick="_depGateResp('lost-dep-wrap','si')" style="font-size:11px">Sí</button>
               <button type="button" class="btn-secondary" id="lost-dep-no" onclick="_depGateResp('lost-dep-wrap','no')" style="font-size:11px">No</button>
             </div>
+            <!-- v248 — el lugar REAL, no una etiqueta: alimenta la indagación y
+                 el detector de zonas (zonas_precio clasifica esta columna) -->
+            <div id="lost-dep-lugar" style="display:none;margin-top:7px">
+              <label class="form-label" for="lost-dep-lugar-txt">¿Dónde tiene el terreno?</label>
+              <input class="form-control" type="text" id="lost-dep-lugar-txt" placeholder="Zona, anillo, avenida, municipio..." autocomplete="off">
+            </div>
             <div id="lost-dep-msg" style="font-size:11px;color:var(--gray-400);margin-top:7px"></div>
           </div>
           <!-- v224 — respuesta de WhatsApp del guion que responde este motivo -->
@@ -1757,6 +1763,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" class="btn-secondary" id="nl-perdido-dep-si" onclick="_depGateResp('nl-perdido-dep-wrap','si')" style="font-size:11px">Sí</button>
             <button type="button" class="btn-secondary" id="nl-perdido-dep-no" onclick="_depGateResp('nl-perdido-dep-wrap','no')" style="font-size:11px">No</button>
+          </div>
+          <div id="nl-perdido-dep-lugar" style="display:none;margin-top:7px">
+            <label class="form-label" for="nl-perdido-dep-lugar-txt" style="font-size:11px">¿Dónde tiene el terreno?</label>
+            <input type="text" id="nl-perdido-dep-lugar-txt" placeholder="Zona, anillo, avenida, municipio..." autocomplete="off" style="width:100%;box-sizing:border-box;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:6px 8px;color:var(--gray-100)">
           </div>
           <div id="nl-perdido-dep-msg" style="font-size:11px;color:var(--gray-400);margin-top:7px"></div>
         </div>
@@ -2115,7 +2125,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='247';
+  var CURRENT_VERSION='248';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3430,8 +3440,14 @@ function _motivoEsOtroDepto(id){
   if(!m)return false;
   return _cvNorm(m.nombre).replace(/\s+/g,' ').trim()==='es de otro departamento';
 }
-const _DEP_TERRENO_SI='Santa Cruz (confirmado)';
-const _DEP_TERRENO_NO='No tiene terreno en Santa Cruz';
+/* v248 — el "No" ya NO escribe ind_lugar_terreno. Esa columna es uno de los 5
+   campos del gate de indagación (v196) y no puede quedar "completa" con una
+   frase que nadie preguntó: el dato va al detalle del motivo, que es donde
+   vive el porqué de la pérdida.
+   El "Sí" sí escribe ind_lugar_terreno, pero con el lugar REAL que se tipea
+   ("6to anillo Banzer"), no con una etiqueta: así sirve para la indagación y
+   lo clasifica _zonaDeLugar contra zonas_precio. */
+const _DEP_DETALLE_NO='No tiene terreno en Santa Cruz';
 /* Respuesta del gate. Vive en el data-resp del wrap: no hay global que quede
    pegada entre dos leads, y cambiar de motivo la borra (ver _lostMotivoChange).
    Sin respuesta no se guarda — cerrar el modal no es un atajo. */
@@ -3448,10 +3464,20 @@ function _depGateResp(wrapId,resp){
   };
   _mark('-si',w.dataset.resp==='si');
   _mark('-no',w.dataset.resp==='no');
+  /* v248 — con "Sí" se pide el lugar real. Se limpia si la respuesta cambia:
+     un lugar tipeado y después un "No" no puede quedar colgado. */
+  const lug=document.getElementById(base+'-lugar');
+  if(lug){
+    const _on=w.dataset.resp==='si';
+    lug.style.display=_on?'block':'none';
+    const t=document.getElementById(base+'-lugar-txt');
+    if(t&&!_on)t.value='';
+    if(t&&_on)try{t.focus();}catch(e){}
+  }
   const m=document.getElementById(base+'-msg');
   if(m){
     if(w.dataset.resp==='si')m.innerHTML='<span style="color:var(--st-atrasado)">🚫 Este lead sigue en protocolo, no se pierde por ubicación.</span>';
-    else if(w.dataset.resp==='no')m.innerHTML='Se cierra como perdido y queda registrado que no tiene terreno en Santa Cruz.';
+    else if(w.dataset.resp==='no')m.innerHTML='Se cierra como perdido y queda anotado en el detalle del motivo.';
     else m.innerHTML='';
   }
 }
@@ -11639,11 +11665,22 @@ async function saveSeguimiento(){
       toast('Respondé si tiene o compraría terreno en Santa Cruz','error');return;
     }
     if(_resp==='si'){
+      /* v248 — sin el lugar no se guarda nada: el objetivo del gate es traer
+         el dato que falta, no dejar una marca genérica en la columna. */
+      const _lugarDep=(document.getElementById('lost-dep-lugar-txt')?.value||'').trim();
+      if(!_lugarDep){
+        if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=originalText;}
+        _modalBodyLock('modalFinalize',false);
+        _antiDupLock.delete(lockKey);
+        toast('Escribí dónde tiene el terreno','error');
+        try{document.getElementById('lost-dep-lugar-txt').focus();}catch(e){}
+        return;
+      }
       try{
         const{error:eDep}=await sb.from('leads')
-          .update({ind_lugar_terreno:_DEP_TERRENO_SI,updated_at:now}).eq('id',currentLeadId);
+          .update({ind_lugar_terreno:_lugarDep,updated_at:now}).eq('id',currentLeadId);
         if(eDep)throw eDep;
-        try{await registrarAuditoria('gate_otro_departamento','leads',currentLeadId,{terreno_santa_cruz:true});}catch(e){}
+        try{await registrarAuditoria('gate_otro_departamento','leads',currentLeadId,{terreno_santa_cruz:true,lugar:_lugarDep});}catch(e){}
         toast('🚫 Este lead sigue en protocolo, no se pierde por ubicación','error');
       }catch(eDep){
         toast('Error al guardar el lugar del terreno: '+eDep.message,'error');
@@ -11837,14 +11874,15 @@ async function saveSeguimiento(){
          v221 — se escriben las DOS columnas: el id (lo que agrupa de verdad) y
          el nombre (lo que leen los exports y los reportes viejos). */
       const notaLost=document.getElementById('lost-nota').value;
-      const _detLost=[_otroTxt,notaLost].filter(function(s){return(s||'').trim();}).join(' — ');
+      /* v248 — el "No" del gate de otro departamento va al DETALLE del motivo,
+         no a ind_lugar_terreno: esa columna es de indagación y no se llena con
+         algo que nadie preguntó. */
+      const _detLost=[_otroTxt,_depNoTerreno?_DEP_DETALLE_NO:'',notaLost]
+        .filter(function(s){return(s||'').trim();}).join(' — ');
       const _updLost={
         estado:'cerrado_perdido',motivo_perdida:_mo.nombre,motivo_perdida_id:_mo.id,
         motivo_perdida_detalle:_detLost,updated_at:now
       };
-      /* v247 — el "No" del gate de otro departamento no se tira: queda escrito
-         para el día que el lead se reactive por "Nueva Oportunidad". */
-      if(_depNoTerreno)_updLost.ind_lugar_terreno=_DEP_TERRENO_NO;
       const{error:e4}=await sb.from('leads').update(_updLost).eq('id',currentLeadId);
       if(e4)throw e4;
       registrarAuditoria('marcar_perdido','leads',currentLeadId,{motivo:_mo.nombre,motivo_id:_mo.id,nota:notaLost});
@@ -12158,7 +12196,13 @@ async function saveLeadPerdido(){
       toast('Respondé si tiene o compraría terreno en Santa Cruz','error');return;
     }
     if(_respNl==='si'){
-      _nlTerrenoSC=_DEP_TERRENO_SI;
+      const _lugarNl=(document.getElementById('nl-perdido-dep-lugar-txt')?.value||'').trim();
+      if(!_lugarNl){
+        toast('Escribí dónde tiene el terreno','error');
+        try{document.getElementById('nl-perdido-dep-lugar-txt').focus();}catch(e){}
+        return;
+      }
+      _nlTerrenoSC=_lugarNl;
       toast('🚫 Este lead sigue en protocolo, no se pierde por ubicación — guardalo con "Guardar y programar 1er intento"','error');
       return;
     }
@@ -12178,9 +12222,9 @@ async function saveLeadPerdido(){
       // v185/v209 — origen: una de las dos va con dato y la otra en null
       campana_id:_origenNLP.campana_id,campana:_origenNLP.campana,
       estado:'cerrado_perdido',motivo_perdida:_moNl.nombre,motivo_perdida_id:_moNl.id,
-      motivo_perdida_detalle:_otroTxtNl||null,
-      // v247 — dijo que no tiene terreno en Santa Cruz: el dato queda guardado
-      ind_lugar_terreno:_depNoTerrenoNl?_DEP_TERRENO_NO:null,
+      // v248 — el "No" del gate va al detalle del motivo, no a ind_lugar_terreno
+      motivo_perdida_detalle:[_otroTxtNl,_depNoTerrenoNl?_DEP_DETALLE_NO:'']
+        .filter(function(s){return(s||'').trim();}).join(' — ')||null,
       /* v182 — nace cerrado: proximo_contacto queda NULL a propósito (no se
          trabaja), pero la fecha real de contacto y la gestión sí se registran
          para que el CPL y el tiempo de respuesta lo cuenten. */
@@ -12249,7 +12293,7 @@ function closeModal(id){
     /* v247 — el gate de terreno vuelve a cero al cerrar: sin respuesta no hay
        guardado, y el "Sí" de un lead no puede viajar al siguiente. */
     const _pdw=document.getElementById('nl-perdido-dep-wrap');if(_pdw)_pdw.style.display='none';
-    _depGateResp('nl-perdido-dep-wrap','');
+    _depGateResp('nl-perdido-dep-wrap','');  // v248: también limpia el lugar tipeado
     _nlTerrenoSC='';
     const _nip=document.getElementById('nl-ind-preview');if(_nip)_nip.remove();
   }
