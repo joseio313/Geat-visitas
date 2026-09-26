@@ -1008,6 +1008,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
   </nav>
+  <!-- v253 — franja de carga baja de leads. Va fuera de toda .screen para que se
+       vea en cualquier pestaña. Mismo look que #search-alerta-visitas. La pinta
+       _alertaCargaLeads(), que corre dentro de refrescarBadges(). -->
+  <div id="alerta-carga-leads" style="display:none;border:1px solid var(--st-atrasado);border-radius:8px;padding:9px 12px;margin:8px 12px 0;font-size:12px;color:var(--gray-100);background:var(--gray-900)"></div>
 
   <!-- ══ SCREEN: SEMANA ══ -->
   <section id="screen-week" class="screen active">
@@ -2125,7 +2129,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='249';
+  var CURRENT_VERSION='253';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4319,8 +4323,31 @@ function _bdgClick(k,cual){
    usuario salta entre pestañas, el pase en curso ya trae los números.
    Cada contador va en su propio try/catch: un panel que falla (403, columna
    fuera del grant) apaga SU badge, no los ocho. */
+/* ── v253 · FRANJA DE CARGA BAJA DE LEADS ────────────────────────────────
+   Si en las últimas 24 h entraron menos de ALERTA_CARGA_MIN leads de
+   'Facebook Ads', se muestra la franja debajo de la barra; si no, se esconde.
+   Ventana MÓVIL de 24 h: es un instante contra otro, no depende de la zona del
+   dispositivo. Cuenta también los archivados (el lead se cargó igual).
+   Solo lectura, head:true (no baja filas). La ven admin, commercial_lead y
+   captadoras; tecnico y Reclutamiento no. ALERTA_CARGA_MIN es `let` a
+   propósito: para probar la franja desde la consola sin deployar. */
+let ALERTA_CARGA_MIN=3;
+async function _alertaCargaLeads(){
+  const box=document.getElementById('alerta-carga-leads'); if(!box)return;
+  if(!cu||!['admin','commercial_lead','field_capturer'].includes(cu.rol)){box.style.display='none';return;}
+  try{
+    const desde=new Date(Date.now()-24*3600000).toISOString();
+    const n=await _bdgN(sb.from('leads').select('id',{count:'exact',head:true})
+      .eq('canal','Facebook Ads').gte('created_at',desde));
+    if(n<ALERTA_CARGA_MIN){
+      box.textContent='⚠️ Solo '+n+' leads cargados en 24h. Si te llegaron chats de anuncios, cargalos.';
+      box.style.display='';
+    }else{box.style.display='none';box.textContent='';}
+  }catch(e){box.style.display='none';}   /* si la consulta falla no se inventa una alerta */
+}
 async function refrescarBadges(){
   if(!cu||_bdgCorriendo)return;
+  _alertaCargaLeads();
   _bdgCorriendo=true;
   _bdgCobCache=null;
   try{
@@ -12142,6 +12169,8 @@ async function saveLead(){
     if(btn){btn.innerHTML='✅ Creado';}
     setTimeout(()=>{closeModal('modalNewLead');},700);
     toast('✅ Lead creado y 1er intento programado para '+captador);
+    /* v253 — el lead recién creado puede ser el que apaga la franja de carga baja */
+    try{_alertaCargaLeads();}catch(_ea){}
     /* v209 — 'nl-campana' entra al reset a propósito: al ser obligatorio y
        quedar pegado del lead anterior, cargar cinco leads seguidos les pondría
        el mismo origen sin que nadie lo mire. El medio SÍ queda pegado, como
