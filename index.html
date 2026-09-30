@@ -2129,7 +2129,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='253';
+  var CURRENT_VERSION='254';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -18323,6 +18323,8 @@ async function _cvProcesar(){
   try{
     const r=await _cvCall({pin:_cvPin,accion:'procesar'},120000);
     if(!r||!r.ok)throw new Error((r&&r.error)||'respuesta inválida');
+    /* v254: sin conteo no es "0 procesados" — el script no corrió (26 días así hasta el 30-sep-2026). */
+    if(r.procesados==null)throw new Error('el script de correos no devolvió resultado');
     const proc=Number(r.procesados)||0,pend=Number(r.pendientes)||0,err=Number(r.errores)||0;
     _cvPendientes=pend;
     let msg='✅ '+proc+' procesados';
