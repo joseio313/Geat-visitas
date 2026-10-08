@@ -2133,7 +2133,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='255';
+  var CURRENT_VERSION='256';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -18787,9 +18787,16 @@ function _cvRepost(c){
   return (i<0?n:n.slice(0,i)).trim();
 }
 
+/* v256: un CV que entró pero OpenAI no pudo puntuar llega con puntaje NULL y bandera
+   'pendiente_analisis' (geat-cv v9). Se muestra "Pendiente", no 0: un 0 se lee como "malo". */
+function _cvPendiente(c){
+  return c.puntaje==null&&String(c.bandera||'').trim()==='pendiente_analisis';
+}
+
 /* v155: fila compacta tipo inbox. Clic en la fila abre el modal; botones/dropdown no propagan. */
 function _cvRow(c){
   const p=Number(c.puntaje)||0;
+  const pend=_cvPendiente(c);
   const est=(c.estado||'nuevo');
   const id=_cvIdAttr(c.id);
   const esTop=_cvEsTop(c);
@@ -18802,13 +18809,13 @@ function _cvRow(c){
   const meta=[_cvEsc(c.ciudad||'—'),
     (c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+'a obra':'s/obra'),
     _cvEsc(c.perfil||'—')].concat(reciente?['🕐']:[]).join(' · ')
-    +(c.bandera?' · <span class="cv-flag">🚩 '+_cvEsc(c.bandera)+'</span>':'')
+    +(pend?' · <span class="cv-flag">⏳ Se puntúa solo</span>':(c.bandera?' · <span class="cv-flag">🚩 '+_cvEsc(c.bandera)+'</span>':''))
     +(_cvRepost(c)?' · <span class="cv-flag">🔁 Repostulación</span>':'');
   const links=_cvParseLinks(c.links_detectados).slice(0,2);
   const sinExtra=!mail&&!arch&&links.length===0;
   return `
   <div class="cv-row${esTop?' cv-top':''}${est==='descartado'?' cv-desc':''}" onclick="abrirCVModal('${id}')">
-    <div class="cv-score" style="color:${sc}">${p}${esTop?'<span class="cv-star">⭐</span>':''}</div>
+    <div class="cv-score" style="color:${sc}">${pend?'<span style="font-size:9px;font-weight:700;color:var(--gray-400);white-space:nowrap">Pendiente</span>':p}${esTop?'<span class="cv-star">⭐</span>':''}</div>
     <div class="cv-main">
       <div class="cv-name">${_cvEsc(c.nombre||'—')}</div>
       <div class="cv-meta">${meta}</div>
@@ -18912,10 +18919,11 @@ function abrirCVModal(id){
   document.getElementById('cv-modal-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
       <div style="font-size:12px;color:var(--gray-400)">📍 ${_cvEsc(c.ciudad||'—')} · 🏗 ${c.anos_obra!=null&&c.anos_obra!==''?_cvEsc(c.anos_obra)+' años':'—'} · ${_cvEsc(c.perfil||'—')} · 💰 ${c.pretension_bs?_cvEsc(c.pretension_bs)+' Bs':'—'} · 📞 ${_cvEsc(c.telefono||'—')} ${c.email?' · ✉️ '+_cvEsc(c.email):''}</div>
-      <div style="font-size:30px;font-weight:800;color:${(Number(c.puntaje)||0)>=70?'var(--gold)':'var(--gray-400)'};flex-shrink:0">${Number(c.puntaje)||0}</div>
+      <div style="font-size:${_cvPendiente(c)?'16':'30'}px;font-weight:800;color:${(Number(c.puntaje)||0)>=70?'var(--gold)':'var(--gray-400)'};flex-shrink:0">${_cvPendiente(c)?'Pendiente':(Number(c.puntaje)||0)}</div>
     </div>
+    ${_cvPendiente(c)?'<div style="font-size:12px;color:var(--gray-300);margin-bottom:10px">⏳ Pendiente de análisis automático: el CV entró y se puntúa solo en la próxima pasada (cada ~6 h). No es un 0.</div>':''}
     ${_cvRepost(c)?`<div style="font-size:12px;font-weight:700;color:#FF5A4A;margin-bottom:10px">${_cvEsc(_cvRepost(c))}</div>`:''}
-    ${c.bandera?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
+    ${(c.bandera&&!_cvPendiente(c))?`<div style="font-size:12px;color:#FF8A78;margin-bottom:10px">🚩 ${_cvEsc(c.bandera)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">✉️ Correo del postulante</div>
     <div style="background:var(--black);border:1px solid var(--gray-600);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto">${_cvEsc(c.cuerpo_correo||'—')}</div>
     ${c.cv_filename?`<div style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">📎 Adjunto: ${archUrl?`<a href="#" onclick="event.preventDefault();cvVerCV('${idA}')" style="color:var(--gold);font-weight:700;text-decoration:underline">${_cvEsc(c.cv_filename)}</a>${_cvU.esDrive?'<span style="font-size:10px;color:var(--gray-400)">(Drive)</span>':`<a href="${_cvEsc(archDl)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-flex;align-items:center">⬇ Descargar</a>`}`:`<strong>${_cvEsc(c.cv_filename)}</strong>`}</div>`:''}
