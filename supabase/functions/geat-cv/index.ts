@@ -21,9 +21,13 @@
 //   'reintentar_pendientes' la puntua despues. El archivo se busca como en
 //   geat-cv-analisis v4: cv_drive_id (Drive) -> archivo_url (Storage); sin ninguno
 //   la fila sigue pendiente.
+// - v9: CVs EN WORD. OpenAI solo acepta PDF como archivo (HTTP 400 con .docx): esa fue la
+//   causa real de los 502 del 04/09. Ahora el texto del .docx se extrae aca (zip ->
+//   word/document.xml) y viaja como texto; el .doc antiguo se lee de forma aproximada.
 // ============================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { unzipSync } from "npm:fflate@0.8.2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -95,21 +99,60 @@ function bytesToB64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-function mimeDe(filename: string | null): string {
-  return /\.docx?$/i.test(filename || "")
-    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf";
+function detectarTipo(b: Uint8Array): "pdf" | "docx" | "doc" | "otro" {
+  if (b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "pdf";
+  if (b.length > 4 && b[0] === 0x50 && b[1] === 0x4b) return "docx";
+  if (b.length > 4 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0) return "doc";
+  return "otro";
+}
+
+// .docx = zip; solo se descomprime word/document.xml (el resto, imagenes, no se toca).
+function textoDocx(bytes: Uint8Array): string {
+  const files = unzipSync(bytes, { filter: (f) => f.name === "word/document.xml" });
+  const raw = files["word/document.xml"];
+  if (!raw) return "";
+  return new TextDecoder().decode(raw)
+    .replace(/<\/w:p>/g, "\n").replace(/<w:tab\/>/g, "\t").replace(/<w:br\/>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'")
+    .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// .doc binario antiguo: lectura aproximada (tramos de texto imprimible).
+function textoDocViejo(bytes: Uint8Array): string {
+  const t = new TextDecoder("latin1").decode(bytes);
+  const tramos = (t.match(/[\x20-\x7e\xa1-\xfe\r\n\t]{8,}/g) ?? [])
+    .filter((x) => (x.match(/[A-Za-z\xc0-\xfe]/g)?.length ?? 0) / x.length > 0.6);
+  return tramos.join("\n").replace(/[\r\t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// Decide como llega el archivo a OpenAI: PDF como archivo; Word como texto extraido.
+function prepararArchivo(bytes: Uint8Array): { pdfB64: string | null; textoCv: string | null; nota: string | null } {
+  const tipo = detectarTipo(bytes);
+  const mb = Math.round(bytes.length / 1e6);
+  if (tipo === "pdf") {
+    if (bytes.length > MAX_BYTES) return { pdfB64: null, textoCv: null, nota: `CV PDF de ${mb} MB sin leer (limite 8 MB): puntaje solo con el correo` };
+    return { pdfB64: bytesToB64(bytes), textoCv: null, nota: null };
+  }
+  try {
+    const texto = tipo === "docx" ? textoDocx(bytes) : tipo === "doc" ? textoDocViejo(bytes) : "";
+    if (texto.length >= 200) {
+      return { pdfB64: null, textoCv: texto.slice(0, 40000), nota: tipo === "doc" ? "CV Word .doc antiguo: texto leido de forma aproximada" : null };
+    }
+  } catch { /* cae al aviso */ }
+  return { pdfB64: null, textoCv: null, nota: `CV en formato ${tipo === "otro" ? "no reconocido" : "Word"} sin texto legible: puntaje solo con el correo` };
 }
 
 // Puntua un CV con OpenAI. LANZA si OpenAI falla o devuelve algo que no es JSON:
 // quien llama decide guardar la fila como pendiente_analisis (nunca se pierde el correo).
 async function puntuarCv(supabase: any, campanas: any[], p: {
-  asunto: string | null; cuerpo: string | null; pdfB64: string | null;
+  asunto: string | null; cuerpo: string | null; pdfB64: string | null; textoCv: string | null;
   filename: string | null; mimeType: string; codigoFallback: string | null; simularFallo?: boolean;
 }) {
   if (p.simularFallo) throw new Error("openai_fail: simulado (prueba de validacion)");
   const openaiKey = await getOpenAIKey(supabase);
   const tieneArchivo = !!p.pdfB64;
-  const fname = p.filename || (p.mimeType.includes("word") ? "cv.docx" : "cv.pdf");
+  const fname = (p.filename && /\.pdf$/i.test(p.filename)) ? p.filename : "cv.pdf";
 
   // v8: system prompt con clasificacion de vacante incluida
   let sistema: string;
@@ -127,10 +170,14 @@ async function puntuarCv(supabase: any, campanas: any[], p: {
   }
 
   const userContent: any[] = [
-    { type: "text", text: `Asunto del correo: ${p.asunto ?? "(no disponible)"}\n\nCuerpo del correo del postulante:\n${p.cuerpo ?? "(vacio)"}\n\n${tieneArchivo ? "Evalua el CV adjunto." : "NO hay CV adjunto: evalua SOLO con la informacion del cuerpo del correo. Si falta informacion clave, baja el puntaje y pon bandera 'sin CV adjunto'."}` },
+    { type: "text", text: `Asunto del correo: ${p.asunto ?? "(no disponible)"}\n\nCuerpo del correo del postulante:\n${p.cuerpo ?? "(vacio)"}\n\n${tieneArchivo ? "Evalua el CV adjunto." : p.textoCv ? `El CV vino en Word; este es su texto extraido:
+-----
+${p.textoCv}
+-----
+Evalua el CV.` : "NO hay CV adjunto: evalua SOLO con la informacion del cuerpo del correo. Si falta informacion clave, baja el puntaje y pon bandera 'sin CV adjunto'."}` },
   ];
   if (tieneArchivo) {
-    userContent.push({ type: "file", file: { filename: fname, file_data: `data:${p.mimeType};base64,${p.pdfB64}` } });
+    userContent.push({ type: "file", file: { filename: fname, file_data: `data:application/pdf;base64,${p.pdfB64}` } });
   }
 
   const ctrl = new AbortController();
@@ -248,18 +295,15 @@ async function reintentarPendientes(supabase: any, limite: number) {
       out.detalle.push({ id: cv.id, estado: "sin_archivo" });
       continue;
     }
-    // Igual que geat-cv-analisis v4: un archivo de mas de 8 MB no se manda a OpenAI; se
-    // puntua solo con el correo y se deja marcado (no queda pendiente para siempre).
-    const grande = arch.bytes.length > MAX_BYTES;
-    const avisoGrande = grande ? `CV de ${Math.round(arch.bytes.length / 1e6)} MB sin leer (limite 8 MB): puntaje solo con el correo` : null;
+    const prep = prepararArchivo(arch.bytes);
     try {
       const { parsed, campana, banderaExtra } = await puntuarCv(supabase, campanas, {
-        asunto: null, cuerpo: cv.cuerpo_correo, pdfB64: grande ? null : bytesToB64(arch.bytes),
-        filename: cv.cv_filename, mimeType: mimeDe(cv.cv_filename), codigoFallback: null,
+        asunto: null, cuerpo: cv.cuerpo_correo, pdfB64: prep.pdfB64, textoCv: prep.textoCv,
+        filename: cv.cv_filename, mimeType: "application/pdf", codigoFallback: null,
       });
       const upd: any = {
         campana_id: campana.id, perfil: parsed.perfil ?? "indefinido", puntaje: parsed.puntaje ?? 0,
-        bandera: [parsed.bandera, banderaExtra, avisoGrande].filter(Boolean).join(" | ") || null,
+        bandera: [parsed.bandera, banderaExtra, prep.nota].filter(Boolean).join(" | ") || null,
         pretension_bs: parsed.pretension_bs ?? null, resumen: parsed.resumen ?? null,
         procesado_en: new Date().toISOString(),
       };
@@ -356,10 +400,11 @@ Deno.serve(async (req) => {
 
     // v9: si OpenAI falla (HTTP, red, timeout, JSON roto) la fila IGUAL se inserta con
     // puntaje null y bandera 'pendiente_analisis'; geat-cv-cron la reintenta despues.
+    const prep = tieneArchivo ? prepararArchivo(b64ToBytes(pdf_base64)) : null;
     let ev: { parsed: any; campana: any; banderaExtra: string | null };
     try {
       ev = await puntuarCv(supabase, campanas, {
-        asunto: asunto ?? null, cuerpo: cuerpo_correo ?? null, pdfB64: tieneArchivo ? pdf_base64 : null,
+        asunto: asunto ?? null, cuerpo: cuerpo_correo ?? null, pdfB64: prep?.pdfB64 ?? null, textoCv: prep?.textoCv ?? null,
         filename: filename ?? null, mimeType, codigoFallback: codigo_campana ?? null,
         simularFallo: body.simular_fallo_openai === true,
       });
@@ -383,7 +428,7 @@ Deno.serve(async (req) => {
     }
     const { parsed, campana, banderaExtra } = ev;
 
-    const banderaFinal = [parsed.bandera, banderaExtra, (!tieneArchivo && !parsed.bandera) ? "sin CV adjunto" : null]
+    const banderaFinal = [parsed.bandera, banderaExtra, prep?.nota, (!tieneArchivo && !parsed.bandera) ? "sin CV adjunto" : null]
       .filter(Boolean).join(" | ") || null;
 
     const { data: inserted, error: insErr } = await supabase
