@@ -1,0 +1,229 @@
+// ============================================================
+// Edge Function: geat-cv v8 (GEAT v166)
+// - PDF y Word con archivo -> evalua con archivo + cuerpo
+// - SIN archivo -> evalua solo con el cuerpo del correo
+// - Sube archivo a Storage (rec-archivos) cuando existe
+// - Modo solo_archivo: solo subir archivo de un CV existente
+// - v7: tras insertar dispara geat-cv-analisis (analisis profundo)
+// - v8: CLASIFICACION AUTOMATICA DE CAMPANA. El codigo_campana que
+//   manda el Apps Script quedo obsoleto como fuente de verdad (mandaba
+//   ARQ-OBRA fijo y los CVs de Auxiliar caian en Arquitecto). Ahora:
+//   1. Se cargan TODAS las campanas activas de rec_campanas.
+//   2. Si hay una sola activa, se usa esa.
+//   3. Si hay varias, la IA determina a cual vacante postula el
+//      candidato (asunto/cuerpo/CV) y lo evalua con ESA rubrica,
+//      todo en una sola llamada (campo campana_codigo en el JSON).
+//   4. codigo_campana del request queda solo como fallback si la IA
+//      devuelve un codigo desconocido.
+// ============================================================
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SHARED_SECRET = Deno.env.get("GEAT_CV_SECRET") ?? "";
+const BUCKET = "rec-archivos";
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-geat-secret",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const FORMATO_JSON = `\nDevuelve EXCLUSIVAMENTE un objeto JSON valido (sin markdown):\n{\n  "campana_codigo": string,\n  "nombre": string,\n  "telefono": string | null,\n  "email": string | null,\n  "ciudad": string | null,\n  "anos_obra": number,\n  "ejecuto_obra": boolean,\n  "perfil": "obra" | "diseno" | "mixto" | "indefinido",\n  "puntaje": number,\n  "bandera": string | null,\n  "pretension_bs": number | null,\n  "resumen": string\n}`;
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+function limpiarNombre(n: string): string {
+  return (n || "cv.pdf")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80);
+}
+
+function dispararAnalisis(id: number | string | undefined) {
+  if (!id || !SHARED_SECRET) return;
+  try {
+    const p = fetch(`${SUPABASE_URL}/functions/v1/geat-cv-analisis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-geat-secret": SHARED_SECRET },
+      body: JSON.stringify({ accion: "uno", id }),
+    }).then(() => {}).catch(() => {});
+    // @ts-ignore EdgeRuntime existe en el runtime de Supabase
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+  } catch { /* el batch del panel lo levanta despues */ }
+}
+
+async function subirArchivo(supabase: any, gmailId: string, filename: string, b64: string, mime: string): Promise<string | null> {
+  try {
+    const path = `cvs/${gmailId}_${limpiarNombre(filename)}`;
+    const bytes = b64ToBytes(b64);
+    const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: mime, upsert: true });
+    if (error) return null;
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  } catch { return null; }
+}
+
+async function getOpenAIKey(supabase: any): Promise<string> {
+  const { data, error } = await supabase
+    .from("app_config").select("value").eq("key", "openai_api_key").single();
+  if (error || !data?.value) throw new Error("No se pudo leer openai_api_key");
+  return data.value as string;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  try {
+    if (SHARED_SECRET && req.headers.get("x-geat-secret") !== SHARED_SECRET) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const body = await req.json();
+    const { gmail_message_id, pdf_base64, filename, cuerpo_correo, codigo_campana, mime, solo_archivo, asunto } = body;
+
+    if (!gmail_message_id) {
+      return new Response(JSON.stringify({ error: "falta gmail_message_id" }), {
+        status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const mimeType = mime || "application/pdf";
+    const tieneArchivo = !!pdf_base64;
+
+    if (solo_archivo) {
+      if (!tieneArchivo) return new Response(JSON.stringify({ error: "sin archivo" }), {
+        status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const url = await subirArchivo(supabase, gmail_message_id, filename || "cv.pdf", pdf_base64, mimeType);
+      if (url) {
+        await supabase.from("cv_postulaciones").update({ archivo_url: url }).eq("gmail_message_id", gmail_message_id);
+        return new Response(JSON.stringify({ status: "archivo_ok", url }), {
+          headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ status: "archivo_fail" }), {
+        status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const { data: existente } = await supabase
+      .from("cv_postulaciones").select("id").eq("gmail_message_id", gmail_message_id).maybeSingle();
+    if (existente) {
+      return new Response(JSON.stringify({ status: "ya_procesado", id: existente.id }), {
+        headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // v8: cargar TODAS las campanas activas
+    const { data: activas } = await supabase
+      .from("rec_campanas").select("id, codigo, nombre, rubrica").eq("activa", true);
+    const campanas = activas ?? [];
+
+    const archivoUrl = tieneArchivo ? await subirArchivo(supabase, gmail_message_id, filename || "cv.pdf", pdf_base64, mimeType) : null;
+
+    if (campanas.length === 0) {
+      const { data: ins } = await supabase
+        .from("cv_postulaciones").insert({
+          gmail_message_id, cv_filename: filename ?? null, cuerpo_correo: cuerpo_correo ?? null,
+          archivo_url: archivoUrl, perfil: "indefinido", puntaje: 0, estado: "sin_clasificar",
+          bandera: "sin campanas activas",
+          procesado_en: new Date().toISOString(),
+        }).select("id").single();
+      return new Response(JSON.stringify({ status: "sin_clasificar", id: ins?.id }), {
+        headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const openaiKey = await getOpenAIKey(supabase);
+    const fname = filename || (mimeType.includes("word") ? "cv.docx" : "cv.pdf");
+
+    // v8: system prompt con clasificacion de vacante incluida
+    let sistema: string;
+    if (campanas.length === 1) {
+      sistema = `${campanas[0].rubrica}\n\nEn el campo campana_codigo devuelve exactamente: ${campanas[0].codigo}` + FORMATO_JSON;
+    } else {
+      const listado = campanas.map((c: any) =>
+        `=== VACANTE ${c.codigo} (${c.nombre}) ===\n${c.rubrica}`).join("\n\n");
+      sistema = `GEAT Construccion (Santa Cruz, Bolivia) tiene ${campanas.length} vacantes abiertas. ` +
+        `PRIMERO determina a cual vacante postula este candidato usando el asunto del correo, el cuerpo y el perfil del CV ` +
+        `(un contador/administrativo NO postula a arquitecto de obra y viceversa). ` +
+        `LUEGO evalualo EXCLUSIVAMENTE con la rubrica de ESA vacante. ` +
+        `En campana_codigo devuelve el codigo exacto de la vacante elegida (${campanas.map((c: any) => c.codigo).join(" | ")}).\n\n` +
+        listado + FORMATO_JSON;
+    }
+
+    const userContent: any[] = [
+      { type: "text", text: `Asunto del correo: ${asunto ?? "(no disponible)"}\n\nCuerpo del correo del postulante:\n${cuerpo_correo ?? "(vacio)"}\n\n${tieneArchivo ? "Evalua el CV adjunto." : "NO hay CV adjunto: evalua SOLO con la informacion del cuerpo del correo. Si falta informacion clave, baja el puntaje y pon bandera 'sin CV adjunto'."}` },
+    ];
+    if (tieneArchivo) {
+      userContent.push({ type: "file", file: { filename: fname, file_data: `data:${mimeType};base64,${pdf_base64}` } });
+    }
+
+    const oaResp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini", temperature: 0, response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: sistema },
+          { role: "user", content: userContent },
+        ],
+      }),
+    });
+
+    if (!oaResp.ok) {
+      const errTxt = await oaResp.text();
+      return new Response(JSON.stringify({ error: "openai_fail", detail: errTxt }), {
+        status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const oaData = await oaResp.json();
+    let parsed: any;
+    try { parsed = JSON.parse(oaData.choices?.[0]?.message?.content ?? "{}"); }
+    catch { parsed = { nombre: null, resumen: "No se pudo parsear", puntaje: 0, perfil: "indefinido" }; }
+
+    // v8: resolver campana elegida por la IA, con fallbacks
+    let campana = campanas.find((c: any) => c.codigo === parsed.campana_codigo);
+    let banderaExtra: string | null = null;
+    if (!campana && codigo_campana) {
+      campana = campanas.find((c: any) => c.codigo === codigo_campana);
+      if (campana) banderaExtra = "clasificacion IA fallo, se uso codigo del script";
+    }
+    if (!campana) {
+      campana = campanas[0];
+      banderaExtra = `campana no resuelta (IA: ${parsed.campana_codigo ?? "null"}), asignada por defecto`;
+    }
+
+    const banderaFinal = [parsed.bandera, banderaExtra, (!tieneArchivo && !parsed.bandera) ? "sin CV adjunto" : null]
+      .filter(Boolean).join(" | ") || null;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("cv_postulaciones").insert({
+        gmail_message_id, campana_id: campana.id,
+        nombre: parsed.nombre ?? null, email: parsed.email ?? null, telefono: parsed.telefono ?? null,
+        ciudad: parsed.ciudad ?? null, anos_obra: parsed.anos_obra ?? null,
+        ejecuto_obra: parsed.ejecuto_obra ?? null, perfil: parsed.perfil ?? "indefinido",
+        puntaje: parsed.puntaje ?? 0,
+        bandera: banderaFinal,
+        pretension_bs: parsed.pretension_bs ?? null, resumen: parsed.resumen ?? null,
+        cv_filename: filename ?? null, cuerpo_correo: cuerpo_correo ?? null,
+        archivo_url: archivoUrl, estado: "nuevo", procesado_en: new Date().toISOString(),
+      }).select("id, nombre, puntaje, campana_id").single();
+
+    if (insErr) {
+      return new Response(JSON.stringify({ error: "insert_fail", detail: insErr.message }), {
+        status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    dispararAnalisis(inserted?.id);
+
+    return new Response(JSON.stringify({ status: "ok", ...inserted, campana: campana.codigo, archivo: !!archivoUrl }), {
+      headers: { ...cors, "Content-Type": "application/json" } });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "server_error", detail: String(e) }), {
+      status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+  }
+});
