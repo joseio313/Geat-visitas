@@ -1,5 +1,5 @@
 // ============================================================
-// Edge Function: geat-cv-cron v1 (GEAT v255)
+// Edge Function: geat-cv-cron v2 (GEAT v255)
 // Ingesta diaria de CVs SIN que nadie apriete "Procesar nuevos".
 //
 // Lo llama pg_cron (07:00 y 13:00 Bolivia) con ?key=<app_config.sheet_sync_key>,
@@ -14,8 +14,15 @@
 //   1. POST a app_config.cv_webapp_url con {token}; la respuesta DEBE ser JSON.
 //   2. geat-cv accion reintentar_pendientes (CVs que entraron sin puntaje).
 //   3. guarda el resultado en app_config.cv_cron_estado.
+//   4. (v2) evalua alertas y avisa a Jose Miguel por WhatsApp con el bot (ycloud):
+//        - falla_ingesta : el Apps Script no respondio JSON / dio error / hubo timeout
+//        - errores_script: el Apps Script informo errores > 0
+//        - sin_cvs_48h   : >48 h sin fila nueva en cv_postulaciones con campana activa
+//        - pendientes_24h: filas pendiente_analisis de mas de 24 h que no se pudieron puntuar
+//      Antispam: cv_cron_avisos guarda cuando se mando cada tipo. Nada es silencioso:
+//      si el aviso mismo no sale, queda en cv_cron_estado.aviso_fallido y la funcion da 500.
 //
-// Modos (?modo=): ingesta (default) | reintento | test_fallo | limpiar_test
+// Modos (?modo=): ingesta (default) | reintento | vigilancia | test_aviso | test_fallo | limpiar_test
 // ============================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -58,6 +65,82 @@ async function reintentar(res: any) {
   } catch (e) { res.reintento = { error: String(e).slice(0, 200) }; }
 }
 
+// ---- v2: alertas por WhatsApp (mismo patron que avisoWhatsApp de bot-whatsapp) ----
+const BOT_FROM = "+59174572694";
+const HORAS = (ms: number) => ms / 3600e3;
+const horaBO = () => new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 16).replace("T", " ");
+
+type Alerta = { tipo: string; titulo: string; detalle: string; espera_h: number };
+
+async function enviarAviso(titulo: string, detalle: string): Promise<{ ok: boolean; via: string; error?: string }> {
+  const apiKey = await cfg("ycloud_api_key");
+  const dest = await cfg("bot_notif_whatsapp");
+  if (!apiKey || !dest) return { ok: false, via: "-", error: "falta ycloud_api_key o bot_notif_whatsapp" };
+  const to = "+" + dest.replace(/\D/g, "");
+  const body = ("\u{1F514} " + titulo + "\n" + detalle).slice(0, 1500);
+  const post = (payload: unknown) => fetch("https://api.ycloud.com/v2/whatsapp/messages/sendDirectly", {
+    method: "POST", headers: { "X-API-Key": apiKey, "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(20000),
+  });
+  try {
+    const r = await post({ from: BOT_FROM, to, type: "text", text: { body } });
+    if (r.ok) return { ok: true, via: "texto" };
+    const r2 = await post({ from: BOT_FROM, to, type: "template", template: { name: "aviso_interno", language: { code: "es" },
+      components: [{ type: "body", parameters: [{ type: "text", text: titulo.slice(0, 200) }, { type: "text", text: detalle.replace(/\n/g, " ").slice(0, 700) }] }] } });
+    if (r2.ok) return { ok: true, via: "plantilla" };
+    return { ok: false, via: "-", error: "texto HTTP " + r.status + " / plantilla HTTP " + r2.status + ": " + (await r2.text()).slice(0, 200) };
+  } catch (e) { return { ok: false, via: "-", error: String(e).slice(0, 200) }; }
+}
+
+// Devuelve las alertas activas; res aporta el resultado de la corrida en curso (si hubo).
+async function evaluarAlertas(res: any | null): Promise<Alerta[]> {
+  const out: Alerta[] = [];
+  if (res && !res.ok) {
+    out.push({ tipo: "falla_ingesta", espera_h: 5, titulo: "CVs: la ingesta automatica FALLO",
+      detalle: (res.error ?? "error desconocido") + "\nCorrida " + horaBO() + " (hora Bolivia). Los CVs nuevos no estan entrando." });
+  }
+  const errs = Number(res?.ingesta?.errores ?? 0);
+  if (res?.ok && errs > 0) {
+    out.push({ tipo: "errores_script", espera_h: 23, titulo: "CVs: el Apps Script informo " + errs + " error(es)",
+      detalle: "Procesados: " + (res.ingesta.procesados ?? "?") + ", errores: " + errs + ". Revisar Ejecuciones del script." });
+  }
+  const { count: activas } = await sb.from("rec_campanas").select("id", { count: "exact", head: true }).eq("activa", true);
+  if ((activas ?? 0) > 0) {
+    const { data: ult } = await sb.from("cv_postulaciones").select("created_at").order("created_at", { ascending: false }).limit(1);
+    const t = ult?.[0]?.created_at ? new Date(ult[0].created_at).getTime() : 0;
+    if (!t || HORAS(Date.now() - t) > 48) {
+      out.push({ tipo: "sin_cvs_48h", espera_h: 23, titulo: "CVs: mas de 48 h sin ningun CV nuevo",
+        detalle: "Ultimo CV: " + (t ? new Date(t - 4 * 3600e3).toISOString().slice(0, 16).replace("T", " ") + " (Bolivia)" : "ninguno") +
+          ". Hay " + activas + " campana(s) activa(s). Puede ser que no lleguen postulaciones o que la ingesta este caida." });
+    }
+  }
+  const limite = new Date(Date.now() - 24 * 3600e3).toISOString();
+  const { count: pend } = await sb.from("cv_postulaciones").select("id", { count: "exact", head: true })
+    .eq("bandera", "pendiente_analisis").lt("created_at", limite);
+  if ((pend ?? 0) > 0) {
+    out.push({ tipo: "pendientes_24h", espera_h: 23, titulo: "CVs: " + pend + " sin puntuar hace mas de 24 h",
+      detalle: "Entraron pero no se pudieron puntuar (OpenAI o falta el archivo). Quedan marcados pendiente_analisis en el panel." });
+  }
+  return out;
+}
+
+// Manda las alertas respetando el antispam. Devuelve el resumen y si alguna no pudo salir.
+async function avisar(alertas: Alerta[]) {
+  let registro: Record<string, string> = {};
+  try { registro = JSON.parse((await cfg("cv_cron_avisos")) ?? "{}"); } catch { registro = {}; }
+  const resumen: any[] = [];
+  let fallo = false;
+  for (const a of alertas) {
+    const ultimo = registro[a.tipo] ? new Date(registro[a.tipo]).getTime() : 0;
+    if (HORAS(Date.now() - ultimo) < a.espera_h) { resumen.push({ tipo: a.tipo, enviado: false, motivo: "antispam" }); continue; }
+    const r = await enviarAviso(a.titulo, a.detalle);
+    if (r.ok) registro[a.tipo] = new Date().toISOString(); else { fallo = true; console.error("aviso no enviado", a.tipo, r.error); }
+    resumen.push({ tipo: a.tipo, enviado: r.ok, via: r.via, error: r.error });
+  }
+  if (alertas.length) await guardarCfg("cv_cron_avisos", registro);
+  return { resumen, fallo };
+}
+
 async function correr(): Promise<any> {
   const res: any = { modo: "ingesta", inicio: new Date().toISOString(), ok: false, error: null, ingesta: null, reintento: null };
   const webapp = await cfg("cv_webapp_url");
@@ -90,14 +173,18 @@ async function correr(): Promise<any> {
   // El reintento corre siempre: no depende de que el Apps Script haya respondido.
   await reintentar(res);
   res.fin = new Date().toISOString();
+  const av = await avisar(await evaluarAlertas(res));
+  res.alertas = av.resumen;
 
   let previo: any = {};
   try { previo = JSON.parse((await cfg("cv_cron_estado")) ?? "{}"); } catch { /* primera corrida */ }
   await guardarCfg("cv_cron_estado", {
     ultima_ejecucion: res.fin, ok: res.ok, error: res.error,
     ultima_ok: res.ok ? res.fin : (previo.ultima_ok ?? null),
-    ingesta: res.ingesta, reintento: res.reintento,
+    ingesta: res.ingesta, reintento: res.reintento, alertas: res.alertas,
+    aviso_fallido: av.fallo ? res.fin : null,
   });
+  res.aviso_fallido = av.fallo;
   return res;
 }
 
@@ -134,6 +221,15 @@ Deno.serve(async (req) => {
       await reintentar(res);
       return json(res);
     }
+    if (modo === "vigilancia") {
+      const alertas = await evaluarAlertas(null);
+      const av = await avisar(alertas);
+      return json({ modo, alertas: alertas.map((a) => a.tipo), ...av }, av.fallo ? 500 : 200);
+    }
+    if (modo === "test_aviso") {
+      const r = await enviarAviso("Prueba del aviso de CVs", "Mensaje de validacion de geat-cv-cron (" + horaBO() + " Bolivia). Si lo lees, las alertas llegan.");
+      return json({ modo, ...r }, r.ok ? 200 : 500);
+    }
     if (modo === "test_fallo") {
       // Fuerza el fallo de OpenAI DENTRO de geat-cv (flag simular_fallo_openai) sin tocar
       // la clave compartida con el bot. La fila de prueba lleva gmail_message_id TEST-*.
@@ -155,7 +251,8 @@ Deno.serve(async (req) => {
       const { error } = await sb.from("cv_postulaciones").delete().like("gmail_message_id", "TEST-%");
       return json({ modo, filas: (filas ?? []).map((f: any) => f.id), archivos_borrados: paths.length, error: error?.message ?? null });
     }
-    return json(await correr());
+    const corrida = await correr();
+    return json(corrida, corrida.aviso_fallido ? 500 : 200);
   } catch (e) {
     return json({ ok: false, error: String(e).slice(0, 300) }, 500);
   }
