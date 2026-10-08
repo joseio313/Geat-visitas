@@ -248,19 +248,18 @@ async function reintentarPendientes(supabase: any, limite: number) {
       out.detalle.push({ id: cv.id, estado: "sin_archivo" });
       continue;
     }
-    if (arch.bytes.length > MAX_BYTES) {
-      out.siguen_pendientes++;
-      out.detalle.push({ id: cv.id, estado: "archivo_grande", mb: Math.round(arch.bytes.length / 1e6) });
-      continue;
-    }
+    // Igual que geat-cv-analisis v4: un archivo de mas de 8 MB no se manda a OpenAI; se
+    // puntua solo con el correo y se deja marcado (no queda pendiente para siempre).
+    const grande = arch.bytes.length > MAX_BYTES;
+    const avisoGrande = grande ? `CV de ${Math.round(arch.bytes.length / 1e6)} MB sin leer (limite 8 MB): puntaje solo con el correo` : null;
     try {
       const { parsed, campana, banderaExtra } = await puntuarCv(supabase, campanas, {
-        asunto: null, cuerpo: cv.cuerpo_correo, pdfB64: bytesToB64(arch.bytes),
+        asunto: null, cuerpo: cv.cuerpo_correo, pdfB64: grande ? null : bytesToB64(arch.bytes),
         filename: cv.cv_filename, mimeType: mimeDe(cv.cv_filename), codigoFallback: null,
       });
       const upd: any = {
         campana_id: campana.id, perfil: parsed.perfil ?? "indefinido", puntaje: parsed.puntaje ?? 0,
-        bandera: [parsed.bandera, banderaExtra].filter(Boolean).join(" | ") || null,
+        bandera: [parsed.bandera, banderaExtra, avisoGrande].filter(Boolean).join(" | ") || null,
         pretension_bs: parsed.pretension_bs ?? null, resumen: parsed.resumen ?? null,
         procesado_en: new Date().toISOString(),
       };
