@@ -2133,7 +2133,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='256';
+  var CURRENT_VERSION='257';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2335,10 +2335,23 @@ async function registrarAuditoria(accion,tabla,registroId,detalles){
 /* ════════════════════════════════════════
    HELPERS
 ════════════════════════════════════════ */
-function ymdLocal(d){
+/* v257 — ymdLocal() ya NO usa la zona del dispositivo: un equipo en otra zona
+   veía "hoy" y la semana de la agenda desfasados. Ahora es el día calendario de
+   America/La_Paz (igual que ymdBolivia). Es para INSTANTES (new Date(),
+   timestamps). Una fecha armada con new Date(y,m,d) en el dispositivo es un
+   "calendario" sin instante real: se formatea con _ymdDev(), que conserva el
+   comportamiento viejo. */
+function ymdLocal(d){return ymdBolivia(d);}
+function _ymdDev(d){
   const dt=(d instanceof Date)?d:new Date(d);
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 }
+/* Partes {y,m(0-11),d} del día de La Paz; medianoche de La Paz (UTC-4 fijo, sin
+   horario de verano) de un día dado; y suma de días exacta en esa zona.
+   Date.UTC normaliza meses/días fuera de rango (mes 12, día 0). */
+function _lpParts(d){const s=ymdBolivia(d).split('-');return{y:+s[0],m:+s[1]-1,d:+s[2]};}
+function _lpDate(y,m,d){return new Date(Date.UTC(y,m,d,4));}
+function addDaysLP(d,n){return new Date(d.getTime()+n*86400000);}
 /* Fecha YMD en zona horaria Bolivia (America/La_Paz, UTC-4 fijo), independiente
    de la zona del dispositivo. Para agrupar/comparar por día calendario boliviano. */
 function ymdBolivia(d){
@@ -2617,7 +2630,15 @@ function _nlFechaContacto(){
   if(v>ahoraLocal)return Object.assign(_ret(ahoraLocal),{error:'La fecha y hora de contacto no pueden ser futuras'});
   return _ret(v);
 }
+/* v257 — getMonday() devuelve la medianoche de La Paz del lunes de la semana del
+   INSTANTE recibido (el día se toma en La Paz, no en el dispositivo). Mi Agenda
+   trabaja con calendarios del dispositivo y usa getMondayDev(). */
 function getMonday(d){
+  const p=_lpParts(new Date(d));
+  const dow=new Date(Date.UTC(p.y,p.m,p.d)).getUTCDay();
+  return _lpDate(p.y,p.m,p.d+(dow===0?-6:1-dow));
+}
+function getMondayDev(d){
   const dt=new Date(d);
   const day=dt.getDay();
   const diff=day===0?-6:1-day;
@@ -3721,8 +3742,8 @@ function populateCatalogSelects(){
   if(mEl) mEl.value=String(_now.getMonth()+1);
   if(yEl) yEl.value=String(_now.getFullYear());
   // Inicializar rango de leads
-  const _firstDay=ymdLocal(new Date(_now.getFullYear(),_now.getMonth(),1));
-  const _lastDay=ymdLocal(new Date(_now.getFullYear(),_now.getMonth()+1,0));
+  const _firstDay=_ymdDev(new Date(_now.getFullYear(),_now.getMonth(),1));
+  const _lastDay=_ymdDev(new Date(_now.getFullYear(),_now.getMonth()+1,0));
   const lFrom=document.getElementById('leadFrom');
   const lTo=document.getElementById('leadTo');
   if(lFrom) lFrom.value=_firstDay;
@@ -4418,8 +4439,8 @@ function setView(v,btn){
        Se toma el mes del JUEVES de esa semana — la semana pertenece al mes donde
        cae la mayoría de sus días — así "Mes" desde la semana actual abre el mes
        actual y no el anterior. */
-    const _ju=addDays(currentWeekStart,3);
-    _weekMonthDate=new Date(_ju.getFullYear(),_ju.getMonth(),1);
+    const _ju=_lpParts(addDaysLP(currentWeekStart,3));
+    _weekMonthDate=new Date(_ju.y,_ju.m,1);
     renderWeekMonth();
   }else{
     if(wm)wm.style.display='none';
@@ -4440,13 +4461,13 @@ function onFiltroPersonaWeek(){
 function navWeek(dir){
   /* v218 — en modo MES las mismas flechas navegan meses */
   if(_weekView==='mes'){
-    if(dir===0){const h=new Date();_weekMonthDate=new Date(h.getFullYear(),h.getMonth(),1);}
+    if(dir===0){const h=_lpParts(new Date());_weekMonthDate=new Date(h.y,h.m,1);}
     else{_weekMonthDate=new Date(_weekMonthDate.getFullYear(),_weekMonthDate.getMonth()+dir,1);}
     renderWeekMonth();
     return;
   }
   if(dir===0){currentWeekStart=getMonday(new Date());}
-  else{currentWeekStart=addDays(currentWeekStart,dir*7);}
+  else{currentWeekStart=addDaysLP(currentWeekStart,dir*7);}
   renderWeek();
 }
 
@@ -4479,11 +4500,12 @@ async function renderWeek(){
   /* v218 — punto único de delegación: los ~18 llamadores de renderWeek() (guardados,
      refrescos post-agenda, switchTab) refrescan el mes si esa es la vista activa. */
   if(_weekView==='mes')return renderWeekMonth();
-  const weekEnd=addDays(currentWeekStart,7);
+  const weekEnd=addDaysLP(currentWeekStart,7);
   const lbl=document.getElementById('week-label');
   const days=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  lbl.textContent=`${currentWeekStart.getDate()} – ${addDays(currentWeekStart,6).getDate()} ${meses[currentWeekStart.getMonth()]} ${currentWeekStart.getFullYear()}`;
+  const _wp0=_lpParts(currentWeekStart), _wp6=_lpParts(addDaysLP(currentWeekStart,6));
+  lbl.textContent=`${_wp0.d} – ${_wp6.d} ${meses[_wp0.m]} ${_wp0.y}`;
 
   const filtP=document.getElementById('filtro-persona').value;
   const filtE=document.getElementById('filtro-estado').value;
@@ -4545,13 +4567,13 @@ async function renderWeek(){
   const now=new Date();
   let html='';
   for(let i=0;i<7;i++){
-    const day=addDays(currentWeekStart,i);
+    const day=addDaysLP(currentWeekStart,i);
     const isToday=ymdLocal(day)===ymdLocal(now);
     const dayItems=agendaData.filter(a=>ymdLocal(new Date(a.fecha_programada))===ymdLocal(day));
     html+=`<div class="week-day${isToday?' today':''}">
       <div class="week-day-header">
         <div class="week-day-name">${days[i]}${isToday?' · HOY':''}</div>
-        <div class="week-day-num">${day.getDate()}</div>
+        <div class="week-day-num">${_lpParts(day).d}</div>
         ${dayCountPill(dayItems.length)}
       </div>
       <div class="week-day-body">
@@ -4662,7 +4684,7 @@ function _miaEsCeo(){return !!(cu&&cu.rol==='admin');}
 
 /* Lunes de la semana de una fecha. getMonday() ya existe para la agenda del
    equipo; se reusa para no tener dos definiciones de "cuándo empieza la semana". */
-function _miaLunes(d){return getMonday(new Date(d));}
+function _miaLunes(d){return getMondayDev(new Date(d));}
 
 /* Título del período según la vista. Todo en horario de Bolivia: las fechas se
    arman con componentes locales, nunca con toISOString(). */
@@ -4821,13 +4843,13 @@ function _miaTodos(){
 function _miaMiniCal(){
   const y=_miaRef.getFullYear(), m=_miaRef.getMonth();
   const primero=new Date(y,m,1);
-  const arranque=getMonday(primero);
+  const arranque=getMondayDev(primero);
   const hoy=ymdLocal(new Date());
-  const selYmd=ymdLocal(_miaRef);
+  const selYmd=_ymdDev(_miaRef);
   let celdas='';
   for(let i=0;i<42;i++){
     const d=addDays(arranque,i);
-    const ymd=ymdLocal(d);
+    const ymd=_ymdDev(d);
     const otro=d.getMonth()!==m;
     const cls=['mia-mini-d'];
     if(otro)cls.push('otro');
@@ -5128,7 +5150,7 @@ function _miaGrilla(){
 
   const cab='<div class="mia-g-cab"><div class="mia-g-hcol"></div>'+
     dias.map(function(d){
-      const ymd=ymdLocal(d);
+      const ymd=_ymdDev(d);
       const dow=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()];
       return '<div class="mia-g-dia'+(ymd===hoy?' hoy':'')+'">'+
         '<span class="dow">'+dow+'</span><span class="num">'+d.getDate()+'</span></div>';
@@ -5146,7 +5168,7 @@ function _miaGrilla(){
   const nowP=_miaPartes(new Date());
   const nowMin=nowP.h*60+nowP.m;
   let linea='';
-  const idxHoy=dias.map(ymdLocal).indexOf(hoy);
+  const idxHoy=dias.map(_ymdDev).indexOf(hoy);
   if(idxHoy>=0&&nowMin>=MIA_H_INI*60&&nowMin<=MIA_H_FIN*60){
     const top=(nowMin-MIA_H_INI*60)/60*MIA_PX_HORA;
     const w=100/dias.length;
@@ -5154,7 +5176,7 @@ function _miaGrilla(){
   }
 
   const capas=dias.map(function(d){
-    const ymd=ymdLocal(d);
+    const ymd=_ymdDev(d);
     return '<div class="mia-g-capa" data-ymd="'+ymd+'" onclick="_miaClicHueco(event,\''+ymd+'\')">'+
       _miaBloquesDe(ymd).map(_miaBloqueHtml).join('')+'</div>';
   }).join('');
@@ -5271,13 +5293,13 @@ async function _miaDragFin(e){
 /* ── VISTA MES ───────────────────────────────────────────────────────────── */
 function _miaMes(){
   const y=_miaRef.getFullYear(), m=_miaRef.getMonth();
-  const arranque=getMonday(new Date(y,m,1));
+  const arranque=getMondayDev(new Date(y,m,1));
   const hoy=ymdLocal(new Date());
   let html='<div class="mia-mes-dow">'+['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
     .map(function(d){return '<div>'+d+'</div>';}).join('')+'</div><div class="mia-mes">';
   for(let i=0;i<42;i++){
     const d=addDays(arranque,i);
-    const ymd=ymdLocal(d);
+    const ymd=_ymdDev(d);
     if(i>=35&&d.getMonth()!==m)break;
     const evs=_miaTodos().filter(function(e){return _miaPartes(e.fecha_programada).ymd===ymd;})
       .sort(function(a,b){return _miaMin(a.fecha_programada)-_miaMin(b.fecha_programada);});
@@ -5366,7 +5388,7 @@ function _miaIniHoyIso(){return new Date(ymdBolivia(new Date())+'T00:00:00-04:00
 function _miaFinHoyIso(){return _finDeHoyBoIso();}
 /* Fin del domingo de la semana en curso, para el grupo "Esta semana". */
 function _miaFinSemanaIso(){
-  const dom=addDays(getMonday(new Date()),7);
+  const dom=addDaysLP(getMonday(new Date()),7);
   return new Date(ymdLocal(dom)+'T00:00:00-04:00').toISOString();
 }
 /* ¿Postgres rechazó el insert por el NOT NULL de fecha_programada? */
@@ -5890,7 +5912,7 @@ function navWeekToDay(dateStr){
      anterior a las 20:00, y para un lunes getMonday devolvía la semana ANTERIOR.
      Se arma la fecha con los componentes locales. */
   const p=String(dateStr).split('-');
-  currentWeekStart=getMonday(new Date(+p[0],+p[1]-1,+p[2]));
+  currentWeekStart=getMonday(_lpDate(+p[0],+p[1]-1,+p[2]));
   if(_weekView==='mes'){
     const b=document.querySelector('#week-view-toggle button');
     setView('semana',b);
@@ -6086,7 +6108,7 @@ function _mnScopeAgenda(q,quien){
 function _mnRango(){
   const modo=(document.getElementById('mn-periodo')||{}).value||'mes';
   const h=new Date();
-  const mes=function(d){return ymdLocal(new Date(h.getFullYear(),h.getMonth()+d,1));};
+  const mes=function(d){return _ymdDev(new Date(h.getFullYear(),h.getMonth()+d,1));};
   const dia=function(n){const x=new Date();x.setDate(x.getDate()-n);return ymdLocal(x);};
   if(modo==='d90')
     return{desde:dia(90),hasta:dia(-1),desdePrev:dia(180),hastaPrev:dia(90),
@@ -6517,11 +6539,11 @@ async function renderReports(){
   const _trend=rTrend.data||[];
   const _meses3=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const trendKeys=[];
-  for(let i=5;i>=0;i--){const d=new Date(_hoy.getFullYear(),_hoy.getMonth()-i,1);trendKeys.push({key:ymdLocal(d).slice(0,7),label:_meses3[d.getMonth()],n:0});}
+  for(let i=5;i>=0;i--){const d=new Date(_hoy.getFullYear(),_hoy.getMonth()-i,1);trendKeys.push({key:_ymdDev(d).slice(0,7),label:_meses3[d.getMonth()],n:0});}
   const _trendMap={};trendKeys.forEach(t=>_trendMap[t.key]=t);
   _trend.forEach(l=>{const k=ymdLocal(new Date(l.created_at)).slice(0,7);if(_trendMap[k])_trendMap[k].n++;});
   const _trendMax=Math.max(1,...trendKeys.map(t=>t.n));
-  const _mesActualKey=ymdLocal(_hoy).slice(0,7);
+  const _mesActualKey=_ymdDev(_hoy).slice(0,7);
 
   // CAMBIO 4 — KPI ventas (tabla ventas; fallback leads ganados del período)
   /* v240 — los cierres del período son los del rango por fecha_contrato, NO
@@ -12378,8 +12400,8 @@ function openSearchModal(){
   document.getElementById('search-table-section').style.display='';
   // Inicializar rango de fechas
   const now=new Date();
-  const firstDay=ymdLocal(new Date(now.getFullYear(),now.getMonth(),1));
-  const lastDay=ymdLocal(new Date(now.getFullYear(),now.getMonth()+1,0));
+  const firstDay=_ymdDev(new Date(now.getFullYear(),now.getMonth(),1));
+  const lastDay=_ymdDev(new Date(now.getFullYear(),now.getMonth()+1,0));
   const eF=document.getElementById('exportFrom');
   const eT=document.getElementById('exportTo');
   if(eF&&!eF.value)eF.value=firstDay;
@@ -15151,7 +15173,7 @@ function _cobFechaMas(ymd,dias){
   const p=String(ymd).slice(0,10).split('-');
   const d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
   d.setDate(d.getDate()+(Number(dias)||0));
-  return ymdLocal(d);
+  return _ymdDev(d);
 }
 /* días que van de `a` hasta `b` (positivo si b es posterior) */
 function _cobDiasEntre(a,b){
@@ -18455,7 +18477,8 @@ function _critFecha(iso){
   if(!iso)return '—';
   const d=new Date(iso);
   if(isNaN(d.getTime()))return '—';
-  return ymdLocal(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const hm=new Intl.DateTimeFormat('en-GB',{timeZone:'America/La_Paz',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+  return ymdLocal(d)+' '+hm;
 }
 
 /* Banner sobre el listado cuando quedaron CVs con la rúbrica vieja. */
