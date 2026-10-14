@@ -2133,7 +2133,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='257';
+  var CURRENT_VERSION='258';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3755,6 +3755,9 @@ async function loadColaboradores(){
   const captsSel=document.getElementById('nl-captador-sel');
   sel.innerHTML=colaboradores.filter(c=>c.activo).map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('');
   captsSel.innerHTML=colaboradores.filter(c=>c.activo).map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('');
+  /* v258 — captador que no es un colaborador: leads que trae el personal de la
+     inmobiliaria. leads.captador es texto libre (ya hay 1 lead con este valor). */
+  captsSel.innerHTML+='<option value="Personal de la inmobiliaria">Personal de la inmobiliaria</option>';
 }
 
 function buildPersonaFilters(){
