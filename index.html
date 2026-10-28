@@ -1226,6 +1226,86 @@ body.tema-ceo .hdr-btn,body.tema-ceo .ini-card,body.tema-ceo .ini-mini,body.tema
   body.tema-ceo .nav-tabs{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:68px;border-radius:24px;padding:6px 8px}
   body.tema-ceo .ini-fases{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+/* ══ v266 · TEMA CEO — paleta única "Cabina" + Mi agenda ═════════════════
+   Sin violeta, rosa ni magenta. Pisa los valores de v265 (mismas variables).
+   Los 4 círculos de paletas quedan ocultos (el código sigue ahí) y la paleta
+   se fuerza a Cabina en aplicarPaletaCeo(), aunque haya otra guardada. */
+body.tema-ceo{
+  --ac1:#FAC305; --ac2:#2BB6FF;
+  --ceo-fondo:linear-gradient(135deg,#05070D 0%,#0B1626 55%,#101A2A 100%);
+  --ac-grad:linear-gradient(135deg,#FAC305,#F5A800); --on-ac:#111111;
+  --ceo-bg:#05070D; --ceo-ink:#F2F5F9;
+  --ceo-card:rgba(255,255,255,.05); --ceo-line:rgba(255,255,255,.12);
+  --gray-900:rgba(255,255,255,.04); --gray-800:rgba(255,255,255,.05); --gray-700:rgba(255,255,255,.1);
+  --gray-600:rgba(255,255,255,.12); --gray-100:#F2F5F9; --white:#F2F5F9;
+  --mia-obras:#3E73E8; --mia-clientes:#FAC305; --mia-equipo:#2BB6FF; --mia-foco:#34D399; --mia-personal:#A8B0BA; --mia-grupal:#6B7280;
+  color:#F2F5F9;
+}
+body.tema-ceo::before,body.tema-ceo::after{opacity:.25}
+body.tema-ceo::before{background:#2BB6FF}
+body.tema-ceo::after{background:#FAC305}
+.ceo-pals{display:none !important}
+body.tema-ceo .ini-card,body.tema-ceo .pd-box,body.tema-ceo .mia-panel,body.tema-ceo .mia-card,body.tema-ceo .mn-kpi,body.tema-ceo .ger-kpi,body.tema-ceo .alert-card,body.tema-ceo .activity-card,body.tema-ceo .crit-box,body.tema-ceo .ini-fase,body.tema-ceo .ini-c-embudo,body.tema-ceo .ini-c-agenda{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+body.tema-ceo .app-header{border-bottom-color:rgba(255,255,255,.12)}
+body.tema-ceo .nav-tabs{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+body.tema-ceo #ceo-menu,body.tema-ceo #tareasPanel,body.tema-ceo #asistPanel{background:rgba(12,20,34,.95)}
+body.tema-ceo .modal{background:rgba(12,20,34,.84)}
+body.tema-ceo option{background:#0F1B2D}
+body.tema-ceo .ini-fase.on{background:rgba(255,255,255,.1);background:linear-gradient(135deg,color-mix(in srgb,#FAC305 28%,transparent),color-mix(in srgb,#2BB6FF 24%,transparent));border-color:#FAC305}
+body.tema-ceo .ini-al:nth-child(1){color:#FF9A7A}
+body.tema-ceo .ini-al:nth-child(1) b{background:linear-gradient(135deg,#FF7A59,#FFA07A);color:#2A0F08}
+body.tema-ceo #capAudioBtn[title="Detener captura"]::after,
+body.tema-ceo #recBtnHeader[style*="255, 193, 7"]::after{border-color:#0F1B2D}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  body.tema-ceo .ini-card,body.tema-ceo .pd-box,body.tema-ceo .mia-panel,body.tema-ceo .mia-card,body.tema-ceo .nav-tabs,body.tema-ceo .app-header,body.tema-ceo .modal,body.tema-ceo #ceo-menu{background:#0F1B2D}
+}
+
+/* ── Mi agenda ── */
+body.tema-ceo .mia-main{overflow-x:auto}
+body.tema-ceo .mia-top{gap:14px;margin-bottom:18px}
+body.tema-ceo .mia-crear{background:var(--ac-grad);color:#111;min-height:var(--ceo-tap);padding:0 20px;border-radius:22px}
+body.tema-ceo .mia-nav button{min-height:var(--ceo-tap);min-width:var(--ceo-tap);border-radius:14px;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#F2F5F9}
+body.tema-ceo .mia-vistas{border-radius:22px;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}
+body.tema-ceo .mia-vistas button{min-height:var(--ceo-tap);padding:0 16px}
+body.tema-ceo .mia-vistas button.active{background:var(--ac-grad);color:#111}
+body.tema-ceo .mia-rapida{border-radius:22px;padding:10px 16px;background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+body.tema-ceo .mia-rapida input{font-size:14px;min-height:30px}
+body.tema-ceo .mia-rapida button{min-height:36px;border-radius:18px;border-color:var(--ac1);color:var(--ac1)}
+body.tema-ceo .mia-rapida button:hover{background:var(--ac1);color:#111}
+body.tema-ceo .mia-grilla{border-radius:24px;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+body.tema-ceo .mia-grilla:not(.dia){min-width:calc(64px + 7 * 118px)}
+body.tema-ceo .mia-g-hcol{width:64px}
+body.tema-ceo .mia-g-cab{background:rgba(255,255,255,.04);border-bottom-color:rgba(255,255,255,.12)}
+body.tema-ceo .mia-g-dia{padding:10px 2px;border-left-color:rgba(255,255,255,.08)}
+body.tema-ceo .mia-g-dia .dow{font-size:11px}
+body.tema-ceo .mia-g-dia .num{font-size:18px}
+body.tema-ceo .mia-g-dia.hoy{background:rgba(250,195,5,.1)}
+body.tema-ceo .mia-g-dia.hoy .num{width:30px;height:30px;line-height:30px;background:var(--ac-grad);color:#111}
+body.tema-ceo .mia-g-fila{border-bottom-color:rgba(255,255,255,.07)}
+body.tema-ceo .mia-g-fila .mia-g-hcol span{font-size:11px;color:#9AA7B8;right:10px}
+body.tema-ceo .mia-g-celda{border-left-color:rgba(255,255,255,.07)}
+body.tema-ceo .mia-ev{background:rgba(255,255,255,.09);border-radius:10px;padding:5px 8px;font-size:12.5px;line-height:1.3;border-left-width:4px;box-shadow:0 2px 8px -4px rgba(0,0,0,.5)}
+body.tema-ceo .mia-ev-h{font-size:11px;color:#C5CEDA;display:block;margin-bottom:1px}
+body.tema-ceo .mia-ev-t{font-size:12.5px;color:#F2F5F9;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+body.tema-ceo .mia-ev.hecho{opacity:.5}
+body.tema-ceo .mia-ahora{border-top-color:var(--ac1)}
+body.tema-ceo .mia-ahora i{background:var(--ac1)}
+body.tema-ceo .mia-mas{position:absolute;right:3px;bottom:3px;background:rgba(0,0,0,.55);color:#F2F5F9;border:1px solid rgba(255,255,255,.3);border-radius:10px;font:700 10px 'Montserrat',sans-serif;padding:1px 7px;cursor:pointer;min-height:18px}
+body.tema-ceo .mia-mes-c{border-radius:14px;min-height:104px;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1)}
+body.tema-ceo .mia-mes-ev{font-size:11px}
+body.tema-ceo .mia-lista{border-radius:24px;background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+body.tema-ceo .mia-lista-ev{min-height:var(--ceo-tap);font-size:13px}
+body.tema-ceo .mia-lista-ev .bar{width:4px}
+body.tema-ceo .mia-side{width:224px}
+body.tema-ceo .mia-mini,body.tema-ceo .mia-cals{border-radius:20px;background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+body.tema-ceo .mia-cal-row{min-height:32px;font-size:12px}
+body.tema-ceo .mia-pop{border-color:rgba(255,255,255,.2);background:rgba(12,20,34,.97);border-radius:22px}
+body.tema-ceo .mia-pop-h{color:#F2F5F9}
+body.tema-ceo .mia-panel{width:340px;border-radius:24px}
+body.tema-ceo .mia-panel-body{padding:16px;gap:16px}
+body.tema-ceo .mia-card{padding:16px;border-radius:20px}
+body.tema-ceo .mia-card-t{color:var(--ac1);margin-bottom:12px}
+body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padding:9px 0;font-size:12.5px;border-bottom-color:rgba(255,255,255,.08)}
 </style>
 </head>
 <body>
@@ -2491,7 +2571,7 @@ body.tema-ceo .hdr-btn,body.tema-ceo .ini-card,body.tema-ceo .ini-mini,body.tema
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='265';
+  var CURRENT_VERSION='266';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3753,7 +3833,9 @@ function _ceoEditar(el){
 const CEO_PALETAS=['noche','oceano','aurora','bosque'];
 function _ceoPaletaPref(){try{return localStorage.getItem('geat_ceo_paleta');}catch(e){return null;}}
 function aplicarPaletaCeo(n){
-  if(CEO_PALETAS.indexOf(n)<0)n='noche';
+  /* v266 — paleta única "Cabina": se ignora lo guardado y se apagan las clases
+     ceo-pal-*; Cabina son los valores base de body.tema-ceo. */
+  n='cabina';
   CEO_PALETAS.forEach(function(p){document.body.classList.toggle('ceo-pal-'+p,p===n);});
   document.querySelectorAll('.ceo-pal').forEach(function(b){b.classList.toggle('on',b.dataset.pal===n);});
 }
@@ -3762,12 +3844,21 @@ function setPaletaCeo(n){
   aplicarPaletaCeo(n);
   try{localStorage.setItem('geat_ceo_paleta',n);}catch(e){}
 }
+/* v266 — bajo tema-ceo la grilla de Mi agenda usa 64px por hora (46 en el clásico). */
+function _ceoAjustarAgenda(on){
+  const nuevo=on?64:46;
+  if(MIA_PX_HORA===nuevo)return;
+  MIA_PX_HORA=nuevo;
+  const sc=document.getElementById('screen-mi-agenda');
+  if(sc&&sc.classList.contains('active'))renderMiAgenda();
+}
 function aplicarTemaCeo(){
   if(!cu||cu.rol!=='admin')return;
   document.body.classList.toggle('tema-ceo',_temaCeoPref()!=='clasico');
   _ceoMoverHeader(document.body.classList.contains('tema-ceo'));
   _ceoAplicarNombres(document.body.classList.contains('tema-ceo'));
   aplicarPaletaCeo(_ceoPaletaPref());
+  _ceoAjustarAgenda(document.body.classList.contains('tema-ceo'));
   _temaCeoBtn();
 }
 function toggleTemaCeo(){
@@ -3776,6 +3867,7 @@ function toggleTemaCeo(){
   document.body.classList.toggle('tema-ceo',on);
   _ceoMoverHeader(on);
   _ceoAplicarNombres(on);
+  _ceoAjustarAgenda(on);
   try{localStorage.setItem('geat_tema_ceo',on?'nuevo':'clasico');}catch(e){}
   _temaCeoBtn();
 }
@@ -5393,7 +5485,7 @@ function _miaCabecera(){
 
 const MIA_H_INI=7;              /* la grilla arranca 07:00 */
 const MIA_H_FIN=20;             /* y termina 20:00 */
-const MIA_PX_HORA=46;           /* alto de una hora, en px */
+let MIA_PX_HORA=46;             /* alto de una hora, en px (64 bajo tema-ceo: ver _ceoAjustarAgenda) */
 const MIA_SNAP_MIN=15;          /* arrastrar mueve de a 15 minutos */
 const MIA_DUR_DEFECTO=60;       /* sin fecha_fin, un evento dura una hora */
 
@@ -5694,6 +5786,7 @@ function miaAbrirPop(d){
     '<textarea id="mia-p-nota" class="form-control" rows="2" placeholder="Nota (opcional)">'+_escPend(d.nota||'')+'</textarea>'+
     '<div class="mia-pop-f">'+
       (esNuevo?'':'<button type="button" class="btn-ghost" style="font-size:11px;color:var(--st-atrasado)" onclick="miaBorrar('+d.id+')">Dar de baja</button>')+
+      (esNuevo?'':'<button type="button" class="btn-ghost" style="font-size:11px" onclick="miaCerrarPop();miaCompletar('+d.id+','+(d.completada?'false':'true')+')">'+(d.completada?'↩ Reabrir':'✓ Marcar hecha')+'</button>')+
       '<button type="button" class="btn-ghost" style="font-size:11px;margin-left:auto" onclick="miaCerrarPop()">Cancelar</button>'+
       '<button type="button" class="mia-crear" onclick="miaGuardarPop('+(d.id||'null')+')">Guardar</button>'+
     '</div>';
@@ -5722,6 +5815,30 @@ async function miaGuardarPop(id){
   await _miaGuardar(id||null,{titulo:g('mia-p-tit'),calendario:el.dataset.cal||'personal',
     fecha:g('mia-p-fec'),hora:g('mia-p-h1'),horaFin:g('mia-p-h2'),nota:g('mia-p-nota')});
 }
+/* v266 — lista de las citas que no entraron en las 3 columnas de la grilla */
+function miaListaSolape(ids,ev){
+  miaCerrarPop();
+  const lista=String(ids).split(',').map(function(id){
+    return _miaTodos().filter(function(x){return String(x.id)===id;})[0];
+  }).filter(Boolean);
+  if(!lista.length)return;
+  const el=document.createElement('div');
+  el.id='mia-pop';el.className='mia-pop';
+  el.innerHTML='<div class="mia-pop-h">'+lista.length+' cita(s) más<button type="button" class="mia-pop-x" onclick="miaCerrarPop()">✕</button></div>'+
+    lista.map(function(e){
+      const cal=_miaCalDe(e);
+      return '<div class="mia-lista-ev" onclick="miaCerrarPop();'+(e.ro?'':'miaEditar(\''+e.id+'\')')+'">'+
+        '<span class="bar" style="background:'+cal.color+'"></span>'+
+        '<span class="h">'+_miaHhmm(e.fecha_programada)+'–'+_miaHhmm(_miaFin(e))+'</span>'+
+        '<span class="t">'+_escPend(e.titulo||'(sin título)')+'</span></div>';
+    }).join('');
+  document.body.appendChild(el);
+  const w=320,h=el.offsetHeight||200;
+  const x=Math.max(10,Math.min((ev?ev.clientX:200)+12,window.innerWidth-w-10));
+  const y=Math.max(70,Math.min((ev?ev.clientY:120)-20,window.innerHeight-h-14));
+  el.style.left=x+'px';el.style.top=y+'px';
+  setTimeout(function(){document.addEventListener('mousedown',_miaPopFuera,true);},0);
+}
 function miaCrear(){
   miaAbrirPop({fecha:ymdBolivia(new Date()),hora:'09:00'});
 }
@@ -5732,7 +5849,7 @@ function miaEditar(id,ev){
   const p=_miaPartes(e.fecha_programada);
   miaAbrirPop({id:e.id,titulo:e.titulo,calendario:e.calendario||'personal',
     fecha:p.ymd,hora:_miaHhmm(e.fecha_programada),horaFin:_miaHhmm(_miaFin(e)),
-    nota:e.nota||'',x:ev?ev.clientX:null,y:ev?ev.clientY:null});
+    nota:e.nota||'',completada:!!e.completada,x:ev?ev.clientX:null,y:ev?ev.clientY:null});
 }
 
 /* ── GRILLA DE HORAS (Día y Semana) ──────────────────────────────────────── */
@@ -5756,7 +5873,7 @@ function _miaBloquesDe(ymd){
   }).map(function(b,_i,arr){
     const solapan=arr.filter(function(o){return o.ini<b.fin&&b.ini<o.fin;});
     const n=Math.max.apply(null,solapan.map(function(o){return o.col+1;}));
-    return Object.assign(b,{n:n});
+    return Object.assign(b,{n:n,solapan:solapan});
   });
 }
 function _miaBloqueHtml(b){
@@ -5765,7 +5882,16 @@ function _miaBloqueHtml(b){
   if(finMin<=topMin)return '';
   const top=(topMin-MIA_H_INI*60)/60*MIA_PX_HORA;
   const alto=Math.max(17,(finMin-topMin)/60*MIA_PX_HORA-2);
-  const w=100/Math.max(1,b.n), left=b.col*w;
+  /* v266 — bajo tema-ceo: más de 3 citas simultáneas muestran 3 y un "+N más" */
+  let nCols=b.n, mas='';
+  if(document.body.classList.contains('tema-ceo')&&b.n>3){
+    if(b.col>=3)return '';
+    nCols=3;
+    const oc=b.solapan.filter(function(o){return o.col>=3;});
+    if(oc.length)mas='<button type="button" class="mia-mas" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" '+
+      'onclick="event.stopPropagation();miaListaSolape(\''+oc.map(function(o){return o.ev.id;}).join(',')+'\',event)">+'+oc.length+' más</button>';
+  }
+  const w=100/Math.max(1,nCols), left=b.col*w;
   const ro=!!e.ro;
   const st='top:'+top.toFixed(1)+'px;height:'+alto.toFixed(1)+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);'+
     'border-left:3px solid '+cal.color+';'+(ro?'':'background:'+cal.color+'1f;');
@@ -5774,7 +5900,7 @@ function _miaBloqueHtml(b){
       ' ontouchstart="_miaDragIni(event,\''+e.id+'\')" onclick="miaEditar('+e.id+',event)"')+
     ' title="'+_escPend(_miaHhmm(e.fecha_programada)+'–'+_miaHhmm(_miaFin(e))+' · '+(e.titulo||''))+(ro?' (visita del equipo — solo lectura)':'')+'">'+
     '<div class="mia-ev-h">'+_miaHhmm(e.fecha_programada)+'</div>'+
-    '<div class="mia-ev-t">'+_escPend(e.titulo||'(sin título)')+'</div>'+
+    '<div class="mia-ev-t">'+_escPend(e.titulo||'(sin título)')+'</div>'+mas+
     (ro?'':'<div class="mia-ev-rz" onmousedown="_miaDragIni(event,\''+e.id+'\',\'duracion\')"'+
       ' ontouchstart="_miaDragIni(event,\''+e.id+'\',\'duracion\')"></div>')+
   '</div>';
