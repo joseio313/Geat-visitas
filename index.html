@@ -1665,7 +1665,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
           <div class="form-group">
             <label class="form-label">📣 ¿De dónde vino? <span style="color:var(--st-atrasado)">*</span></label>
             <select class="form-control" id="nl-campana"></select>
-            <div class="form-help">Obligatorio. Si vino por una pauta, elegí la campaña: el nombre es el mismo que figura en Meta. Si no vino de pauta, usá Referido, Vino solo u Otro. Si la campaña no está en la lista, pedile al admin que la cargue — no la anotes en la nota.</div>
+            <div class="form-help">Obligatorio. Si vino por una pauta, elegí la campaña: el nombre es el mismo que figura en Meta. Si no vino de pauta, elegí el origen (Referido, Contacto propio, Vino solo, Otro...). Si la campaña no está en la lista, pedile al admin que la cargue — no la anotes en la nota.</div>
           </div>
         </div>
         <div class="form-row">
@@ -2133,7 +2133,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='258';
+  var CURRENT_VERSION='259';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -2422,7 +2422,11 @@ function _medioEsCampana(nombreMedio){
      't:<texto>' -> Referido/Vino solo/Otro -> leads.campana    (campana_id=null)
    Las inactivas siguen existiendo para nombrar leads históricos, pero no se
    ofrecen para cargar nuevos. */
-const ORIGEN_FIJOS=['Referido','Vino solo','Otro'];
+/* v259 — orígenes sin pauta, fijos en el código (no vienen de medios_difusion).
+   Van en leads.campana como texto. El 'Referido' genérico ya no se ofrece, pero
+   los leads viejos con campana='Referido' se siguen mostrando: el editor lo
+   agrega como "Origen actual". */
+const ORIGEN_FIJOS=['TikTok','Instagram','Referido de cliente','Referido de directorio','Referido de funcionario','Sitio Web','Contacto propio','Barrido','Base de datos','Personal de la inmobiliaria','Vino solo','Otro'];
 /* Valor de select que le corresponde a un lead ya guardado ('' si no tiene). */
 function _origenValor(l){
   if(!l)return'';
@@ -12084,7 +12088,7 @@ async function saveLead(){
      lock, por el mismo motivo: un error de validación tomado después del lock
      obliga a esperar los 10 s de TTL para reintentar. */
   const _origenNL=_nlOrigen();
-  if(!_origenNL){toast('Elegí de dónde vino el lead: campaña, Referido, Vino solo u Otro','error');document.getElementById('nl-campana')?.focus();return;}
+  if(!_origenNL){toast('Elegí de dónde vino el lead: una campaña o un origen sin pauta','error');document.getElementById('nl-campana')?.focus();return;}
 
   // CAMBIO 1.A — Deshabilitar botón
   const btn=document.getElementById('btn-guardar-lead');
@@ -12275,7 +12279,7 @@ async function saveLeadPerdido(){
   /* v209 — el origen es obligatorio también acá: es justamente el caso donde más
      importa saber qué pauta trajo un lead que no sirvió. */
   const _origenNLP=_nlOrigen();
-  if(!_origenNLP){toast('Elegí de dónde vino el lead: campaña, Referido, Vino solo u Otro','error');document.getElementById('nl-campana')?.focus();return;}
+  if(!_origenNLP){toast('Elegí de dónde vino el lead: una campaña o un origen sin pauta','error');document.getElementById('nl-campana')?.focus();return;}
   /* v247 — mismo gate que en finalizar. Acá el lead todavía no existe, así que
      un "Sí" no puede guardar nada: frena el alta como perdido y el dato viaja
      en _nlTerrenoSC hasta el alta normal, que es la salida correcta. */
