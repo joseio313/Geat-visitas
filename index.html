@@ -1059,6 +1059,25 @@ body.tema-ceo .screen-title h1{color:#111}
   body.tema-ceo .app-header{padding:8px 12px}
   body.tema-ceo .pd-body > .pd-sec:first-child .pd-n{font-size:30px}
 }
+/* ══ v263 · barra lateral del tema CEO — ajuste fino ═════════════════════
+   Ícono arriba, nombre en UNA línea abajo, badge de 18px fuera del texto.
+   Solo body.tema-ceo; las pestañas son las mismas (ids, permisos, badges). */
+.nt-ic{margin-right:.35em}
+body.tema-ceo .nt-ic{margin:0;font-size:20px;line-height:1}
+body.tema-ceo .nt-lb{font-size:11px;font-weight:700;white-space:nowrap;line-height:1.2}
+body.tema-ceo .nt-lb[data-c]{font-size:0}
+body.tema-ceo .nt-lb[data-c]::after{content:attr(data-c);font-size:11px}
+body.tema-ceo #app{padding-left:104px}
+body.tema-ceo .nav-tabs{width:104px;gap:8px;padding:12px 8px}
+body.tema-ceo .nav-tab{flex:0 0 56px;height:56px;min-height:56px;padding:4px 2px;gap:3px;justify-content:center;font-size:11px}
+body.tema-ceo .tab-badges{top:2px;left:50%;right:auto;margin-left:6px;gap:0}
+body.tema-ceo .tab-badge{min-width:18px;height:18px;padding:0;box-sizing:border-box;border:0;font-size:10px;border-radius:9px}
+body.tema-ceo .tab-badges .bdg-rojo ~ .bdg-ama{display:none}
+@media(max-width:760px){
+  body.tema-ceo #app{padding-left:0}
+  body.tema-ceo .nav-tabs{width:auto;gap:6px;padding:6px 8px;height:68px}
+  body.tema-ceo .nav-tab{flex:0 0 84px}
+}
 </style>
 </head>
 <body>
@@ -1135,9 +1154,9 @@ body.tema-ceo .screen-title h1{color:#111}
   <nav class="nav-tabs">
     <!-- v229 — "Mi agenda" es la pantalla del CEO: primera de la barra y oculta
          para todos menos admin (se prende en startApp, gate real en _SCREEN_ROLES). -->
-    <div class="nav-tab" id="tab-inicio" style="display:none" onclick="switchTab(this,'screen-inicio');renderInicio()">🏠 Inicio</div>
-    <div class="nav-tab" id="tab-mi-agenda" style="display:none" onclick="switchTab(this,'screen-mi-agenda');renderMiAgenda()">🗓️ Mi agenda</div>
-    <div class="nav-tab active" id="tab-week" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
+    <div class="nav-tab" id="tab-inicio" style="display:none" onclick="switchTab(this,'screen-inicio');renderInicio()"><span class="nt-ic">🏠</span> <span class="nt-lb">Inicio</span></div>
+    <div class="nav-tab" id="tab-mi-agenda" style="display:none" onclick="switchTab(this,'screen-mi-agenda');renderMiAgenda()"><span class="nt-ic">🗓️</span> <span class="nt-lb">Mi agenda</span></div>
+    <div class="nav-tab active" id="tab-week" onclick="switchTab(this,'screen-week')"><span class="nt-ic">📅</span> <span class="nt-lb" data-c="Semana">Agenda semanal</span></div>
     <!-- v225 — "🗓️ Vista mensual" y "📥 Sin asignar" salieron de la barra (el CEO lo
          confirmo). El mes vive dentro de Agenda semanal desde v218 (toggle MES) y
          "Sin asignar" era solo monitoreo desde v220. Las <section> y sus funciones
@@ -1146,19 +1165,19 @@ body.tema-ceo .screen-title h1{color:#111}
     <!-- v237 — "Mis números" la ve TODO el equipo: no lleva style="display:none"
          ni entra en _SCREEN_ROLES. Quién ve los números de quién lo decide el
          servidor (geat-montos, acción mis_numeros_cierres), no esta pestaña. -->
-    <div class="nav-tab" id="tab-misnumeros" onclick="switchTab(this,'screen-misnumeros');renderMisNumeros()">📈 Mis números</div>
-    <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()">📊 Reportes</div>
-    <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()">👑 Admin</div>
-    <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()">💵 Gerencia</div>
-    <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()">🧾 Cobranzas</div>
+    <div class="nav-tab" id="tab-misnumeros" onclick="switchTab(this,'screen-misnumeros');renderMisNumeros()"><span class="nt-ic">📈</span> <span class="nt-lb" data-c="Números">Mis números</span></div>
+    <div class="nav-tab" id="tab-reports" onclick="switchTab(this,'screen-reports');renderReports()"><span class="nt-ic">📊</span> <span class="nt-lb">Reportes</span></div>
+    <div class="nav-tab" id="tab-admin" style="display:none" onclick="switchTab(this,'screen-admin');renderAdmin()"><span class="nt-ic">👑</span> <span class="nt-lb">Admin</span></div>
+    <div class="nav-tab" id="tab-gerencia" style="display:none" onclick="switchTab(this,'screen-gerencia');renderGerencia()"><span class="nt-ic">💵</span> <span class="nt-lb">Gerencia</span></div>
+    <div class="nav-tab" id="tab-cobranzas" style="display:none" onclick="switchTab(this,'screen-cobranzas');renderCobranzas()"><span class="nt-ic">🧾</span> <span class="nt-lb">Cobranzas</span></div>
     <!-- v228 — "📍 Precios por zona" salió de la barra (el CEO lo confirmó). La
          <section id="screen-zonas"> y renderZonas()/las funciones de edición siguen
          en el archivo pero YA NO ESTÁN CABLEADAS: ver _SCREEN_RETIRADAS. La tabla
          zonas_precio NO se toca — sus 4 filas siguen alimentando la detección de
          zona en la ficha del lead (v222), que se queda. -->
-    <div class="nav-tab" id="tab-radar" style="display:none" onclick="switchTab(this,'screen-radar');renderRadar()">📡 Radar de contenido</div>
-    <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()">🎯 Reclutamiento</div>
-    <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()">📼 Mi Registro</div>
+    <div class="nav-tab" id="tab-radar" style="display:none" onclick="switchTab(this,'screen-radar');renderRadar()"><span class="nt-ic">📡</span> <span class="nt-lb" data-c="Radar">Radar de contenido</span></div>
+    <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()"><span class="nt-ic">🎯</span> <span class="nt-lb" data-c="Gente">Reclutamiento</span></div>
+    <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()"><span class="nt-ic">📼</span> <span class="nt-lb">Mi Registro</span></div>
   </nav>
   <!-- v253 — franja de carga baja de leads. Va fuera de toda .screen para que se
        vea en cualquier pestaña. Mismo look que #search-alerta-visitas. La pinta
@@ -2323,7 +2342,7 @@ body.tema-ceo .screen-title h1{color:#111}
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='262';
+  var CURRENT_VERSION='263';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
