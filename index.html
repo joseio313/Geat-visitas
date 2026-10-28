@@ -1078,6 +1078,27 @@ body.tema-ceo .tab-badges .bdg-rojo ~ .bdg-ama{display:none}
   body.tema-ceo .nav-tabs{width:auto;gap:6px;padding:6px 8px;height:68px}
   body.tema-ceo .nav-tab{flex:0 0 84px}
 }
+/* ══ v264 · TEMA CEO — grabaciones en la cabecera, degradados, nombres ═══ */
+/* 1 · Reloj y audio vuelven a la cabecera, junto a la campana. Los colores de
+   estado que les pone el JS en línea (border/color) se reemplazan por un punto
+   rojo: aro amarillo = grabando sesión, title "Detener captura" = capturando. */
+body.tema-ceo #recBtnHeader,body.tema-ceo #capAudioBtn{position:relative;width:var(--ceo-tap) !important;height:var(--ceo-tap) !important;border-radius:50% !important;border:0 !important;background:linear-gradient(145deg,#34343A,#111) !important;color:#F6F5F1 !important;font-size:18px !important;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+body.tema-ceo #capAudioBtn[title="Detener captura"]::after,
+body.tema-ceo #recBtnHeader[style*="255, 193, 7"]::after{content:'';position:absolute;top:1px;right:1px;width:13px;height:13px;border-radius:50%;background:#FF1744;border:2px solid #F6F5F1;box-sizing:border-box;animation:ceoPulse 1.2s infinite}
+@keyframes ceoPulse{50%{opacity:.35}}
+
+/* 2 · Degradados suaves */
+body.tema-ceo .nav-tabs{background:linear-gradient(180deg,#111111,#1E1E22)}
+body.tema-ceo .nav-tab.active{background:linear-gradient(135deg,#FAC305,#F5A800);color:#111}
+body.tema-ceo .hdr-btn.primary{background:linear-gradient(135deg,#FAC305,#F5A800);color:#111;border-color:#E09B00}
+body.tema-ceo .hdr-btn.primary:hover{filter:brightness(1.05)}
+body.tema-ceo .ini-fase.on{background:linear-gradient(180deg,#FFFFFF,#F6F5F1);border-width:2.5px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+body.tema-ceo .ini-c-embudo,body.tema-ceo .ini-c-agenda{background:linear-gradient(180deg,#FFFFFF,#F6F5F1)}
+
+/* 3 · Renombrar en el lugar */
+body.tema-ceo .nt-lb,body.tema-ceo [data-ceo-key]{cursor:text;-webkit-user-select:none;user-select:none}
+.ceo-ren{font:700 11px 'Montserrat',sans-serif;color:#111;background:#fff;border:2px solid #FAC305;border-radius:6px;padding:2px 4px;width:100%;min-width:0;box-sizing:border-box;text-align:center;outline:none}
+.ini-card h3 .ceo-ren{font-size:13px;text-align:left;width:70%;text-transform:none}
 </style>
 </head>
 <body>
@@ -1140,7 +1161,7 @@ body.tema-ceo .tab-badges .bdg-rojo ~ .bdg-ama{display:none}
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <button id="ceo-tema-btn" type="button" onclick="toggleTemaCeo()"></button>
-      <div class="ceo-menu-wrap"><button id="ceo-menu-btn" type="button" onclick="toggleCeoMenu()" title="Más">⋯</button><div id="ceo-menu"></div></div>
+      <div class="ceo-menu-wrap"><button id="ceo-menu-btn" type="button" onclick="toggleCeoMenu()" title="Más">⋯</button><div id="ceo-menu"><button id="ceo-restaurar-btn" type="button" onclick="restaurarNombresCeo()">Restaurar nombres</button></div></div>
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
       <div class="user-pill" onclick="cerrarSesion()">
         <span class="user-dot"></span>
@@ -1319,13 +1340,13 @@ body.tema-ceo .tab-badges .bdg-rojo ~ .bdg-ama{display:none}
         </div>
         <div class="ini-cols">
           <div>
-            <div class="ini-card ini-c-embudo"><h3>Embudo — leads activos por fase</h3>
+            <div class="ini-card ini-c-embudo"><h3 data-ceo-key="ini-embudo">Embudo — leads activos por fase</h3>
               <div class="ini-fases" id="ini-fases"></div></div>
             <div class="ini-card" id="ini-lista" style="display:none"></div>
           </div>
           <div>
-            <div class="ini-card ini-c-agenda"><h3>Tu día</h3><div id="ini-agenda">Cargando…</div></div>
-            <div class="ini-card ini-c-alertas"><h3>Alertas</h3><div id="ini-alertas">Cargando…</div><button type="button" class="ini-mini ini-vertodas" onclick="iniVerTodas(this)">Ver todas</button></div>
+            <div class="ini-card ini-c-agenda"><h3 data-ceo-key="ini-agenda">Tu día</h3><div id="ini-agenda">Cargando…</div></div>
+            <div class="ini-card ini-c-alertas"><h3 data-ceo-key="ini-alertas">Alertas</h3><div id="ini-alertas">Cargando…</div><button type="button" class="ini-mini ini-vertodas" onclick="iniVerTodas(this)">Ver todas</button></div>
           </div>
         </div>
       </div>
@@ -2342,7 +2363,7 @@ body.tema-ceo .tab-badges .bdg-rojo ~ .bdg-ama{display:none}
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='263';
+  var CURRENT_VERSION='264';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3489,9 +3510,12 @@ function _temaCeoBtn(){
 function _ceoMoverHeader(on){
   const menu=document.getElementById('ceo-menu');
   if(!menu)return;
-  const ids=['recBtnHeader','capAudioBtn','ceo-tema-btn'];
   if(on){
-    ids.forEach(function(id){const el=document.getElementById(id);if(el&&el.parentNode!==menu)menu.appendChild(el);});
+    /* v264 — reloj y audio vuelven a la cabecera, a la derecha (junto a la campana); en el menú queda solo el botón del tema */
+    const wrap=document.querySelector('.ceo-menu-wrap');
+    ['recBtnHeader','capAudioBtn'].forEach(function(id){const el=document.getElementById(id);if(el&&wrap)wrap.parentNode.insertBefore(el,wrap);});
+    const t=document.getElementById('ceo-tema-btn');
+    if(t&&t.parentNode!==menu)menu.insertBefore(t,menu.firstChild);
   }else{
     menu.classList.remove('on');
     const acc=document.querySelector('.header-actions'),st=document.getElementById('capAudioStatus');
@@ -3517,10 +3541,90 @@ function iniVerTodas(btn){
   const on=a.classList.toggle('ini-open');
   btn.textContent=on?'Ver menos':'Ver todas';
 }
+/* v264 — Renombrar paneles. SOLO bajo tema-ceo y solo admin. Los nombres viven
+   en localStorage (geat_ceo_nombres), nunca en la base. Cambian el TEXTO de la
+   etiqueta, no los ids, permisos ni funciones de la pestaña. */
+const CEO_NOMBRES_KEY='geat_ceo_nombres';
+const CEO_NOMBRE_MAX=14;
+function _ceoNombres(){
+  try{const o=JSON.parse(localStorage.getItem(CEO_NOMBRES_KEY)||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return {};}
+}
+function _ceoGuardarNombres(o){try{localStorage.setItem(CEO_NOMBRES_KEY,JSON.stringify(o));}catch(e){}}
+function _ceoEtiquetas(){
+  return Array.prototype.slice.call(document.querySelectorAll('.nav-tab .nt-lb,[data-ceo-key]'));
+}
+function _ceoClave(el){
+  if(el.dataset.ceoKey)return el.dataset.ceoKey;
+  const t=el.closest('.nav-tab');
+  return t?t.id:null;
+}
+/* on=true pone los nombres guardados; on=false restaura los originales */
+function _ceoAplicarNombres(on){
+  const m=on?_ceoNombres():{};
+  _ceoEtiquetas().forEach(function(el){
+    if(el.dataset.orig==null)el.dataset.orig=el.textContent;
+    if(el.hasAttribute('data-c')&&el.dataset.origC==null)el.dataset.origC=el.getAttribute('data-c');
+    const k=_ceoClave(el),nom=k&&m[k];
+    if(el.hasAttribute('data-c')){el.setAttribute('data-c',nom||el.dataset.origC);}
+    else{el.textContent=nom||el.dataset.orig;}
+  });
+}
+function restaurarNombresCeo(){
+  if(!cu||cu.rol!=='admin')return;
+  _ceoGuardarNombres({});
+  _ceoAplicarNombres(true);
+  toast('Nombres restaurados');
+}
+function _ceoEditar(el){
+  if(!cu||cu.rol!=='admin'||!document.body.classList.contains('tema-ceo'))return;
+  if(el.nextSibling&&el.nextSibling.classList&&el.nextSibling.classList.contains('ceo-ren'))return;
+  const k=_ceoClave(el);
+  if(!k)return;
+  const m=_ceoNombres();
+  const inp=document.createElement('input');
+  inp.className='ceo-ren';inp.type='text';inp.maxLength=CEO_NOMBRE_MAX;
+  inp.value=m[k]||el.dataset.origC||el.dataset.orig||el.textContent;
+  el.style.display='none';
+  el.parentNode.insertBefore(inp,el.nextSibling);
+  let cerrado=false;
+  function cerrar(guardar){
+    if(cerrado)return;cerrado=true;
+    if(guardar){
+      const v=inp.value.trim().slice(0,CEO_NOMBRE_MAX),o=_ceoNombres();
+      if(v&&v!==el.dataset.orig)o[k]=v;else delete o[k];
+      _ceoGuardarNombres(o);
+    }
+    inp.remove();el.style.display='';
+    _ceoAplicarNombres(true);
+  }
+  ['click','dblclick','pointerdown'].forEach(function(ev){inp.addEventListener(ev,function(e){e.stopPropagation();});});
+  inp.addEventListener('keydown',function(e){
+    e.stopPropagation();
+    if(e.key==='Enter'){e.preventDefault();cerrar(true);}
+    else if(e.key==='Escape'){e.preventDefault();cerrar(false);}
+  });
+  inp.addEventListener('blur',function(){cerrar(false);});
+  inp.focus();inp.select();
+}
+(function(){
+  let tm=null;
+  function objetivo(e){return e.target&&e.target.closest?e.target.closest('.nav-tab .nt-lb,[data-ceo-key]'):null;}
+  document.addEventListener('dblclick',function(e){const el=objetivo(e);if(el)_ceoEditar(el);});
+  document.addEventListener('pointerdown',function(e){
+    const el=objetivo(e);
+    if(!el||!document.body.classList.contains('tema-ceo'))return;
+    clearTimeout(tm);
+    tm=setTimeout(function(){tm=null;_ceoEditar(el);},650);
+  });
+  ['pointerup','pointercancel','pointerleave','scroll'].forEach(function(ev){
+    document.addEventListener(ev,function(){clearTimeout(tm);tm=null;},true);
+  });
+})();
 function aplicarTemaCeo(){
   if(!cu||cu.rol!=='admin')return;
   document.body.classList.toggle('tema-ceo',_temaCeoPref()!=='clasico');
   _ceoMoverHeader(document.body.classList.contains('tema-ceo'));
+  _ceoAplicarNombres(document.body.classList.contains('tema-ceo'));
   _temaCeoBtn();
 }
 function toggleTemaCeo(){
@@ -3528,6 +3632,7 @@ function toggleTemaCeo(){
   const on=!document.body.classList.contains('tema-ceo');
   document.body.classList.toggle('tema-ceo',on);
   _ceoMoverHeader(on);
+  _ceoAplicarNombres(on);
   try{localStorage.setItem('geat_tema_ceo',on?'nuevo':'clasico');}catch(e){}
   _temaCeoBtn();
 }
