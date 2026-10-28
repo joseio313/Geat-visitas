@@ -910,6 +910,36 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .tc-add{border-top:1px solid var(--gray-600);padding:9px 10px;display:flex;gap:6px;flex-shrink:0;align-items:center}
 .tc-add input{flex:1;min-width:0;font-size:12px;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:6px;padding:7px 9px;color:var(--gray-100);outline:none}
 .tc-add button{flex-shrink:0;background:#FAC305;color:var(--black);border:none;border-radius:6px;font-size:16px;font-weight:800;width:34px;height:32px;cursor:pointer}
+/* v260 — Inicio (panel CEO). Solo admin. Paleta propia: no depende del tema oscuro. */
+#screen-inicio{background:#F6F5F1;color:#111;font-family:'Montserrat',system-ui,sans-serif;border-radius:12px;padding:0;min-height:70vh}
+.ini-wrap{display:flex;gap:0;min-height:70vh}
+.ini-rail{width:74px;flex:none;background:#111;border-radius:12px 0 0 12px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0}
+.ini-rail button{width:60px;background:none;border:0;color:#bbb;font:600 10px 'Montserrat',sans-serif;padding:8px 0;border-radius:8px;cursor:pointer}
+.ini-rail button .ic{display:block;font-size:18px;margin-bottom:2px}
+.ini-rail button.on,.ini-rail button:hover{background:#FAC305;color:#111}
+.ini-main{flex:1;min-width:0;padding:16px 18px}
+.ini-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.ini-top .sp{flex:1}
+.ini-chip{background:#111;color:#FAC305;border:0;border-radius:20px;padding:8px 14px;font:700 12px 'Montserrat',sans-serif;cursor:pointer}
+.ini-chip.ghost{background:#fff;color:#111;border:1.5px solid #111}
+.ini-cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+.ini-card{background:#fff;border:1.5px solid #111;border-radius:12px;padding:14px;margin-bottom:14px}
+.ini-card h3{margin:0 0 10px;font:800 13px 'Montserrat',sans-serif;text-transform:uppercase;letter-spacing:.05em}
+.ini-fases{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.ini-fase{background:#F6F5F1;border:1.5px solid #111;border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer}
+.ini-fase.on{background:#FAC305}
+.ini-fase .n{font:800 26px 'Montserrat',sans-serif}
+.ini-fase .t{font:600 10px 'Montserrat',sans-serif;text-transform:uppercase}
+.ini-lead{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #e4e2da;font-size:12px}
+.ini-lead .nm{flex:1;min-width:0;font-weight:700;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ini-lead .sub{color:#777;font-weight:500;font-size:11px}
+.ini-mini{border:1.5px solid #111;background:#fff;color:#111;border-radius:6px;padding:4px 8px;font:700 11px 'Montserrat',sans-serif;cursor:pointer}
+.ini-mini.y{background:#FAC305}
+.ini-ag{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px}
+.ini-al{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #e4e2da;font-size:12px;cursor:pointer}
+.ini-al b{background:#111;color:#FAC305;border-radius:10px;padding:1px 9px}
+.ini-al b.r{background:#C62828;color:#fff}
+@media(max-width:900px){.ini-cols{grid-template-columns:1fr}.ini-fases{grid-template-columns:repeat(2,minmax(0,1fr))}.ini-rail{width:56px}.ini-rail button{width:48px}}
 </style>
 </head>
 <body>
@@ -984,6 +1014,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   <nav class="nav-tabs">
     <!-- v229 — "Mi agenda" es la pantalla del CEO: primera de la barra y oculta
          para todos menos admin (se prende en startApp, gate real en _SCREEN_ROLES). -->
+    <div class="nav-tab" id="tab-inicio" style="display:none" onclick="switchTab(this,'screen-inicio');renderInicio()">🏠 Inicio</div>
     <div class="nav-tab" id="tab-mi-agenda" style="display:none" onclick="switchTab(this,'screen-mi-agenda');renderMiAgenda()">🗓️ Mi agenda</div>
     <div class="nav-tab active" id="tab-week" onclick="switchTab(this,'screen-week')">📅 Agenda semanal</div>
     <!-- v225 — "🗓️ Vista mensual" y "📥 Sin asignar" salieron de la barra (el CEO lo
@@ -1123,6 +1154,43 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   <!-- ══ SCREEN: MI AGENDA (v229) — solo admin. La agenda del CEO: eventos
        (tipo 'ceo') y tareas (tipo 'ceo_tarea') de agenda_personal, con lead_id
        y visita_nro en NULL para que no las toque ningún trigger de leads. ══ -->
+  <!-- v260 — INICIO: panel del CEO (solo admin). Aditivo: nada de lo anterior cambia. -->
+  <section id="screen-inicio" class="screen">
+    <div class="ini-wrap">
+      <div class="ini-rail">
+        <button class="on" onclick="renderInicio()"><span class="ic">🏠</span>Inicio</button>
+        <button onclick="iniIr('tab-week','screen-week')"><span class="ic">📅</span>Agenda</button>
+        <button onclick="iniIr('tab-misnumeros','screen-misnumeros',renderMisNumeros)"><span class="ic">📈</span>Números</button>
+        <button onclick="iniIr('tab-cobranzas','screen-cobranzas',renderCobranzas)"><span class="ic">🧾</span>Cobros</button>
+        <button onclick="iniIr('tab-radar','screen-radar',renderRadar)"><span class="ic">📡</span>Radar</button>
+        <button onclick="iniIr('tab-reclutamiento','screen-reclutamiento',renderReclutamiento)"><span class="ic">🎯</span>Gente</button>
+        <button onclick="iniIr('tab-admin','screen-admin',renderAdmin)"><span class="ic">👑</span>Admin</button>
+      </div>
+      <div class="ini-main">
+        <div class="ini-top">
+          <button class="ini-chip" onclick="iniIr('tab-gerencia','screen-gerencia',renderGerencia)">Cómo vamos</button>
+          <button class="ini-chip" onclick="iniIr('tab-week','screen-week')">A quién llamo</button>
+          <button class="ini-chip" onclick="iniIr('tab-cobranzas','screen-cobranzas',renderCobranzas)">Cobranzas</button>
+          <button class="ini-chip" onclick="iniIr('tab-reclutamiento','screen-reclutamiento',renderReclutamiento)">Reclutamiento</button>
+          <button class="ini-chip" onclick="toggleTareasPanel()">Idea nueva</button>
+          <span class="sp"></span>
+          <button class="ini-chip ghost" onclick="iniIr('tab-mi-agenda','screen-mi-agenda',renderMiAgenda)">CRM clásico</button>
+        </div>
+        <div class="ini-cols">
+          <div>
+            <div class="ini-card"><h3>Embudo — leads activos por fase</h3>
+              <div class="ini-fases" id="ini-fases"></div></div>
+            <div class="ini-card" id="ini-lista" style="display:none"></div>
+          </div>
+          <div>
+            <div class="ini-card"><h3>Mi agenda hoy</h3><div id="ini-agenda">Cargando…</div></div>
+            <div class="ini-card"><h3>Alertas</h3><div id="ini-alertas">Cargando…</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="screen-mi-agenda" class="screen">
     <div id="mia-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
@@ -2133,7 +2201,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='259';
+  var CURRENT_VERSION='260';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3288,6 +3356,8 @@ function startApp(){
        Para el resto de los roles el botón queda como estaba. */
     const tabMiAg=document.getElementById('tab-mi-agenda');
     if(tabMiAg)tabMiAg.style.display='';
+    const tabIni=document.getElementById('tab-inicio');
+    if(tabIni)tabIni.style.display='';
     const btnOp=document.getElementById('hdr-oportunidad');
     if(btnOp){
       btnOp.innerHTML='📅 Agenda semanal';
@@ -3370,13 +3440,125 @@ async function initApp(){
   /* v229 — el CEO entra directo a su agenda. El resto de los roles sigue
      entrando a Agenda semanal, que es la pantalla activa del HTML. */
   if(cu.rol==='admin'){
-    const _tma=document.getElementById('tab-mi-agenda');
-    if(_tma)switchTab(_tma,'screen-mi-agenda');
+    const _tma=document.getElementById('tab-inicio')||document.getElementById('tab-mi-agenda');
+    if(_tma)switchTab(_tma,_tma.id==='tab-inicio'?'screen-inicio':'screen-mi-agenda');
   }
   /* v226 — badges de la barra. Va al final: necesita los catálogos cargados
      (zonasPrecio para el matcher, motivosPerdida para el Radar) y las pestañas
      ya mostradas/ocultadas por startApp. */
   refrescarBadges();
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v260 · INICIO — PANEL DEL CEO (solo admin)                           ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Fases = las 5 del protocolo, agrupando leads.etapa (no leads.estado: el
+   estado tiene 7 valores y no es el protocolo). Se cuentan los leads
+   archivado=false y NO cerrados (cerrado_perdido conserva su etapa y son
+   2.783 de ~3.000: contarlos taparía el embudo vivo).
+   Conteos con head:true; la lista de una fase trae máximo INI_LISTA_MAX.
+   "Avanzar" y "Perdido" abren la ficha del lead: el cambio de etapa y la
+   pérdida tienen gates en el front (indagación de 5 campos, motivo desde la
+   tabla, "es de otro departamento") y triggers en la base; re-implementarlos
+   acá sería saltearlos. Sin montos: el panel solo cuenta. */
+const INI_LISTA_MAX=60;
+const INI_FASES=[
+  {n:1,t:'Presentación',e:['Lead','1er intento','2do intento','3er intento']},
+  {n:2,t:'Indagación',e:['Indagación']},
+  {n:3,t:'Envío de info',e:['Envío de información','Cotización']},
+  {n:4,t:'Visita',e:['Visita oficina','Visita terreno','Visita técnica']},
+  {n:5,t:'Cierre',e:['Requerimiento propuesta 2D','Requerimiento propuesta 3D','Presentando propuesta','Reserva','Requerimiento legal para firma de contrato','Firma de contrato','Entrega de planos de ejecución / cálculo estructural','Entrega de vivienda']}
+];
+const INI_RECORDATORIOS=[
+  {fecha:'2026-11-03',txt:'Hacer respaldo de la base'},
+  {fecha:'2026-11-03',txt:'Bajar Supabase al plan Free'}
+];
+let _iniFase=null;
+function iniIr(tabId,screenId,fn){
+  const t=document.getElementById(tabId);
+  if(!t)return;
+  switchTab(t,screenId);
+  if(typeof fn==='function'){try{fn();}catch(e){}}
+}
+function _iniFaseQ(f){
+  return sb.from('leads').select('id',{count:'exact',head:true})
+    .eq('archivado',false).not('estado','in','(cerrado_perdido,cerrado_ganado)').in('etapa',f.e);
+}
+async function renderInicio(){
+  if(!cu||cu.rol!=='admin')return;
+  const fa=document.getElementById('ini-fases');
+  if(!fa)return;
+  try{
+    const cuentas=await Promise.all(INI_FASES.map(function(f){return _bdgN(_iniFaseQ(f));}));
+    fa.innerHTML=INI_FASES.map(function(f,i){
+      return '<div class="ini-fase'+(_iniFase===f.n?' on':'')+'" onclick="iniFase('+f.n+')"><div class="n">'+cuentas[i]+'</div><div class="t">F'+f.n+' · '+f.t+'</div></div>';
+    }).join('');
+  }catch(e){fa.innerHTML='<div>Error: '+_escPend(e.message)+'</div>';}
+  _iniAgenda();
+  _iniAlertas();
+  if(_iniFase)iniFase(_iniFase);
+}
+async function iniFase(n){
+  _iniFase=n;
+  document.querySelectorAll('.ini-fase').forEach(function(el,i){el.classList.toggle('on',i===n-1);});
+  const f=INI_FASES[n-1],box=document.getElementById('ini-lista');
+  box.style.display='';
+  box.innerHTML='Cargando…';
+  try{
+    const{data,error}=await sb.from('leads').select('id,nombre,etapa,captador,proximo_contacto')
+      .eq('archivado',false).not('estado','in','(cerrado_perdido,cerrado_ganado)').in('etapa',f.e)
+      .order('proximo_contacto',{ascending:true,nullsFirst:false}).limit(INI_LISTA_MAX);
+    if(error)throw error;
+    const sig=INI_FASES[n]?'Avanzar → F'+INI_FASES[n].n:'Ficha';
+    box.innerHTML='<h3>F'+f.n+' · '+f.t+(data.length>=INI_LISTA_MAX?' (primeros '+INI_LISTA_MAX+')':'')+'</h3>'+
+      (data.length?data.map(function(l){
+        return '<div class="ini-lead"><div class="nm" onclick="openLeadDetail('+l.id+')">'+_escPend(l.nombre||'Sin nombre')+
+          '<div class="sub">'+_escPend(l.etapa||'')+' · '+_escPend(l.captador||'—')+'</div></div>'+
+          '<button class="ini-mini y" title="Abre la ficha: ahí rigen los gates y triggers de la etapa" onclick="openLeadDetail('+l.id+')">'+sig+'</button>'+
+          '<button class="ini-mini" title="Abre la ficha para elegir el motivo" onclick="openLeadDetail('+l.id+')">Perdido</button></div>';
+      }).join(''):'<div>Sin leads en esta fase.</div>');
+  }catch(e){box.innerHTML='<div>Error: '+_escPend(e.message)+'</div>';}
+}
+async function _iniAgenda(){
+  const box=document.getElementById('ini-agenda');
+  try{
+    const ini=_miaIniHoyIso(),fin=new Date(new Date(ini).getTime()+86400000).toISOString();
+    const{data,error}=await sb.from('agenda_personal').select('id,titulo,tipo,fecha_programada')
+      .in('tipo',['ceo','ceo_tarea']).eq('activo',true).eq('completada',false)
+      .gte('fecha_programada',ini).lt('fecha_programada',fin).order('fecha_programada').limit(50);
+    if(error)throw error;
+    box.innerHTML=data.length?data.map(function(f){
+      return '<div class="ini-ag"><input type="checkbox" onchange="iniCompletar('+f.id+')"><span>'+_escPend(f.titulo||'')+'</span></div>';
+    }).join(''):'Nada para hoy.';
+  }catch(e){box.textContent='Error: '+e.message;}
+}
+/* Misma regla que miaCompletar: completada=true es seguro acá porque estas
+   filas (ceo/ceo_tarea) tienen lead_id NULL y no disparan nada. */
+async function iniCompletar(id){
+  try{
+    const{error}=await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',id);
+    if(error)throw error;
+    toast('✅ Hecho');
+    await _iniAgenda();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+async function _iniAlertas(){
+  const box=document.getElementById('ini-alertas');
+  const hoy=ymdLocal(new Date());
+  const filas=[];
+  async function item(txt,fn,tab,scr,render,rojo){
+    let n=null;
+    try{n=await fn();}catch(e){n=null;}
+    filas.push('<div class="ini-al" onclick="iniIr(\''+tab+'\',\''+scr+'\''+(render?','+render:'')+')"><span>'+txt+'</span><b'+(rojo&&n?' class="r"':'')+'>'+(n==null?'?':n)+'</b></div>');
+  }
+  await item('Visitas vencidas sin resultado',_bdgWeekRojo,'tab-week','screen-week',null,true);
+  await item('Contratos sin revisar',_bdgCobAma,'tab-cobranzas','screen-cobranzas','renderCobranzas',false);
+  await item('CVs nuevos (abrí Reclutamiento si marca 0)',_bdgRecAma,'tab-reclutamiento','screen-reclutamiento','renderReclutamiento',false);
+  INI_RECORDATORIOS.forEach(function(r){
+    const d=Math.round((new Date(r.fecha+'T00:00:00-04:00')-new Date(hoy+'T00:00:00-04:00'))/86400000);
+    filas.push('<div class="ini-al" style="cursor:default"><span>'+_escPend(r.txt)+' · '+r.fecha.split('-').reverse().join('/')+'</span><b'+(d<=0?' class="r"':'')+'>'+(d<0?'vencido':d===0?'hoy':d+'d')+'</b></div>');
+  });
+  box.innerHTML=filas.join('');
 }
 
 function attachPickerListeners(){
@@ -3805,6 +3987,7 @@ function buildPersonaFilters(){
    viajan al navegador de cualquiera con la anon key. El blindaje server-side
    es aparte (ver el reporte del punto 2). */
 const _SCREEN_ROLES={
+  'screen-inicio'       :['admin'],   /* v260 — panel del CEO */
   /* v229 — Mi agenda: la agenda personal del CEO. Solo admin, ni socios. */
   'screen-mi-agenda'    :['admin'],
   'screen-gerencia'     :['admin'],
@@ -3882,6 +4065,7 @@ function switchTab(tab,screenId){
   document.body.classList.toggle('mia-flotantes-izq', screenId==='screen-mi-agenda');
   window.scrollTo(0,0);
   if(screenId==='screen-mi-agenda')renderMiAgenda();
+  if(screenId==='screen-inicio')renderInicio();
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
   /* v225 — se quitó el `if(screenId==='screen-month')renderMonth()`: esa pestaña
      ya no existe y el mes lo dibuja renderWeek() cuando _weekView==='mes'. */
