@@ -958,6 +958,107 @@ body.tema-ceo{
 }
 #ceo-tema-btn{display:none;align-items:center;min-height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font:700 11px 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
 body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
+/* ══ v262 · TEMA CEO — SIMPLIFICAR ══════════════════════════════════════
+   Regla: máximo 5-7 elementos visibles por pantalla; lo secundario se OCULTA
+   (display:none) o va a "⋯" / "Ver más". Nada se borra: las funciones y los
+   nodos siguen en el DOM. Todo bajo body.tema-ceo; sin la clase, lo único que
+   existe de este bloque son tres reglas que ESCONDEN markup nuevo. */
+.ceo-menu-wrap,.ceo-vermas,.ini-vertodas{display:none}
+
+/* 1 · Cabecera: logo, Buscar, Crear, campana, usuario; el resto en "⋯" */
+body.tema-ceo .app-header{background:var(--ceo-bg);border-bottom:1px solid #E2DFD5;padding:10px 20px}
+body.tema-ceo #hdr-oportunidad{display:none}
+body.tema-ceo .hdr-btn{min-height:var(--ceo-tap);border-radius:22px;padding:0 18px;background:#fff;border:1.5px solid var(--ceo-ink);color:var(--ceo-ink);font-size:12px}
+body.tema-ceo .hdr-btn:hover{background:var(--ceo-accent);color:#111;border-color:#111}
+body.tema-ceo .hdr-btn.primary{background:var(--ceo-ink);color:var(--ceo-accent);border-color:var(--ceo-ink)}
+body.tema-ceo .user-pill{min-height:var(--ceo-tap);background:#fff;border:1.5px solid #E2DFD5;padding:0 14px}
+body.tema-ceo .bell{width:var(--ceo-tap);height:var(--ceo-tap);color:var(--ceo-ink)}
+body.tema-ceo .bell-badge{color:#fff}
+body.tema-ceo .ceo-menu-wrap{display:block;position:relative}
+#ceo-menu-btn{width:var(--ceo-tap);height:var(--ceo-tap);border-radius:50%;border:1.5px solid #111;background:#fff;color:#111;font-size:20px;font-weight:800;cursor:pointer;line-height:1}
+#ceo-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:#fff;border:1.5px solid #111;border-radius:14px;padding:8px;z-index:300;flex-direction:column;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+#ceo-menu.on{display:flex}
+#ceo-menu > button{width:100% !important;height:auto !important;min-height:var(--ceo-tap);border-radius:10px !important;text-align:left;justify-content:flex-start !important;padding:0 12px !important;gap:8px;font-size:13px !important;color:#111 !important;border:1px solid #E2DFD5 !important;background:#F6F5F1 !important}
+#ceo-menu > #recBtnHeader::after{content:'Sesión';font:700 12px 'Montserrat',sans-serif}
+#ceo-menu > #capAudioBtn::after{content:'Grabar llamada';font:700 12px 'Montserrat',sans-serif}
+body.tema-ceo #ceo-menu > #ceo-tema-btn{background:#111 !important;color:#FAC305 !important}
+
+/* 2 · Navegación: UNA sola. Las mismas pestañas (permisos, badges y clics)
+   pasan a ser la barra lateral angosta; no hay una segunda lista que mantener. */
+body.tema-ceo #app{padding-left:76px}
+body.tema-ceo .nav-tabs{position:fixed;left:0;top:0;bottom:0;width:76px;z-index:120;flex-direction:column;align-items:stretch;gap:4px;overflow-y:auto;overflow-x:hidden;padding:12px 6px;background:#111;border:0}
+body.tema-ceo .nav-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;white-space:normal;word-break:break-word;min-height:var(--ceo-tap);padding:8px 2px;border:0;border-radius:12px;color:#BDBBB2;font-size:9px;letter-spacing:0;text-transform:none;line-height:1.2}
+body.tema-ceo .nav-tab:hover{color:#fff;background:#222}
+body.tema-ceo .nav-tab.active{background:var(--ceo-accent);color:#111}
+body.tema-ceo .tab-badges{position:absolute;top:2px;right:2px;margin:0;gap:2px}
+body.tema-ceo .tab-badge{min-width:16px;height:16px;border:2px solid #111;box-sizing:content-box}
+body.tema-ceo .tab-badge.bdg-ama{color:#111}
+body.tema-ceo .ini-rail{display:none}
+
+/* 3 · Inicio: una columna angosta y centrada; "Tu día" arriba, embudo, lista
+   justo debajo de las fases, y solo 3 alertas con "Ver todas". */
+body.tema-ceo #screen-inicio{background:transparent}
+body.tema-ceo .ini-wrap{display:block;min-height:0}
+body.tema-ceo .ini-main{padding:8px 0}
+body.tema-ceo .ini-top{display:none}
+body.tema-ceo .ini-cols{display:flex;flex-direction:column;gap:16px;max-width:640px;margin:0 auto}
+body.tema-ceo .ini-cols > div{display:contents}
+body.tema-ceo .ini-card{margin:0;border-radius:var(--ceo-radius);border:1.5px solid #E2DFD5;padding:18px}
+body.tema-ceo .ini-c-agenda{order:1}
+body.tema-ceo .ini-c-embudo{order:2;border-color:#111}
+body.tema-ceo #ini-lista{order:3}
+body.tema-ceo .ini-c-alertas{order:4}
+body.tema-ceo #ini-agenda .ini-ag:nth-child(n+4){display:none}
+body.tema-ceo .ini-ag{min-height:var(--ceo-tap);font-size:14px}
+body.tema-ceo .ini-ag input{width:22px;height:22px}
+body.tema-ceo .ini-fase{min-height:var(--ceo-tap)}
+body.tema-ceo .ini-fase .n{font-size:30px}
+body.tema-ceo #ini-alertas:not(.ini-open) .ini-al:nth-child(n+4){display:none}
+body.tema-ceo .ini-al{min-height:var(--ceo-tap);align-items:center;font-size:13px}
+body.tema-ceo .ini-vertodas{display:block;margin-top:8px;min-height:var(--ceo-tap);width:100%}
+body.tema-ceo .ini-mini{min-height:var(--ceo-tap);padding:0 12px}
+
+/* 4 · Parte del día: contraído. 3 tarjetas con el número; el resto, en "Ver más". */
+body.tema-ceo .pd-box{border:1.5px solid #E2DFD5;border-radius:var(--ceo-radius);background:#fff}
+body.tema-ceo .pd-bar{background:#fff;min-height:var(--ceo-tap)}
+body.tema-ceo .pd-bar-t{color:#111}
+body.tema-ceo .pd-body > .pd-sec:first-child{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+body.tema-ceo .pd-body > .pd-sec:first-child > .pd-sec-t{grid-column:1/-1}
+body.tema-ceo .pd-body > .pd-sec:first-child > .pd-det{grid-column:1/-1;margin:0}
+body.tema-ceo .pd-body > .pd-sec:first-child .pd-line{flex-direction:column;justify-content:center;text-align:center;gap:2px;margin:0;padding:16px 6px;border:1.5px solid #E2DFD5;border-radius:var(--ceo-radius);background:#F6F5F1;min-height:112px}
+body.tema-ceo .pd-body > .pd-sec:first-child .pd-n{font-size:38px;line-height:1}
+body.tema-ceo .pd-body > .pd-sec:first-child .pd-tx{min-width:0;flex:none;font-size:11px;font-weight:700}
+body.tema-ceo .pd-body > .pd-sec:first-child .pd-sub{display:none}
+body.tema-ceo #parte-dia-wrap:not(.ceo-open) .pd-body > :nth-child(n+2){display:none}
+body.tema-ceo .ceo-vermas{display:block;margin:-8px auto 16px;min-height:var(--ceo-tap);padding:0 22px;border-radius:22px;border:1.5px solid #111;background:#fff;color:#111;font:700 12px 'Montserrat',sans-serif;cursor:pointer}
+
+/* 5 · Superficies que son oscuras A PROPÓSITO (barras de modal, paneles
+   flotantes, cuadros de código) conservan texto claro: la variable --white
+   ahora es oscura, así que se la vuelve a invertir solo adentro de ellas. */
+body.tema-ceo .modal-header,body.tema-ceo .tc-head,body.tema-ceo #asistPanel > div:first-child{--white:#fff;--gray-100:#F0F0F0;--gray-400:#9A9A9A}
+body.tema-ceo .crit-ta{background:#fff;color:#111}
+body.tema-ceo .rep-seg-header,body.tema-ceo .rep-seg-footer{--white:#fff;--gray-100:#F0F0F0;--gray-400:#9A9A9A}
+body.tema-ceo #asistFab,body.tema-ceo #tareasFab{border-color:#111}
+body.tema-ceo #tareasPanel,body.tema-ceo #asistPanel{background:var(--ceo-bg);border:1.5px solid #111}
+body.tema-ceo .tc-row,body.tema-ceo .tc-tabs{background:#fff}
+body.tema-ceo .tc-tab.on{color:#111;border-bottom-color:#FAC305}
+body.tema-ceo .tc-add input{background:#fff;color:#111}
+body.tema-ceo #asistMsgs [style*="var(--gray-800)"]{background:#fff !important;color:#111 !important}
+body.tema-ceo .form-control{min-height:var(--ceo-tap);background:#fff;color:#111}
+body.tema-ceo .btn-primary,body.tema-ceo .btn-ghost,body.tema-ceo .btn-secondary{min-height:var(--ceo-tap)}
+body.tema-ceo .btn-primary{background:#111;color:#FAC305}
+body.tema-ceo .screen-title h1{color:#111}
+
+@media(max-width:760px){
+  body.tema-ceo #app{padding-left:0;padding-bottom:68px}
+  body.tema-ceo .nav-tabs{top:auto;right:0;width:auto;height:60px;flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:6px 8px;gap:4px}
+  body.tema-ceo .nav-tab{flex:0 0 68px}
+  body.tema-ceo #asistFab{bottom:76px}
+  body.tema-ceo #tareasFab{bottom:144px}
+  body.tema-ceo #asistPanel,body.tema-ceo #tareasPanel{bottom:144px}
+  body.tema-ceo .app-header{padding:8px 12px}
+  body.tema-ceo .pd-body > .pd-sec:first-child .pd-n{font-size:30px}
+}
 </style>
 </head>
 <body>
@@ -1020,6 +1121,7 @@ body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <button id="ceo-tema-btn" type="button" onclick="toggleTemaCeo()"></button>
+      <div class="ceo-menu-wrap"><button id="ceo-menu-btn" type="button" onclick="toggleCeoMenu()" title="Más">⋯</button><div id="ceo-menu"></div></div>
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
       <div class="user-pill" onclick="cerrarSesion()">
         <span class="user-dot"></span>
@@ -1076,6 +1178,7 @@ body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
     <!-- ══ PARTE DEL DÍA (v159) — solo rol admin. Plegable, arranca desplegado.
          Todo se calcula en vivo desde Supabase; nada se precalcula para otros roles. ══ -->
     <div id="parte-dia-wrap" style="display:none;margin-bottom:16px"></div>
+    <button type="button" class="ceo-vermas" onclick="ceoVerMas(this)">Ver más</button>
 
     <!-- Panel "Para hoy" — solo field_capturer y commercial_lead -->
     <div id="para-hoy-wrap" style="display:none;margin-bottom:16px">
@@ -1197,13 +1300,13 @@ body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
         </div>
         <div class="ini-cols">
           <div>
-            <div class="ini-card"><h3>Embudo — leads activos por fase</h3>
+            <div class="ini-card ini-c-embudo"><h3>Embudo — leads activos por fase</h3>
               <div class="ini-fases" id="ini-fases"></div></div>
             <div class="ini-card" id="ini-lista" style="display:none"></div>
           </div>
           <div>
-            <div class="ini-card"><h3>Mi agenda hoy</h3><div id="ini-agenda">Cargando…</div></div>
-            <div class="ini-card"><h3>Alertas</h3><div id="ini-alertas">Cargando…</div></div>
+            <div class="ini-card ini-c-agenda"><h3>Tu día</h3><div id="ini-agenda">Cargando…</div></div>
+            <div class="ini-card ini-c-alertas"><h3>Alertas</h3><div id="ini-alertas">Cargando…</div><button type="button" class="ini-mini ini-vertodas" onclick="iniVerTodas(this)">Ver todas</button></div>
           </div>
         </div>
       </div>
@@ -2220,7 +2323,7 @@ body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='261';
+  var CURRENT_VERSION='262';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3364,15 +3467,48 @@ function _temaCeoBtn(){
   b.style.display='inline-flex';
   b.textContent=document.body.classList.contains('tema-ceo')?'Volver al clásico':'Probar diseño nuevo';
 }
+function _ceoMoverHeader(on){
+  const menu=document.getElementById('ceo-menu');
+  if(!menu)return;
+  const ids=['recBtnHeader','capAudioBtn','ceo-tema-btn'];
+  if(on){
+    ids.forEach(function(id){const el=document.getElementById(id);if(el&&el.parentNode!==menu)menu.appendChild(el);});
+  }else{
+    menu.classList.remove('on');
+    const acc=document.querySelector('.header-actions'),st=document.getElementById('capAudioStatus');
+    const rec=document.getElementById('recBtnHeader'),cap=document.getElementById('capAudioBtn');
+    if(acc&&st){if(rec)acc.insertBefore(rec,st);if(cap)acc.insertBefore(cap,st);}
+    const t=document.getElementById('ceo-tema-btn'),bell=document.querySelector('.bell');
+    if(t&&bell)bell.parentNode.insertBefore(t,bell);
+  }
+}
+function toggleCeoMenu(){
+  const m=document.getElementById('ceo-menu');
+  if(m)m.classList.toggle('on');
+}
+function ceoVerMas(btn){
+  const w=document.getElementById('parte-dia-wrap');
+  if(!w)return;
+  const on=w.classList.toggle('ceo-open');
+  btn.textContent=on?'Ver menos':'Ver más';
+}
+function iniVerTodas(btn){
+  const a=document.getElementById('ini-alertas');
+  if(!a)return;
+  const on=a.classList.toggle('ini-open');
+  btn.textContent=on?'Ver menos':'Ver todas';
+}
 function aplicarTemaCeo(){
   if(!cu||cu.rol!=='admin')return;
   document.body.classList.toggle('tema-ceo',_temaCeoPref()!=='clasico');
+  _ceoMoverHeader(document.body.classList.contains('tema-ceo'));
   _temaCeoBtn();
 }
 function toggleTemaCeo(){
   if(!cu||cu.rol!=='admin')return;
   const on=!document.body.classList.contains('tema-ceo');
   document.body.classList.toggle('tema-ceo',on);
+  _ceoMoverHeader(on);
   try{localStorage.setItem('geat_tema_ceo',on?'nuevo':'clasico');}catch(e){}
   _temaCeoBtn();
 }
