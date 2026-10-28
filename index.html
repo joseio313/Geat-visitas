@@ -940,6 +940,24 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .ini-al b{background:#111;color:#FAC305;border-radius:10px;padding:1px 9px}
 .ini-al b.r{background:#C62828;color:#fff}
 @media(max-width:900px){.ini-cols{grid-template-columns:1fr}.ini-fases{grid-template-columns:repeat(2,minmax(0,1fr))}.ini-rail{width:56px}.ini-rail button{width:48px}}
+/* ══ v261 · TEMA CEO — FASE 0: variables y clase ═════════════════════════
+   Todo cuelga de body.tema-ceo, que SOLO se pone con rol==='admin' (ver
+   aplicarTemaCeo). Sin la clase no hay una sola regla de este bloque que
+   aplique: el CRM del equipo queda idéntico. Las fases siguientes agregan
+   reglas acá abajo, siempre con el prefijo body.tema-ceo.
+   Se re-mapean las variables NEUTRAS que ya usa todo el CRM (fondo, tarjeta,
+   texto, bordes), así las pantallas existentes se pasan a claro sin tocar su
+   markup; lo que tenga color fijo en el código se corrige fase por fase. */
+body.tema-ceo{
+  --ceo-bg:#F6F5F1; --ceo-ink:#111111; --ceo-accent:#FAC305; --ceo-card:#FFFFFF;
+  --ceo-line:#111111; --ceo-mute:#6B6A64; --ceo-radius:14px; --ceo-tap:44px;
+  --gray-900:var(--ceo-bg); --gray-800:var(--ceo-card);
+  --gray-600:#D4D1C7; --gray-400:var(--ceo-mute);
+  --gray-300:#4A4A47; --gray-200:#2A2A28; --gray-100:#1A1A1A;
+  --white:var(--ceo-ink); --gold:var(--ceo-accent);
+}
+#ceo-tema-btn{display:none;align-items:center;min-height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font:700 11px 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
+body.tema-ceo #ceo-tema-btn{background:#111;color:#FAC305;border-color:#111}
 </style>
 </head>
 <body>
@@ -1001,6 +1019,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       <span id="capAudioStatus" style="display:none;align-items:center;gap:6px;font-size:11px;color:#FF1744;font-weight:700;white-space:nowrap">🔴 Capturando audio de la PC...<button class="btn-red btn-sm" type="button" onclick="stopCapturaPC()">Detener</button></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
+      <button id="ceo-tema-btn" type="button" onclick="toggleTemaCeo()"></button>
       <div class="bell">🔔<span class="bell-badge" id="bell-count" style="display:none">0</span></div>
       <div class="user-pill" onclick="cerrarSesion()">
         <span class="user-dot"></span>
@@ -2201,7 +2220,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='260';
+  var CURRENT_VERSION='261';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3334,6 +3353,29 @@ function iniciarIdleTimer(){
   });
   resetear();
 }
+/* v261 — Tema CEO. SOLO rol admin: para cualquier otro rol esta función ni se
+   llama (ver startApp) y el botón queda con display:none. La preferencia vive en
+   localStorage del navegador (por dispositivo); sin ella el admin entra al tema
+   nuevo. Cerrar sesión recarga la página, así que la clase no sobrevive. */
+function _temaCeoPref(){try{return localStorage.getItem('geat_tema_ceo');}catch(e){return null;}}
+function _temaCeoBtn(){
+  const b=document.getElementById('ceo-tema-btn');
+  if(!b)return;
+  b.style.display='inline-flex';
+  b.textContent=document.body.classList.contains('tema-ceo')?'Volver al clásico':'Probar diseño nuevo';
+}
+function aplicarTemaCeo(){
+  if(!cu||cu.rol!=='admin')return;
+  document.body.classList.toggle('tema-ceo',_temaCeoPref()!=='clasico');
+  _temaCeoBtn();
+}
+function toggleTemaCeo(){
+  if(!cu||cu.rol!=='admin')return;
+  const on=!document.body.classList.contains('tema-ceo');
+  document.body.classList.toggle('tema-ceo',on);
+  try{localStorage.setItem('geat_tema_ceo',on?'nuevo':'clasico');}catch(e){}
+  _temaCeoBtn();
+}
 function startApp(){
   _sessionStart=Date.now();
   document.getElementById('login').style.display='none';
@@ -3343,6 +3385,7 @@ function startApp(){
   const _fab=document.getElementById('asistFab'); if(_fab)_fab.style.display='flex';
   // Admin tab
   if(cu.rol==='admin'){
+    aplicarTemaCeo();
     // v167 — gestor de tareas del CEO: FAB flotante solo para admin
     const _tfab=document.getElementById('tareasFab'); if(_tfab)_tfab.style.display='flex';
     try{cargarTareasCeo();}catch(_e){}
