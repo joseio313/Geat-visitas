@@ -1099,6 +1099,133 @@ body.tema-ceo .ini-c-embudo,body.tema-ceo .ini-c-agenda{background:linear-gradie
 body.tema-ceo .nt-lb,body.tema-ceo [data-ceo-key]{cursor:text;-webkit-user-select:none;user-select:none}
 .ceo-ren{font:700 11px 'Montserrat',sans-serif;color:#111;background:#fff;border:2px solid #FAC305;border-radius:6px;padding:2px 4px;width:100%;min-width:0;box-sizing:border-box;text-align:center;outline:none}
 .ini-card h3 .ceo-ren{font-size:13px;text-align:left;width:70%;text-transform:none}
+/* ══ v265 · TEMA CEO "ESPACIO" — oscuro, vidrio, 4 paletas ═══════════════
+   Reemplaza el remapeo CLARO de v261 (las mismas variables, ahora oscuras y
+   translúcidas) y pisa las reglas claras de v262-v264 que quedaron arriba.
+   Todo cuelga de body.tema-ceo (solo admin). Paleta = clase ceo-pal-* en body.
+   PENDIENTE a propósito (v266): auditar contraste pantalla por pantalla. */
+body.tema-ceo{
+  --ac1:#FAC305; --ac2:#7A4DFF;
+  --ceo-fondo:linear-gradient(135deg,#0B0B14,#1B1530 55%,#2A1F10);
+  --ac-grad:linear-gradient(135deg,var(--ac1) 30%,var(--ac2));
+  --on-ac:#0B0B14;
+  --ceo-bg:#0B0B14; --ceo-ink:#F4F4F8; --ceo-accent:var(--ac1);
+  --ceo-card:rgba(255,255,255,.07); --ceo-line:rgba(255,255,255,.16); --ceo-mute:#B4B4C4;
+  --ceo-radius:24px; --ceo-tap:44px;
+  --gray-900:rgba(255,255,255,.05); --gray-800:rgba(255,255,255,.07); --gray-700:rgba(255,255,255,.12);
+  --gray-600:rgba(255,255,255,.16); --gray-400:#B4B4C4; --gray-300:#CFCFDC; --gray-200:#E4E4EE; --gray-100:#F4F4F8;
+  --white:#F4F4F8; --gold:var(--ac1);
+  color-scheme:dark; color:#F4F4F8;
+  background:#0B0B14; background:var(--ceo-fondo); background-attachment:fixed;
+}
+body.tema-ceo.ceo-pal-oceano{--ac1:#2BB6FF;--ac2:#00E0B8;--ceo-fondo:linear-gradient(135deg,#04101F,#0A2A4A 55%,#0B4A5A);--ceo-bg:#04101F}
+body.tema-ceo.ceo-pal-aurora{--ac1:#B14DFF;--ac2:#FF4D9A;--ceo-fondo:linear-gradient(135deg,#0B0F1A,#1A1040 55%,#3A0F4A);--ceo-bg:#0B0F1A}
+body.tema-ceo.ceo-pal-bosque{--ac1:#3DDC84;--ac2:#C6FF4D;--ceo-fondo:linear-gradient(135deg,#06140E,#0B2A1C 55%,#16331A);--ceo-bg:#06140E}
+/* dos luces difuminadas en esquinas opuestas, con los dos acentos */
+body.tema-ceo::before,body.tema-ceo::after{content:'';position:fixed;width:46vmax;height:46vmax;border-radius:50%;filter:blur(90px);opacity:.32;pointer-events:none;z-index:0}
+body.tema-ceo::before{top:-18vmax;left:-12vmax;background:var(--ac1)}
+body.tema-ceo::after{bottom:-20vmax;right:-14vmax;background:var(--ac2)}
+body.tema-ceo #app{position:relative;z-index:1;background:transparent}
+
+/* paletas: 4 círculos junto a Crear lead */
+.ceo-pals{display:none}
+body.tema-ceo .ceo-pals{display:flex;align-items:center;gap:8px}
+.ceo-pal{width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.3);cursor:pointer;padding:0;transition:all .25s ease}
+.ceo-pal:hover{transform:scale(1.08)}
+.ceo-pal.on{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.ceo-pal[data-pal=noche]{background:linear-gradient(135deg,#FAC305,#7A4DFF)}
+.ceo-pal[data-pal=oceano]{background:linear-gradient(135deg,#2BB6FF,#00E0B8)}
+.ceo-pal[data-pal=aurora]{background:linear-gradient(135deg,#B14DFF,#FF4D9A)}
+.ceo-pal[data-pal=bosque]{background:linear-gradient(135deg,#3DDC84,#C6FF4D)}
+
+/* 2 · superficies de vidrio */
+body.tema-ceo .app-header{background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.12);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+body.tema-ceo .logo-text{color:#F4F4F8}
+body.tema-ceo .hdr-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#F4F4F8}
+body.tema-ceo .hdr-btn:hover{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35)}
+body.tema-ceo .hdr-btn.primary{background:var(--ac-grad);color:var(--on-ac);border-color:transparent;box-shadow:0 6px 18px -6px var(--ac1)}
+body.tema-ceo .user-pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#F4F4F8}
+body.tema-ceo .bell{color:#F4F4F8}
+body.tema-ceo #ceo-menu-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#F4F4F8}
+body.tema-ceo #ceo-menu{background:rgba(24,22,40,.94);border:1px solid rgba(255,255,255,.2);border-radius:22px}
+body.tema-ceo #ceo-menu > button{color:#F4F4F8 !important;background:rgba(255,255,255,.08) !important;border:1px solid rgba(255,255,255,.16) !important}
+body.tema-ceo #ceo-menu > #ceo-tema-btn{background:var(--ac-grad) !important;color:var(--on-ac) !important;border-color:transparent !important}
+body.tema-ceo #recBtnHeader,body.tema-ceo #capAudioBtn{background:rgba(255,255,255,.1) !important;border:1px solid rgba(255,255,255,.22) !important;color:#F4F4F8 !important;box-shadow:none}
+body.tema-ceo #capAudioBtn[title="Detener captura"]::after,
+body.tema-ceo #recBtnHeader[style*="255, 193, 7"]::after{border-color:#1B1530}
+
+body.tema-ceo .ini-card,body.tema-ceo .pd-box,body.tema-ceo .mia-panel,body.tema-ceo .mia-card,body.tema-ceo .mn-kpi,body.tema-ceo .ger-kpi,body.tema-ceo .alert-card,body.tema-ceo .activity-card,body.tema-ceo .crit-box{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:24px;color:#F4F4F8;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+body.tema-ceo .modal-backdrop{background:rgba(5,5,12,.62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+body.tema-ceo .modal{background:rgba(24,22,40,.8);border:1px solid rgba(255,255,255,.16);border-radius:28px;box-shadow:0 24px 70px rgba(0,0,0,.5);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px)}
+body.tema-ceo .modal-header{background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.14)}
+body.tema-ceo .modal-header h2{color:#F4F4F8}
+body.tema-ceo :where(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]){background:rgba(255,255,255,.08);color:#F4F4F8;border:1px solid rgba(255,255,255,.2);border-radius:12px}
+body.tema-ceo ::placeholder{color:#9A9AB0;opacity:1}
+body.tema-ceo option{background:#1B1530;color:#F4F4F8}
+body.tema-ceo .form-control{background:rgba(255,255,255,.08);color:#F4F4F8;border:1px solid rgba(255,255,255,.2)}
+body.tema-ceo .form-control:focus{border-color:var(--ac1);outline:none;box-shadow:0 0 0 3px rgba(255,255,255,.1)}
+body.tema-ceo .btn-primary{background:var(--ac-grad);color:var(--on-ac);border:0}
+body.tema-ceo .screen-title h1{color:#F4F4F8}
+body.tema-ceo .crit-ta{background:rgba(255,255,255,.08);color:#F4F4F8}
+
+/* 3 · barra lateral flotante */
+body.tema-ceo #app{padding-left:116px}
+body.tema-ceo .nav-tabs{left:12px;top:12px;bottom:12px;width:92px;padding:12px 6px;border-radius:28px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 12px 40px -10px rgba(0,0,0,.6)}
+body.tema-ceo .nav-tab{color:#D6D6E4;border-radius:18px;transition:all .25s ease}
+body.tema-ceo .nav-tab:hover{background:rgba(255,255,255,.12);color:#fff}
+body.tema-ceo .nav-tab.active{background:var(--ac-grad);color:var(--on-ac);box-shadow:0 8px 20px -6px var(--ac1)}
+body.tema-ceo .nav-tab.active .nt-lb{font-weight:800}
+
+/* 4 · Inicio */
+body.tema-ceo #screen-inicio{color:#F4F4F8}
+body.tema-ceo .ini-cols{max-width:780px}
+body.tema-ceo .ini-card{padding:20px;box-shadow:0 10px 40px -14px rgba(0,0,0,.6)}
+body.tema-ceo .ini-c-embudo,body.tema-ceo .ini-c-agenda{background:rgba(255,255,255,.07)}
+body.tema-ceo .ini-card h3{color:#F4F4F8}
+body.tema-ceo .ini-fases{gap:12px}
+body.tema-ceo .ini-fase{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:22px;color:#F4F4F8;padding:20px 6px;box-shadow:none;transition:transform .25s ease,box-shadow .25s ease,background .25s ease,border-color .25s ease}
+body.tema-ceo .ini-fase .n{font-size:46px;line-height:1.05}
+body.tema-ceo .ini-fase .t{color:#CFCFDC}
+body.tema-ceo .ini-fase:hover{transform:translateY(-6px) scale(1.02);background:rgba(255,255,255,.12)}
+body.tema-ceo .ini-fase.on{background:rgba(255,255,255,.16);background:linear-gradient(135deg,color-mix(in srgb,var(--ac1) 30%,transparent),color-mix(in srgb,var(--ac2) 30%,transparent));border:1px solid var(--ac1);border-width:1px;box-shadow:0 0 30px -4px var(--ac1)}
+body.tema-ceo .ini-lead,body.tema-ceo .ini-al{border-top-color:rgba(255,255,255,.12)}
+body.tema-ceo .ini-lead .sub{color:#B4B4C4}
+body.tema-ceo .ini-mini{background:rgba(255,255,255,.1);color:#F4F4F8;border:1px solid rgba(255,255,255,.22);border-radius:12px}
+body.tema-ceo .ini-mini.y{background:var(--ac-grad);color:var(--on-ac);border-color:transparent}
+body.tema-ceo .ini-al b{background:rgba(255,255,255,.16);color:#F4F4F8}
+body.tema-ceo .ini-al b.r{background:#C62828;color:#fff}
+body.tema-ceo .ini-al:nth-child(1){color:#FF9DBD}
+body.tema-ceo .ini-al:nth-child(1) b{background:linear-gradient(135deg,#FF4D8D,#FF7AA8);color:#2A0A18}
+
+/* Parte del día y botones secundarios sobre vidrio */
+body.tema-ceo .pd-bar{background:transparent}
+body.tema-ceo .pd-bar-t{color:#F4F4F8}
+body.tema-ceo .pd-body > .pd-sec:first-child .pd-line{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16)}
+body.tema-ceo .ceo-vermas{background:rgba(255,255,255,.1);color:#F4F4F8;border:1px solid rgba(255,255,255,.22)}
+
+/* paneles flotantes */
+body.tema-ceo #tareasPanel,body.tema-ceo #asistPanel{background:rgba(24,22,40,.94);border:1px solid rgba(255,255,255,.2);border-radius:26px}
+body.tema-ceo .tc-row,body.tema-ceo .tc-tabs{background:rgba(255,255,255,.07)}
+body.tema-ceo .tc-tab.on{color:var(--ac1);border-bottom-color:var(--ac1)}
+body.tema-ceo .tc-add input{background:rgba(255,255,255,.08);color:#F4F4F8}
+body.tema-ceo #asistMsgs [style*="var(--gray-800)"]{background:rgba(255,255,255,.1) !important;color:#F4F4F8 !important}
+body.tema-ceo #asistFab,body.tema-ceo #tareasFab{border-color:rgba(255,255,255,.3)}
+
+/* 5 · movimiento */
+body.tema-ceo .hdr-btn,body.tema-ceo .ini-card,body.tema-ceo .ini-mini,body.tema-ceo .user-pill{transition:all .25s ease}
+@media (prefers-reduced-motion:reduce){
+  body.tema-ceo *,body.tema-ceo *::before,body.tema-ceo *::after,.ceo-pal{transition:none !important;animation:none !important}
+  body.tema-ceo .ini-fase:hover{transform:none}
+}
+/* sin backdrop-filter: fondo sólido para que el texto siga legible */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  body.tema-ceo .ini-card,body.tema-ceo .pd-box,body.tema-ceo .mia-panel,body.tema-ceo .mia-card,body.tema-ceo .nav-tabs,body.tema-ceo .app-header,body.tema-ceo .modal,body.tema-ceo #ceo-menu{background:#1B1A2E}
+}
+@media(max-width:760px){
+  body.tema-ceo #app{padding-left:0;padding-bottom:84px}
+  body.tema-ceo .nav-tabs{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:68px;border-radius:24px;padding:6px 8px}
+  body.tema-ceo .ini-fases{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
@@ -1153,6 +1280,7 @@ body.tema-ceo .nt-lb,body.tema-ceo [data-ceo-key]{cursor:text;-webkit-user-selec
     </div>
     <div class="header-actions">
       <button class="hdr-btn primary" onclick="openModal('modalNewLead')">🆕 Crear Lead</button>
+      <div class="ceo-pals" role="group" aria-label="Paleta"><button type="button" class="ceo-pal" data-pal="noche" title="Noche dorada" onclick="setPaletaCeo('noche')"></button><button type="button" class="ceo-pal" data-pal="oceano" title="Océano" onclick="setPaletaCeo('oceano')"></button><button type="button" class="ceo-pal" data-pal="aurora" title="Aurora" onclick="setPaletaCeo('aurora')"></button><button type="button" class="ceo-pal" data-pal="bosque" title="Bosque" onclick="setPaletaCeo('bosque')"></button></div>
       <button class="hdr-btn" onclick="openSearchModal()">🔍 Buscar Lead</button>
       <button class="hdr-btn" id="hdr-oportunidad" onclick="openNuevaOportunidad()">♻️ Nueva Oportunidad</button>
       <button id="recBtnHeader" type="button" onclick="toggleGrabacionH()" title="Sesión" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--gray-600);background:none;color:var(--gray-400);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;flex-shrink:0;padding:0">🕐</button>
@@ -2363,7 +2491,7 @@ body.tema-ceo .nt-lb,body.tema-ceo [data-ceo-key]{cursor:text;-webkit-user-selec
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='264';
+  var CURRENT_VERSION='265';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3620,11 +3748,26 @@ function _ceoEditar(el){
     document.addEventListener(ev,function(){clearTimeout(tm);tm=null;},true);
   });
 })();
+/* v265 — Paletas del tema CEO. Solo admin. La clase ceo-pal-* solo tiene efecto
+   junto a tema-ceo; la elección vive en localStorage (geat_ceo_paleta). */
+const CEO_PALETAS=['noche','oceano','aurora','bosque'];
+function _ceoPaletaPref(){try{return localStorage.getItem('geat_ceo_paleta');}catch(e){return null;}}
+function aplicarPaletaCeo(n){
+  if(CEO_PALETAS.indexOf(n)<0)n='noche';
+  CEO_PALETAS.forEach(function(p){document.body.classList.toggle('ceo-pal-'+p,p===n);});
+  document.querySelectorAll('.ceo-pal').forEach(function(b){b.classList.toggle('on',b.dataset.pal===n);});
+}
+function setPaletaCeo(n){
+  if(!cu||cu.rol!=='admin')return;
+  aplicarPaletaCeo(n);
+  try{localStorage.setItem('geat_ceo_paleta',n);}catch(e){}
+}
 function aplicarTemaCeo(){
   if(!cu||cu.rol!=='admin')return;
   document.body.classList.toggle('tema-ceo',_temaCeoPref()!=='clasico');
   _ceoMoverHeader(document.body.classList.contains('tema-ceo'));
   _ceoAplicarNombres(document.body.classList.contains('tema-ceo'));
+  aplicarPaletaCeo(_ceoPaletaPref());
   _temaCeoBtn();
 }
 function toggleTemaCeo(){
