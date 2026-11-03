@@ -1306,6 +1306,36 @@ body.tema-ceo .mia-panel-body{padding:16px;gap:16px}
 body.tema-ceo .mia-card{padding:16px;border-radius:20px}
 body.tema-ceo .mia-card-t{color:var(--ac1);margin-bottom:12px}
 body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padding:9px 0;font-size:12.5px;border-bottom-color:rgba(255,255,255,.08)}
+/* v267 — Catálogo */
+.cat-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media(max-width:1000px){.cat-wrap{grid-template-columns:1fr}}
+.cat-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.cat-chip{background:var(--gray-900);color:var(--gray-200);border:1px solid var(--gray-600);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.cat-chip.on{background:var(--gold);color:var(--black);border-color:var(--gold)}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.cat-card{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;overflow:hidden;cursor:pointer}
+.cat-card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.cat-img{height:120px;background:var(--gray-900) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:11px}
+.cat-body{padding:10px 12px}
+.cat-name{font-weight:800;font-size:14px;margin-bottom:3px}
+.cat-spec{font-size:11px;color:var(--gray-400);margin-bottom:6px}
+.cat-price{font-size:13px;font-weight:800;color:var(--gold)}
+.cat-total{font-size:11px;color:var(--gray-200)}
+.cat-new{color:#7BE495}
+.cat-panel{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;padding:14px;position:sticky;top:70px}
+.cat-tabs{display:flex;gap:6px;margin-bottom:12px}
+.cat-franja{border:1px solid var(--gold);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--gray-900)}
+.cat-franja.vieja{border-color:var(--st-atrasado)}
+#cat-hoja{display:none;background:#fff;color:#000;padding:24px;font-size:12px}
+#cat-hoja table{width:100%;border-collapse:collapse;margin-top:10px}
+#cat-hoja th,#cat-hoja td{border:1px solid #999;padding:4px 6px;text-align:right}
+#cat-hoja th:first-child,#cat-hoja td:first-child{text-align:left}
+@media print{
+  body.cat-imprimiendo>*:not(#cat-hoja){display:none!important}
+  body.cat-imprimiendo #cat-hoja{display:block!important;position:static!important;background:#fff;color:#000;padding:0}
+  body.cat-imprimiendo #cat-hoja .no-print{display:none!important}
+  body.cat-imprimiendo{background:#fff!important}
+}
 </style>
 </head>
 <body>
@@ -1405,6 +1435,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
          zonas_precio NO se toca — sus 4 filas siguen alimentando la detección de
          zona en la ficha del lead (v222), que se queda. -->
     <div class="nav-tab" id="tab-radar" style="display:none" onclick="switchTab(this,'screen-radar');renderRadar()"><span class="nt-ic">📡</span> <span class="nt-lb" data-c="Radar">Radar de contenido</span></div>
+    <div class="nav-tab" id="tab-catalogo" onclick="switchTab(this,'screen-catalogo');renderCatalogo()"><span class="nt-ic">🏘️</span> <span class="nt-lb" data-c="Catálogo">Catálogo</span></div>
     <div class="nav-tab" id="tab-reclutamiento" style="display:none" onclick="switchTab(this,'screen-reclutamiento');renderReclutamiento()"><span class="nt-ic">🎯</span> <span class="nt-lb" data-c="Gente">Reclutamiento</span></div>
     <div class="nav-tab" id="tab-miregistro" style="display:none" onclick="switchTab(this,'screen-miregistro');renderMiRegistro()"><span class="nt-ic">📼</span> <span class="nt-lb">Mi Registro</span></div>
   </nav>
@@ -1673,6 +1704,15 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   <!-- ══ SCREEN: RADAR DE CONTENIDO (v223) — admin + commercial_lead.
        Mismo mecanismo de permisos que Gerencia/Cobranzas/Zonas: _SCREEN_ROLES
        en switchTab, o sea validación de CLIENTE. ══ -->
+  <!-- ══ SCREEN: CATÁLOGO (v267) — todo el equipo ve precios vigentes; Incremento solo admin/commercial_lead. Datos solo vía Edge Function catalogo-admin. ══ -->
+  <section id="screen-catalogo" class="screen">
+    <div class="screen-title">
+      <h1>🏠 <span class="gold">Catálogo</span> de modelos</h1>
+    </div>
+    <div id="catalogo-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+  </section>
+  <div id="cat-hoja"></div>
+
   <section id="screen-radar" class="screen">
     <div class="screen-title">
       <h1>📡 Radar de <span class="gold">contenido</span></h1>
@@ -2571,7 +2611,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='266';
+  var CURRENT_VERSION='267';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -19766,6 +19806,246 @@ async function cvGuardarNota(id){
    INICIO
 ════════════════════════════════════════ */
 _loginInit=initLogin();
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v267 · CATÁLOGO                                                      ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Única puerta de datos: Edge Function catalogo-admin (las tablas no tienen
+   policies para anon). El borrador de incremento solo lo recibe quien edita
+   (admin y commercial_lead); al equipo nunca le llega. Los precios vigentes
+   no cambian hasta "aprobar". Baja de modelos = activo=false (no se borra). */
+const CAT_URL=SB_URL+'/functions/v1/catalogo-admin';
+const CAT_CBDI={ant:158.89,nue:163.33,base:'CBDI sep→oct 2026'};
+let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,cargado:false};
+
+async function _catCall(payload){
+  const r=await fetch(CAT_URL,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+    body:JSON.stringify(Object.assign({token:localStorage.getItem('geat_session_token')},payload))});
+  const j=await r.json();
+  if(!j||j.ok!==true)throw new Error((j&&j.error)||'error de catálogo');
+  return j;
+}
+function _catE(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _catN(n,d){if(n==null||isNaN(n))return '—';return Number(n).toLocaleString('es-BO',{minimumFractionDigits:d||0,maximumFractionDigits:d==null?0:d});}
+function _catImg(m){const a=m.imagenes;return (Array.isArray(a)&&a.length&&typeof a[0]==='string')?a[0]:'';}
+function _catPct(){
+  if(_cat.bor&&_cat.bor.porcentaje!=null)return Number(_cat.bor.porcentaje);
+  const v=Number(String(_cat.pct).replace(',','.'));
+  return isFinite(v)?v:0;
+}
+function _catNuevoM2(m){return m.precio_borrador_usd_m2!=null?Number(m.precio_borrador_usd_m2):null;}
+function _catNuevoTotal(m){return m.precio_total_usd!=null?Number(m.precio_total_usd)*(1+_catPct()/100):null;}
+function _catDiasSinConfirmar(){
+  if(!_cat.conf)return null;
+  const p=String(_cat.conf).slice(0,10).split('-').map(Number);
+  const h=ymdLocal(new Date()).split('-').map(Number);
+  return Math.round((Date.UTC(h[0],h[1]-1,h[2])-Date.UTC(p[0],p[1]-1,p[2]))/86400000);
+}
+async function renderCatalogo(){
+  const el=document.getElementById('catalogo-body');
+  if(!el)return;
+  if(!_cat.cargado)el.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
+  try{
+    const j=await _catCall({action:'listar'});
+    _cat.modelos=j.modelos||[];_cat.edit=!!j.es_editor;_cat.conf=j.precios_confirmados||null;
+    _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.cargado=true;
+    if(!_cat.edit){_cat.vista='vigente';if(_cat.tab==='incr')_cat.tab='modelo';}
+    if(!_cat.bor&&_cat.vista==='borrador')_cat.vista='vigente';
+    if(_cat.sel&&!_cat.modelos.some(m=>m.id===_cat.sel))_cat.sel=null;
+    _catPintar();
+  }catch(e){
+    el.innerHTML='<div class="loading-state" style="color:var(--st-atrasado-tx)">No se pudo cargar el catálogo: '+_catE(e.message)+'</div>';
+  }
+}
+function _catFiltrados(){
+  const q=_cat.busca.trim().toLowerCase();
+  return _cat.modelos.filter(m=>{
+    if(q&&String(m.nombre||'').toLowerCase().indexOf(q)<0)return false;
+    const f=_cat.filtro;
+    if(f==='con')return !!_catImg(m);
+    if(f==='sin')return !_catImg(m);
+    if(f==='p1')return Number(m.plantas)===1;
+    if(f==='p2')return Number(m.plantas)===2;
+    return true;
+  });
+}
+function _catFranja(){
+  const d=_catDiasSinConfirmar();
+  let txt,vieja=false;
+  if(d==null){txt='Precios sin confirmar: nunca se registró una confirmación.';vieja=true;}
+  else if(d<=0){txt='✅ Precios confirmados hoy.';}
+  else{txt='Precios sin confirmar hace <b>'+d+' día'+(d===1?'':'s')+'</b> (última confirmación: '+_catE(String(_cat.conf).slice(0,10))+').';vieja=d>30;}
+  const btn=_cat.edit?'<button class="btn-ghost" style="font-size:11px" onclick="catConfirmarHoy()">Confirmar hoy</button>':'';
+  return '<div class="cat-franja'+(vieja?' vieja':'')+'"><span style="flex:1">'+txt+'</span>'+btn+'</div>';
+}
+function _catPintar(){
+  const el=document.getElementById('catalogo-body');
+  if(!el)return;
+  const verBor=_cat.edit&&_cat.bor&&_cat.vista==='borrador';
+  const filtros=[['todos','Todos'],['con','Con foto'],['sin','Sin foto'],['p1','1 planta'],['p2','2 plantas']];
+  let h=_catFranja();
+  h+='<div class="cat-bar"><input class="form-control" style="max-width:240px" placeholder="Buscar modelo…" value="'+_catE(_cat.busca)+'" oninput="catBuscar(this.value)" id="cat-q">';
+  h+=filtros.map(f=>'<button class="cat-chip'+(_cat.filtro===f[0]?' on':'')+'" onclick="catFiltro(\''+f[0]+'\')">'+f[1]+'</button>').join('');
+  if(_cat.edit&&_cat.bor){
+    h+='<span style="margin-left:auto;display:flex;gap:6px"><button class="cat-chip'+(!verBor?' on':'')+'" onclick="catVista(\'vigente\')">Vigente</button><button class="cat-chip'+(verBor?' on':'')+'" onclick="catVista(\'borrador\')">Borrador +'+_catE(_catPct())+'%</button></span>';
+  }
+  h+='</div><div class="cat-wrap"><div id="cat-grid-wrap">'+_catGrid(verBor)+'</div><div class="cat-panel">'+_catPanel()+'</div></div>';
+  el.innerHTML=h;
+}
+function _catGrid(verBor){
+  const lista=_catFiltrados();
+  if(!lista.length)return '<div class="loading-state">No hay modelos con ese filtro.</div>';
+  return '<div class="cat-grid">'+lista.map(m=>{
+    const img=_catImg(m);
+    const m2=verBor?_catNuevoM2(m):m.precio_desde_usd_m2;
+    const tot=verBor?_catNuevoTotal(m):m.precio_total_usd;
+    const specs=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
+    return '<div class="cat-card'+(_cat.sel===m.id?' sel':'')+'" onclick="catSel('+m.id+')">'
+      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':'Sin foto')+'</div>'
+      +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs||'—')+'</div>'
+      +'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(m2,2)+' /m²</div>'
+      +'<div class="cat-total">Total USD '+_catN(tot,0)+(verBor?' (nuevo)':'')+'</div></div></div>';
+  }).join('')+'</div>';
+}
+function _catPanel(){
+  let h='';
+  if(_cat.edit){
+    h+='<div class="cat-tabs"><button class="cat-chip'+(_cat.tab==='modelo'?' on':'')+'" onclick="catTab(\'modelo\')">Modelo</button><button class="cat-chip'+(_cat.tab==='incr'?' on':'')+'" onclick="catTab(\'incr\')">Incremento</button></div>';
+  }
+  if(_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
+  const m=_cat.modelos.find(x=>x.id===_cat.sel);
+  if(!m)return h+'<div style="font-size:12px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
+  const img=_catImg(m);
+  h+=(img?'<img src="'+_catE(img)+'" alt="" style="width:100%;border-radius:8px;margin-bottom:10px">':'')
+    +'<div class="cat-name" style="font-size:16px">'+_catE(m.nombre)+'</div>'
+    +'<div class="cat-spec">'+_catE([m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · '))+'</div>'
+    +'<div class="cat-price">USD '+_catN(m.precio_desde_usd_m2,2)+' /m²</div><div class="cat-total">Total USD '+_catN(m.precio_total_usd,0)+'</div>';
+  if(_cat.edit&&m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
+  if(m.pdf_url)h+='<a class="btn-secondary" style="display:inline-block;margin-top:10px;font-size:11px;text-decoration:none" href="'+_catE(m.pdf_url)+'" target="_blank" rel="noopener">📄 Ficha PDF</a>';
+  return h+_catEquipoBtn();
+}
+function _catEquipoBtn(){
+  return '<div style="margin-top:12px"><button class="btn-ghost" style="font-size:11px" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
+}
+function _catPanelIncr(){
+  const b=_cat.bor;
+  let h='<div class="section-title">Incremento de precios</div>';
+  if(!b){
+    h+='<div class="form-group"><label class="form-label">Porcentaje (%)</label><input class="form-control" id="cat-pct" value="'+_catE(_cat.pct)+'" oninput="catPct(this.value)" placeholder="2,79"></div>'
+      +'<button class="btn-ghost" style="font-size:11px;margin-bottom:8px" onclick="catUsarCBDI()">Índice CBDI ('+CAT_CBDI.nue+' / '+CAT_CBDI.ant+' − 1)</button>';
+    const v=Number(String(_cat.pct).replace(',','.'));
+    h+='<div id="cat-prev" style="font-size:12px;color:var(--gray-200);margin-bottom:10px">'+_catPrevTxt(v)+'</div>';
+    h+='<button class="btn-primary" onclick="catCalcular()">Calcular borrador</button>';
+  }else{
+    h+='<div style="font-size:12px;margin-bottom:8px"><b>Borrador +'+_catE(b.porcentaje)+'%</b><br>Base: '+_catE(b.base||'—')+(b.indice_anterior!=null?'<br>Índice: '+_catE(b.indice_anterior)+' → '+_catE(b.indice_nuevo):'')+'<br>Creado por '+_catE(b.creado_por||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">Los precios vigentes no cambian hasta aprobar. El equipo no ve el borrador.</div>'
+      +'<button class="btn-ghost" style="font-size:11px;margin-bottom:8px;display:block" onclick="catHoja()">🖨️ Ver e imprimir nuevos precios</button>';
+    if(_cat.confirmando){
+      h+='<div style="border:1px solid var(--gold);border-radius:8px;padding:10px;margin-bottom:8px;font-size:12px">Esto cambia los precios vigentes de <b>'+_cat.modelos.length+' modelos</b> en +'+_catE(b.porcentaje)+'%. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catConf(false)">Cancelar</button></div></div>';
+    }else{
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-primary" onclick="catConf(true)">Aprobar</button><button class="btn-ghost" onclick="catDescartar()">Descartar</button></div>';
+    }
+  }
+  if(_cat.ult){
+    h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--gray-600);font-size:11px;color:var(--gray-400)">Último incremento aprobado: +'+_catE(_cat.ult.porcentaje)+'% ('+_catE(_cat.ult.base||'sin base')+') por '+_catE(_cat.ult.resuelto_por||'—')
+      +'<br><button class="btn-ghost" style="font-size:11px;margin-top:6px" onclick="catRevertir()">↩ Revertir último incremento</button></div>';
+  }
+  return h;
+}
+function _catPrevTxt(v){
+  if(!isFinite(v)||v===0||!_cat.modelos.length)return 'Ingresá un porcentaje para ver la vista previa.';
+  const m=_cat.modelos.find(x=>x.precio_desde_usd_m2!=null)||null;
+  if(!m)return 'Sin modelos con precio.';
+  return 'Ej. '+_catE(m.nombre)+': USD '+_catN(m.precio_desde_usd_m2,2)+' → '+_catN(Number(m.precio_desde_usd_m2)*(1+v/100),2)+' /m² (aprox.; el servidor calcula el valor final).';
+}
+/* — handlers — */
+function catBuscar(v){_cat.busca=v;const w=document.getElementById('cat-grid-wrap');if(w)w.innerHTML=_catGrid(_cat.edit&&_cat.bor&&_cat.vista==='borrador');}
+function catFiltro(f){_cat.filtro=f;_catPintar();}
+function catVista(v){_cat.vista=v;_catPintar();}
+function catSel(id){_cat.sel=id;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();}
+function catTab(t){_cat.tab=t;_cat.confirmando=false;_catPintar();}
+function catPct(v){_cat.pct=v;_cat.ia=null;_cat.inn=null;_cat.base='';const p=document.getElementById('cat-prev');if(p)p.innerHTML=_catPrevTxt(Number(String(v).replace(',','.')));}
+function catUsarCBDI(){
+  const p=(CAT_CBDI.nue/CAT_CBDI.ant-1)*100;
+  _cat.pct=String(Math.round(p*100)/100).replace('.',',');_cat.ia=CAT_CBDI.ant;_cat.inn=CAT_CBDI.nue;_cat.base=CAT_CBDI.base;
+  _catPintar();
+}
+function catConf(v){_cat.confirmando=v;_catPintar();}
+async function catCalcular(){
+  const v=Number(String(_cat.pct).replace(',','.'));
+  if(!isFinite(v)||v===0){toast('Ingresá un porcentaje distinto de 0','error');return;}
+  try{
+    await _catCall({action:'crear_borrador',porcentaje:v,indice_anterior:_cat.ia,indice_nuevo:_cat.inn,base:_cat.base||('Manual '+String(_cat.pct)+'%')});
+    toast('Borrador calculado','ok');
+    _cat.vista='borrador';
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function catDescartar(){
+  try{
+    await _catCall({action:'descartar'});
+    toast('Borrador descartado','ok');
+    _cat.vista='vigente';_cat.confirmando=false;
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function catAprobar(){
+  try{
+    const j=await _catCall({action:'aprobar'});
+    toast('Precios publicados ('+(j.modelos_actualizados!=null?j.modelos_actualizados:'')+' modelos)','ok');
+    _cat.vista='vigente';_cat.confirmando=false;_cat.pct='';
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function catRevertir(){
+  if(!window.confirm('¿Revertir el último incremento aprobado?'))return;
+  try{
+    const j=await _catCall({action:'revertir'});
+    toast('Incremento revertido ('+(j.revertidos||0)+' modelos)','ok');
+    if(j.saltados>0)toast('Atención: '+j.saltados+' modelo(s) NO se revirtieron porque su precio se cambió después del incremento.','error');
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function catConfirmarHoy(){
+  try{
+    await _catCall({action:'confirmar_hoy'});
+    toast('Precios confirmados hoy','ok');
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+function catCopiarWA(){
+  const lista=_catFiltrados().filter(m=>m.precio_desde_usd_m2!=null);
+  if(!lista.length){toast('No hay modelos para copiar','error');return;}
+  const txt='*Modelos GEAT — precios vigentes*\n'+lista.map(m=>'• '+m.nombre+(m.superficie_m2!=null?' ('+_catN(m.superficie_m2,1)+' m²)':'')+': USD '+_catN(m.precio_desde_usd_m2,2)+'/m²'+(m.precio_total_usd!=null?' · total USD '+_catN(m.precio_total_usd,0):'')).join('\n');
+  try{
+    navigator.clipboard.writeText(txt).then(function(){toast('Texto copiado','ok');},function(){toast('No se pudo copiar','error');});
+  }catch(e){toast('No se pudo copiar','error');}
+}
+/* Hoja imprimible de nuevos precios (solo con borrador) */
+function catHoja(){
+  const b=_cat.bor;
+  if(!b){toast('No hay borrador','error');return;}
+  const f=_cat.modelos.filter(m=>m.precio_borrador_usd_m2!=null);
+  const filas=f.map(m=>{
+    const v=Number(m.precio_desde_usd_m2),n=Number(m.precio_borrador_usd_m2);
+    const t0=Number(m.precio_total_usd),t1=t0*(1+_catPct()/100);
+    return '<tr><td>'+_catE(m.nombre)+'</td><td>'+_catN(m.superficie_m2,1)+'</td><td>'+_catN(v,2)+'</td><td>'+_catN(n,2)+'</td><td>'+(v?_catN((n/v-1)*100,2):'—')+'%</td><td>'+_catN(t0,0)+'</td><td>'+_catN(t1,0)+'</td><td>'+_catN(t1-t0,0)+'</td></tr>';
+  }).join('');
+  const el=document.getElementById('cat-hoja');
+  el.innerHTML='<h2 style="margin:0 0 4px">GEAT — Nuevos precios (borrador)</h2>'
+    +'<div>Incremento: <b>+'+_catE(b.porcentaje)+'%</b> · Base del cálculo: <b>'+_catE(b.base||'—')+'</b>'+(b.indice_anterior!=null?' (índice '+_catE(b.indice_anterior)+' → '+_catE(b.indice_nuevo)+')':'')+'</div>'
+    +'<div>Preparado por '+_catE(b.creado_por||'—')+' · '+_catE(ymdLocal(new Date()))+' · Precios en USD. <i>No vigente hasta su aprobación.</i></div>'
+    +'<table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Variación</th><th>Total vigente</th><th>Total nuevo</th><th>Diferencia</th></tr></thead><tbody>'+filas+'</tbody></table>'
+    +'<div class="no-print" style="margin-top:14px"><button onclick="catCerrarHoja()">Cerrar</button> <button onclick="window.print()">Imprimir</button></div>';
+  document.body.classList.add('cat-imprimiendo');
+  el.style.display='block';el.style.position='fixed';el.style.inset='0';el.style.overflow='auto';el.style.zIndex='9999';
+}
+function catCerrarHoja(){
+  const el=document.getElementById('cat-hoja');
+  el.style.cssText='';el.innerHTML='';
+  document.body.classList.remove('cat-imprimiendo');
+}
 </script>
 </body>
 </html>
