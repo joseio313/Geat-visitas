@@ -1307,25 +1307,41 @@ body.tema-ceo .mia-card{padding:16px;border-radius:20px}
 body.tema-ceo .mia-card-t{color:var(--ac1);margin-bottom:12px}
 body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padding:9px 0;font-size:12.5px;border-bottom-color:rgba(255,255,255,.08)}
 /* v267 — Catálogo */
-.cat-wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
-@media(max-width:1000px){.cat-wrap{grid-template-columns:1fr}}
-.cat-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.cat-chip{background:var(--gray-900);color:var(--gray-200);border:1px solid var(--gray-600);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+#screen-catalogo{width:100%;max-width:1500px;margin:0 auto;padding:24px;box-sizing:border-box}
+.cat-wrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+.cat-bar{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.cat-bar::-webkit-scrollbar{display:none}
+.cat-bar .form-control{height:44px;font-size:14px;flex:0 0 240px;max-width:240px}
+.cat-chip{background:var(--gray-900);color:var(--gray-200);border:1px solid var(--gray-600);border-radius:999px;height:44px;min-height:44px;padding:0 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:0 0 auto}
 .cat-chip.on{background:var(--gold);color:var(--black);border-color:var(--gold)}
-.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.cat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .cat-card{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;overflow:hidden;cursor:pointer}
 .cat-card.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
-.cat-img{height:120px;background:var(--gray-900) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:11px}
-.cat-body{padding:10px 12px}
-.cat-name{font-weight:800;font-size:14px;margin-bottom:3px}
-.cat-spec{font-size:11px;color:var(--gray-400);margin-bottom:6px}
-.cat-price{font-size:13px;font-weight:800;color:var(--gold)}
-.cat-total{font-size:11px;color:var(--gray-200)}
+.cat-img{height:170px;background:var(--gray-900) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:13px}
+.cat-body{padding:14px 16px}
+.cat-name{font-weight:700;font-size:16px;margin-bottom:4px}
+.cat-spec{font-size:13px;color:var(--gray-400);margin-bottom:8px}
+.cat-price{font-size:20px;font-weight:700;color:var(--gold)}
+.cat-total{font-size:14px;color:var(--gray-200)}
 .cat-new{color:#7BE495}
-.cat-panel{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;padding:14px;position:sticky;top:70px}
-.cat-tabs{display:flex;gap:6px;margin-bottom:12px}
-.cat-franja{border:1px solid var(--gold);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--gray-900)}
+.cat-panel{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;padding:18px;position:sticky;top:16px;font-size:13px}
+.cat-panel .btn-primary,.cat-panel .btn-ghost,.cat-panel .btn-secondary{min-height:44px;font-size:13px}
+.cat-panel .form-label{font-size:13px}
+.cat-tabs{display:flex;gap:8px;margin-bottom:14px}
+.cat-pct{height:52px;font-size:22px;font-weight:700}
+.cat-full{width:100%;height:48px;font-size:14px}
+.cat-franja{border:1px solid var(--gold);border-radius:8px;padding:6px 12px;min-height:44px;margin-bottom:14px;font-size:13px;display:flex;gap:10px;align-items:center;background:var(--gray-900);white-space:nowrap}
+.cat-franja>span{flex:1;overflow:hidden;text-overflow:ellipsis}
 .cat-franja.vieja{border-color:var(--st-atrasado)}
+@media(max-width:900px){
+  #screen-catalogo{padding:16px}
+  .cat-wrap{grid-template-columns:1fr}
+  .cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cat-panel{position:static}
+  .cat-bar{flex-wrap:wrap;overflow:visible}
+  .cat-franja{white-space:normal}
+}
+@media(max-width:560px){.cat-grid{grid-template-columns:1fr}}
 #cat-hoja{display:none;background:#fff;color:#000;padding:24px;font-size:12px}
 #cat-hoja table{width:100%;border-collapse:collapse;margin-top:10px}
 #cat-hoja th,#cat-hoja td{border:1px solid #999;padding:4px 6px;text-align:right}
@@ -2611,7 +2627,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='267';
+  var CURRENT_VERSION='268';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -19816,7 +19832,7 @@ _loginInit=initLogin();
    no cambian hasta "aprobar". Baja de modelos = activo=false (no se borra). */
 const CAT_URL=SB_URL+'/functions/v1/catalogo-admin';
 const CAT_CBDI={ant:158.89,nue:163.33,base:'CBDI sep→oct 2026'};
-let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,cargado:false};
+let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,confirmandoRev:false,cargado:false};
 
 async function _catCall(payload){
   const r=await fetch(CAT_URL,{method:'POST',
@@ -19876,7 +19892,7 @@ function _catFranja(){
   if(d==null){txt='Precios sin confirmar: nunca se registró una confirmación.';vieja=true;}
   else if(d<=0){txt='✅ Precios confirmados hoy.';}
   else{txt='Precios sin confirmar hace <b>'+d+' día'+(d===1?'':'s')+'</b> (última confirmación: '+_catE(String(_cat.conf).slice(0,10))+').';vieja=d>30;}
-  const btn=_cat.edit?'<button class="btn-ghost" style="font-size:11px" onclick="catConfirmarHoy()">Confirmar hoy</button>':'';
+  const btn=_cat.edit?'<button class="btn-ghost" style="font-size:13px;white-space:nowrap" onclick="catConfirmarHoy()">Confirmar hoy</button>':'';
   return '<div class="cat-franja'+(vieja?' vieja':'')+'"><span style="flex:1">'+txt+'</span>'+btn+'</div>';
 }
 function _catPintar(){
@@ -19915,41 +19931,43 @@ function _catPanel(){
   }
   if(_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
   const m=_cat.modelos.find(x=>x.id===_cat.sel);
-  if(!m)return h+'<div style="font-size:12px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
+  if(!m)return h+'<div style="font-size:13px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
   const img=_catImg(m);
   h+=(img?'<img src="'+_catE(img)+'" alt="" style="width:100%;border-radius:8px;margin-bottom:10px">':'')
     +'<div class="cat-name" style="font-size:16px">'+_catE(m.nombre)+'</div>'
     +'<div class="cat-spec">'+_catE([m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · '))+'</div>'
     +'<div class="cat-price">USD '+_catN(m.precio_desde_usd_m2,2)+' /m²</div><div class="cat-total">Total USD '+_catN(m.precio_total_usd,0)+'</div>';
   if(_cat.edit&&m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
-  if(m.pdf_url)h+='<a class="btn-secondary" style="display:inline-block;margin-top:10px;font-size:11px;text-decoration:none" href="'+_catE(m.pdf_url)+'" target="_blank" rel="noopener">📄 Ficha PDF</a>';
+  if(m.pdf_url)h+='<a class="btn-secondary" style="display:inline-flex;align-items:center;margin-top:10px;text-decoration:none" href="'+_catE(m.pdf_url)+'" target="_blank" rel="noopener">📄 Ficha PDF</a>';
   return h+_catEquipoBtn();
 }
 function _catEquipoBtn(){
-  return '<div style="margin-top:12px"><button class="btn-ghost" style="font-size:11px" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
+  return '<div style="margin-top:12px"><button class="btn-ghost" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
 }
 function _catPanelIncr(){
   const b=_cat.bor;
   let h='<div class="section-title">Incremento de precios</div>';
   if(!b){
-    h+='<div class="form-group"><label class="form-label">Porcentaje (%)</label><input class="form-control" id="cat-pct" value="'+_catE(_cat.pct)+'" oninput="catPct(this.value)" placeholder="2,79"></div>'
-      +'<button class="btn-ghost" style="font-size:11px;margin-bottom:8px" onclick="catUsarCBDI()">Índice CBDI ('+CAT_CBDI.nue+' / '+CAT_CBDI.ant+' − 1)</button>';
+    h+='<div class="form-group"><label class="form-label">Porcentaje (%)</label><input class="form-control cat-pct" id="cat-pct" value="'+_catE(_cat.pct)+'" oninput="catPct(this.value)" placeholder="2,79"></div>'
+      +'<button class="btn-ghost" style="margin-bottom:10px" onclick="catUsarCBDI()">Índice CBDI ('+CAT_CBDI.nue+' / '+CAT_CBDI.ant+' − 1)</button>';
     const v=Number(String(_cat.pct).replace(',','.'));
-    h+='<div id="cat-prev" style="font-size:12px;color:var(--gray-200);margin-bottom:10px">'+_catPrevTxt(v)+'</div>';
-    h+='<button class="btn-primary" onclick="catCalcular()">Calcular borrador</button>';
+    h+='<div id="cat-prev" style="font-size:14px;color:var(--gray-200);margin-bottom:10px">'+_catPrevTxt(v)+'</div>';
+    h+='<button class="btn-primary cat-full" onclick="catCalcular()">Calcular borrador</button>';
   }else{
-    h+='<div style="font-size:12px;margin-bottom:8px"><b>Borrador +'+_catE(b.porcentaje)+'%</b><br>Base: '+_catE(b.base||'—')+(b.indice_anterior!=null?'<br>Índice: '+_catE(b.indice_anterior)+' → '+_catE(b.indice_nuevo):'')+'<br>Creado por '+_catE(b.creado_por||'—')+'</div>'
-      +'<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">Los precios vigentes no cambian hasta aprobar. El equipo no ve el borrador.</div>'
-      +'<button class="btn-ghost" style="font-size:11px;margin-bottom:8px;display:block" onclick="catHoja()">🖨️ Ver e imprimir nuevos precios</button>';
+    h+='<div style="font-size:13px;margin-bottom:8px"><b>Borrador +'+_catE(b.porcentaje)+'%</b><br>Base: '+_catE(b.base||'—')+(b.indice_anterior!=null?'<br>Índice: '+_catE(b.indice_anterior)+' → '+_catE(b.indice_nuevo):'')+'<br>Creado por '+_catE(b.creado_por||'—')+'</div>'
+      +'<div style="font-size:13px;color:var(--gray-400);margin-bottom:10px">Los precios vigentes no cambian hasta aprobar. El equipo no ve el borrador.</div>'
+      +'<button class="btn-ghost" style="margin-bottom:8px;display:block" onclick="catHoja()">🖨️ Ver e imprimir nuevos precios</button>';
     if(_cat.confirmando){
-      h+='<div style="border:1px solid var(--gold);border-radius:8px;padding:10px;margin-bottom:8px;font-size:12px">Esto cambia los precios vigentes de <b>'+_cat.modelos.length+' modelos</b> en +'+_catE(b.porcentaje)+'%. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catConf(false)">Cancelar</button></div></div>';
+      h+='<div style="border:1px solid var(--gold);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px">Esto cambia los precios vigentes de <b>'+_cat.modelos.length+' modelos</b> en +'+_catE(b.porcentaje)+'%. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catConf(false)">Cancelar</button></div></div>';
     }else{
       h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-primary" onclick="catConf(true)">Aprobar</button><button class="btn-ghost" onclick="catDescartar()">Descartar</button></div>';
     }
   }
   if(_cat.ult){
-    h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--gray-600);font-size:11px;color:var(--gray-400)">Último incremento aprobado: +'+_catE(_cat.ult.porcentaje)+'% ('+_catE(_cat.ult.base||'sin base')+') por '+_catE(_cat.ult.resuelto_por||'—')
-      +'<br><button class="btn-ghost" style="font-size:11px;margin-top:6px" onclick="catRevertir()">↩ Revertir último incremento</button></div>';
+    h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--gray-600);font-size:13px;color:var(--gray-400)">Último incremento aprobado: +'+_catE(_cat.ult.porcentaje)+'% ('+_catE(_cat.ult.base||'sin base')+') por '+_catE(_cat.ult.resuelto_por||'—')
+      +(_cat.confirmandoRev
+        ?'<div style="border:1px solid var(--gold);border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:var(--gray-100)">Esto devuelve los precios vigentes a como estaban antes de ese incremento. ¿Revertir?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catRevertir()">Sí, revertir</button><button class="btn-ghost" onclick="catConfRev(false)">Cancelar</button></div></div>'
+        :'<br><button class="btn-ghost" style="margin-top:6px" onclick="catConfRev(true)">↩ Revertir último incremento</button>')+'</div>';
   }
   return h;
 }
@@ -19964,12 +19982,15 @@ function catBuscar(v){_cat.busca=v;const w=document.getElementById('cat-grid-wra
 function catFiltro(f){_cat.filtro=f;_catPintar();}
 function catVista(v){_cat.vista=v;_catPintar();}
 function catSel(id){_cat.sel=id;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();}
-function catTab(t){_cat.tab=t;_cat.confirmando=false;_catPintar();}
+function catTab(t){_cat.tab=t;_cat.confirmando=false;_cat.confirmandoRev=false;_catPintar();}
 function catPct(v){_cat.pct=v;_cat.ia=null;_cat.inn=null;_cat.base='';const p=document.getElementById('cat-prev');if(p)p.innerHTML=_catPrevTxt(Number(String(v).replace(',','.')));}
 function catUsarCBDI(){
   const p=(CAT_CBDI.nue/CAT_CBDI.ant-1)*100;
   _cat.pct=String(Math.round(p*100)/100).replace('.',',');_cat.ia=CAT_CBDI.ant;_cat.inn=CAT_CBDI.nue;_cat.base=CAT_CBDI.base;
-  _catPintar();
+  const inp=document.getElementById('cat-pct');
+  if(inp)inp.value=_cat.pct;
+  const pv=document.getElementById('cat-prev');
+  if(pv)pv.innerHTML=_catPrevTxt(Number(_cat.pct.replace(',','.')));
 }
 function catConf(v){_cat.confirmando=v;_catPintar();}
 async function catCalcular(){
@@ -19998,8 +20019,9 @@ async function catAprobar(){
     await renderCatalogo();
   }catch(e){toast('Error: '+e.message,'error');}
 }
+function catConfRev(v){_cat.confirmandoRev=v;_catPintar();}
 async function catRevertir(){
-  if(!window.confirm('¿Revertir el último incremento aprobado?'))return;
+  _cat.confirmandoRev=false;
   try{
     const j=await _catCall({action:'revertir'});
     toast('Incremento revertido ('+(j.revertidos||0)+' modelos)','ok');
