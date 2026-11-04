@@ -1370,6 +1370,27 @@ body.tema-cap #para-hoy-wrap:not(.abierto) #para-hoy-body,
 body.tema-cap #para-hoy-wrap:not(.abierto) #en-cierre-wrap,
 body.tema-cap #para-hoy-wrap:not(.abierto) > div:first-child button{display:none !important}
 body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost{min-height:var(--ceo-tap,44px)}
+/* v274 — celular: chat flotante sobre la barra, cabecera en 2 filas, columnas compactas */
+.cw-resumen{display:none}
+.cw-col,.cw-col.today{scroll-margin-top:84px}
+@media(max-width:900px){
+  .cw-col.late.cero{display:none}
+  .cw-col.cw-solo .cw-head,.cw-col.cw-solo .cw-body{display:none}
+  .cw-col.cw-solo .cw-resumen{display:flex;align-items:center;width:100%;min-height:var(--ceo-tap,44px);padding:0 14px;background:transparent;border:0;color:var(--ceo-ink);font-size:14px;font-weight:700;text-align:left;cursor:pointer}
+}
+@media(max-width:760px){
+  body.tema-cap #asistFab{bottom:84px !important;right:12px !important}
+  body.tema-cap #asistPanel{bottom:148px !important;right:12px !important}
+  body.tema-cap .app-header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 12px}
+  body.tema-cap .app-header .header-actions{order:1;width:100%;flex-wrap:nowrap;gap:8px}
+  body.tema-cap .app-header .header-actions .hdr-btn{flex:1 1 0;min-height:var(--ceo-tap,44px);padding:0 8px;font-size:13px;white-space:nowrap}
+  body.tema-cap .app-header .header-actions .ceo-pals{display:none}
+  body.tema-cap .app-header .logo{order:2}
+  body.tema-cap .app-header .logo-text{display:none}
+  body.tema-cap .app-header > div:last-child{order:3;margin-left:auto;gap:6px !important}
+  body.tema-cap .user-pill{padding:4px 8px}
+  body.tema-cap #screen-week{padding-top:8px}
+}
 /* ═══ v270 — Agenda de captadoras (solo field_capturer). Azul marino + vidrio + amarillo ═══ */
 .cw-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 12px}
 .cw-chip{min-height:var(--ceo-tap,44px);padding:0 16px;border-radius:22px;border:1px solid var(--ceo-line);background:var(--ceo-card);color:var(--ceo-ink);font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
@@ -2690,7 +2711,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='273';
+  var CURRENT_VERSION='274';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4838,6 +4859,9 @@ function _bdgLeadsScope(q){
    🟡 Tareas = todo lo que NO es visita, para no contar dos veces la misma fila. */
 async function _bdgWeekRojo(){
   const corte=new Date(Date.now()-PD_DIAS_VISITA_VENCIDA*86400000).toISOString();
+  /* v274 — captadoras: el numero es el de la columna Atrasadas del calendario (misma lista).
+     El alcance ancho sumaba las visitas que generaron y atiende el cerrador (50 en Genoveva). */
+  if(cu&&cu.rol==='field_capturer')return _cwLateN;
   return _bdgN(_bdgAgendaScope(
     sb.from('agenda_personal').select('id',{count:'exact',head:true})
       .eq('activo',true).eq('completada',false)
@@ -4846,6 +4870,7 @@ async function _bdgWeekRojo(){
       .or('nota_resultado.is.null,nota_resultado.eq.')));
 }
 async function _bdgWeekAma(){
+  if(cu&&cu.rol==='field_capturer')return 0;   /* v274: un solo numero, el de Atrasadas */
   /* agenda_personal.tipo no tiene NULL (0 de 5.584), así que el .not(ilike) no
      se come filas por ese lado.
      v235 — FIX 1: el alcance ya NO es _bdgAgendaScope. Ese suma las filas donde
@@ -5325,6 +5350,7 @@ function onFiltroPersonaWeek(){
    SEMANA
 ════════════════════════════════════════ */
 function navWeek(dir){
+  _cwScrollHoy=true;
   /* v218 — en modo MES las mismas flechas navegan meses */
   if(_weekView==='mes'){
     if(dir===0){const h=_lpParts(new Date());_weekMonthDate=new Date(h.y,h.m,1);}
@@ -5544,6 +5570,7 @@ function _cwDiaTxt(d){
 }
 function _cwHora(a){const h=_cwHm(a.fecha_programada);return h==='00:00'?'—':h;}
 function _cwSetFiltro(f){_cwFiltro=f;renderWeek();}
+let _cwScrollHoy=true, _cwLateN=0;
 function _cwToggle(k){_cwAbierto[k]=!_cwAbierto[k];renderWeek();}
 function _cwCard(a,late){
   _cwRows[a.id]=a;
@@ -5606,7 +5633,7 @@ async function renderWeekCapt(){
   let html='';
   /* ATRASADAS: el contador es el total real; la lista respeta el filtro y muestra 5 */
   const lateOpen=!!_cwAbierto.late, lateList=lateOpen?lateShow:lateShow.slice(0,5);
-  html+=`<div class="cw-col late"><div class="cw-head"><div class="n">⚠️ Atrasadas</div><div class="d">${lateAll.length}</div></div><div class="cw-body">`+
+  html+=`<div class="cw-col late${lateAll.length?'':' cero'}"><div class="cw-head"><div class="n">⚠️ Atrasadas</div><div class="d">${lateAll.length}</div></div><div class="cw-body">`+
     (lateList.length?lateList.map(function(a){return _cwCard(a,true);}).join(''):'<div class="cw-empty">Sin atrasadas'+(_cwFiltro!=='todas'&&lateAll.length?' en este filtro':'')+' 🎉</div>')+
     (lateShow.length>5?`<button type="button" class="cw-more" onclick="_cwToggle('late')">${lateOpen?'Ver menos':'+'+(lateShow.length-5)+' más'}</button>`:'')+`</div></div>`;
   for(let i=0;i<7;i++){
@@ -5615,7 +5642,8 @@ async function renderWeekCapt(){
     const pend=items.filter(function(a){return !a.completada;}), hechas=items.filter(function(a){return a.completada;});
     const cap=isToday?8:999, open=!!_cwAbierto['d'+ymd];
     const lista=(isToday&&!open)?pend.slice(0,cap):pend;
-    html+=`<div class="cw-col${isToday?' today':''}"><div class="cw-head"><div class="n">${_cwDIAS[i]}${isToday?' · HOY':''}</div><div class="d">${_lpParts(day).d}</div></div><div class="cw-body">`+
+    const solo=!isToday&&!pend.length&&hechas.length&&!_cwAbierto['h'+ymd];
+    html+=`<div class="cw-col${isToday?' today':''}${solo?' cw-solo':''}"><button type="button" class="cw-resumen" onclick="_cwToggle('h${ymd}')">${_cwDIAS[i]} ${_lpParts(day).d} · ✓ ${hechas.length} hechas ▼</button><div class="cw-head"><div class="n">${_cwDIAS[i]}${isToday?' · HOY':''}</div><div class="d">${_lpParts(day).d}</div></div><div class="cw-body">`+
       (lista.length?lista.map(function(a){return _cwCard(a,false);}).join(''):(hechas.length?'':'<div class="cw-empty">—</div>'))+
       (isToday&&pend.length>cap?`<button type="button" class="cw-more" onclick="_cwToggle('d${ymd}')">${open?'Ver menos':'+'+(pend.length-cap)+' más'}</button>`:'')+
       (hechas.length?`<button type="button" class="cw-hechas" onclick="_cwToggle('h${ymd}')">✓ ${hechas.length} hechas ${_cwAbierto['h'+ymd]?'▲':'▼'}</button>`+(_cwAbierto['h'+ymd]?hechas.map(function(a){return _cwCard(a,false);}).join(''):''):'')+
@@ -5630,6 +5658,16 @@ async function renderWeekCapt(){
   _set('m-realizado',delHoy.filter(function(a){return a.completada;}).length);
   _set('m-pendiente',delHoy.filter(function(a){return !a.completada;}).length);
   _set('m-atrasado',lateAll.length);
+  /* v274 — badge de la pestana Semana: mismo numero que la columna Atrasadas */
+  _cwLateN=lateAll.length;
+  try{const wd=_bdgDefs().filter(function(d){return d.k==='week';})[0]; if(wd)_bdgPintar(wd,lateAll.length,0);}catch(e){}
+  /* v274 — celular: al abrir la agenda, el scroll cae en HOY (una vez por apertura) */
+  if(_cwScrollHoy){
+    _cwScrollHoy=false;
+    if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches){
+      setTimeout(function(){const t=g.querySelector('.cw-col.today'); if(t)t.scrollIntoView({block:'start'});},60);
+    }
+  }
 }
 
 /* ── Panel lateral ── */
