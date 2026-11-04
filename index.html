@@ -1352,6 +1352,53 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   body.cat-imprimiendo #cat-hoja .no-print{display:none!important}
   body.cat-imprimiendo{background:#fff!important}
 }
+/* ═══ v270 — Agenda de captadoras (solo field_capturer). Azul marino + vidrio + amarillo ═══ */
+.cw-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 12px}
+.cw-chip{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07);color:#EAF0FF;font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cw-chip.on{background:var(--gold);color:#0B1B3A;border-color:var(--gold)}
+.cw-new{margin-left:auto;min-height:44px;padding:0 18px;border-radius:22px;border:0;background:var(--gold);color:#0B1B3A;font-weight:800;font-size:14px;cursor:pointer}
+.cw-grid{display:grid !important;grid-template-columns:1.15fr repeat(7,minmax(0,1fr));gap:8px;align-items:start;background:linear-gradient(160deg,#0B1B3A,#102A56 60%,#0E2347);padding:10px;border-radius:16px}
+.cw-col{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);min-width:0;display:flex;flex-direction:column}
+.cw-col.late{border-color:#FF6B6B;background:rgba(255,80,80,.10)}
+.cw-col.today{border-color:var(--gold);background:rgba(242,197,0,.10)}
+.cw-head{padding:10px 10px 8px;border-bottom:1px solid rgba(255,255,255,.12);text-align:center;color:#EAF0FF}
+.cw-head .n{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.cw-head .d{font-family:'Playfair Display',serif;font-weight:900;font-size:24px;line-height:1.1}
+.cw-col.today .cw-head .d,.cw-col.today .cw-head .n{color:var(--gold);opacity:1}
+.cw-col.late .cw-head .d,.cw-col.late .cw-head .n{color:#FF8A8A;opacity:1}
+.cw-body{padding:8px;display:flex;flex-direction:column;gap:8px}
+.cw-empty{color:rgba(234,240,255,.45);text-align:center;font-size:13px;padding:8px 0}
+.cw-card{position:relative;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-left:6px solid var(--cwk,#9AA7C7);border-radius:10px;padding:8px 10px;color:#F4F7FF;cursor:pointer;min-height:44px;text-align:left;width:100%;font:inherit}
+.cw-card:hover{background:rgba(255,255,255,.18)}
+.cw-card.late{background:rgba(255,80,80,.16);border-color:rgba(255,120,120,.5);border-left-color:var(--cwk,#FF6B6B)}
+.cw-card.done{opacity:.6}
+.cw-card.deleg{opacity:.55}
+.cw-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:8px;background:var(--cwk,#9AA7C7);color:#10203F}
+.cw-name{font-size:14px;font-weight:700;margin-top:4px;word-break:break-word}
+.cw-time{font-size:13px;opacity:.9;margin-top:2px}
+.cw-debia{font-size:12px;font-weight:700;color:#FFB3B3;margin-top:3px}
+.cw-more,.cw-hechas{min-height:44px;width:100%;border-radius:10px;border:1px dashed rgba(255,255,255,.3);background:transparent;color:#EAF0FF;font-size:13px;font-weight:700;cursor:pointer}
+.cw-k-i1{--cwk:var(--st-1intento)}.cw-k-i2{--cwk:var(--st-2intento)}.cw-k-i3{--cwk:var(--st-3intento)}
+.cw-k-ind{--cwk:var(--st-indagacion)}.cw-k-env{--cwk:var(--st-envio)}.cw-k-vis{--cwk:#43A047}
+.cw-k-seg{--cwk:#F2C500}.cw-k-otro{--cwk:#9AA7C7}
+.cw-ov{position:fixed;inset:0;background:rgba(3,10,25,.55);z-index:900;display:none}
+.cw-ov.on{display:block}
+.cw-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:linear-gradient(170deg,#0B1B3A,#12305F);color:#F4F7FF;z-index:901;padding:18px;overflow-y:auto;box-shadow:-10px 0 30px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .2s;border-left:1px solid rgba(255,255,255,.18)}
+.cw-panel.on{transform:none}
+.cw-panel h3{margin:6px 0 2px;font-size:20px}
+.cw-sec{margin-top:14px}.cw-sec .l{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-bottom:4px}
+.cw-sec .t{font-size:14px;line-height:1.45}
+.cw-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.cw-btn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.09);color:#fff;font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.cw-btn.pri{background:var(--gold);color:#0B1B3A;border-color:var(--gold)}
+.cw-x{float:right;min-width:44px;min-height:44px;font-size:20px;background:transparent;border:0;color:#fff;cursor:pointer}
+@media(max-width:1100px){.cw-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){
+  .cw-grid{grid-template-columns:minmax(0,1fr)}
+  .cw-panel{top:auto;left:0;width:100%;max-height:88vh;border-radius:18px 18px 0 0;transform:translateY(105%)}
+  .cw-panel.on{transform:none}
+  .cw-new{margin-left:0}
+}
 </style>
 </head>
 <body>
@@ -2627,7 +2674,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='268';
+  var CURRENT_VERSION='270';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -5291,6 +5338,9 @@ async function renderWeek(){
   const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const _wp0=_lpParts(currentWeekStart), _wp6=_lpParts(addDaysLP(currentWeekStart,6));
   lbl.textContent=`${_wp0.d} – ${_wp6.d} ${meses[_wp0.m]} ${_wp0.y}`;
+  /* v270 — captadoras: diseño nuevo. Admin y commercial_lead siguen abajo, sin cambios. */
+  if(cu&&cu.rol==='field_capturer')return renderWeekCapt();
+  _cwReset();
 
   const filtP=document.getElementById('filtro-persona').value;
   const filtE=document.getElementById('filtro-estado').value;
@@ -5421,6 +5471,233 @@ function renderCard(a,now){
       ${isDone?`<div class="ok"><span style="font-weight:700;font-size:8px">Realizado:</span> ${fmtTime(a.completada_en)} ✓</div>`:'<div><span style="font-weight:700;font-size:8px">Realizado:</span> —</div>'}
     </div>
   </div>`;
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v270 · AGENDA DE CAPTADORAS (solo rol field_capturer)                ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Mismos datos de agenda_personal que la agenda de siempre (mismo alcance con
+   _filtrarAgendaVisible, mismo descarte de archivados y de tareas abiertas de
+   leads cerrados). Sin montos: esta pantalla no los toca.
+   Admin y commercial_lead siguen con el renderWeek() original.
+   REGLAS que esta vista respeta:
+   · "Marcar como hecho" es completada=true sobre UNA fila y nada mas: no crea la
+     fase siguiente ni mueve el lead por su cuenta. Si la base lo rechaza (falta
+     el siguiente paso / indagacion incompleta) se muestra el motivo y se abre
+     la ficha para registrarlo bien.
+   · Una tarea "Visita..." NO se completa desde aca: completada=true en una visita
+     mueve el lead a visita_realizada. Se resuelve en la ficha (resultado de la
+     visita). Lo mismo reprogramar una visita (toca 3 tablas, v241). */
+let _cwFiltro='todas', _cwAbierto={}, _cwRows={}, _cwSel=null;
+const _cwDIAS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+function _cwTipo(a){return (a.tipo_original||a.tipo||'');}
+function _cwNorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function _cwKey(a){
+  const t=_cwNorm(_cwTipo(a));
+  if(/^1er/.test(t))return 'i1'; if(/^2do/.test(t))return 'i2'; if(/^3er/.test(t))return 'i3';
+  if(/indagaci/.test(t))return 'ind'; if(/^envio/.test(t))return 'env';
+  if(/^visita/.test(t))return 'vis'; if(/seguimiento/.test(t))return 'seg';
+  return 'otro';
+}
+function _cwEsVisita(a){return _cwKey(a)==='vis';}
+function _cwGrupo(a){const k=_cwKey(a);return k==='i1'||k==='i2'||k==='i3'?'intentos':k==='ind'?'indagacion':k==='env'?'envio':k==='vis'?'visita':k==='seg'?'seguimiento':'otro';}
+function _cwPasa(a){return _cwFiltro==='todas'||_cwGrupo(a)===_cwFiltro;}
+function _cwHm(d){return new Intl.DateTimeFormat('en-GB',{timeZone:'America/La_Paz',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(d));}
+function _cwDiaTxt(d){
+  const p=_lpParts(new Date(d));
+  const wd=(new Date(Date.UTC(p.y,p.m,p.d)).getUTCDay()+6)%7;
+  return _cwDIAS[wd]+' '+p.d;
+}
+function _cwHora(a){const h=_cwHm(a.fecha_programada);return h==='00:00'?'—':h;}
+function _cwSetFiltro(f){_cwFiltro=f;renderWeek();}
+function _cwToggle(k){_cwAbierto[k]=!_cwAbierto[k];renderWeek();}
+function _cwCard(a,late){
+  _cwRows[a.id]=a;
+  const k=_cwKey(a), deleg=!a.completada&&_esVisitaQueGenere(a);
+  const cls='cw-card cw-k-'+k+(late?' late':'')+(a.completada?' done':'')+(deleg?' deleg':'');
+  const click=!a.lead_id?'':deleg?`openLeadDetail(${a.lead_id},null,'readonly')`:`cwAbrir(${a.id})`;
+  return `<button type="button" class="${cls}"${click?` onclick="${click}"`:' style="cursor:default"'}>
+    <span class="cw-tag">${_escPend(_cwTipo(a)||'—')}</span>
+    <div class="cw-name">${_escPend(a.titulo||'—')}${a.completada?' ✓':''}</div>
+    <div class="cw-time">${deleg?'🤝 asignada a '+_escPend(a.colaborador||''):'🕘 '+_cwHora(a)}</div>
+    ${late?`<div class="cw-debia">Debía: ${_cwDiaTxt(a.fecha_programada)} · ${_cwHora(a)}</div>`:''}
+  </button>`;
+}
+function _cwReset(){
+  const g=document.getElementById('week-grid'); if(g)g.classList.remove('cw-grid');
+  const b=document.getElementById('cw-bar'); if(b)b.remove();
+  ['filtro-persona','filtro-estado'].forEach(function(i){const e=document.getElementById(i);if(e&&_weekView!=='mes')e.style.display='';});
+}
+async function _cwLeadStates(ids){
+  const out={};
+  for(let i=0;i<ids.length;i+=150){
+    const{data}=await sb.from('leads').select('id,estado,visito_oficina,archivado').in('id',ids.slice(i,i+150));
+    (data||[]).forEach(function(l){out[l.id]=l;});
+  }
+  return out;
+}
+async function renderWeekCapt(){
+  const weekEnd=addDaysLP(currentWeekStart,7);
+  const cols='id,colaborador,captador,lead_id,tipo,tipo_original,titulo,nota,fecha_programada,completada,completada_en';
+  const base=function(){return _filtrarAgendaVisible(_sinCeo(sb.from('agenda_personal').select(cols))).eq('activo',true);};
+  const now=new Date();
+  let semana,atras;
+  try{
+    const[r1,r2]=await Promise.all([
+      base().gte('fecha_programada',currentWeekStart.toISOString()).lt('fecha_programada',weekEnd.toISOString()).order('fecha_programada').limit(1000),
+      base().eq('completada',false).not('lead_id','is',null).lt('fecha_programada',now.toISOString()).order('fecha_programada').limit(1000)
+    ]);
+    if(r1.error)throw r1.error; if(r2.error)throw r2.error;
+    semana=r1.data||[]; atras=r2.data||[];
+  }catch(e){toast('Error cargando agenda: '+((e&&e.message)||'error'),'error');return;}
+  const ids=[...new Set(semana.concat(atras).map(function(a){return a.lead_id;}).filter(Boolean))];
+  const st=await _cwLeadStates(ids);
+  _estadoLeadMap={}; Object.keys(st).forEach(function(i){_estadoLeadMap[i]=st[i].estado;});
+  const vivo=function(a){const l=st[a.lead_id]; if(!a.lead_id||!l)return true; if(l.archivado)return false; return a.completada||!/^cerrado_/.test(l.estado||'');};
+  semana=semana.filter(vivo); atras=atras.filter(vivo);
+  agendaData=semana;
+  _cwRows={};
+  /* atrasadas = abiertas, vencidas y mias (las que genere yo y atiende otro no son mi atraso: v235) */
+  const lateAll=atras.filter(function(a){return !_esVisitaQueGenere(a);});
+  const lateIds=new Set(lateAll.map(function(a){return a.id;}));
+  const lateShow=lateAll.filter(_cwPasa);
+  const g=document.getElementById('week-grid'); if(!g)return;
+  g.classList.add('cw-grid');
+  ['filtro-persona','filtro-estado'].forEach(function(i){const e=document.getElementById(i);if(e)e.style.display='none';});
+  const lg=document.getElementById('week-legend'); if(lg)lg.style.display='none';
+  let bar=document.getElementById('cw-bar');
+  if(!bar){bar=document.createElement('div');bar.id='cw-bar';bar.className='cw-bar';g.parentNode.insertBefore(bar,g);}
+  const F=[['todas','Todas'],['intentos','Intentos'],['seguimiento','Seguimiento'],['indagacion','Indagación'],['envio','Envío info'],['visita','Visita']];
+  bar.innerHTML=F.map(function(f){return `<button type="button" class="cw-chip${_cwFiltro===f[0]?' on':''}" onclick="_cwSetFiltro('${f[0]}')">${f[1]}</button>`;}).join('')+
+    `<button type="button" class="cw-new" onclick="openModal('modalNewLead')">+ Crear lead</button>`;
+  let html='';
+  /* ATRASADAS: el contador es el total real; la lista respeta el filtro y muestra 5 */
+  const lateOpen=!!_cwAbierto.late, lateList=lateOpen?lateShow:lateShow.slice(0,5);
+  html+=`<div class="cw-col late"><div class="cw-head"><div class="n">⚠️ Atrasadas</div><div class="d">${lateAll.length}</div></div><div class="cw-body">`+
+    (lateList.length?lateList.map(function(a){return _cwCard(a,true);}).join(''):'<div class="cw-empty">Sin atrasadas'+(_cwFiltro!=='todas'&&lateAll.length?' en este filtro':'')+' 🎉</div>')+
+    (lateShow.length>5?`<button type="button" class="cw-more" onclick="_cwToggle('late')">${lateOpen?'Ver menos':'+'+(lateShow.length-5)+' más'}</button>`:'')+`</div></div>`;
+  for(let i=0;i<7;i++){
+    const day=addDaysLP(currentWeekStart,i), ymd=ymdLocal(day), isToday=ymd===ymdLocal(now);
+    const items=semana.filter(function(a){return ymdLocal(new Date(a.fecha_programada))===ymd && !lateIds.has(a.id) && _cwPasa(a);});
+    const pend=items.filter(function(a){return !a.completada;}), hechas=items.filter(function(a){return a.completada;});
+    const cap=isToday?8:999, open=!!_cwAbierto['d'+ymd];
+    const lista=(isToday&&!open)?pend.slice(0,cap):pend;
+    html+=`<div class="cw-col${isToday?' today':''}"><div class="cw-head"><div class="n">${_cwDIAS[i]}${isToday?' · HOY':''}</div><div class="d">${_lpParts(day).d}</div></div><div class="cw-body">`+
+      (lista.length?lista.map(function(a){return _cwCard(a,false);}).join(''):(hechas.length?'':'<div class="cw-empty">—</div>'))+
+      (isToday&&pend.length>cap?`<button type="button" class="cw-more" onclick="_cwToggle('d${ymd}')">${open?'Ver menos':'+'+(pend.length-cap)+' más'}</button>`:'')+
+      (hechas.length?`<button type="button" class="cw-hechas" onclick="_cwToggle('h${ymd}')">✓ ${hechas.length} hechas ${_cwAbierto['h'+ymd]?'▲':'▼'}</button>`+(_cwAbierto['h'+ymd]?hechas.map(function(a){return _cwCard(a,false);}).join(''):''):'')+
+      `</div></div>`;
+  }
+  g.innerHTML=html;
+}
+
+/* ── Panel lateral ── */
+const _cwQUE={
+  i1:'Primer contacto: llamá al cliente; si no contesta, escribile por WhatsApp y dejá agendado el 2do intento.',
+  i2:'Segundo intento de la fase de presentación: volvé a llamar y a escribir. Registrá qué pasó.',
+  i3:'Tercer y último intento de la fase de presentación: llamá y escribí; registrá el resultado en la ficha.',
+  ind:'Fase de indagación: relevá los datos obligatorios del cliente antes de pasar a enviar información.',
+  env:'Fase de envío de información: mandá la información del modelo que le interesa y confirmá que la recibió.',
+  vis:'Fase de visita: confirmá día y hora con el cliente. Si vino o no vino se registra desde la ficha (resultado de la visita).',
+  seg:'Seguimiento: retomá el contacto y acordá el próximo paso con el cliente.',
+  otro:'Abrí la ficha para ver el historial y registrar lo que pasó.'
+};
+function _cwPanelEl(){
+  let p=document.getElementById('cw-panel');
+  if(!p){
+    const ov=document.createElement('div');ov.id='cw-ov';ov.className='cw-ov';ov.onclick=cwCerrar;document.body.appendChild(ov);
+    p=document.createElement('div');p.id='cw-panel';p.className='cw-panel';document.body.appendChild(p);
+  }
+  return p;
+}
+function cwCerrar(){
+  const p=document.getElementById('cw-panel'),o=document.getElementById('cw-ov');
+  if(p)p.classList.remove('on'); if(o)o.classList.remove('on'); _cwSel=null;
+}
+async function cwAbrir(id){
+  const a=_cwRows[id]; if(!a)return;
+  _cwSel=a;
+  const p=_cwPanelEl(); document.getElementById('cw-ov').classList.add('on');
+  const late=!a.completada&&new Date(a.fecha_programada)<new Date(), k=_cwKey(a);
+  p.innerHTML=`<button type="button" class="cw-x" onclick="cwCerrar()">✕</button>
+    <span class="cw-tag cw-k-${k}">${_escPend(_cwTipo(a)||'—')}</span>
+    <h3>${_escPend(a.titulo||'—')}</h3>
+    <div class="cw-sec"><div class="l">Qué hay que hacer</div><div class="t">${_escPend(_cwQUE[k])}</div></div>
+    <div class="cw-sec"><div class="l">Fecha programada</div><div class="t">${_cwDiaTxt(a.fecha_programada)} · ${_cwHora(a)}</div>${late?`<div class="cw-debia" style="font-size:14px">Debía: ${_cwDiaTxt(a.fecha_programada)} · ${_cwHora(a)}</div>`:''}</div>
+    <div class="cw-sec"><div class="l">Contacto</div><div class="cw-btns" id="cw-contacto"><span class="t" style="opacity:.6">Cargando…</span></div></div>
+    <div class="cw-sec">${a.completada?'<div class="t">✓ Esta gestión ya está hecha.</div>':`<div class="cw-btns"><button type="button" class="cw-btn pri" onclick="cwHecho()">✅ Marcar como hecho</button><button type="button" class="cw-btn" onclick="openLeadDetail(${a.lead_id},${a.id})">📋 Abrir ficha</button></div>`}</div>
+    ${a.completada?'':`<div class="cw-sec"><div class="l">Reprogramar</div><div class="cw-btns">
+      <button type="button" class="cw-btn" onclick="cwReprog('hoy')">Hoy</button>
+      <button type="button" class="cw-btn" onclick="cwReprog('manana')">Mañana</button>
+      <button type="button" class="cw-btn" onclick="cwReprog('vie')">Viernes</button>
+      <button type="button" class="cw-btn" onclick="cwReprog('sab')">Sábado</button></div></div>`}`;
+  p.classList.add('on');
+  try{
+    const{data}=await sb.from('leads').select('id,celular').eq('id',a.lead_id).single();
+    const cel=((data&&data.celular)||'').replace(/\D/g,''), box=document.getElementById('cw-contacto');
+    if(box&&_cwSel&&_cwSel.id===a.id)box.innerHTML=cel
+      ?`<a class="cw-btn" href="tel:+591${cel}">📞 Llamar</a><a class="cw-btn" target="_blank" rel="noopener" href="https://wa.me/591${cel}">💬 WhatsApp</a>`
+      :'<span class="t" style="opacity:.7">Sin celular cargado</span>';
+  }catch(e){const box=document.getElementById('cw-contacto');if(box)box.innerHTML='<span class="t">No se pudo leer el celular</span>';}
+}
+async function _cwRefrescar(){
+  cwCerrar();
+  try{await renderWeek();}catch(e){}
+  try{cargarMarcadoresDia();}catch(e){}
+  try{renderParaHoy();}catch(e){}
+  try{if(typeof cargarAgendaPersonal==='function')await cargarAgendaPersonal();}catch(e){}
+  try{if(typeof renderInicioCal==='function')renderInicioCal();}catch(e){}
+}
+async function cwHecho(){
+  const a=_cwSel; if(!a||a.completada)return;
+  if(_cwEsVisita(a)){
+    toast('Las visitas se cierran desde la ficha, con el resultado','warning');
+    cwCerrar(); openLeadDetail(a.lead_id,a.id); return;
+  }
+  try{
+    const{error}=await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',a.id);
+    if(error)throw error;
+    try{registrarAuditoria('marcar_hecho_agenda','agenda_personal',a.id,{tipo:_cwTipo(a),lead_id:a.lead_id});}catch(e){}
+    toast('✅ Marcada como hecha');
+    await _cwRefrescar();
+  }catch(e){
+    toast('No se pudo marcar: '+((e&&e.message)||'error'),'error');
+    cwCerrar(); openLeadDetail(a.lead_id,a.id);
+  }
+}
+function _cwDestino(que,a){
+  const hoy=ymdBolivia(new Date()), p=_lpParts(new Date());
+  const wdHoy=(new Date(Date.UTC(p.y,p.m,p.d)).getUTCDay()+6)%7;
+  let add=0;
+  if(que==='manana')add=1;
+  else if(que==='vie')add=((4-wdHoy)+7)%7||7;
+  else if(que==='sab')add=((5-wdHoy)+7)%7||7;
+  const ymd=ymdBolivia(new Date(new Date(hoy+'T12:00:00-04:00').getTime()+add*86400000));
+  let hm=_cwHm(a.fecha_programada); if(hm==='00:00')hm='09:00';
+  let iso=_dtBoliviaToIso(ymd+'T'+hm);
+  if(que==='hoy'&&new Date(iso)<=new Date()){
+    /* hoy y la hora original ya paso: proxima media hora del dia */
+    const mm=_cwHm(new Date(Date.now()+30*60000)).split(':'), h=+mm[0], m=+mm[1]<30?30:0, hh=m===0?h+1:h;
+    if(hh>23)return null;
+    iso=_dtBoliviaToIso(hoy+'T'+String(hh).padStart(2,'0')+':'+String(m).padStart(2,'0'));
+  }
+  return iso;
+}
+async function cwReprog(que){
+  const a=_cwSel; if(!a||a.completada)return;
+  if(_cwEsVisita(a)){
+    toast('Para reprogramar una visita usá "Reprogramar visita" en la ficha','warning');
+    cwCerrar(); openLeadDetail(a.lead_id,a.id); return;
+  }
+  const iso=_cwDestino(que,a);
+  if(!iso){toast('Ya es muy tarde para hoy: elegí mañana','error');return;}
+  try{
+    const{error}=await sb.from('agenda_personal').update({fecha_programada:iso}).eq('id',a.id);
+    if(error)throw error;
+    try{registrarAuditoria('reprogramar_gestion','agenda_personal',a.id,{de:a.fecha_programada,a:iso});}catch(e){}
+    toast('📅 Reprogramada para '+_cwDiaTxt(iso)+' · '+_cwHm(iso));
+    await _cwRefrescar();
+  }catch(e){toast('Error: '+((e&&e.message)||'no se pudo reprogramar'),'error');}
 }
 
 function buildLegend(){
