@@ -1352,52 +1352,68 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   body.cat-imprimiendo #cat-hoja .no-print{display:none!important}
   body.cat-imprimiendo{background:#fff!important}
 }
+/* ═══ v272 — tema-cap: captadoras reusan body.tema-ceo (riel, vidrio, variables). Solo lo propio de este rol. ═══ */
+body.tema-cap .ceo-menu-wrap{display:block}
+body.tema-cap #ceo-menu > #hdr-oportunidad{display:flex !important}
+body.tema-cap .mobile-note,body.tema-cap .ceo-vermas,body.tema-cap #marcadores-por-vendedor{display:none !important}
+body.tema-cap #screen-week.active{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+body.tema-cap #screen-week > .screen-title{order:0;margin:0}
+body.tema-cap #screen-week > .filter-bar{order:1}
+body.tema-cap #screen-week > #ws-wrap,body.tema-cap #screen-week > #wm-wrap{order:2}
+body.tema-cap #screen-week > .marcadores-dia{order:3}
+body.tema-cap #screen-week > #para-hoy-wrap{order:4;margin:0 !important}
+body.tema-cap #para-hoy-wrap{background:var(--ceo-card);border:1px solid var(--ceo-line);border-radius:var(--ceo-radius);padding:10px 14px}
+body.tema-cap #para-hoy-wrap > div:first-child{min-height:var(--ceo-tap,44px);display:flex;align-items:center}
+body.tema-cap #para-hoy-wrap > div:first-child::after{content:'▼';margin-left:8px;font-size:11px;opacity:.7}
+body.tema-cap #para-hoy-wrap.abierto > div:first-child::after{content:'▲'}
+body.tema-cap #para-hoy-wrap:not(.abierto) #para-hoy-body,
+body.tema-cap #para-hoy-wrap:not(.abierto) #en-cierre-wrap,
+body.tema-cap #para-hoy-wrap:not(.abierto) > div:first-child button{display:none !important}
+body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost{min-height:var(--ceo-tap,44px)}
 /* ═══ v270 — Agenda de captadoras (solo field_capturer). Azul marino + vidrio + amarillo ═══ */
 .cw-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 12px}
-.cw-chip{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07);color:#EAF0FF;font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.cw-chip.on{background:var(--gold);color:#0B1B3A;border-color:var(--gold)}
-.cw-new{margin-left:auto;min-height:44px;padding:0 18px;border-radius:22px;border:0;background:var(--gold);color:#0B1B3A;font-weight:800;font-size:14px;cursor:pointer}
-.cw-grid{display:grid !important;grid-template-columns:1.15fr repeat(7,minmax(0,1fr));gap:8px;align-items:start;background:linear-gradient(160deg,#0B1B3A,#102A56 60%,#0E2347);padding:10px;border-radius:16px}
-.cw-col{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);min-width:0;display:flex;flex-direction:column}
-.cw-col.late{border-color:#FF6B6B;background:rgba(255,80,80,.10)}
-.cw-col.today{border-color:var(--gold);background:rgba(242,197,0,.10)}
-.cw-head{padding:10px 10px 8px;border-bottom:1px solid rgba(255,255,255,.12);text-align:center;color:#EAF0FF}
+.cw-chip{min-height:var(--ceo-tap,44px);padding:0 16px;border-radius:22px;border:1px solid var(--ceo-line);background:var(--ceo-card);color:var(--ceo-ink);font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cw-chip.on{background:var(--ac1);color:var(--on-ac);border-color:var(--ac1)}
+.cw-grid{display:grid !important;grid-template-columns:1.15fr repeat(7,minmax(0,1fr));gap:8px;align-items:start;background:transparent;padding:0;border-radius:var(--ceo-radius)}
+.cw-col{background:var(--ceo-card);border:1px solid var(--ceo-line);border-radius:var(--ceo-radius);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);min-width:0;display:flex;flex-direction:column}
+.cw-col.late{border-color:var(--st-atrasado);background:color-mix(in srgb,var(--st-atrasado) 14%,transparent)}
+.cw-col.today{border-color:var(--ac1);background:color-mix(in srgb,var(--ac1) 12%,transparent)}
+.cw-head{padding:10px 10px 8px;border-bottom:1px solid var(--ceo-line);text-align:center;color:var(--ceo-ink)}
 .cw-head .n{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
 .cw-head .d{font-family:'Playfair Display',serif;font-weight:900;font-size:24px;line-height:1.1}
-.cw-col.today .cw-head .d,.cw-col.today .cw-head .n{color:var(--gold);opacity:1}
-.cw-col.late .cw-head .d,.cw-col.late .cw-head .n{color:#FF8A8A;opacity:1}
+.cw-col.today .cw-head .d,.cw-col.today .cw-head .n{color:var(--ac1);opacity:1}
+.cw-col.late .cw-head .d,.cw-col.late .cw-head .n{color:var(--st-atrasado);opacity:1}
 .cw-body{padding:8px;display:flex;flex-direction:column;gap:8px}
 .cw-empty{color:rgba(234,240,255,.45);text-align:center;font-size:13px;padding:8px 0}
-.cw-card{position:relative;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-left:6px solid var(--cwk,#9AA7C7);border-radius:10px;padding:8px 10px;color:#F4F7FF;cursor:pointer;min-height:44px;text-align:left;width:100%;font:inherit}
-.cw-card:hover{background:rgba(255,255,255,.18)}
-.cw-card.late{background:rgba(255,80,80,.16);border-color:rgba(255,120,120,.5);border-left-color:var(--cwk,#FF6B6B)}
+.cw-card{position:relative;background:var(--ceo-card);border:1px solid var(--ceo-line);border-left:6px solid var(--cwk,var(--gray-400));border-radius:var(--ceo-radius);padding:8px 10px;color:var(--ceo-ink);cursor:pointer;min-height:var(--ceo-tap,44px);text-align:left;width:100%;font:inherit}
+.cw-card:hover{background:var(--ceo-line)}
+.cw-card.late{background:color-mix(in srgb,var(--st-atrasado) 18%,transparent);border-color:var(--st-atrasado);border-left-color:var(--cwk,var(--st-atrasado))}
 .cw-card.done{opacity:.6}
 .cw-card.deleg{opacity:.55}
-.cw-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:8px;background:var(--cwk,#9AA7C7);color:#10203F}
+.cw-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:8px;background:var(--cwk,var(--gray-400));color:var(--on-ac)}
 .cw-name{font-size:14px;font-weight:700;margin-top:4px;word-break:break-word}
 .cw-time{font-size:13px;opacity:.9;margin-top:2px}
-.cw-debia{font-size:12px;font-weight:700;color:#FFB3B3;margin-top:3px}
-.cw-more,.cw-hechas{min-height:44px;width:100%;border-radius:10px;border:1px dashed rgba(255,255,255,.3);background:transparent;color:#EAF0FF;font-size:13px;font-weight:700;cursor:pointer}
+.cw-debia{font-size:12px;font-weight:700;color:var(--st-atrasado);margin-top:3px}
+.cw-more,.cw-hechas{min-height:var(--ceo-tap,44px);width:100%;border-radius:var(--ceo-radius);border:1px dashed var(--ceo-line);background:transparent;color:var(--ceo-ink);font-size:13px;font-weight:700;cursor:pointer}
 .cw-k-i1{--cwk:var(--st-1intento)}.cw-k-i2{--cwk:var(--st-2intento)}.cw-k-i3{--cwk:var(--st-3intento)}
-.cw-k-ind{--cwk:var(--st-indagacion)}.cw-k-env{--cwk:var(--st-envio)}.cw-k-vis{--cwk:#43A047}
-.cw-k-seg{--cwk:#F2C500}.cw-k-otro{--cwk:#9AA7C7}
+.cw-k-ind{--cwk:var(--st-indagacion)}.cw-k-env{--cwk:var(--st-envio)}.cw-k-vis{--cwk:var(--st-completo)}
+.cw-k-seg{--cwk:var(--ac1)}.cw-k-otro{--cwk:var(--gray-400)}
 .cw-ov{position:fixed;inset:0;background:rgba(3,10,25,.55);z-index:900;display:none}
 .cw-ov.on{display:block}
-.cw-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:linear-gradient(170deg,#0B1B3A,#12305F);color:#F4F7FF;z-index:901;padding:18px;overflow-y:auto;box-shadow:-10px 0 30px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .2s;border-left:1px solid rgba(255,255,255,.18)}
+.cw-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--ceo-bg);color:var(--ceo-ink);z-index:901;padding:18px;overflow-y:auto;box-shadow:-10px 0 30px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .2s;border-left:1px solid var(--ceo-line)}
 .cw-panel.on{transform:none}
 .cw-panel h3{margin:6px 0 2px;font-size:20px}
-.cw-sec{margin-top:14px}.cw-sec .l{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-bottom:4px}
+.cw-sec{margin-top:14px}.cw-sec .l{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ac1);margin-bottom:4px}
 .cw-sec .t{font-size:14px;line-height:1.45}
 .cw-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.cw-btn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.09);color:#fff;font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-.cw-btn.pri{background:var(--gold);color:#0B1B3A;border-color:var(--gold)}
-.cw-x{float:right;min-width:44px;min-height:44px;font-size:20px;background:transparent;border:0;color:#fff;cursor:pointer}
+.cw-btn{min-height:var(--ceo-tap,44px);padding:0 16px;border-radius:var(--ceo-radius);border:1px solid var(--ceo-line);background:var(--ceo-card);color:var(--ceo-ink);font-size:14px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.cw-btn.pri{background:var(--ac1);color:var(--on-ac);border-color:var(--ac1)}
+.cw-x{float:right;min-width:44px;min-height:var(--ceo-tap,44px);font-size:20px;background:transparent;border:0;color:var(--ceo-ink);cursor:pointer}
 @media(max-width:1100px){.cw-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:700px){
   .cw-grid{grid-template-columns:minmax(0,1fr)}
   .cw-panel{top:auto;left:0;width:100%;max-height:88vh;border-radius:18px 18px 0 0;transform:translateY(105%)}
   .cw-panel.on{transform:none}
-  .cw-new{margin-left:0}
 }
 </style>
 </head>
@@ -1525,7 +1541,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
     <!-- Panel "Para hoy" — solo field_capturer y commercial_lead -->
     <div id="para-hoy-wrap" style="display:none;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold)">📋 Para hoy</div>
+        <div id="para-hoy-t" style="font-size:13px;font-weight:700;color:var(--gold)">📋 Para hoy</div>
         <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_paraHoyTodos=false;renderParaHoy()">↺ Actualizar</button>
       </div>
       <div id="para-hoy-body"></div>
@@ -2674,7 +2690,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='270';
+  var CURRENT_VERSION='272';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3628,6 +3644,8 @@ function _normColab(n){
   return cand.length===1?cand[0].nombre:n;
 }
 async function cargarMarcadoresDia(){
+  /* v272 — captadoras: los contadores los escribe renderWeekCapt() con los mismos datos de la grilla */
+  if(cu&&cu.rol==='field_capturer')return;
   const hoy=ymdLocal(new Date());
   // Bolivia es UTC-4 fijo: límites del día como instantes UTC correctos
   const hoyInicio=new Date(hoy+'T00:00:00-04:00').toISOString();
@@ -3974,6 +3992,21 @@ function toggleTemaCeo(){
   try{localStorage.setItem('geat_tema_ceo',on?'nuevo':'clasico');}catch(e){}
   _temaCeoBtn();
 }
+/* v272 — captadoras: MISMO tema y MISMO riel que el admin (body.tema-ceo + .nav-tabs). El riel
+   es el mismo nodo <nav>: sus 4 items son las pestañas que ya le corresponden por rol
+   (Agenda, Mis numeros, Catalogo, Mi registro); no hay segunda lista. tema-cap solo agrega
+   lo que cambia para este rol. Admin y commercial_lead no pasan por aca. */
+function aplicarTemaCaptadora(){
+  document.body.classList.add('tema-ceo','tema-cap');
+  _ceoMoverHeader(true);
+  aplicarPaletaCeo('cabina');
+  /* "Nueva Oportunidad" pierde su lugar en la cabecera (una sola accion: Crear Lead) y pasa al menu ⋯ */
+  const menu=document.getElementById('ceo-menu'),op=document.getElementById('hdr-oportunidad');
+  if(menu&&op){menu.appendChild(op);}
+  const rest=document.getElementById('ceo-restaurar-btn'); if(rest)rest.style.display='none';
+  const w=document.getElementById('para-hoy-wrap');
+  if(w){const h=w.firstElementChild;if(h&&!h.dataset.cw){h.dataset.cw='1';h.style.cursor='pointer';h.addEventListener('click',function(e){if(e.target.closest('button'))return;w.classList.toggle('abierto');});}}
+}
 function startApp(){
   _sessionStart=Date.now();
   document.getElementById('login').style.display='none';
@@ -4043,6 +4076,7 @@ function startApp(){
   if(cu.rol==='field_capturer'){
     const tabRep=document.getElementById('tab-reports');
     if(tabRep)tabRep.style.display='none';
+    aplicarTemaCaptadora();
   }
   // Mi Registro: visible para field_capturer y commercial_lead
   if(cu.rol==='field_capturer'||cu.rol==='commercial_lead'){
@@ -5568,8 +5602,7 @@ async function renderWeekCapt(){
   let bar=document.getElementById('cw-bar');
   if(!bar){bar=document.createElement('div');bar.id='cw-bar';bar.className='cw-bar';g.parentNode.insertBefore(bar,g);}
   const F=[['todas','Todas'],['intentos','Intentos'],['seguimiento','Seguimiento'],['indagacion','Indagación'],['envio','Envío info'],['visita','Visita']];
-  bar.innerHTML=F.map(function(f){return `<button type="button" class="cw-chip${_cwFiltro===f[0]?' on':''}" onclick="_cwSetFiltro('${f[0]}')">${f[1]}</button>`;}).join('')+
-    `<button type="button" class="cw-new" onclick="openModal('modalNewLead')">+ Crear lead</button>`;
+  bar.innerHTML=F.map(function(f){return `<button type="button" class="cw-chip${_cwFiltro===f[0]?' on':''}" onclick="_cwSetFiltro('${f[0]}')">${f[1]}</button>`;}).join('');
   let html='';
   /* ATRASADAS: el contador es el total real; la lista respeta el filtro y muestra 5 */
   const lateOpen=!!_cwAbierto.late, lateList=lateOpen?lateShow:lateShow.slice(0,5);
@@ -5589,6 +5622,14 @@ async function renderWeekCapt(){
       `</div></div>`;
   }
   g.innerHTML=html;
+  /* v272 — UNA sola fuente para los contadores: los tres numeros de arriba salen de
+     las mismas listas que dibujan la grilla (nada se recuenta aparte). */
+  const hoyY=ymdLocal(now);
+  const delHoy=semana.filter(function(a){return ymdLocal(new Date(a.fecha_programada))===hoyY&&!lateIds.has(a.id)&&!_esVisitaQueGenere(a);});
+  const _set=function(i,v){const e=document.getElementById(i);if(e)e.textContent=v;};
+  _set('m-realizado',delHoy.filter(function(a){return a.completada;}).length);
+  _set('m-pendiente',delHoy.filter(function(a){return !a.completada;}).length);
+  _set('m-atrasado',lateAll.length);
 }
 
 /* ── Panel lateral ── */
@@ -15516,13 +15557,17 @@ async function renderParaHoy(){
     if(error)throw error;
     try{_renderEnCierre();}catch(e){}
     const orden={'alto':0,'medio':1,'bajo':2};
+    /* v272 — el lead que ya paso al cerrador (David) no es trabajo de la captadora: sale de "Para hoy".
+       Sigue visible en "En cierre". _paraHoyCard conserva su rama gris para los demas roles. */
+    const _soloMios=cu.rol==='field_capturer';
     /* A igual grado de interés, primero el que lleva más tiempo esperando. */
-    const todos=(data||[]).slice().sort(function(a,b){
+    const todos=(data||[]).filter(function(l){return !(_soloMios&&(l.cerrador||'').trim());}).slice().sort(function(a,b){
       const g=(orden[a.grado_interes]||3)-(orden[b.grado_interes]||3);
       if(g!==0)return g;
       return (leadDiasSinGestion(b)||0)-(leadDiasSinGestion(a)||0);
     });
     const mostrar=_paraHoyTodos?todos:todos.slice(0,20);
+    const _pt=document.getElementById('para-hoy-t'); if(_pt)_pt.textContent='📋 Para hoy ('+todos.length+')';
     if(!mostrar.length){
       cont.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:6px 0">Sin pendientes para hoy. 🎉</div>';
       return;
