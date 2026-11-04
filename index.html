@@ -2690,7 +2690,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='272';
+  var CURRENT_VERSION='273';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20209,6 +20209,8 @@ function _catFiltrados(){
   });
 }
 function _catFranja(){
+  /* v273 — captadoras: sin aviso de confirmacion de precios (es tema de admin y David). El resto del codigo no cambia. */
+  if(cu&&cu.rol==='field_capturer')return '';
   const d=_catDiasSinConfirmar();
   let txt,vieja=false;
   if(d==null){txt='Precios sin confirmar: nunca se registró una confirmación.';vieja=true;}
