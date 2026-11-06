@@ -1349,7 +1349,9 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-pick{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:rgba(14,12,9,.82);color:var(--gold);font-size:24px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit}
 .cat-pick.on{background:var(--gold);color:var(--black)}
 .cat-img{position:relative}
-.cat-gen{height:44px}
+.cat-gen{height:44px;min-height:44px;padding:0 16px;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;background:var(--gray-800)}
+.cat-gen:hover{background:var(--gold);color:var(--black)}
+.cat-gen-v{font-weight:400;font-size:11px;opacity:.8;margin-left:4px}
 .cat-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border:1px solid var(--gold);border-radius:10px;padding:8px 12px;margin-bottom:14px;background:var(--gray-900);font-size:13px}
 .cat-selchip{display:inline-flex;align-items:center;gap:4px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:999px;padding:0 6px 0 12px;min-height:36px}
 .cat-selchip button{background:none;border:0;color:var(--gray-200);font-size:20px;min-width:36px;min-height:36px;cursor:pointer}
@@ -1375,6 +1377,9 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cvw-bar{display:flex;align-items:center;gap:4px;background:var(--gray-900);color:#fff;font-size:12px;padding-left:10px}
 .cvw-bar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cvw-bar button{min-width:44px;min-height:44px;background:none;border:0;color:#fff;font-size:18px;cursor:pointer}
+.cat-sil{width:46%;max-width:150px;color:var(--gray-600);opacity:.9}
+#cat-clave{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px}
+.ccl-box{background:var(--gray-800);border:1px solid var(--gold);border-radius:12px;padding:20px;width:min(380px,100%)}
 #cat-hoja{display:none;background:#fff;color:#000;padding:24px;font-size:12px}
 #cat-hoja table{width:100%;border-collapse:collapse;margin-top:10px}
 #cat-hoja th,#cat-hoja td{border:1px solid #999;padding:4px 6px;text-align:right}
@@ -2745,7 +2750,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276f';
+  var CURRENT_VERSION='276g';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20226,6 +20231,8 @@ _loginInit=initLogin();
    no cambian hasta "aprobar". Baja de modelos = activo=false (no se borra). */
 const CAT_URL=SB_URL+'/functions/v1/catalogo-admin';
 const CAT_CBDI={ant:158.89,nue:163.33,base:'CBDI sep→oct 2026'};
+/* v276g — Orden de José Miguel: el cambio de precios pasa a la Tabla oficial (v277). El selector Vigente/Borrador y la pestaña Incremento quedan OCULTOS (el código sigue). Poner true para volver a mostrarlos. */
+const CAT_INCR_VISIBLE=false;
 let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,confirmandoRev:false,cargado:false,selm:[],sub:'cat',arch:[]};
 
 async function _catCall(payload){
@@ -20233,7 +20240,7 @@ async function _catCall(payload){
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
     body:JSON.stringify(Object.assign({token:localStorage.getItem('geat_session_token')},payload))});
   const j=await r.json();
-  if(!j||j.ok!==true)throw new Error((j&&j.error)||'error de catálogo');
+  if(!j||j.ok!==true){const er=new Error((j&&j.error)||'error de catálogo');er.requiereClave=!!(j&&j.requiere_clave);throw er;}
   return j;
 }
 function _catE(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -20265,6 +20272,8 @@ async function renderCatalogo(){
     if(!_cat.edit){_cat.vista='vigente';if(_cat.tab==='incr')_cat.tab='modelo';}
     if(!_cat.bor&&_cat.vista==='borrador')_cat.vista='vigente';
     if(_cat.sel&&!_cat.modelos.some(m=>m.id===_cat.sel))_cat.sel=null;
+    if(!_cat.sel&&_cat.modelos.length)_cat.sel=(_catFiltrados()[0]||_cat.modelos[0]).id;
+    if(!CAT_INCR_VISIBLE){_cat.vista='vigente';_cat.tab='modelo';}
     _catPintar();
   }catch(e){
     el.innerHTML='<div class="loading-state" style="color:var(--st-atrasado-tx)">No se pudo cargar el catálogo: '+_catE(e.message)+'</div>';
@@ -20303,7 +20312,7 @@ function _catPintar(){
   let h=_catFranja();
   h+='<div class="cat-bar">';
   h+=filtros.map(f=>'<button class="cat-chip'+(_cat.filtro===f[0]?' on':'')+'" onclick="catFiltro(\''+f[0]+'\')">'+f[1]+'</button>').join('');
-  if(_cat.edit&&_cat.bor){
+  if(CAT_INCR_VISIBLE&&_cat.edit&&_cat.bor){
     h+='<span style="display:flex;gap:6px"><button class="cat-chip'+(!verBor?' on':'')+'" onclick="catVista(\'vigente\')">Vigente</button><button class="cat-chip'+(verBor?' on':'')+'" onclick="catVista(\'borrador\')">Borrador +'+_catE(_catPct())+'%</button></span>';
   }
   h+='<input class="form-control" style="max-width:240px;margin-left:auto" placeholder="Buscar modelo…" value="'+_catE(_cat.busca)+'" oninput="catBuscar(this.value)" id="cat-q"></div>'+_catSeleccion();
@@ -20322,7 +20331,7 @@ function _catGrid(verBor){
     const en=_cat.selm.indexOf(m.id)>=0;
     /* v276 — el equipo ve solo el total llave en mano; el precio por m² es de los editores */
     return '<div class="cat-card'+(_cat.sel===m.id?' sel':'')+'" onclick="catSel('+m.id+')">'
-      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':'Sin foto')
+      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':_CAT_SIL)
       +'<button class="cat-pick'+(en?' on':'')+'" title="'+(en?'Quitar de mi selección':'Agregar a mi selección')+'" onclick="event.stopPropagation();catPick('+m.id+')">'+(en?'✓':'+')+'</button></div>'
       +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs||'—')+'</div>'
       +(_cat.edit?'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(m2,2)+' /m²</div>':'')
@@ -20331,10 +20340,10 @@ function _catGrid(verBor){
 }
 function _catPanel(){
   let h='';
-  if(_cat.edit){
+  if(CAT_INCR_VISIBLE&&_cat.edit){
     h+='<div class="cat-tabs"><button class="cat-chip'+(_cat.tab==='modelo'?' on':'')+'" onclick="catTab(\'modelo\')">Modelo</button><button class="cat-chip'+(_cat.tab==='incr'?' on':'')+'" onclick="catTab(\'incr\')">Incremento</button></div>';
   }
-  if(_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
+  if(CAT_INCR_VISIBLE&&_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
   const m=_cat.modelos.find(x=>x.id===_cat.sel);
   if(!m)return h+'<div style="font-size:13px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
   return h+_catFicha(m);
@@ -20397,7 +20406,7 @@ async function catCalcular(){
   const v=Number(String(_cat.pct).replace(',','.'));
   if(!isFinite(v)||v===0){toast('Ingresá un porcentaje distinto de 0','error');return;}
   try{
-    await _catCall({action:'crear_borrador',porcentaje:v,indice_anterior:_cat.ia,indice_nuevo:_cat.inn,base:_cat.base||('Manual '+String(_cat.pct)+'%')});
+    await _catPrecio({action:'crear_borrador',porcentaje:v,indice_anterior:_cat.ia,indice_nuevo:_cat.inn,base:_cat.base||('Manual '+String(_cat.pct)+'%')});
     toast('Borrador calculado','ok');
     _cat.vista='borrador';
     await renderCatalogo();
@@ -20405,7 +20414,7 @@ async function catCalcular(){
 }
 async function catDescartar(){
   try{
-    await _catCall({action:'descartar'});
+    await _catPrecio({action:'descartar'});
     toast('Borrador descartado','ok');
     _cat.vista='vigente';_cat.confirmando=false;
     await renderCatalogo();
@@ -20413,7 +20422,7 @@ async function catDescartar(){
 }
 async function catAprobar(){
   try{
-    const j=await _catCall({action:'aprobar'});
+    const j=await _catPrecio({action:'aprobar'});
     toast('Precios publicados ('+(j.modelos_actualizados!=null?j.modelos_actualizados:'')+' modelos)','ok');
     _cat.vista='vigente';_cat.confirmando=false;_cat.pct='';
     await renderCatalogo();
@@ -20423,7 +20432,7 @@ function catConfRev(v){_cat.confirmandoRev=v;_catPintar();}
 async function catRevertir(){
   _cat.confirmandoRev=false;
   try{
-    const j=await _catCall({action:'revertir'});
+    const j=await _catPrecio({action:'revertir'});
     toast('Incremento revertido ('+(j.revertidos||0)+' modelos)','ok');
     if(j.saltados>0)toast('Atención: '+j.saltados+' modelo(s) NO se revirtieron porque su precio se cambió después del incremento.','error');
     await renderCatalogo();
@@ -20484,7 +20493,7 @@ function _catFechaRef(){
 }
 function _catGenerales(){
   const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
-    return '<button class="cat-chip cat-gen" '+(a?'onclick="catVer('+a.id+')"':'disabled style="opacity:.45"')+'>'+lbl+(a?' <span style="font-weight:400;font-size:11px">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':' <span style="font-weight:400;font-size:11px">sin cargar</span>')+'</button>';};
+    return '<button class="btn-secondary cat-gen" onclick="'+(a?'catVer('+a.id+')':'catSinGeneral(\''+tipo+'\')')+'">'+lbl+(a?' <span class="cat-gen-v">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':'')+'</button>';};
   return '<div class="cat-gen-row">'+bt('cronograma','📅 Cronograma modelo')+bt('contrato','📄 Contrato modelo')+'</div>';
 }
 function _catSeleccion(){
@@ -20492,6 +20501,7 @@ function _catSeleccion(){
   const ch=_cat.selm.map(id=>{const m=_cat.modelos.find(x=>x.id===id);return m?'<span class="cat-selchip">'+_catE(m.nombre)+' <button onclick="catPick('+id+')" aria-label="Quitar">×</button></span>':'';}).join('');
   return '<div class="cat-sel"><b>Mi selección ('+_cat.selm.length+'/4)</b>'+ch+'<button class="btn-primary" style="min-height:44px;margin-left:auto" onclick="catCopiarSel()">📋 Copiar todo para WhatsApp</button></div>';
 }
+function catSinGeneral(t){toast('Todavía no se cargó el '+(t==='contrato'?'contrato modelo':'cronograma modelo'),'error');}
 function catPick(id){
   const i=_cat.selm.indexOf(id);
   if(i>=0)_cat.selm.splice(i,1);
@@ -20707,7 +20717,13 @@ function _catDibujarCard(ctx,m,img,x,y,w,h){
   ctx.strokeStyle=_CATC.line;ctx.lineWidth=3;ctx.strokeRect(1.5,1.5,W-3,H-3);
   /* 1) render completo a todo el ancho, con su proporción */
   if(img)ctx.drawImage(img,0,0,W,nat.rh);
-  else{ctx.fillStyle='#E4DFCE';ctx.fillRect(0,0,W,nat.rh);ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(700,40);ctx.textAlign='center';ctx.fillText('Imagen no disponible',W/2,nat.rh/2);}
+  else{
+    ctx.fillStyle='#E4DFCE';ctx.fillRect(0,0,W,nat.rh);
+    const hx=W/2,hy=nat.rh/2;ctx.fillStyle='#B9B2A0';
+    ctx.beginPath();ctx.moveTo(hx-250,hy-10);ctx.lineTo(hx,hy-190);ctx.lineTo(hx+250,hy-10);ctx.closePath();ctx.fill();
+    ctx.fillRect(hx-200,hy-10,400,190);
+    ctx.fillStyle='#E4DFCE';ctx.fillRect(hx-35,hy+70,70,110);ctx.fillRect(hx-160,hy+30,80,70);ctx.fillRect(hx+80,hy+30,80,70);
+  }
   ctx.textAlign='left';
   /* 2) contenido: si la fila es más alta que esta tarjeta, el sobrante se reparte arriba y abajo */
   ctx.save();ctx.translate(0,Math.max(0,H-nat.h)/2);
@@ -20819,6 +20835,46 @@ async function catDescargarImg(id){
   catch(e){toast('No se pudo generar la imagen','error');}
 }
 function catCopiarSel(){_catEntregar(_cat.selm.slice(),'GEAT-seleccion');}
+
+/* v276g — silueta de casa para los modelos sin render */
+const _CAT_SIL='<svg class="cat-sil" viewBox="0 0 120 90" aria-label="Sin render" role="img"><path d="M8 46 L60 8 L112 46 Z" fill="currentColor"/><rect x="18" y="46" width="84" height="38" fill="currentColor"/><rect x="54" y="58" width="14" height="26" fill="#1a1a1a" opacity=".55"/><rect x="26" y="54" width="18" height="14" fill="#1a1a1a" opacity=".55"/><rect x="76" y="54" width="18" height="14" fill="#1a1a1a" opacity=".55"/></svg>';
+/* v276g — segunda clave de precios. El 'unlock' vive SOLO en memoria (nunca localStorage); la clave nunca se guarda ni se imprime. */
+let _catUnlock={tok:null,exp:0};
+function _catPedirClave(){
+  return new Promise(function(res){
+    catClaveCerrar();
+    const o=document.createElement('div');o.id='cat-clave';
+    o.innerHTML='<div class="ccl-box"><div class="section-title" style="margin-bottom:6px">Clave de precios</div><div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">Para cambiar precios hace falta la segunda clave (no es tu PIN).</div><input type="password" id="ccl-in" class="form-control" autocomplete="new-password" style="height:48px" placeholder="Clave"><div id="ccl-err" style="min-height:20px;color:var(--st-atrasado-tx);font-size:13px;margin:6px 0"></div><div style="display:flex;gap:8px"><button class="btn-primary" id="ccl-ok" style="min-height:44px">Verificar</button><button class="btn-ghost" id="ccl-no" style="min-height:44px">Cancelar</button></div></div>';
+    document.body.appendChild(o);
+    const inp=o.querySelector('#ccl-in'),ok=o.querySelector('#ccl-ok'),er=o.querySelector('#ccl-err');
+    function fin(v){inp.value='';o.remove();res(v);}
+    async function enviar(){
+      if(!inp.value)return;
+      ok.disabled=true;er.textContent='';
+      try{
+        const j=await _catCall({action:'clave_verificar',clave:inp.value});
+        _catUnlock={tok:j.unlock,exp:Number(j.expira)||0};
+        fin(true);
+      }catch(e){er.textContent=e.message;inp.value='';ok.disabled=false;inp.focus();}
+    }
+    ok.onclick=enviar;
+    o.querySelector('#ccl-no').onclick=function(){fin(false);};
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')enviar();if(e.key==='Escape')fin(false);});
+    setTimeout(function(){inp.focus();},50);
+  });
+}
+function catClaveCerrar(){const o=document.getElementById('cat-clave');if(o)o.remove();}
+async function _catPrecio(payload){
+  const vigente=_catUnlock.tok&&Date.now()<_catUnlock.exp-5000;
+  if(!vigente&&!(await _catPedirClave()))throw new Error('Cancelado: hace falta la clave de precios');
+  try{return await _catCall(Object.assign({unlock:_catUnlock.tok},payload));}
+  catch(e){
+    if(!e.requiereClave)throw e;
+    _catUnlock={tok:null,exp:0};
+    if(!(await _catPedirClave()))throw new Error('Cancelado: hace falta la clave de precios');
+    return await _catCall(Object.assign({unlock:_catUnlock.tok},payload));
+  }
+}
 </script>
 </body>
 </html>
