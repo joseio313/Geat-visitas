@@ -2742,7 +2742,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276a';
+  var CURRENT_VERSION='276b';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20712,12 +20712,14 @@ function _catDibujarCard(ctx,m,img,x,y,w,h){
   ctx.fillText(sp,48,ty+40);
   if(m.superficie_m2!=null)ctx.fillText(_catN(m.superficie_m2,1)+' m² construidos',48,ty+92);
   ty+=104+24;
-  ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,m.precio_total_usd!=null?66:52);
-  ctx.fillText(m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio',48,ty+62);
+  const ptxt=m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio';
+  let pfs=66;ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,pfs);
+  while(pfs>40&&ctx.measureText(ptxt).width>W-48-300-48-24){pfs-=2;ctx.font=_catFuente(800,pfs);}
+  ctx.fillText(ptxt,48,ty+62);
   ctx.fillStyle=_CATC.tx;ctx.font=_catFuente(600,40);
   ctx.fillText('llave en mano',48,ty+62+50);
   /* plano referencial pequeño a la derecha */
-  const pw=330,ph=260,px=W-48-pw,py=nat.rh+40;
+  const pw=300,ph=250,px=W-48-pw,py=nat.rh+40;
   _catPlano(ctx,px,py,pw,ph,m.dormitorios);
   ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(600,22);ctx.textAlign='center';
   ctx.fillText('Plano referencial',px+pw/2,py+ph+34);
