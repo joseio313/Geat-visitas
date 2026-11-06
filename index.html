@@ -1342,6 +1342,37 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   .cat-franja{white-space:normal}
 }
 @media(max-width:560px){.cat-grid{grid-template-columns:1fr}}
+/* v276 — Catálogo v2 */
+@media(min-width:1101px){.cat-wrap{grid-template-columns:minmax(0,1fr) 450px}}
+.cat-pick{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:rgba(14,12,9,.82);color:var(--gold);font-size:24px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit}
+.cat-pick.on{background:var(--gold);color:var(--black)}
+.cat-img{position:relative}
+.cat-gen{height:44px}
+.cat-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border:1px solid var(--gold);border-radius:10px;padding:8px 12px;margin-bottom:14px;background:var(--gray-900);font-size:13px}
+.cat-selchip{display:inline-flex;align-items:center;gap:4px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:999px;padding:0 6px 0 12px;min-height:36px}
+.cat-selchip button{background:none;border:0;color:var(--gray-200);font-size:20px;min-width:36px;min-height:36px;cursor:pointer}
+.cat-canvasbox{min-height:120px}
+.cat-doc{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-600)}
+.cat-obras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.cat-obra{cursor:pointer;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;overflow:hidden}
+.cat-obra-th{height:90px;display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--gray-700) center/cover no-repeat}
+.cat-obra-t{padding:6px 8px;font-size:12px;min-height:34px}
+#cat-visor{position:fixed;inset:0;z-index:10000;background:#0b0a08;display:flex;flex-direction:column;user-select:none;-webkit-user-select:none}
+.cvz-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--gray-900);color:#fff;font-weight:700}
+.cvz-bar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvz-bar button,.cvz-nav button{min-width:44px;min-height:44px;border-radius:8px;border:1px solid var(--gray-600);background:var(--gray-800);color:#fff;font-size:18px;cursor:pointer}
+.cvz-wrap{position:relative;flex:1;overflow:hidden}
+.cvz-body{position:absolute;inset:0;overflow:auto;text-align:center;padding:4px;color:#ddd}
+.cvz-body canvas,.cvz-body img{max-width:100%;display:inline-block;-webkit-touch-callout:none}
+.cvz-body img{height:auto}
+.cvz-marca{position:absolute;inset:0;pointer-events:none;background-repeat:repeat}
+.cvz-nav{justify-content:center;align-items:center;gap:16px;padding:8px;background:var(--gray-900);color:#fff}
+#cat-video-win{position:fixed;right:16px;bottom:16px;width:360px;max-width:calc(100vw - 32px);z-index:9990;background:#000;border:2px solid var(--gold);border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#cat-video-win.grande{width:min(900px,calc(100vw - 32px))}
+#cat-video-win iframe{display:block;width:100%;aspect-ratio:16/9;border:0}
+.cvw-bar{display:flex;align-items:center;gap:4px;background:var(--gray-900);color:#fff;font-size:12px;padding-left:10px}
+.cvw-bar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cvw-bar button{min-width:44px;min-height:44px;background:none;border:0;color:#fff;font-size:18px;cursor:pointer}
 #cat-hoja{display:none;background:#fff;color:#000;padding:24px;font-size:12px}
 #cat-hoja table{width:100%;border-collapse:collapse;margin-top:10px}
 #cat-hoja th,#cat-hoja td{border:1px solid #999;padding:4px 6px;text-align:right}
@@ -2711,7 +2742,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='274';
+  var CURRENT_VERSION='276';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20192,7 +20223,7 @@ _loginInit=initLogin();
    no cambian hasta "aprobar". Baja de modelos = activo=false (no se borra). */
 const CAT_URL=SB_URL+'/functions/v1/catalogo-admin';
 const CAT_CBDI={ant:158.89,nue:163.33,base:'CBDI sep→oct 2026'};
-let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,confirmandoRev:false,cargado:false};
+let _cat={modelos:[],edit:false,conf:null,bor:null,ult:null,busca:'',filtro:'todos',vista:'vigente',sel:null,tab:'modelo',pct:'',base:'',ia:null,inn:null,confirmando:false,confirmandoRev:false,cargado:false,selm:[],sub:'cat',arch:[]};
 
 async function _catCall(payload){
   const r=await fetch(CAT_URL,{method:'POST',
@@ -20226,6 +20257,8 @@ async function renderCatalogo(){
     const j=await _catCall({action:'listar'});
     _cat.modelos=j.modelos||[];_cat.edit=!!j.es_editor;_cat.conf=j.precios_confirmados||null;
     _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.cargado=true;
+    try{const ja=await _catCall({action:'archivo_listar'});_cat.arch=ja.archivos||[];}catch(e2){_cat.arch=[];}
+    _cat.selm=_cat.selm.filter(id=>_cat.modelos.some(m=>m.id===id));
     if(!_cat.edit){_cat.vista='vigente';if(_cat.tab==='incr')_cat.tab='modelo';}
     if(!_cat.bor&&_cat.vista==='borrador')_cat.vista='vigente';
     if(_cat.sel&&!_cat.modelos.some(m=>m.id===_cat.sel))_cat.sel=null;
@@ -20268,7 +20301,8 @@ function _catPintar(){
   if(_cat.edit&&_cat.bor){
     h+='<span style="margin-left:auto;display:flex;gap:6px"><button class="cat-chip'+(!verBor?' on':'')+'" onclick="catVista(\'vigente\')">Vigente</button><button class="cat-chip'+(verBor?' on':'')+'" onclick="catVista(\'borrador\')">Borrador +'+_catE(_catPct())+'%</button></span>';
   }
-  h+='</div><div class="cat-wrap"><div id="cat-grid-wrap">'+_catGrid(verBor)+'</div><div class="cat-panel">'+_catPanel()+'</div></div>';
+  h+='</div>'+_catGenerales()+_catSeleccion();
+  h+='<div class="cat-wrap"><div id="cat-grid-wrap">'+_catGrid(verBor)+'</div><div class="cat-panel">'+_catPanel()+'</div></div>';
   el.innerHTML=h;
 }
 function _catGrid(verBor){
@@ -20279,11 +20313,14 @@ function _catGrid(verBor){
     const m2=verBor?_catNuevoM2(m):m.precio_desde_usd_m2;
     const tot=verBor?_catNuevoTotal(m):m.precio_total_usd;
     const specs=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
+    const en=_cat.selm.indexOf(m.id)>=0;
+    /* v276 — el equipo ve solo el total llave en mano; el precio por m² es de los editores */
     return '<div class="cat-card'+(_cat.sel===m.id?' sel':'')+'" onclick="catSel('+m.id+')">'
-      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':'Sin foto')+'</div>'
+      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':'Sin foto')
+      +'<button class="cat-pick'+(en?' on':'')+'" title="'+(en?'Quitar de mi selección':'Agregar a mi selección')+'" onclick="event.stopPropagation();catPick('+m.id+')">'+(en?'✓':'+')+'</button></div>'
       +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs||'—')+'</div>'
-      +'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(m2,2)+' /m²</div>'
-      +'<div class="cat-total">Total USD '+_catN(tot,0)+(verBor?' (nuevo)':'')+'</div></div></div>';
+      +(_cat.edit?'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(m2,2)+' /m²</div>':'')
+      +'<div class="cat-total'+(_cat.edit?'':' cat-price')+'">'+(_cat.edit?'Total USD ':'Aprox. USD ')+_catN(tot,0)+(verBor?' (nuevo)':'')+(_cat.edit?'':' llave en mano')+'</div></div></div>';
   }).join('')+'</div>';
 }
 function _catPanel(){
@@ -20294,14 +20331,7 @@ function _catPanel(){
   if(_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
   const m=_cat.modelos.find(x=>x.id===_cat.sel);
   if(!m)return h+'<div style="font-size:13px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
-  const img=_catImg(m);
-  h+=(img?'<img src="'+_catE(img)+'" alt="" style="width:100%;border-radius:8px;margin-bottom:10px">':'')
-    +'<div class="cat-name" style="font-size:16px">'+_catE(m.nombre)+'</div>'
-    +'<div class="cat-spec">'+_catE([m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · '))+'</div>'
-    +'<div class="cat-price">USD '+_catN(m.precio_desde_usd_m2,2)+' /m²</div><div class="cat-total">Total USD '+_catN(m.precio_total_usd,0)+'</div>';
-  if(_cat.edit&&m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
-  if(m.pdf_url)h+='<a class="btn-secondary" style="display:inline-flex;align-items:center;margin-top:10px;text-decoration:none" href="'+_catE(m.pdf_url)+'" target="_blank" rel="noopener">📄 Ficha PDF</a>';
-  return h+_catEquipoBtn();
+  return h+_catFicha(m);
 }
 function _catEquipoBtn(){
   return '<div style="margin-top:12px"><button class="btn-ghost" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
@@ -20401,7 +20431,7 @@ async function catConfirmarHoy(){
 function catCopiarWA(){
   const lista=_catFiltrados().filter(m=>m.precio_desde_usd_m2!=null);
   if(!lista.length){toast('No hay modelos para copiar','error');return;}
-  const txt='*Modelos GEAT — precios vigentes*\n'+lista.map(m=>'• '+m.nombre+(m.superficie_m2!=null?' ('+_catN(m.superficie_m2,1)+' m²)':'')+': USD '+_catN(m.precio_desde_usd_m2,2)+'/m²'+(m.precio_total_usd!=null?' · total USD '+_catN(m.precio_total_usd,0):'')).join('\n');
+  const txt='*Modelos GEAT — precios vigentes*\n'+lista.map(m=>'• '+m.nombre+(m.superficie_m2!=null?' ('+_catN(m.superficie_m2,1)+' m²)':'')+(_cat.edit?': USD '+_catN(m.precio_desde_usd_m2,2)+'/m²':': aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano')+(_cat.edit&&m.precio_total_usd!=null?' · total USD '+_catN(m.precio_total_usd,0):'')).join('\n');
   try{
     navigator.clipboard.writeText(txt).then(function(){toast('Texto copiado','ok');},function(){toast('No se pudo copiar','error');});
   }catch(e){toast('No se pudo copiar','error');}
@@ -20430,6 +20460,280 @@ function catCerrarHoja(){
   el.style.cssText='';el.innerHTML='';
   document.body.classList.remove('cat-imprimiendo');
 }
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v276 · CATÁLOGO v2 — lectura para todos los roles                    ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Documentos: solo ver (URL firmada de 120 s, marca de agua, sin descargar).
+   Lo único que se copia/descarga es la imagen de catálogo dibujada en canvas. */
+const CAT_SUBS=[['cat','Catálogo'],['planos','Planos'],['presentacion','Presentación'],['obras','Obras'],['tec','Técnico']];
+function _catFmtF(x){if(!x)return '—';const d=ymdLocal(new Date(x)).split('-');return d[2]+'/'+d[1]+'/'+d[0];}
+function _catArch(tipo,mid){
+  return _cat.arch.filter(a=>a.tipo===tipo&&a.estado==='vigente'&&(mid==null?a.modelo_id==null:a.modelo_id===mid)).sort((x,y)=>(y.version||0)-(x.version||0));
+}
+function _catFechaRef(){
+  const f=_cat.conf?String(_cat.conf).slice(0,10):ymdLocal(new Date());
+  const p=f.split('-');return p[2]+'/'+p[1]+'/'+p[0];
+}
+function _catGenerales(){
+  const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
+    return '<button class="cat-chip cat-gen" '+(a?'onclick="catVer('+a.id+')"':'disabled style="opacity:.45"')+'>'+lbl+(a?' <span style="font-weight:400;font-size:11px">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':' <span style="font-weight:400;font-size:11px">sin cargar</span>')+'</button>';};
+  return '<div class="cat-bar">'+bt('cronograma','📅 Cronograma modelo')+bt('contrato','📄 Contrato modelo')+'</div>';
+}
+function _catSeleccion(){
+  if(!_cat.selm.length)return '';
+  const ch=_cat.selm.map(id=>{const m=_cat.modelos.find(x=>x.id===id);return m?'<span class="cat-selchip">'+_catE(m.nombre)+' <button onclick="catPick('+id+')" aria-label="Quitar">×</button></span>':'';}).join('');
+  return '<div class="cat-sel"><b>Mi selección ('+_cat.selm.length+'/4)</b>'+ch+'<button class="btn-primary" style="min-height:44px;margin-left:auto" onclick="catCopiarSel()">📋 Copiar todo para WhatsApp</button></div>';
+}
+function catPick(id){
+  const i=_cat.selm.indexOf(id);
+  if(i>=0)_cat.selm.splice(i,1);
+  else if(_cat.selm.length>=4){toast('Máximo 4 modelos en la selección','error');return;}
+  else _cat.selm.push(id);
+  _catPintar();
+}
+function catSub(s){_cat.sub=s;_catPintar();}
+function _catFicha(m){
+  const specs=[m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
+  let h='<div class="cat-name" style="font-size:16px">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs)+'</div>';
+  h+='<div class="cat-tabs" style="flex-wrap:wrap">'+CAT_SUBS.map(s=>'<button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
+  if(_cat.sub==='cat'){
+    h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
+    if(_cat.edit){
+      h+='<div class="cat-price" style="margin-top:12px">USD '+_catN(m.precio_desde_usd_m2,2)+' /m²</div><div class="cat-total">Total USD '+_catN(m.precio_total_usd,0)+'</div>';
+      if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
+    }
+    setTimeout(()=>_catPintarCanvas(m.id),0);
+  }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
+    h+=_catListaDocs(_cat.sub,m.id);
+  }else if(_cat.sub==='tec'){
+    h+='<div class="section-title" style="font-size:14px">Especificaciones</div>'+_catListaDocs('especificaciones',m.id)
+      +'<div class="section-title" style="font-size:14px;margin-top:12px">Lista de materiales</div>'+_catListaDocs('materiales',m.id);
+  }else if(_cat.sub==='obras'){
+    h+='<input class="form-control" id="cat-obra-q" placeholder="Buscar obra…" value="'+_catE(_cat.obraQ||'')+'" oninput="catObraQ(this.value)" style="height:44px;margin-bottom:10px"><div id="cat-obras-grid">'+_catObrasHTML(m.id)+'</div>';
+    setTimeout(()=>_catObrasFotos(m.id),0);
+  }
+  return h+_catEquipoBtn();
+}
+function _catListaDocs(tipo,mid){
+  const l=_catArch(tipo,mid);
+  if(!l.length)return '<div style="font-size:13px;color:var(--gray-400);padding:6px 0">Todavía no hay archivo cargado.</div>';
+  return l.map(a=>'<div class="cat-doc"><div style="flex:1;min-width:0"><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis">'+_catE(a.titulo||tipo)+'</div><div style="font-size:12px;color:var(--gray-400)">Versión '+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</div></div><button class="btn-secondary" onclick="catVer('+a.id+')">👁 Ver</button></div>').join('');
+}
+/* — Obras — */
+function _catObrasLista(mid){
+  const q=String(_cat.obraQ||'').trim().toLowerCase();
+  return _cat.arch.filter(a=>(a.tipo==='obra_foto'||a.tipo==='obra_video')&&a.estado==='vigente'&&a.modelo_id===mid&&(!q||String(a.titulo||'').toLowerCase().indexOf(q)>=0));
+}
+function _catObrasHTML(mid){
+  const l=_catObrasLista(mid);
+  if(!l.length)return '<div style="font-size:13px;color:var(--gray-400)">No hay obras para mostrar.</div>';
+  return '<div class="cat-obras">'+l.map(a=>a.tipo==='obra_video'
+    ?'<div class="cat-obra" onclick="catVideo('+a.id+')"><div class="cat-obra-th">▶</div><div class="cat-obra-t">'+_catE(a.titulo||'Video')+'</div></div>'
+    :'<div class="cat-obra" onclick="catVer('+a.id+')"><div class="cat-obra-th" id="cat-th-'+a.id+'">🖼️</div><div class="cat-obra-t">'+_catE(a.titulo||'Foto')+'</div></div>').join('')+'</div>';
+}
+function catObraQ(v){
+  _cat.obraQ=v;
+  const m=_cat.sel,g=document.getElementById('cat-obras-grid');
+  if(g){g.innerHTML=_catObrasHTML(m);_catObrasFotos(m);}
+}
+async function _catObrasFotos(mid){
+  const fotos=_catObrasLista(mid).filter(a=>a.tipo==='obra_foto').slice(0,24);
+  for(const a of fotos){
+    try{
+      const r=await _catCall({action:'archivo_ver',id:a.id});
+      const el=document.getElementById('cat-th-'+a.id);
+      if(el){el.textContent='';el.style.backgroundImage='url("'+r.url+'")';}
+    }catch(e){}
+  }
+}
+function _ytId(u){const m=String(u||'').match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{6,})/);return m?m[1]:null;}
+async function catVideo(id){
+  try{
+    const r=await _catCall({action:'archivo_ver',id:id});
+    const yid=_ytId(r.url);
+    if(!yid){toast('Link de video inválido','error');return;}
+    let w=document.getElementById('cat-video-win');
+    if(!w){w=document.createElement('div');w.id='cat-video-win';document.body.appendChild(w);}
+    w.className='';
+    w.innerHTML='<div class="cvw-bar"><span>'+_catE(r.titulo||'Video')+'</span><button onclick="catVideoAmpliar()" title="Ampliar / reducir">⤢</button><button onclick="catVideoCerrar()" title="Cerrar">✕</button></div>'
+      +'<iframe src="https://www.youtube-nocookie.com/embed/'+yid+'?rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+function catVideoAmpliar(){const w=document.getElementById('cat-video-win');if(w)w.classList.toggle('grande');}
+function catVideoCerrar(){const w=document.getElementById('cat-video-win');if(w)w.remove();}
+/* — Visor de documentos (solo ver) — */
+let _catPdf=null,_catPdfPag=1,_catPdfLib=null;
+function _catCargarPdfJs(){
+  if(_catPdfLib)return _catPdfLib;
+  _catPdfLib=new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok(window.pdfjsLib);};
+    s.onerror=()=>{_catPdfLib=null;ko(new Error('No se pudo cargar el visor PDF'));};
+    document.head.appendChild(s);
+  });
+  return _catPdfLib;
+}
+function _catMarca(txt){
+  const t=String(txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const svg="<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='50%' y='50%' text-anchor='middle' transform='rotate(-30 180 110)' font-family='Arial' font-size='20' font-weight='700' fill='rgba(128,128,128,0.38)'>"+t+"</text></svg>";
+  return 'url("data:image/svg+xml;utf8,'+encodeURIComponent(svg)+'")';
+}
+async function catVer(id){
+  const ov=_catVisorAbrir('<div class="loading-state"><span class="spin"></span> Abriendo…</div>');
+  try{
+    const r=await _catCall({action:'archivo_ver',id:id});
+    const resp=await fetch(r.url);
+    if(!resp.ok)throw new Error('No se pudo abrir el archivo');
+    const buf=await resp.arrayBuffer();
+    const b4=new Uint8Array(buf.slice(0,5));
+    const cab=String.fromCharCode.apply(null,b4);
+    const esPdf=cab==='%PDF-';
+    const ct=(resp.headers.get('content-type')||'');
+    const cont=ov.querySelector('.cvz-body');
+    ov.querySelector('.cvz-title').textContent=r.titulo||'Documento';
+    ov.querySelector('.cvz-marca').style.backgroundImage=_catMarca(r.marca_agua);
+    if(esPdf){
+      const lib=await _catCargarPdfJs();
+      _catPdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
+      _catPdfPag=1;
+      cont.innerHTML='<canvas id="cvz-canvas"></canvas>';
+      ov.querySelector('.cvz-nav').style.display='flex';
+      await _catPdfPagina();
+    }else if(/^image\//.test(ct)||b4[0]===0xFF||cab.indexOf('PNG')===1){
+      const url=URL.createObjectURL(new Blob([buf],{type:ct||'image/jpeg'}));
+      cont.innerHTML='<img src="'+url+'" draggable="false" alt="">';
+      ov._blob=url;
+    }else{
+      cont.innerHTML='<div class="loading-state">Este formato no se puede ver dentro del CRM. Pedí que se cargue en PDF.</div>';
+    }
+  }catch(e){
+    ov.querySelector('.cvz-body').innerHTML='<div class="loading-state" style="color:var(--st-atrasado-tx)">'+_catE(e.message)+'</div>';
+  }
+}
+async function _catPdfPagina(){
+  const cv=document.getElementById('cvz-canvas');
+  if(!cv||!_catPdf)return;
+  const pg=await _catPdf.getPage(_catPdfPag);
+  const body=cv.parentNode,w=Math.max(280,body.clientWidth-8);
+  const v0=pg.getViewport({scale:1}),sc=w/v0.width,dpr=window.devicePixelRatio||1;
+  const vp=pg.getViewport({scale:sc*dpr});
+  cv.width=vp.width;cv.height=vp.height;cv.style.width=(vp.width/dpr)+'px';cv.style.height=(vp.height/dpr)+'px';
+  await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+  const n=document.getElementById('cvz-pag');
+  if(n)n.textContent=_catPdfPag+' / '+_catPdf.numPages;
+}
+function catPdfIr(d){
+  if(!_catPdf)return;
+  const n=Math.min(_catPdf.numPages,Math.max(1,_catPdfPag+d));
+  if(n===_catPdfPag)return;
+  _catPdfPag=n;_catPdfPagina();
+}
+function _catVisorAbrir(inner){
+  catVisorCerrar();
+  const ov=document.createElement('div');
+  ov.id='cat-visor';
+  ov.innerHTML='<div class="cvz-bar"><span class="cvz-title">Documento</span><button onclick="catVisorCerrar()" aria-label="Cerrar">✕</button></div>'
+    +'<div class="cvz-wrap"><div class="cvz-body">'+inner+'</div><div class="cvz-marca"></div></div>'
+    +'<div class="cvz-nav" style="display:none"><button onclick="catPdfIr(-1)">◀</button><span id="cvz-pag">1</span><button onclick="catPdfIr(1)">▶</button></div>';
+  ov.addEventListener('contextmenu',e=>e.preventDefault());
+  ov.addEventListener('dragstart',e=>e.preventDefault());
+  document.body.appendChild(ov);
+  return ov;
+}
+function catVisorCerrar(){
+  const ov=document.getElementById('cat-visor');
+  if(ov){if(ov._blob)URL.revokeObjectURL(ov._blob);ov.remove();}
+  _catPdf=null;
+}
+/* — Catálogo-imagen (canvas) — */
+const _catImgCache={};
+function _catCargarImg(url){
+  if(!url)return Promise.resolve(null);
+  if(_catImgCache[url])return _catImgCache[url];
+  return _catImgCache[url]=new Promise(ok=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>ok(i);i.onerror=()=>ok(null);i.src=url;});
+}
+function _catTxtAjuste(ctx,t,x,y,maxW,lh,maxL){
+  const pal=String(t).split(' ');let l='',n=0;
+  for(const w of pal){const p=l?l+' '+w:w;if(ctx.measureText(p).width>maxW&&l){ctx.fillText(l,x,y+n*lh);n++;l=w;if(n>=maxL)return n;}else l=p;}
+  if(l){ctx.fillText(l,x,y+n*lh);n++;}return n;
+}
+function _catDibujarCard(ctx,m,img,x,y,w,h){
+  const s=w/1080;
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  const W=1080,H=h/s;
+  ctx.fillStyle='#16130E';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#C9A24B';ctx.lineWidth=6;ctx.strokeRect(3,3,W-6,H-6);
+  const ih=Math.round(H*0.50);
+  ctx.save();ctx.beginPath();ctx.rect(0,0,W,ih);ctx.clip();
+  if(img){const r=Math.max(W/img.width,ih/img.height),dw=img.width*r,dh=img.height*r;ctx.drawImage(img,(W-dw)/2,(ih-dh)/2,dw,dh);}
+  else{ctx.fillStyle='#2A2620';ctx.fillRect(0,0,W,ih);ctx.fillStyle='#8A8372';ctx.font='700 40px Arial';ctx.textAlign='center';ctx.fillText('Imagen no disponible',W/2,ih/2);ctx.textAlign='left';}
+  ctx.restore();
+  ctx.fillStyle='#fff';ctx.font='700 64px Arial';ctx.textAlign='left';
+  let ty=ih+84;
+  const nl=_catTxtAjuste(ctx,m.nombre||'',48,ty,W-96,72,2);
+  ty+=nl*72-8;
+  ctx.fillStyle='#CFC8B8';ctx.font='400 38px Arial';
+  const sp=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dormitorios':null,m.banos!=null?m.banos+' baños':null].filter(Boolean).join(' · ');
+  ctx.fillText(sp,48,ty+10);
+  if(m.superficie_m2!=null)ctx.fillText(_catN(m.superficie_m2,1)+' m² construidos',48,ty+58);
+  ctx.fillStyle='#C9A24B';ctx.font='700 58px Arial';
+  ctx.fillText(m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio',48,H-190);
+  ctx.fillStyle='#fff';ctx.font='400 38px Arial';ctx.fillText('llave en mano',48,H-140);
+  ctx.fillStyle='#8A8372';ctx.font='400 30px Arial';
+  ctx.fillText('Precio referencial al '+_catFechaRef()+' · Imagen referencial',48,H-84);
+  ctx.fillStyle='#C9A24B';ctx.font='700 34px Arial';ctx.textAlign='right';ctx.fillText('GEAT',W-48,H-48);
+  ctx.restore();
+}
+async function _catComponer(ids){
+  const ms=ids.map(id=>_cat.modelos.find(x=>x.id===id)).filter(Boolean);
+  const imgs=await Promise.all(ms.map(m=>_catCargarImg(_catImg(m))));
+  const n=ms.length,cols=n===1?1:2,rows=Math.ceil(n/cols);
+  const cw=n===1?1080:800,ch=n===1?1350:1000,gap=n===1?0:20;
+  const cv=document.createElement('canvas');
+  cv.width=cols*cw+(cols-1)*gap;cv.height=rows*ch+(rows-1)*gap;
+  const ctx=cv.getContext('2d');ctx.fillStyle='#0E0C09';ctx.fillRect(0,0,cv.width,cv.height);
+  ms.forEach((m,i)=>_catDibujarCard(ctx,m,imgs[i],(i%cols)*(cw+gap),Math.floor(i/cols)*(ch+gap),cw,ch));
+  return cv;
+}
+async function _catPintarCanvas(id){
+  const box=document.getElementById('cat-canvas-box');
+  if(!box)return;
+  try{
+    const cv=await _catComponer([id]);
+    if(_cat.sel!==id||_cat.sub!=='cat')return;
+    const b=document.getElementById('cat-canvas-box');
+    if(b){cv.style.cssText='width:100%;height:auto;border-radius:8px;display:block';b.innerHTML='';b.appendChild(cv);}
+  }catch(e){box.innerHTML='<div class="loading-state">No se pudo dibujar la imagen.</div>';}
+}
+function _catBlob(cv){return new Promise((ok,ko)=>cv.toBlob(b=>b?ok(b):ko(new Error('canvas')),'image/png'));}
+function _catDescargarBlob(blob,nombre){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nombre;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+async function _catEntregar(ids,nombre){
+  let blob;
+  try{blob=await _catBlob(await _catComponer(ids));}
+  catch(e){toast('No se pudo generar la imagen (las fotos no permiten copiarse)','error');return;}
+  const file=new File([blob],nombre+'.png',{type:'image/png'});
+  const movil=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  try{
+    if(movil&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Modelos GEAT'});return;}
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  try{
+    if(navigator.clipboard&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);toast('Imagen copiada. Pegala en WhatsApp','ok');return;}
+  }catch(e){}
+  _catDescargarBlob(blob,nombre+'.png');
+  toast('Tu navegador no permite copiar imágenes: la descargué para que la adjuntes','ok');
+}
+function catCopiarImg(id){const m=_cat.modelos.find(x=>x.id===id);_catEntregar([id],'GEAT-'+(m?m.nombre:'modelo').replace(/[^\w-]+/g,'_'));}
+async function catDescargarImg(id){
+  const m=_cat.modelos.find(x=>x.id===id);
+  try{_catDescargarBlob(await _catBlob(await _catComponer([id])),'GEAT-'+(m?m.nombre:'modelo').replace(/[^\w-]+/g,'_')+'.png');}
+  catch(e){toast('No se pudo generar la imagen','error');}
+}
+function catCopiarSel(){_catEntregar(_cat.selm.slice(),'GEAT-seleccion');}
 </script>
 </body>
 </html>
