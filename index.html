@@ -2745,7 +2745,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276d';
+  var CURRENT_VERSION='276e';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20379,7 +20379,9 @@ function _catPrevTxt(v){
 function catBuscar(v){_cat.busca=v;const w=document.getElementById('cat-grid-wrap');if(w)w.innerHTML=_catGrid(_cat.edit&&_cat.bor&&_cat.vista==='borrador');}
 function catFiltro(f){_cat.filtro=f;_catPintar();}
 function catVista(v){_cat.vista=v;_catPintar();}
-function catSel(id){_cat.sel=id;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();}
+function catSel(id){_cat.sel=id;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();
+  /* v276e — en celular el panel queda debajo de la grilla: bajar hasta él al elegir un modelo */
+  if(window.innerWidth<=900)setTimeout(function(){const pn=document.querySelector('.cat-panel');if(pn)pn.scrollIntoView({behavior:'smooth',block:'start'});},80);}
 function catTab(t){_cat.tab=t;_cat.confirmando=false;_cat.confirmandoRev=false;_catPintar();}
 function catPct(v){_cat.pct=v;_cat.ia=null;_cat.inn=null;_cat.base='';const p=document.getElementById('cat-prev');if(p)p.innerHTML=_catPrevTxt(Number(String(v).replace(',','.')));}
 function catUsarCBDI(){
