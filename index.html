@@ -1337,7 +1337,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   #screen-catalogo{padding:16px}
   .cat-wrap{grid-template-columns:1fr}
   .cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cat-panel{position:static;height:auto;overflow:visible;--cat-prev-h:none}
+  .cat-panel{position:static;height:auto;overflow:visible;--cat-prev-h:none;scroll-margin-top:112px}
   .cat-bar{flex-wrap:wrap;overflow:visible}
   .cat-franja{white-space:normal}
 }
@@ -2745,7 +2745,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276e';
+  var CURRENT_VERSION='276f';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
