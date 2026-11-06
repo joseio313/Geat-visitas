@@ -2742,7 +2742,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276';
+  var CURRENT_VERSION='276a';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20659,42 +20659,115 @@ function _catTxtAjuste(ctx,t,x,y,maxW,lh,maxL){
   for(const w of pal){const p=l?l+' '+w:w;if(ctx.measureText(p).width>maxW&&l){ctx.fillText(l,x,y+n*lh);n++;l=w;if(n>=maxL)return n;}else l=p;}
   if(l){ctx.fillText(l,x,y+n*lh);n++;}return n;
 }
-function _catDibujarCard(ctx,m,img,x,y,w,h){
-  const s=w/1080;
-  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
-  const W=1080,H=h/s;
-  ctx.fillStyle='#16130E';ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='#C9A24B';ctx.lineWidth=6;ctx.strokeRect(3,3,W-6,H-6);
-  const ih=Math.round(H*0.50);
-  ctx.save();ctx.beginPath();ctx.rect(0,0,W,ih);ctx.clip();
-  if(img){const r=Math.max(W/img.width,ih/img.height),dw=img.width*r,dh=img.height*r;ctx.drawImage(img,(W-dw)/2,(ih-dh)/2,dw,dh);}
-  else{ctx.fillStyle='#2A2620';ctx.fillRect(0,0,W,ih);ctx.fillStyle='#8A8372';ctx.font='700 40px Arial';ctx.textAlign='center';ctx.fillText('Imagen no disponible',W/2,ih/2);ctx.textAlign='left';}
+/* v277a — tarjeta del catálogo-imagen: render completo (sin recortar), alto según contenido, fondo crema */
+const _CATC={bg:'#F7F5EE',tx:'#1B2433',oro:'#B07A00',sub:'#3D4757',line:'#D9D4C3',gap:'#E4DFCE'};
+function _catFuente(w,px){return w+' '+px+'px Montserrat, Arial, sans-serif';}
+function _catLineasTxt(ctx,t,maxW,maxL){
+  const pal=String(t).split(' ');const out=[];let l='';
+  for(const w of pal){const p=l?l+' '+w:w;if(ctx.measureText(p).width>maxW&&l){out.push(l);l=w;}else l=p;}
+  if(l)out.push(l);
+  return out.slice(0,maxL);
+}
+/* alto natural de una tarjeta de 1080 px de ancho */
+function _catNat(m,img){
+  const cx=document.createElement('canvas').getContext('2d');
+  cx.font=_catFuente(800,72);
+  const nl=_catLineasTxt(cx,m.nombre||'',620,2).length||1;
+  const rh=img?Math.round(1080*img.height/img.width):560;
+  const left=40+nl*80+14+2*52+24+80+50;
+  return {rh:rh,nl:nl,h:rh+Math.max(left,400)+100};
+}
+function _catPlano(ctx,x,y,w,h,dorm){
+  const nd=Math.max(1,Math.min(4,Number(dorm)||2));
+  ctx.save();
+  ctx.fillStyle='#EFEAD8';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=_CATC.tx;ctx.lineWidth=5;ctx.lineJoin='miter';
+  ctx.strokeRect(x,y,w,h);
+  ctx.lineWidth=3;
+  const vx=x+w*0.52;
+  ctx.beginPath();ctx.moveTo(vx,y);ctx.lineTo(vx,y+h);ctx.stroke();
+  const celdas=nd+1;
+  for(let i=1;i<celdas;i++){const yy=y+h*i/celdas;ctx.beginPath();ctx.moveTo(vx,yy);ctx.lineTo(x+w,yy);ctx.stroke();}
+  const hy=y+h*0.58;
+  ctx.beginPath();ctx.moveTo(x,hy);ctx.lineTo(vx,hy);ctx.stroke();
   ctx.restore();
-  ctx.fillStyle='#fff';ctx.font='700 64px Arial';ctx.textAlign='left';
-  let ty=ih+84;
-  const nl=_catTxtAjuste(ctx,m.nombre||'',48,ty,W-96,72,2);
-  ty+=nl*72-8;
-  ctx.fillStyle='#CFC8B8';ctx.font='400 38px Arial';
-  const sp=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dormitorios':null,m.banos!=null?m.banos+' baños':null].filter(Boolean).join(' · ');
-  ctx.fillText(sp,48,ty+10);
-  if(m.superficie_m2!=null)ctx.fillText(_catN(m.superficie_m2,1)+' m² construidos',48,ty+58);
-  ctx.fillStyle='#C9A24B';ctx.font='700 58px Arial';
-  ctx.fillText(m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio',48,H-190);
-  ctx.fillStyle='#fff';ctx.font='400 38px Arial';ctx.fillText('llave en mano',48,H-140);
-  ctx.fillStyle='#8A8372';ctx.font='400 30px Arial';
-  ctx.fillText('Precio referencial al '+_catFechaRef()+' · Imagen referencial',48,H-84);
-  ctx.fillStyle='#C9A24B';ctx.font='700 34px Arial';ctx.textAlign='right';ctx.fillText('GEAT',W-48,H-48);
+}
+function _catDibujarCard(ctx,m,img,x,y,w,h){
+  const s=w/1080,W=1080,H=h/s,nat=_catNat(m,img);
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  ctx.fillStyle=_CATC.bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=_CATC.line;ctx.lineWidth=3;ctx.strokeRect(1.5,1.5,W-3,H-3);
+  /* 1) render completo a todo el ancho, con su proporción */
+  if(img)ctx.drawImage(img,0,0,W,nat.rh);
+  else{ctx.fillStyle='#E4DFCE';ctx.fillRect(0,0,W,nat.rh);ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(700,40);ctx.textAlign='center';ctx.fillText('Imagen no disponible',W/2,nat.rh/2);}
+  ctx.textAlign='left';
+  /* 2) contenido */
+  let ty=nat.rh+40;
+  ctx.fillStyle=_CATC.tx;ctx.font=_catFuente(800,72);
+  const ls=_catLineasTxt(ctx,m.nombre||'',620,2);
+  ls.forEach((t,i)=>ctx.fillText(t,48,ty+60+i*80));
+  ty+=ls.length*80+14;
+  ctx.font=_catFuente(500,40);ctx.fillStyle=_CATC.sub;
+  const sp=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null].filter(Boolean).join(' · ');
+  ctx.fillText(sp,48,ty+40);
+  if(m.superficie_m2!=null)ctx.fillText(_catN(m.superficie_m2,1)+' m² construidos',48,ty+92);
+  ty+=104+24;
+  ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,m.precio_total_usd!=null?66:52);
+  ctx.fillText(m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio',48,ty+62);
+  ctx.fillStyle=_CATC.tx;ctx.font=_catFuente(600,40);
+  ctx.fillText('llave en mano',48,ty+62+50);
+  /* plano referencial pequeño a la derecha */
+  const pw=330,ph=260,px=W-48-pw,py=nat.rh+40;
+  _catPlano(ctx,px,py,pw,ph,m.dormitorios);
+  ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(600,22);ctx.textAlign='center';
+  ctx.fillText('Plano referencial',px+pw/2,py+ph+34);
+  ctx.textAlign='left';
+  /* 4) pie legible, pegado abajo */
+  ctx.strokeStyle=_CATC.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(48,H-92);ctx.lineTo(W-48,H-92);ctx.stroke();
+  ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(500,24);
+  ctx.fillText('Precio referencial al '+_catFechaRef()+' · Imagen referencial',48,H-42);
+  ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,36);ctx.textAlign='right';ctx.fillText('GEAT',W-48,H-40);
+  ctx.restore();
+}
+/* bloque de marca para el hueco libre de la grilla */
+function _catDibujarMarca(ctx,x,y,w,h){
+  ctx.save();ctx.translate(x,y);
+  ctx.fillStyle=_CATC.tx;ctx.fillRect(0,0,w,h);
+  ctx.textAlign='center';
+  const k=w/1000;
+  ctx.fillStyle='#E0B13A';ctx.font=_catFuente(800,Math.round(150*k));ctx.fillText('GEAT',w/2,h/2);
+  ctx.fillStyle=_CATC.bg;ctx.font=_catFuente(600,Math.round(42*k));
+  ctx.fillText('Consultá por tu visita',w/2,h/2+Math.round(80*k));
+  ctx.fillText('sin compromiso',w/2,h/2+Math.round(134*k));
   ctx.restore();
 }
 async function _catComponer(ids){
   const ms=ids.map(id=>_cat.modelos.find(x=>x.id===id)).filter(Boolean);
+  try{await Promise.all([document.fonts.load('800 72px Montserrat'),document.fonts.load('600 40px Montserrat'),document.fonts.load('500 40px Montserrat')]);}catch(e){}
   const imgs=await Promise.all(ms.map(m=>_catCargarImg(_catImg(m))));
-  const n=ms.length,cols=n===1?1:2,rows=Math.ceil(n/cols);
-  const cw=n===1?1080:800,ch=n===1?1350:1000,gap=n===1?0:20;
+  const nats=ms.map((m,i)=>_catNat(m,imgs[i]));
+  const n=ms.length;
+  if(n===1){
+    const cv=document.createElement('canvas');cv.width=1080;cv.height=nats[0].h;
+    _catDibujarCard(cv.getContext('2d'),ms[0],imgs[0],0,0,1080,nats[0].h);
+    return cv;
+  }
+  const cw=1000,s=cw/1080,gap=24,pad=24,cols=2,rows=Math.ceil(n/cols);
+  const rowH=[];
+  for(let r=0;r<rows;r++){let mx=0;for(let c=0;c<cols;c++){const i=r*cols+c;if(i<n)mx=Math.max(mx,Math.round(nats[i].h*s));}rowH.push(mx);}
   const cv=document.createElement('canvas');
-  cv.width=cols*cw+(cols-1)*gap;cv.height=rows*ch+(rows-1)*gap;
-  const ctx=cv.getContext('2d');ctx.fillStyle='#0E0C09';ctx.fillRect(0,0,cv.width,cv.height);
-  ms.forEach((m,i)=>_catDibujarCard(ctx,m,imgs[i],(i%cols)*(cw+gap),Math.floor(i/cols)*(ch+gap),cw,ch));
+  cv.width=pad*2+cols*cw+(cols-1)*gap;
+  cv.height=pad*2+rowH.reduce((a,b)=>a+b,0)+(rows-1)*gap;
+  const ctx=cv.getContext('2d');ctx.fillStyle=_CATC.gap;ctx.fillRect(0,0,cv.width,cv.height);
+  let yy=pad;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const i=r*cols+c,xx=pad+c*(cw+gap);
+      if(i<n)_catDibujarCard(ctx,ms[i],imgs[i],xx,yy,cw,rowH[r]);
+      else _catDibujarMarca(ctx,xx,yy,cw,rowH[r]);
+    }
+    yy+=rowH[r]+gap;
+  }
   return cv;
 }
 async function _catPintarCanvas(id){
