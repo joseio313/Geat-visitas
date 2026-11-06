@@ -1307,8 +1307,8 @@ body.tema-ceo .mia-card{padding:16px;border-radius:20px}
 body.tema-ceo .mia-card-t{color:var(--ac1);margin-bottom:12px}
 body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padding:9px 0;font-size:12.5px;border-bottom-color:rgba(255,255,255,.08)}
 /* v267 — Catálogo */
-#screen-catalogo{width:100%;max-width:1500px;margin:0 auto;padding:24px;box-sizing:border-box}
-.cat-wrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+#screen-catalogo{width:100%;max-width:none;margin:0;padding:24px;box-sizing:border-box}
+.cat-wrap{display:grid;grid-template-columns:minmax(0,1fr) max(420px,33%);gap:20px;align-items:start}
 .cat-bar{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
 .cat-bar::-webkit-scrollbar{display:none}
 .cat-bar .form-control{height:44px;font-size:14px;flex:0 0 240px;max-width:240px}
@@ -1324,7 +1324,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-price{font-size:20px;font-weight:700;color:var(--gold)}
 .cat-total{font-size:14px;color:var(--gray-200)}
 .cat-new{color:#7BE495}
-.cat-panel{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;padding:18px;position:sticky;top:16px;font-size:13px}
+.cat-panel{background:var(--gray-800);border:1px solid var(--gray-600);border-radius:12px;padding:18px;position:sticky;top:12px;height:calc(100vh - 88px);overflow-y:auto;box-sizing:border-box;font-size:13px;--cat-prev-h:calc(100vh - 470px)}
 .cat-panel .btn-primary,.cat-panel .btn-ghost,.cat-panel .btn-secondary{min-height:44px;font-size:13px}
 .cat-panel .form-label{font-size:13px}
 .cat-tabs{display:flex;gap:8px;margin-bottom:14px}
@@ -1337,13 +1337,15 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
   #screen-catalogo{padding:16px}
   .cat-wrap{grid-template-columns:1fr}
   .cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cat-panel{position:static}
+  .cat-panel{position:static;height:auto;overflow:visible;--cat-prev-h:none}
   .cat-bar{flex-wrap:wrap;overflow:visible}
   .cat-franja{white-space:normal}
 }
 @media(max-width:560px){.cat-grid{grid-template-columns:1fr}}
 /* v276 — Catálogo v2 */
-@media(min-width:1101px){.cat-wrap{grid-template-columns:minmax(0,1fr) 450px}}
+@media(min-width:901px){.cat-wrap{grid-template-columns:minmax(0,1fr) max(420px,33%)}}
+.cat-gen-head,.cat-gen-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#screen-catalogo>.screen-title{align-items:center}
 .cat-pick{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:rgba(14,12,9,.82);color:var(--gold);font-size:24px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit}
 .cat-pick.on{background:var(--gold);color:var(--black)}
 .cat-img{position:relative}
@@ -1351,7 +1353,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border:1px solid var(--gold);border-radius:10px;padding:8px 12px;margin-bottom:14px;background:var(--gray-900);font-size:13px}
 .cat-selchip{display:inline-flex;align-items:center;gap:4px;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:999px;padding:0 6px 0 12px;min-height:36px}
 .cat-selchip button{background:none;border:0;color:var(--gray-200);font-size:20px;min-width:36px;min-height:36px;cursor:pointer}
-.cat-canvasbox{min-height:120px}
+.cat-canvasbox{min-height:120px;text-align:center}
 .cat-doc{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-600)}
 .cat-obras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .cat-obra{cursor:pointer;background:var(--gray-900);border:1px solid var(--gray-600);border-radius:8px;overflow:hidden}
@@ -1839,6 +1841,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
   <section id="screen-catalogo" class="screen">
     <div class="screen-title">
       <h1>🏠 <span class="gold">Catálogo</span> de modelos</h1>
+      <div id="cat-gen-head" class="cat-gen-head"></div>
     </div>
     <div id="catalogo-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
   </section>
@@ -2742,7 +2745,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276c';
+  var CURRENT_VERSION='276d';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20276,6 +20279,8 @@ function _catFiltrados(){
     if(f==='sin')return !_catImg(m);
     if(f==='p1')return Number(m.plantas)===1;
     if(f==='p2')return Number(m.plantas)===2;
+    if(f==='d3')return Number(m.dormitorios)===3;
+    if(f==='d4')return Number(m.dormitorios)===4;
     return true;
   });
 }
@@ -20294,16 +20299,17 @@ function _catPintar(){
   const el=document.getElementById('catalogo-body');
   if(!el)return;
   const verBor=_cat.edit&&_cat.bor&&_cat.vista==='borrador';
-  const filtros=[['todos','Todos'],['con','Con foto'],['sin','Sin foto'],['p1','1 planta'],['p2','2 plantas']];
+  const filtros=[['todos','Todos'],['p1','1 planta'],['p2','2 plantas'],['d3','3 dormitorios'],['d4','4 dormitorios'],['con','Con foto'],['sin','Sin foto']];
   let h=_catFranja();
-  h+='<div class="cat-bar"><input class="form-control" style="max-width:240px" placeholder="Buscar modelo…" value="'+_catE(_cat.busca)+'" oninput="catBuscar(this.value)" id="cat-q">';
+  h+='<div class="cat-bar">';
   h+=filtros.map(f=>'<button class="cat-chip'+(_cat.filtro===f[0]?' on':'')+'" onclick="catFiltro(\''+f[0]+'\')">'+f[1]+'</button>').join('');
   if(_cat.edit&&_cat.bor){
-    h+='<span style="margin-left:auto;display:flex;gap:6px"><button class="cat-chip'+(!verBor?' on':'')+'" onclick="catVista(\'vigente\')">Vigente</button><button class="cat-chip'+(verBor?' on':'')+'" onclick="catVista(\'borrador\')">Borrador +'+_catE(_catPct())+'%</button></span>';
+    h+='<span style="display:flex;gap:6px"><button class="cat-chip'+(!verBor?' on':'')+'" onclick="catVista(\'vigente\')">Vigente</button><button class="cat-chip'+(verBor?' on':'')+'" onclick="catVista(\'borrador\')">Borrador +'+_catE(_catPct())+'%</button></span>';
   }
-  h+='</div>'+_catGenerales()+_catSeleccion();
+  h+='<input class="form-control" style="max-width:240px;margin-left:auto" placeholder="Buscar modelo…" value="'+_catE(_cat.busca)+'" oninput="catBuscar(this.value)" id="cat-q"></div>'+_catSeleccion();
   h+='<div class="cat-wrap"><div id="cat-grid-wrap">'+_catGrid(verBor)+'</div><div class="cat-panel">'+_catPanel()+'</div></div>';
   el.innerHTML=h;
+  const gh=document.getElementById('cat-gen-head');if(gh)gh.innerHTML=_catGenerales();
 }
 function _catGrid(verBor){
   const lista=_catFiltrados();
@@ -20477,7 +20483,7 @@ function _catFechaRef(){
 function _catGenerales(){
   const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
     return '<button class="cat-chip cat-gen" '+(a?'onclick="catVer('+a.id+')"':'disabled style="opacity:.45"')+'>'+lbl+(a?' <span style="font-weight:400;font-size:11px">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':' <span style="font-weight:400;font-size:11px">sin cargar</span>')+'</button>';};
-  return '<div class="cat-bar">'+bt('cronograma','📅 Cronograma modelo')+bt('contrato','📄 Contrato modelo')+'</div>';
+  return '<div class="cat-gen-row">'+bt('cronograma','📅 Cronograma modelo')+bt('contrato','📄 Contrato modelo')+'</div>';
 }
 function _catSeleccion(){
   if(!_cat.selm.length)return '';
@@ -20494,13 +20500,13 @@ function catPick(id){
 function catSub(s){_cat.sub=s;_catPintar();}
 function _catFicha(m){
   const specs=[m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
-  let h='<div class="cat-name" style="font-size:16px">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs)+'</div>';
+  let h='<div class="cat-name" style="font-size:22px;font-weight:800;line-height:1.15">'+_catE(m.nombre)+'</div><div class="cat-spec" style="font-size:12px;margin-bottom:4px">'+_catE(specs)+'</div>'
+    +'<div class="cat-price" style="margin-bottom:10px">'+(_cat.edit?'USD '+_catN(m.precio_desde_usd_m2,2)+' /m² · total USD '+_catN(m.precio_total_usd,0):'Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano')+'</div>';
   h+='<div class="cat-tabs" style="flex-wrap:wrap">'+CAT_SUBS.map(s=>'<button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
   if(_cat.sub==='cat'){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
-    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     if(_cat.edit){
-      h+='<div class="cat-price" style="margin-top:12px">USD '+_catN(m.precio_desde_usd_m2,2)+' /m²</div><div class="cat-total">Total USD '+_catN(m.precio_total_usd,0)+'</div>';
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
     }
     setTimeout(()=>_catPintarCanvas(m.id),0);
@@ -20781,7 +20787,7 @@ async function _catPintarCanvas(id){
     const cv=await _catComponer([id]);
     if(_cat.sel!==id||_cat.sub!=='cat')return;
     const b=document.getElementById('cat-canvas-box');
-    if(b){cv.style.cssText='width:100%;height:auto;border-radius:8px;display:block';b.innerHTML='';b.appendChild(cv);}
+    if(b){cv.style.cssText='max-width:100%;max-height:var(--cat-prev-h,none);width:auto;height:auto;border-radius:8px;display:block;margin:0 auto';b.innerHTML='';b.appendChild(cv);}
   }catch(e){box.innerHTML='<div class="loading-state">No se pudo dibujar la imagen.</div>';}
 }
 function _catBlob(cv){return new Promise((ok,ko)=>cv.toBlob(b=>b?ok(b):ko(new Error('canvas')),'image/png'));}
