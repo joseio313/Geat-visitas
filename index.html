@@ -1351,6 +1351,26 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-pick.on{background:var(--gold);color:var(--black)}
 .cat-pick.off{opacity:.45;border-color:#A9B3C4;color:#A9B3C4;cursor:not-allowed}
 .cat-panel .cat-off{opacity:.45;cursor:not-allowed;filter:grayscale(.6)}
+.cat-gen.cat-gen-tabla,.cat-auto .cat-gen-tabla{background:rgba(250,195,5,.10);border:1px solid #FAC305;color:#FAC305;font-weight:800}
+.cat-gen.cat-gen-tabla:hover{background:rgba(250,195,5,.10);color:#FAC305}
+#cat-tabla{position:fixed;inset:0;z-index:10000;background:rgba(3,6,12,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+.ctb-box{width:min(1040px,100%);max-height:100%;background:#111827;border:1px solid rgba(255,255,255,.16);border-radius:26px;padding:20px;display:flex;flex-direction:column;gap:10px;color:#F2F4F8;box-sizing:border-box}
+.ctb-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ctb-t{font-size:19px;font-weight:800}
+.ctb-x{min-width:44px;min-height:44px;border-radius:12px;cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#F2F4F8;font:800 16px inherit}
+.ctb-sub{font-size:12px;color:#C9D1DE}
+.ctb-bor{border-radius:14px;background:rgba(250,195,5,.10);border:1px solid #FAC305;padding:8px 12px;font-size:12px}
+.ctb-scroll{overflow:auto;min-height:0;border-radius:14px;border:1px solid rgba(255,255,255,.10)}
+.ctb-scroll table{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+.ctb-scroll th{position:sticky;top:0;background:#1B2433;text-align:right;padding:8px 10px;font-weight:800;color:#A9B3C4;white-space:nowrap}
+.ctb-scroll td{padding:4px 10px;text-align:right;border-top:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.ctb-scroll th:first-child,.ctb-scroll td:first-child{text-align:left;font-weight:700}
+.ctb-scroll tr.cambio td{background:rgba(250,195,5,.07)}
+.ctb-in{width:110px;height:44px;box-sizing:border-box;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:#F2F4F8;padding:0 10px;font-size:13px;font-weight:700;text-align:right;font-family:inherit}
+.ctb-in.mal{border-color:#FF7A5C;color:#FFB48A}
+.ctb-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ctb-foot .btn-primary,.ctb-foot .btn-ghost{min-height:48px}
+.ctb-conf{flex:1 1 100%;border:1px solid #FAC305;border-radius:12px;padding:10px;font-size:13px}
 .cat-sinrender{font-size:12px;font-weight:700;color:#FFB48A;margin-bottom:8px}
 .cat-img{position:relative}
 .cat-gen{height:44px;min-height:44px;padding:0 16px;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;background:var(--gray-800)}
@@ -2788,7 +2808,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276m';
+  var CURRENT_VERSION='277';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20307,7 +20327,7 @@ async function renderCatalogo(){
   try{
     const j=await _catCall({action:'listar'});
     _cat.modelos=j.modelos||[];_cat.edit=!!j.es_editor;_cat.conf=j.precios_confirmados||null;
-    _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.cargado=true;
+    _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.tb=j.tabla_borrador||[];_cat.cargado=true;
     try{const ja=await _catCall({action:'archivo_listar'});_cat.arch=ja.archivos||[];}catch(e2){_cat.arch=[];}
     _cat.selm=_cat.selm.filter(id=>_cat.modelos.some(m=>m.id===id));
     if(!_cat.edit){_cat.vista='vigente';if(_cat.tab==='incr')_cat.tab='modelo';}
@@ -20316,6 +20336,7 @@ async function renderCatalogo(){
     if(!_cat.sel&&_cat.modelos.length)_cat.sel=(_catFiltrados()[0]||_cat.modelos[0]).id;
     if(!CAT_INCR_VISIBLE){_cat.vista='vigente';_cat.tab='modelo';}
     _catPintar();
+    if(_catTbl.abierta)_catTbPintar();
   }catch(e){
     el.innerHTML='<div class="loading-state" style="color:var(--st-atrasado-tx)">No se pudo cargar el catálogo: '+_catE(e.message)+'</div>';
   }
@@ -20541,7 +20562,7 @@ function _catFechaRef(){
 function _catGenerales(){
   const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
     return '<button class="btn-secondary cat-gen" onclick="'+(a?'catVer('+a.id+')':'catSinGeneral(\''+tipo+'\')')+'">'+lbl+(a?' <span class="cat-gen-v">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':'')+'</button>';};
-  return '<div class="cat-gen-row">'+bt('cronograma','Cronograma modelo')+bt('contrato','Contrato modelo')+'</div>';
+  return '<div class="cat-gen-row">'+bt('cronograma','Cronograma modelo')+bt('contrato','Contrato modelo')+(_cat.edit?'<button class="btn-secondary cat-gen cat-gen-tabla" onclick="catTabla()">Tabla oficial de precios'+((_cat.tb||[]).length?' <span class="cat-gen-v">· '+(_cat.tb||[]).length+' en borrador</span>':'')+'</button>':'')+'</div>';
 }
 function _catSeleccion(){
   if(!_cat.selm.length)return '';
@@ -20571,7 +20592,7 @@ function _catFicha(m){
     if(_cat.edit){
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
     }
-    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div><div class="cat-auto-s">Precio vigente: <b>Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div></div>';
+    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div><div class="cat-auto-s">Precio vigente: <b>Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div><button class="btn-secondary cat-gen-tabla" style="min-height:44px;border-radius:12px" onclick="catTabla()">Cambiar precio en la Tabla oficial</button></div>';
     setTimeout(()=>_catPintarCanvas(m.id),0);
   }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
     h+=_catListaDocs(_cat.sub,m.id);
@@ -20924,6 +20945,103 @@ function _catPedirClave(){
   });
 }
 function catClaveCerrar(){const o=document.getElementById('cat-clave');if(o)o.remove();}
+
+/* v277 — Tabla oficial de precios: una fila por modelo con el precio por m2. Todo cambio pasa por _catPrecio() (segunda clave). Guardar = borrador; el equipo no ve nada hasta aprobar. El servidor calcula total = m2 x precio. */
+let _catTbl={abierta:false,v:{},conf:false};
+function _catTbNum(t){const v=Number(String(t==null?'':t).replace(',','.'));return isFinite(v)?v:NaN;}
+function _catTbBor(){const o={};(_cat.tb||[]).forEach(x=>{o[x.modelo_id]=Number(x.precio_m2);});return o;}
+function _catTbInit(){const b=_catTbBor();_catTbl.v={};_cat.modelos.forEach(m=>{const x=b[m.id]!=null?b[m.id]:Number(m.precio_desde_usd_m2);_catTbl.v[m.id]=isFinite(x)?String(x).replace('.',','):'';});_catTbl.conf=false;}
+function _catTbSt(m){
+  const act=Number(m.precio_desde_usd_m2),n=_catTbNum(_catTbl.v[m.id]);
+  const ok=isFinite(n)&&n>0&&act>0&&Math.abs(n-act)/act<=0.5;
+  return {act:act,n:n,ok:ok,cambio:isFinite(n)&&Math.round(n*100)!==Math.round(act*100)};
+}
+function _ctbDelta(st){return (st.ok&&st.cambio)?(st.n>st.act?'+':'')+_catN((st.n/st.act-1)*100,2)+'%':'—';}
+function _catTbFila(m){
+  const st=_catTbSt(m),tn=st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;
+  return '<tr id="ctb-r-'+m.id+'" class="'+(st.cambio?'cambio':'')+'"><td>'+_catE(m.nombre)+'</td><td>'+_catN(m.superficie_m2,1)+'</td><td>'+_catN(st.act,2)+'</td>'
+    +'<td><input class="ctb-in'+(st.ok?'':' mal')+'" id="ctb-i-'+m.id+'" inputmode="decimal" value="'+_catE(_catTbl.v[m.id])+'" oninput="catTbInput('+m.id+',this.value)" aria-label="Precio por m2 de '+_catE(m.nombre)+'"></td>'
+    +'<td>'+_catN(m.precio_total_usd,0)+'</td><td id="ctb-t-'+m.id+'">'+(tn==null?'—':_catN(tn,0))+'</td><td id="ctb-d-'+m.id+'">'+_ctbDelta(st)+'</td></tr>';
+}
+function _catTbResumen(){
+  const n=_cat.modelos.filter(m=>_catTbSt(m).cambio).length,g=(_cat.tb||[]).length;
+  return {n:n,g:g};
+}
+function _catTbPintar(){
+  let o=document.getElementById('cat-tabla');
+  if(!o){o=document.createElement('div');o.id='cat-tabla';document.body.appendChild(o);}
+  const r=_catTbResumen();
+  let h='<div class="ctb-box" role="dialog" aria-label="Tabla oficial de precios"><div class="ctb-head"><div class="ctb-t">Tabla oficial de precios</div><button class="ctb-x" onclick="catTablaCerrar()" aria-label="Cerrar">✕</button></div>'
+    +'<div class="ctb-sub">Precio por m² de cada modelo. Editá el campo, guardá el borrador y aprobá para publicar. El equipo sigue viendo los precios vigentes hasta que aprobás. El total se calcula como m² × precio.</div>'
+    +(r.g?'<div class="ctb-bor"><b>'+r.g+' modelo(s) con cambio en borrador guardado.</b> Los captadores todavía ven la versión anterior.</div>':'')
+    +'<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Total vigente</th><th>Total nuevo</th><th>Variación</th></tr></thead><tbody>'
+    +_cat.modelos.map(_catTbFila).join('')+'</tbody></table></div>'
+    +'<div class="ctb-foot" id="ctb-foot">'+_catTbFoot()+'</div></div>';
+  o.innerHTML=h;
+}
+function _catTbFoot(){
+  const r=_catTbResumen();
+  if(_catTbl.conf==='pub')return '<div class="ctb-conf">Esto cambia el precio de <b>'+r.n+' modelo(s)</b> para todo el equipo. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
+  if(_catTbl.conf==='desc')return '<div class="ctb-conf">Se descarta el borrador guardado y los campos vuelven al precio vigente. ¿Descartar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbDescartar()">Sí, descartar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
+  return '<button class="btn-ghost" onclick="catTbGuardar()">Guardar borrador</button><button class="btn-primary" onclick="catTbConf(\'pub\')">Aprobar y publicar</button>'+(r.g?'<button class="btn-ghost" onclick="catTbConf(\'desc\')">Descartar borrador</button>':'')+'<span id="ctb-res" style="font-size:12px;color:#A9B3C4">'+r.n+' modelo(s) con cambio</span>';
+}
+function catTabla(){
+  if(!_cat.edit){toast('Solo José Miguel o David','error');return;}
+  _catTbl.abierta=true;_catTbInit();_catTbPintar();
+}
+function catTablaCerrar(){_catTbl.abierta=false;const o=document.getElementById('cat-tabla');if(o)o.remove();}
+function catTbConf(v){
+  if(v==='pub'){if(_catTbItems()===null)return;if(!_catTbResumen().n){toast('No hay cambios para publicar','error');return;}}
+  _catTbl.conf=v;const f=document.getElementById('ctb-foot');if(f)f.innerHTML=_catTbFoot();
+}
+function catTbInput(id,val){
+  _catTbl.v[id]=val;
+  const m=_cat.modelos.find(x=>x.id===id);if(!m)return;
+  const st=_catTbSt(m),tn=st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;
+  const i=document.getElementById('ctb-i-'+id),t=document.getElementById('ctb-t-'+id),d=document.getElementById('ctb-d-'+id),r=document.getElementById('ctb-r-'+id);
+  if(i)i.classList.toggle('mal',!st.ok);
+  if(r)r.classList.toggle('cambio',st.cambio);
+  if(t)t.textContent=tn==null?'—':_catN(tn,0);
+  if(d)d.textContent=_ctbDelta(st);
+  const rs=document.getElementById('ctb-res');if(rs)rs.textContent=_catTbResumen().n+' modelo(s) con cambio';
+}
+/* filas a mandar: las que cambian + las que vuelven al vigente teniendo borrador (el servidor las borra). null = hay un valor invalido */
+function _catTbItems(){
+  const b=_catTbBor(),items=[];
+  for(const m of _cat.modelos){
+    const st=_catTbSt(m);
+    if(!st.ok&&(st.cambio||!isFinite(st.n))){toast('Revisá el precio de '+m.nombre+': debe ser mayor a 0 y no variar más de 50%','error');return null;}
+    if(st.cambio)items.push({modelo_id:m.id,precio_m2:Math.round(st.n*100)/100});
+    else if(b[m.id]!=null)items.push({modelo_id:m.id,precio_m2:st.act});
+  }
+  return items;
+}
+async function catTbGuardar(){
+  const items=_catTbItems();if(items===null)return;
+  if(!items.length){toast('No hay cambios para guardar','error');return;}
+  try{
+    await _catPrecio({action:'tabla_guardar',items:items});
+    toast('Borrador de precios guardado. Falta aprobar','ok');
+    await renderCatalogo();_catTbInit();_catTbPintar();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function catTbAprobar(){
+  const items=_catTbItems();if(items===null){catTbConf(false);return;}
+  try{
+    if(items.length)await _catPrecio({action:'tabla_guardar',items:items});
+    const j=await _catPrecio({action:'tabla_aprobar'});
+    toast('Precios publicados ('+(j.modelos_actualizados!=null?j.modelos_actualizados:'')+' modelos)','ok');
+    catTablaCerrar();
+    await renderCatalogo();
+  }catch(e){toast('Error: '+e.message,'error');catTbConf(false);}
+}
+async function catTbDescartar(){
+  try{
+    await _catPrecio({action:'tabla_descartar'});
+    toast('Borrador descartado','ok');
+    await renderCatalogo();_catTbInit();_catTbPintar();
+  }catch(e){toast('Error: '+e.message,'error');catTbConf(false);}
+}
 async function _catPrecio(payload){
   const vigente=_catUnlock.tok&&Date.now()<_catUnlock.exp-5000;
   if(!vigente&&!(await _catPedirClave()))throw new Error('Cancelado: hace falta la clave de precios');
