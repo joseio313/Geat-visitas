@@ -1333,6 +1333,7 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-franja{border:1px solid var(--gold);border-radius:8px;padding:6px 12px;min-height:44px;margin-bottom:14px;font-size:13px;display:flex;gap:10px;align-items:center;background:var(--gray-900);white-space:nowrap}
 .cat-franja>span{flex:1;overflow:hidden;text-overflow:ellipsis}
 .cat-franja.vieja{border-color:var(--st-atrasado)}
+.cat-franja.fina{min-height:0;padding:3px 12px;margin-bottom:8px;font-size:11px;font-weight:600;line-height:1.3;border-color:rgba(80,200,140,.5);background:rgba(80,200,140,.08);color:#8DE3B5}
 @media(max-width:900px){
   #screen-catalogo{padding:16px}
   .cat-wrap{grid-template-columns:1fr}
@@ -2787,7 +2788,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276l';
+  var CURRENT_VERSION='276m';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20341,6 +20342,8 @@ function _catFranja(){
   if(d==null){txt='Precios sin confirmar: nunca se registró una confirmación.';vieja=true;}
   else if(d<=0){txt='✅ Precios confirmados hoy.';}
   else{txt='Precios sin confirmar hace <b>'+d+' día'+(d===1?'':'s')+'</b> (última confirmación: '+_catE(String(_cat.conf).slice(0,10))+').';vieja=d>30;}
+  /* v276m — confirmado hoy: una línea fina, sin botón (no hay nada que confirmar) */
+  if(d!=null&&d<=0)return '<div class="cat-franja fina"><span>'+txt+'</span></div>';
   const btn=_cat.edit?'<button class="btn-ghost" style="font-size:13px;white-space:nowrap" onclick="catConfirmarHoy()">Confirmar hoy</button>':'';
   return '<div class="cat-franja'+(vieja?' vieja':'')+'"><span style="flex:1">'+txt+'</span>'+btn+'</div>';
 }
