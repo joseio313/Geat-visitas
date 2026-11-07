@@ -1370,9 +1370,48 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .ctb-in.mal{border-color:#FF7A5C;color:#FFB48A}
 .ctb-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ctb-foot .btn-primary,.ctb-foot .btn-ghost{min-height:48px}
+.ctb-box{width:min(1180px,100%);height:min(760px,100%);position:relative;overflow:hidden}
+.ctb-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:6px 12px;background:rgba(255,255,255,.04)}
+.ctb-top .btn-primary{min-height:44px;margin-left:auto}
+.ctb-top .btn-primary[disabled]{opacity:.45;cursor:not-allowed}
+.ctb-pend{font-size:13px;color:#A9B3C4}.ctb-pend.hay{color:#FAC305}
+.ctb-body{display:flex;gap:12px;flex:1;min-height:0}
+.ctb-menu{width:200px;flex:0 0 200px;display:flex;flex-direction:column;gap:6px}
+.ctb-mi{min-height:44px;border-radius:12px;padding:0 12px;text-align:left;cursor:pointer;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:#F2F4F8;font:700 12px inherit;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ctb-mi.on{background:#FAC305;border-color:#FAC305;color:#111}
+.ctb-bd{background:#FAC305;color:#111;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800}
+.ctb-mi.on .ctb-bd{background:#111;color:#FAC305}
+.ctb-cont{flex:1;min-width:0;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.ctb-cont>*{flex-shrink:0}
+.ctb-prec{max-height:calc(100vh - 430px);min-height:180px}
+.ctb-grid{max-height:calc(100vh - 430px);min-height:160px}
+.ctb-chk{display:inline-flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-size:13px}
+.ctb-chk input{width:22px;height:22px}
+.ctb-cel{min-height:44px;width:100%;border-radius:12px;padding:0 8px;cursor:pointer;font:700 11px inherit;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:#F2F4F8}
+.ctb-cel.vig{border-color:rgba(80,200,140,.5);background:rgba(80,200,140,.12);color:#8DE3B5}
+.ctb-cel.bor{border-color:#FAC305;background:rgba(250,195,5,.14);color:#FFD23F}
+.ctb-cel.falta{border-color:rgba(255,140,80,.55);background:rgba(255,120,60,.10);color:#FFB48A}
+.ctb-side{position:absolute;top:0;right:0;bottom:0;width:min(430px,100%);background:#0F1624;border-left:1px solid rgba(255,255,255,.16);padding:16px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:-12px 0 30px rgba(0,0,0,.45)}
+.ctb-sideb{overflow:auto;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ctb-card{border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.ctb-card.bor{border-color:#FAC305}.ctb-card.falta{border-color:rgba(255,140,80,.55)}
+.ctb-card .btn-primary,.ctb-card .btn-ghost{min-height:44px}
+.ctb-ch{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ctb-chip{font-size:10px;font-weight:800;border-radius:999px;padding:4px 10px;background:rgba(250,195,5,.18);color:#FFD23F;white-space:nowrap}
+.ctb-chip.ok{background:rgba(80,200,140,.16);color:#8DE3B5}
+.ctb-cm{font-size:11px;color:#A9B3C4}
+.ctb-aviso{font-size:12px;color:#FFB48A;border:1px solid rgba(255,140,80,.55);border-radius:12px;padding:8px 10px;background:rgba(255,120,60,.10)}
+.ctb-gen{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.ctb-prev{background:#F7F5EE;color:#1B2433;border-radius:12px;padding:12px;font-size:14px;font-weight:800}
+.ctb-tx td{text-align:left!important;white-space:normal!important}
+.ctb-scroll table.ctb-tx{min-width:0}
+.ctb-txw{overflow:visible!important}
+.ctb-tx .ctb-in{min-width:0}
+@media(max-width:760px){.ctb-body{flex-direction:column}.ctb-menu{width:auto;flex:0 0 auto;flex-direction:row;overflow-x:auto}.ctb-mi{white-space:nowrap;flex:0 0 auto}.ctb-box{height:100%}}
 .ctb-rojo td{background:rgba(255,90,60,.18)!important;color:#FFB48A}
 #ctb-diff{position:fixed;inset:0;z-index:10002;background:rgba(3,6,12,.8);display:flex;align-items:center;justify-content:center;padding:16px}
 .ctb-foot button[disabled]{opacity:.45;cursor:not-allowed}
+.ctb-box>.ctb-conf{flex:0 0 auto}
 .ctb-conf{flex:1 1 100%;border:1px solid #FAC305;border-radius:12px;padding:10px;font-size:13px}
 .cat-sinrender{font-size:12px;font-weight:700;color:#FFB48A;margin-bottom:8px}
 .cat-img{position:relative}
@@ -2811,7 +2850,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='277b';
+  var CURRENT_VERSION='278';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20330,8 +20369,8 @@ async function renderCatalogo(){
   try{
     const j=await _catCall({action:'listar'});
     _cat.modelos=j.modelos||[];_cat.edit=!!j.es_editor;_cat.conf=j.precios_confirmados||null;
-    _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.tb=j.tabla_borrador||[];_cat.cargado=true;
-    try{const ja=await _catCall({action:'archivo_listar'});_cat.arch=ja.archivos||[];}catch(e2){_cat.arch=[];}
+    _cat.bor=j.borrador||null;_cat.ult=j.ultimo_aprobado||null;_cat.tb=j.tabla_borrador||[];_cat.tx=j.textos||{};_cat.txd=j.textos_detalle||[];_cat.cargado=true;
+    try{const ja=await _catCall({action:'archivo_listar',historial:true});_cat.arch=ja.archivos||[];}catch(e2){_cat.arch=[];}
     _cat.selm=_cat.selm.filter(id=>_cat.modelos.some(m=>m.id===id));
     if(!_cat.edit){_cat.vista='vigente';if(_cat.tab==='incr')_cat.tab='modelo';}
     if(!_cat.bor&&_cat.vista==='borrador')_cat.vista='vigente';
@@ -20565,7 +20604,7 @@ function _catFechaRef(){
 function _catGenerales(){
   const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
     return '<button class="btn-secondary cat-gen" onclick="'+(a?'catVer('+a.id+')':'catSinGeneral(\''+tipo+'\')')+'">'+lbl+(a?' <span class="cat-gen-v">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':'')+'</button>';};
-  return '<div class="cat-gen-row">'+bt('cronograma','Cronograma modelo')+bt('contrato','Contrato modelo')+(_cat.edit?'<button class="btn-secondary cat-gen cat-gen-tabla" onclick="catTabla()">Tabla oficial de precios'+((_cat.tb||[]).length?' <span class="cat-gen-v">· '+(_cat.tb||[]).length+' en borrador</span>':'')+'</button>':'')+'</div>';
+  return '<div class="cat-gen-row">'+bt('cronograma','Cronograma modelo')+bt('contrato','Contrato modelo')+(_cat.edit?'<button class="btn-secondary cat-gen cat-gen-tabla" onclick="catTabla()">'+_catE(_catTx('titulo','Tabla oficial de cambios'))+((_cat.tb||[]).length?' <span class="cat-gen-v">· '+(_cat.tb||[]).length+' en borrador</span>':'')+'</button>':'')+'</div>';
 }
 function _catSeleccion(){
   if(!_cat.selm.length)return '';
@@ -20970,23 +21009,240 @@ function _catTbResumen(){
   const n=_cat.modelos.filter(m=>_catTbSt(m).cambio).length,g=(_cat.tb||[]).length;
   return {n:n,g:g};
 }
+/* v278 — Tabla oficial de cambios: precios + archivos por modelo + cronograma/contrato + textos + historial. Solo editores. */
+const _CAT_TIPO_LBL={planos:'Planos',presentacion:'Presentación',especificaciones:'Especificaciones',materiales:'Materiales',obras:'Obras',obra_foto:'Foto de obra',obra_video:'Video de obra',cronograma:'Cronograma modelo',contrato:'Contrato modelo'};
+const _CAT_COLS=[['planos','Planos'],['presentacion','Presentación'],['especificaciones','Especificaciones'],['materiales','Materiales'],['obras','Obras']];
+const _CAT_SECS=[['precios','Precios'],['archivos','Archivos por modelo'],['general','Cronograma y contrato'],['textos','Títulos y textos'],['hist','Historial']];
+function _catTx(k,def){return (_cat.tx&&_cat.tx[k]!=null&&_cat.tx[k]!=='')?_cat.tx[k]:def;}
+function _catTxFmt(t,precio,fecha){return String(t==null?'':t).replace(/\{precio\}/g,precio).replace(/\{fecha\}/g,fecha);}
+function _catTbPendPrecios(){const b=_catTbBor();return _cat.modelos.filter(m=>_catTbSt(m).cambio||b[m.id]!=null).length;}
+function _catTbPendArch(){return _cat.arch.filter(a=>a.estado==='borrador').length;}
+function _catTbPendTotal(){return _catTbPendPrecios()+_catTbPendArch();}
+function _catTbTxCambios(){const o=[];(_cat.txd||[]).forEach(t=>{const v=_catTbl.tx&&_catTbl.tx[t.clave];if(v!==undefined&&String(v).trim()!==''&&String(v).trim()!==t.valor)o.push({clave:t.clave,valor:String(v).trim()});});return o;}
+
+/* — shell — */
 function _catTbPintar(){
   let o=document.getElementById('cat-tabla');
   if(!o){o=document.createElement('div');o.id='cat-tabla';document.body.appendChild(o);}
+  const sec=_catTbl.sec||'precios',pend=_catTbPendTotal();
+  const bad={precios:_catTbPendPrecios(),archivos:_cat.arch.filter(a=>a.estado==='borrador'&&a.modelo_id!=null).length,general:_cat.arch.filter(a=>a.estado==='borrador'&&a.modelo_id==null).length,textos:_catTbTxCambios().length,hist:0};
+  let cont='';
+  if(sec==='precios')cont=_catTbSecPrecios();
+  else if(sec==='archivos')cont=_catTbSecArchivos();
+  else if(sec==='general')cont=_catTbSecGeneral();
+  else if(sec==='textos')cont=_catTbSecTextos();
+  else cont=_catTbSecHist();
+  let conf='';
+  if(_catTbl.todo){
+    const np=_catTbPendPrecios(),na=_catTbPendArch();
+    conf=`<div class="ctb-conf">Se publica para todo el equipo: <b>${np} precio(s)</b> y <b>${na} archivo(s)</b>.${np?' Los precios piden la clave de precios.':''} ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbTodoOk()">Sí, publicar todo</button><button class="btn-ghost" onclick="catTbTodoConf(false)">Cancelar</button></div></div>`;
+  }
+  o.innerHTML=`<div class="ctb-box" role="dialog" aria-label="${_catE(_catTx('titulo','Tabla oficial de cambios'))}">
+    <div class="ctb-head"><div class="ctb-t">${_catE(_catTx('titulo','Tabla oficial de cambios'))}</div><button class="ctb-x" onclick="catTablaCerrar()" aria-label="Cerrar">✕</button></div>
+    <div class="ctb-sub">${_catE(_catTx('subtitulo','Un solo lugar para precios, archivos y textos. Nada llega al equipo hasta que lo aprobás.'))}</div>
+    <div class="ctb-top"><span class="ctb-pend${pend?' hay':''}"><b>${pend}</b> cambio(s) sin publicar</span><button class="btn-primary" ${pend?'':'disabled '}onclick="catTbTodoConf(true)">Aprobar y publicar todo</button></div>${conf}
+    <div class="ctb-body"><nav class="ctb-menu">${_CAT_SECS.map(s=>`<button class="ctb-mi${sec===s[0]?' on':''}" onclick="catTbSec('${s[0]}')">${s[1]}${bad[s[0]]?` <span class="ctb-bd">${bad[s[0]]}</span>`:''}</button>`).join('')}</nav>
+    <div class="ctb-cont" id="ctb-cont">${cont}</div></div>${_catTbSide()}</div>
+    <input type="file" id="ctb-file" accept=".xlsx,.xls" hidden onchange="catTbExcelLeer(this)">`;
+  if(sec==='archivos'&&_catTbl.foco){const r=document.getElementById('ctb-ar-'+_catTbl.foco);if(r)r.scrollIntoView({block:'center'});_catTbl.foco=null;}
+}
+function catTbSec(s){_catTbl.sec=s;_catTbl.side=null;_catTbl.conf=false;_catTbPintar();}
+function catTbTodoConf(v){
+  if(v){if(_catTbItems()===null)return;if(!_catTbPendTotal()){toast('No hay cambios para publicar','error');return;}}
+  _catTbl.todo=!!v;_catTbPintar();
+}
+/* publica precios (segunda clave) y después archivos; precios primero para que cancelar la clave no deje nada a medias */
+async function catTbTodoOk(){
+  const items=_catTbItems();if(items===null){catTbTodoConf(false);return;}
+  const np=_catTbPendPrecios(),na=_catTbPendArch(),res=[];
+  try{
+    if(np){
+      if(items.length)await _catPrecio({action:'tabla_guardar',items:items});
+      const j=await _catPrecio({action:'tabla_aprobar'});
+      res.push((j.modelos_actualizados!=null?j.modelos_actualizados:np)+' precio(s)');
+    }
+    if(na){const j=await _catCall({action:'archivo_aprobar_todo'});res.push((j.publicados!=null?j.publicados:na)+' archivo(s)');}
+    toast('Publicado: '+res.join(' y '),'ok');
+  }catch(e){toast('Error: '+e.message,'error');}
+  _catTbl.todo=false;
+  await renderCatalogo();_catTbInit();_catTbPintar();
+}
+
+/* — 2. Archivos por modelo — */
+function _catTbArchEst(tipo,mid){
+  if(tipo==='obras'){
+    const l=_cat.arch.filter(a=>(a.tipo==='obra_foto'||a.tipo==='obra_video')&&a.modelo_id===mid),bor=l.filter(a=>a.estado==='borrador').length,vig=l.filter(a=>a.estado==='vigente').length;
+    if(bor)return {k:'bor',t:bor+' en borrador'+(vig?' · '+vig+' vigentes':'')};
+    if(vig)return {k:'vig',t:vig+' obra(s)'};
+    return {k:'falta',t:'+ Falta'};
+  }
+  const bor=_cat.arch.filter(a=>a.tipo===tipo&&a.estado==='borrador'&&(mid==null?a.modelo_id==null:a.modelo_id===mid)).sort((x,y)=>(y.version||0)-(x.version||0))[0],vig=_catArch(tipo,mid)[0];
+  if(bor)return {k:'bor',t:'Borrador v'+bor.version};
+  if(vig)return {k:'vig',t:'Vigente v'+vig.version};
+  return {k:'falta',t:'+ Falta'};
+}
+function _catTbSecArchivos(){
+  const solo=!!_catTbl.soloFalta;
+  const filas=_cat.modelos.filter(m=>!solo||_CAT_COLS.some(c=>_catTbArchEst(c[0],m.id).k==='falta'));
+  return `<div class="ctb-sub">Una fila por modelo. Tocá una casilla para subir o reemplazar. Lo que subís queda como borrador hasta que lo aprobás.</div>
+  <div class="ctb-foot"><label class="ctb-chk"><input type="checkbox" ${solo?'checked ':''}onchange="catTbSoloFalta(this.checked)"> Solo los que faltan</label><span style="font-size:12px;color:#A9B3C4">${filas.length} de ${_cat.modelos.length} modelos</span></div>
+  <div class="ctb-scroll ctb-grid"><table><thead><tr><th>Modelo</th>${_CAT_COLS.map(c=>`<th style="text-align:center">${c[1]}</th>`).join('')}</tr></thead><tbody>${
+    filas.map(m=>`<tr id="ctb-ar-${m.id}" class="${_catTbl.side&&_catTbl.side.mid===m.id?'cambio':''}"><td>${_catE(m.nombre)}</td>${_CAT_COLS.map(c=>{const e=_catTbArchEst(c[0],m.id);return `<td style="text-align:center"><button class="ctb-cel ${e.k}" onclick="catTbAbrirArch(${m.id},'${c[0]}')">${_catE(e.t)}</button></td>`;}).join('')}</tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#A9B3C4">No falta nada.</td></tr>'}</tbody></table></div>`;
+}
+function catTbSoloFalta(v){_catTbl.soloFalta=!!v;_catTbPintar();}
+function catTbAbrirArch(mid,tipo){_catTbl.side={mid:mid,tipo:tipo};_catTbl.aviso='';_catTbl.busy='';_catTbPintar();}
+function catTbSideCerrar(){_catTbl.side=null;_catTbPintar();}
+function _catTbSide(){
+  const sd=_catTbl.side;if(!sd)return '';
+  const m=sd.mid==null?null:_cat.modelos.find(x=>x.id===sd.mid);
+  return `<div class="ctb-side" role="dialog"><div class="ctb-head"><div class="ctb-t" style="font-size:16px">${_catE((m?m.nombre+' · ':'')+(_CAT_TIPO_LBL[sd.tipo]||sd.tipo))}</div><button class="ctb-x" onclick="catTbSideCerrar()" aria-label="Cerrar">✕</button></div><div class="ctb-sideb">${sd.tipo==='obras'?_catTbSideObras(sd.mid):_catTbSideDoc(sd.tipo,sd.mid)}</div></div>`;
+}
+function _catTbSideDoc(tipo,mid){
+  const vig=_catArch(tipo,mid)[0],bor=_cat.arch.filter(a=>a.tipo===tipo&&a.estado==='borrador'&&(mid==null?a.modelo_id==null:a.modelo_id===mid)).sort((x,y)=>(y.version||0)-(x.version||0))[0];
+  const bz=_catTbl.busy?'disabled ':'';
+  let h='';
+  h+=vig?`<div class="ctb-card"><div class="ctb-ch"><b>Vigente v${vig.version}</b><span class="ctb-chip ok">lo ve el equipo</span></div><div class="ctb-cm">${_catE(vig.titulo||'')} · publicado ${_catFmtF(vig.aprobado_at||vig.subido_at)}</div><button class="btn-ghost" onclick="catVer(${vig.id})">Ver</button></div>`:`<div class="ctb-card falta"><b>+ Falta</b><div class="ctb-cm">Todavía no hay archivo vigente.</div></div>`;
+  if(bor)h+=`<div class="ctb-card bor"><div class="ctb-ch"><b>Borrador v${bor.version}</b><span class="ctb-chip">todavía no lo ve el equipo</span></div><div class="ctb-cm">${_catE(bor.titulo||'')} · subido por ${_catE(bor.subido_por||'—')} el ${_catFmtF(bor.subido_at)}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-ghost" onclick="catVer(${bor.id})">Ver</button><button class="btn-primary" ${bz}onclick="catTbAprobarId(${bor.id})">Aprobar</button><button class="btn-ghost" ${bz}onclick="catTbDescartarId(${bor.id})">Descartar</button></div></div>`;
+  h+=`<div class="ctb-card"><b>${vig||bor?'Reemplazar':'Subir'}</b><input type="file" id="ctb-up" class="form-control" accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="catTbArchElegido(this)" style="height:auto;padding:8px">`;
+  h+=`<div id="ctb-aviso" class="ctb-aviso" ${_catTbl.aviso?'':'hidden'}>${_catE(_catTbl.aviso||'')}</div>`;
+  if(tipo==='presentacion')h+=`<div class="ctb-cm">Los precios se cambian solo en la Tabla oficial. Revisá que la presentación no traiga precios adentro: se vería desactualizada.</div>`;
+  h+=`<button class="btn-primary" ${bz}onclick="catTbSubirDoc()">Guardar como borrador</button><div class="ctb-cm" id="ctb-busy">${_catE(_catTbl.busy||'Se guarda como versión nueva; la anterior queda en el historial.')}</div></div>`;
+  return h;
+}
+function catTbArchElegido(inp){
+  const f=inp.files&&inp.files[0],sd=_catTbl.side;
+  _catTbl.aviso=(f&&sd&&sd.tipo==='presentacion'&&/precio|price|cotiz|tarifa|usd|\$|\bbs\b|oferta/i.test(f.name))?'⚠ El nombre del archivo sugiere que trae precios adentro. Los precios cambian en la Tabla oficial: si la presentación los muestra, quedará desactualizada.':'';
+  const a=document.getElementById('ctb-aviso');if(a){a.textContent=_catTbl.aviso;a.hidden=!_catTbl.aviso;}
+}
+async function _catTbPut(j,file){
+  const r=await fetch(j.signedUrl,{method:'PUT',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
+  if(!r.ok)throw new Error('No se pudo subir el archivo ('+r.status+')');
+}
+/* archivo_subir_url -> PUT a signedUrl -> archivo_borrador */
+async function _catTbSubir(tipo,mid,file,titulo){
+  const j=await _catCall({action:'archivo_subir_url',tipo:tipo,modelo_id:mid,nombre:file.name});
+  await _catTbPut(j,file);
+  return await _catCall({action:'archivo_borrador',tipo:tipo,modelo_id:mid,path:j.path,titulo:titulo||file.name});
+}
+async function catTbSubirDoc(){
+  const sd=_catTbl.side,inp=document.getElementById('ctb-up'),f=inp&&inp.files&&inp.files[0];
+  if(!sd||!f){toast('Elegí primero el archivo','error');return;}
+  if(f.size>50*1024*1024){toast('El archivo pesa más de 50 MB','error');return;}
+  _catTbl.busy='Subiendo '+f.name+'…';const b=document.getElementById('ctb-busy');if(b)b.textContent=_catTbl.busy;
+  try{await _catTbSubir(sd.tipo,sd.mid,f,f.name);toast('Guardado como borrador. Falta aprobar','ok');}
+  catch(e){toast('Error: '+e.message,'error');}
+  _catTbl.busy='';await renderCatalogo();
+}
+async function _catTbAccion(p,msg){
+  try{await _catCall(p);toast(msg,'ok');}catch(e){toast('Error: '+e.message,'error');}
+  await renderCatalogo();
+}
+function catTbAprobarId(id){return _catTbAccion({action:'archivo_aprobar',id:id},'Publicado: ahora lo ve todo el equipo');}
+function catTbDescartarId(id){return _catTbAccion({action:'archivo_descartar',id:id},'Borrador descartado');}
+function catTbQuitarId(id){return _catTbAccion({action:'archivo_quitar',id:id},'Quitado del catálogo');}
+function catTbRevertirId(id){return _catTbAccion({action:'archivo_revertir',id:id},'Volviste a esa versión');}
+/* obras: fotos comprimidas en el navegador (lado mayor 1600 px, JPEG 0,8) y links de YouTube */
+function _catTbComprimir(file){
+  return new Promise(function(ok,ko){
+    const url=URL.createObjectURL(file),im=new Image();
+    im.onload=function(){
+      const mx=Math.max(im.width,im.height),k=mx>1600?1600/mx:1,c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      c.toBlob(function(b){b?ok(new File([b],(file.name.replace(/\.[^.]+$/,'')||'foto')+'.jpg',{type:'image/jpeg'})):ko(new Error('No se pudo comprimir la foto'));},'image/jpeg',0.8);
+    };
+    im.onerror=function(){URL.revokeObjectURL(url);ko(new Error('La imagen no es válida'));};
+    im.src=url;
+  });
+}
+function _catTbSideObras(mid){
+  const l=_cat.arch.filter(a=>(a.tipo==='obra_foto'||a.tipo==='obra_video')&&a.modelo_id===mid&&(a.estado==='vigente'||a.estado==='borrador'));
+  const bz=_catTbl.busy?'disabled ':'';
+  let h=l.length?l.map(a=>`<div class="ctb-card${a.estado==='borrador'?' bor':''}"><div class="ctb-ch"><b>${a.tipo==='obra_video'?'▶ Video':'🖼️ Foto'}</b><span class="ctb-chip${a.estado==='vigente'?' ok':''}">${a.estado==='vigente'?'vigente':'borrador'}</span></div><div class="ctb-cm">${_catE(a.titulo||'')}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${a.estado==='borrador'?`<button class="btn-primary" ${bz}onclick="catTbAprobarId(${a.id})">Aprobar</button><button class="btn-ghost" ${bz}onclick="catTbDescartarId(${a.id})">Descartar</button>`:`<button class="btn-ghost" ${bz}onclick="catTbQuitarId(${a.id})">Quitar</button>`}</div></div>`).join(''):`<div class="ctb-card falta"><b>+ Falta</b><div class="ctb-cm">Todavía no hay obras de este modelo.</div></div>`;
+  h+=`<div class="ctb-card"><b>Subir fotos</b><input type="file" id="ctb-fotos" class="form-control" accept="image/*" multiple style="height:auto;padding:8px"><div class="ctb-cm">Se achican solas (lado mayor 1600 px, JPEG calidad 0,8) antes de subir.</div><button class="btn-primary" ${bz}onclick="catTbSubirFotos()">Subir como borrador</button></div>`;
+  h+=`<div class="ctb-card"><b>Agregar video</b><input id="ctb-vid" class="form-control" placeholder="Link de YouTube (https://…)" style="height:44px"><div class="ctb-cm">Los videos viven en YouTube (no listado) y se ven dentro del CRM.</div><button class="btn-primary" ${bz}onclick="catTbAgregarVideo()">Agregar como borrador</button></div><div class="ctb-cm" id="ctb-busy">${_catE(_catTbl.busy||'')}</div>`;
+  return h;
+}
+async function catTbSubirFotos(){
+  const sd=_catTbl.side,inp=document.getElementById('ctb-fotos'),fs=inp&&inp.files?Array.from(inp.files):[];
+  if(!sd||!fs.length){toast('Elegí primero las fotos','error');return;}
+  let ok=0;
+  try{
+    for(let i=0;i<fs.length;i++){
+      _catTbl.busy='Subiendo foto '+(i+1)+' de '+fs.length+'…';const b=document.getElementById('ctb-busy');if(b)b.textContent=_catTbl.busy;
+      const f=await _catTbComprimir(fs[i]);
+      await _catTbSubir('obra_foto',sd.mid,f,f.name);ok++;
+    }
+    toast(ok+' foto(s) guardadas como borrador. Falta aprobar','ok');
+  }catch(e){toast('Error: '+e.message+(ok?' ('+ok+' ya subidas)':''),'error');}
+  _catTbl.busy='';await renderCatalogo();
+}
+async function catTbAgregarVideo(){
+  const sd=_catTbl.side,inp=document.getElementById('ctb-vid'),u=inp?inp.value.trim():'';
+  if(!sd)return;
+  if(!/^https:\/\//i.test(u)){toast('Pegá un link de YouTube que empiece con https://','error');return;}
+  try{await _catCall({action:'archivo_borrador',tipo:'obra_video',modelo_id:sd.mid,url:u,titulo:'Video · '+((_cat.modelos.find(x=>x.id===sd.mid)||{}).nombre||'')});toast('Video guardado como borrador. Falta aprobar','ok');}
+  catch(e){toast('Error: '+e.message,'error');}
+  await renderCatalogo();
+}
+
+/* — 3. Cronograma y contrato (generales) — */
+function _catTbSecGeneral(){
+  return `<div class="ctb-sub">Valen para todos los modelos. Mismo flujo: se sube como borrador y se aprueba.</div><div class="ctb-gen">${['cronograma','contrato'].map(t=>{
+    const e=_catTbArchEst(t,null),vig=_catArch(t,null)[0];
+    return `<div class="ctb-card${e.k==='bor'?' bor':(e.k==='falta'?' falta':'')}"><div class="ctb-ch"><b>${_CAT_TIPO_LBL[t]}</b><span class="ctb-chip${e.k==='vig'?' ok':''}">${_catE(e.t)}</span></div><div class="ctb-cm">${vig?'Publicado el '+_catFmtF(vig.aprobado_at||vig.subido_at)+' · lo ve todo el equipo':'Todavía no se cargó.'}</div><button class="btn-ghost" onclick="catTbAbrirArch(null,'${t}')">${e.k==='falta'?'+ Subir':'Reemplazar / revisar'}</button></div>`;}).join('')}</div>`;
+}
+
+/* — 4. Títulos y textos — */
+function _catTbSecTextos(){
+  const det=_cat.txd||[];_catTbl.tx=_catTbl.tx||{};
+  const m=_cat.modelos[0]||{},precio=_catN(m.precio_total_usd,0),fecha=(typeof _catFechaRef==='function'?_catFechaRef():'');
+  const val=t=>_catTbl.tx[t.clave]!==undefined?_catTbl.tx[t.clave]:t.valor;
+  const get=k=>{const t=det.find(x=>x.clave===k);return t?val(t):'';};
+  return `<div class="ctb-sub">Textos que se ven en el catálogo. Se pueden usar <b>{precio}</b> y <b>{fecha}</b>. Se publican con su propio botón (no esperan a "Aprobar y publicar todo").</div>
+  <div class="ctb-scroll ctb-txw"><table class="ctb-tx"><tbody>${det.map(t=>`<tr><td style="width:34%">${_catE(t.etiqueta||t.clave)}</td><td><input class="ctb-in" style="width:100%;text-align:left" id="ctb-tx-${_catE(t.clave)}" value="${_catE(val(t))}" maxlength="200" oninput="catTbTxInput('${_catE(t.clave)}',this.value)"></td><td style="width:1%"><button class="btn-ghost" style="min-height:44px" onclick="catTbTxRestaurar('${_catE(t.clave)}')">Restaurar</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="ctb-card"><b>Vista previa</b><div class="ctb-prev"><div>${_catE(_catTxFmt(get('precio_txt'),precio,fecha))}</div><div style="font-size:11px;color:#6b6f78;margin-top:6px">${_catE(_catTxFmt(get('pie'),precio,fecha))}</div></div><div class="ctb-cm">Con el precio de ${_catE(m.nombre||'un modelo')} y la fecha de hoy.</div></div>
+  <div class="ctb-foot"><button class="btn-primary" onclick="catTbTxPublicar()">Publicar textos</button><span id="ctb-txn" style="font-size:12px;color:#A9B3C4">${_catTbTxCambios().length} texto(s) con cambio</span></div>`;
+}
+function catTbTxInput(k,v){_catTbl.tx=_catTbl.tx||{};_catTbl.tx[k]=v;const n=document.getElementById('ctb-txn');if(n)n.textContent=_catTbTxCambios().length+' texto(s) con cambio';}
+function catTbTxRestaurar(k){const t=(_cat.txd||[]).find(x=>x.clave===k);if(!t)return;_catTbl.tx=_catTbl.tx||{};_catTbl.tx[k]=t.por_defecto;_catTbPintar();}
+async function catTbTxPublicar(){
+  const items=_catTbTxCambios();
+  if(!items.length){toast('No hay textos con cambio','error');return;}
+  try{
+    const j=await _catCall({action:'texto_guardar',items:items});
+    toast('Textos publicados ('+(j.guardados!=null?j.guardados:items.length)+')','ok');
+    _catTbl.tx={};
+  }catch(e){toast('Error: '+e.message,'error');}
+  await renderCatalogo();
+}
+
+/* — 5. Historial — */
+function _catTbSecHist(){
+  const lst=_cat.arch.slice().sort((a,b)=>String(b.aprobado_at||b.subido_at||'').localeCompare(String(a.aprobado_at||a.subido_at||'')));
+  const nomM=id=>{const m=_cat.modelos.find(x=>x.id===id);return m?m.nombre:'General';};
+  const hayArch=lst.some(a=>a.estado==='archivado');
+  let h='<div class="ctb-sub">Cada archivo con su versión, quién lo cargó y cuándo. "Volver a esta" deja esa versión como la vigente.</div>';
+  if(_cat.ult)h+=`<div class="ctb-card"><b>Último incremento de precios aprobado: +${_catE(_cat.ult.porcentaje)}%</b><div class="ctb-cm">${_catE(_cat.ult.base||'sin base')} · ${_catE(_cat.ult.resuelto_por||'—')} · ${_catFmtF(_cat.ult.resuelto_at)}</div></div>`;
+  h+=lst.length?lst.map(a=>{const doc=['planos','presentacion','especificaciones','materiales','cronograma','contrato'].indexOf(a.tipo)>=0;return `<div class="ctb-card"><div class="ctb-ch"><b>${_catE(_CAT_TIPO_LBL[a.tipo]||a.tipo)} · ${_catE(nomM(a.modelo_id))}${a.version?' · v'+a.version:''}</b><span class="ctb-chip${a.estado==='vigente'?' ok':''}">${_catE(a.estado)}</span></div><div class="ctb-cm">${_catE(a.titulo||'')} · ${_catE(a.subido_por||'—')} · ${_catFmtF(a.aprobado_at||a.subido_at)}</div>${a.estado==='archivado'&&doc?`<button class="btn-ghost" onclick="catTbRevertirId(${a.id})">Volver a esta</button>`:''}</div>`;}).join(''):'<div class="ctb-card falta"><b>Todavía no hay cambios de archivos.</b></div>';
+  if(!hayArch)h+='<div class="ctb-cm">Las versiones anteriores (archivadas) aparecen acá apenas el servidor las entregue; hoy el listado trae solo vigentes y borradores.</div>';
+  return h;
+}
+
+/* — 1. Precios (la tabla de v277) — */
+function _catTbSecPrecios(){
   const r=_catTbResumen();
-  let h='<div class="ctb-box" role="dialog" aria-label="Tabla oficial de precios"><div class="ctb-head"><div class="ctb-t">Tabla oficial de precios</div><button class="ctb-x" onclick="catTablaCerrar()" aria-label="Cerrar">✕</button></div>'
-    +'<div class="ctb-sub">Precio por m² de cada modelo. Editá el campo, guardá el borrador y aprobá para publicar. El equipo sigue viendo los precios vigentes hasta que aprobás. El total se calcula como m² × precio.</div>'
+  return '<div class="ctb-sub">Precio por m² de cada modelo. Editá el campo y guardá el borrador; se publica con "Aprobar y publicar todo". El equipo sigue viendo los precios vigentes hasta entonces. El total se calcula como m² × precio.</div>'
     +(r.g?'<div class="ctb-bor"><b>'+r.g+' modelo(s) con cambio en borrador guardado.</b> Los captadores todavía ven la versión anterior.</div>':'')
-    +'<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Total vigente</th><th>Total nuevo</th><th>Variación</th></tr></thead><tbody>'
+    +'<div class="ctb-scroll ctb-prec"><table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Total vigente</th><th>Total nuevo</th><th>Variación</th></tr></thead><tbody>'
     +_cat.modelos.map(_catTbFila).join('')+'</tbody></table></div>'
-    +'<div class="ctb-foot" id="ctb-foot">'+_catTbFoot()+'</div></div>';
-  o.innerHTML=h+'<input type="file" id="ctb-file" accept=".xlsx,.xls" hidden onchange="catTbExcelLeer(this)">';
+    +'<div class="ctb-foot" id="ctb-foot">'+_catTbFoot()+'</div>';
 }
 function _catTbFoot(){
   const r=_catTbResumen();let h='';
   if(_catTbl.conf==='pub')h+='<div class="ctb-conf">Esto cambia el precio de <b>'+r.n+' modelo(s)</b> para todo el equipo. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
   if(_catTbl.conf==='desc')h+='<div class="ctb-conf">Se descarta el borrador guardado y los campos vuelven al precio vigente. ¿Descartar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbDescartar()">Sí, descartar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
-  h+='<button class="btn-ghost" onclick="catTbGuardar()">Guardar borrador</button><button class="btn-primary" onclick="catTbPubConf()">Aprobar y publicar</button>';
+  h+='<button class="btn-ghost" onclick="catTbGuardar()">Guardar borrador</button>';
   /* v277a — Descartar borrador SIEMPRE que haya un borrador guardado (r.g), tambien con una confirmacion abierta */
   if(r.g)h+='<button class="btn-ghost ctb-desc" onclick="catTbDescConf()">Descartar borrador</button>';
   h+='<button class="btn-ghost" onclick="catTbExcelBajar()">Descargar Excel</button><button class="btn-ghost" onclick="catTbExcelSubir()">Subir Excel</button><span id="ctb-res" style="font-size:12px;color:#A9B3C4">'+r.n+' modelo(s) con cambio</span>';
@@ -20995,11 +21251,11 @@ function _catTbFoot(){
 function catTbPubConf(){catTbConf('pub');}
 function catTbDescConf(){catTbConf('desc');}
 /* v277a — la clave de precios se pide al ABRIR la tabla (el unlock vive solo en memoria; si vence, _catPrecio la vuelve a pedir al guardar) */
-async function catTabla(){
+async function catTabla(opt){
   if(!_cat.edit){toast('Solo José Miguel o David','error');return;}
   const vig=_catUnlock.tok&&Date.now()<_catUnlock.exp-5000;
   if(!vig&&!(await _catPedirClave())){toast('Hace falta la clave de precios para abrir la Tabla oficial','error');return;}
-  _catTbl.abierta=true;_catTbInit();_catTbPintar();
+  _catTbl.abierta=true;_catTbInit();_catTbl.sec=(opt&&opt.sec)||'precios';_catTbl.side=null;_catTbl.todo=false;_catTbl.foco=(opt&&opt.modelo)||null;_catTbPintar();
 }
 function _catTb2(x){const n=Number(x);return isFinite(n)?(Math.round(n*100)/100).toFixed(2).replace('.',','):'';}
 function _catTbTot(m,st){if(!st.cambio)return Number(m.precio_total_usd);return st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;}
