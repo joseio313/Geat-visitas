@@ -1348,6 +1348,9 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 #screen-catalogo>.screen-title{align-items:center}
 .cat-pick{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:rgba(14,12,9,.82);color:var(--gold);font-size:24px;font-weight:700;cursor:pointer;line-height:1;font-family:inherit}
 .cat-pick.on{background:var(--gold);color:var(--black)}
+.cat-pick.off{opacity:.45;border-color:#A9B3C4;color:#A9B3C4;cursor:not-allowed}
+.cat-panel .cat-off{opacity:.45;cursor:not-allowed;filter:grayscale(.6)}
+.cat-sinrender{font-size:12px;font-weight:700;color:#FFB48A;margin-bottom:8px}
 .cat-img{position:relative}
 .cat-gen{height:44px;min-height:44px;padding:0 16px;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;background:var(--gray-800)}
 .cat-gen:hover{background:var(--gold);color:var(--black)}
@@ -2784,7 +2787,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276k';
+  var CURRENT_VERSION='276l';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20279,6 +20282,9 @@ async function _catCall(payload){
 }
 function _catE(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function _catN(n,d){if(n==null||isNaN(n))return '—';return Number(n).toLocaleString('es-BO',{minimumFractionDigits:d||0,maximumFractionDigits:d==null?0:d});}
+const CAT_SIN_RENDER='Falta render';
+function _catSinRender(m){return !_catImg(m);}
+function catAvisoRender(){toast(CAT_SIN_RENDER+': este modelo todavía no tiene imagen','error');}
 function _catImg(m){const a=m.imagenes;return (Array.isArray(a)&&a.length&&typeof a[0]==='string')?a[0]:'';}
 function _catPct(){
   if(_cat.bor&&_cat.bor.porcentaje!=null)return Number(_cat.bor.porcentaje);
@@ -20369,7 +20375,8 @@ function _catGrid(verBor){
     const comp=_cat.edit?_catComp(m):null;
     return '<div class="cat-card'+(_cat.sel===m.id?' sel':'')+'" onclick="catSel('+m.id+')">'
       +'<div class="cat-img" style="'+(img?'background-image:url(&quot;'+_catE(img)+'&quot;)':'background:'+fondo)+'">'+(img?'':_CAT_SIL)
-      +'<button class="cat-pick'+(en?' on':'')+'" title="'+(en?'Quitar de mi selección':'Agregar a mi selección')+'" onclick="event.stopPropagation();catPick('+m.id+')">'+(en?'✓':'+')+'</button></div>'
+      +(img?'<button class="cat-pick'+(en?' on':'')+'" title="'+(en?'Quitar de mi selección':'Agregar a mi selección')+'" onclick="event.stopPropagation();catPick('+m.id+')">'+(en?'✓':'+')+'</button>'
+        :'<button class="cat-pick off" aria-disabled="true" title="'+CAT_SIN_RENDER+'" onclick="event.stopPropagation();catAvisoRender()">+</button>')+'</div>'
       +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div>'
       +'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(tot,0)+' total'+(verBor?' (nuevo)':'')+'</div>'
       +(comp?'<div class="cat-comp" style="color:'+comp.c+'">'+comp.t+'</div>':'')+'</div></div>';
@@ -20540,6 +20547,8 @@ function _catSeleccion(){
 }
 function catSinGeneral(t){toast('Todavía no se cargó el '+(t==='contrato'?'contrato modelo':'cronograma modelo'),'error');}
 function catPick(id){
+  const mp=_cat.modelos.find(x=>x.id===id);
+  if(mp&&_catSinRender(mp)){catAvisoRender();return;}
   const i=_cat.selm.indexOf(id);
   if(i>=0)_cat.selm.splice(i,1);
   else if(_cat.selm.length>=4){toast('Máximo 4 modelos en la selección','error');return;}
@@ -20553,7 +20562,8 @@ function _catFicha(m){
     +'<div class="cat-price" style="margin-bottom:10px">'+(_cat.edit?'USD '+_catN(m.precio_desde_usd_m2,2)+' /m² · total USD '+_catN(m.precio_total_usd,0):'Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano')+'</div>';
   h+='<div class="cat-tabs" style="flex-wrap:wrap">'+CAT_SUBS.map(s=>'<button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
   if(_cat.sub==='cat'){
-    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
+    if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ Copiar imagen</button><button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
+    else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
     if(_cat.edit){
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
@@ -20748,7 +20758,7 @@ function _catPlano(ctx,x,y,w,h,dorm){
   ctx.beginPath();ctx.moveTo(x,hy);ctx.lineTo(vx,hy);ctx.stroke();
   ctx.restore();
 }
-function _catDibujarCard(ctx,m,img,x,y,w,h){
+function _catDibujarCard(ctx,m,img,x,y,w,h,vista){
   const s=w/1080,W=1080,H=h/s,nat=_catNat(m,img);
   ctx.save();ctx.translate(x,y);ctx.scale(s,s);
   ctx.fillStyle=_CATC.bg;ctx.fillRect(0,0,W,H);
@@ -20757,10 +20767,11 @@ function _catDibujarCard(ctx,m,img,x,y,w,h){
   if(img)ctx.drawImage(img,0,0,W,nat.rh);
   else{
     ctx.fillStyle='#E4DFCE';ctx.fillRect(0,0,W,nat.rh);
-    const hx=W/2,hy=nat.rh/2;ctx.fillStyle='#B9B2A0';
+    /* v276l — la silueta es solo de pantalla (vista previa); en la imagen que se copia/descarga nunca va */
+    if(vista){const hx=W/2,hy=nat.rh/2;ctx.fillStyle='#B9B2A0';
     ctx.beginPath();ctx.moveTo(hx-250,hy-10);ctx.lineTo(hx,hy-190);ctx.lineTo(hx+250,hy-10);ctx.closePath();ctx.fill();
     ctx.fillRect(hx-200,hy-10,400,190);
-    ctx.fillStyle='#E4DFCE';ctx.fillRect(hx-35,hy+70,70,110);ctx.fillRect(hx-160,hy+30,80,70);ctx.fillRect(hx+80,hy+30,80,70);
+    ctx.fillStyle='#E4DFCE';ctx.fillRect(hx-35,hy+70,70,110);ctx.fillRect(hx-160,hy+30,80,70);ctx.fillRect(hx+80,hy+30,80,70);}
   }
   ctx.textAlign='left';
   /* 2) contenido: si la fila es más alta que esta tarjeta, el sobrante se reparte arriba y abajo */
@@ -20807,7 +20818,7 @@ function _catDibujarMarca(ctx,x,y,w,h){
   ctx.fillText('sin compromiso',w/2,h/2+Math.round(134*k));
   ctx.restore();
 }
-async function _catComponer(ids){
+async function _catComponer(ids,vista){
   const ms=ids.map(id=>_cat.modelos.find(x=>x.id===id)).filter(Boolean);
   try{await Promise.all([document.fonts.load('800 72px Montserrat'),document.fonts.load('600 40px Montserrat'),document.fonts.load('500 40px Montserrat')]);}catch(e){}
   const imgs=await Promise.all(ms.map(m=>_catCargarImg(_catImg(m))));
@@ -20815,7 +20826,7 @@ async function _catComponer(ids){
   const n=ms.length;
   if(n===1){
     const cv=document.createElement('canvas');cv.width=1080;cv.height=nats[0].h;
-    _catDibujarCard(cv.getContext('2d'),ms[0],imgs[0],0,0,1080,nats[0].h);
+    _catDibujarCard(cv.getContext('2d'),ms[0],imgs[0],0,0,1080,nats[0].h,vista);
     return cv;
   }
   const cw=1000,s=cw/1080,gap=24,pad=24,cols=2,rows=Math.ceil(n/cols);
@@ -20829,7 +20840,7 @@ async function _catComponer(ids){
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
       const i=r*cols+c,xx=pad+c*(cw+gap);
-      if(i<n)_catDibujarCard(ctx,ms[i],imgs[i],xx,yy,cw,rowH[r]);
+      if(i<n)_catDibujarCard(ctx,ms[i],imgs[i],xx,yy,cw,rowH[r],vista);
       else _catDibujarMarca(ctx,xx,yy,cw,rowH[r]);
     }
     yy+=rowH[r]+gap;
@@ -20840,7 +20851,7 @@ async function _catPintarCanvas(id){
   const box=document.getElementById('cat-canvas-box');
   if(!box)return;
   try{
-    const cv=await _catComponer([id]);
+    const cv=await _catComponer([id],true);
     if(_cat.sel!==id||_cat.sub!=='cat')return;
     const b=document.getElementById('cat-canvas-box');
     if(b){cv.style.cssText='max-width:100%;max-height:var(--cat-prev-h,none);width:auto;height:auto;border-radius:8px;display:block;margin:0 auto';b.innerHTML='';b.appendChild(cv);}
@@ -20852,6 +20863,7 @@ function _catDescargarBlob(blob,nombre){
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
 async function _catEntregar(ids,nombre){
+  if(ids.some(id=>{const m=_cat.modelos.find(x=>x.id===id);return !m||_catSinRender(m);})){catAvisoRender();return;}
   let blob;
   try{blob=await _catBlob(await _catComponer(ids));}
   catch(e){toast('No se pudo generar la imagen (las fotos no permiten copiarse)','error');return;}
@@ -20869,6 +20881,7 @@ async function _catEntregar(ids,nombre){
 function catCopiarImg(id){const m=_cat.modelos.find(x=>x.id===id);_catEntregar([id],'GEAT-'+(m?m.nombre:'modelo').replace(/[^\w-]+/g,'_'));}
 async function catDescargarImg(id){
   const m=_cat.modelos.find(x=>x.id===id);
+  if(!m||_catSinRender(m)){catAvisoRender();return;}
   try{_catDescargarBlob(await _catBlob(await _catComponer([id])),'GEAT-'+(m?m.nombre:'modelo').replace(/[^\w-]+/g,'_')+'.png');}
   catch(e){toast('No se pudo generar la imagen','error');}
 }
