@@ -1377,9 +1377,41 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cvw-bar{display:flex;align-items:center;gap:4px;background:var(--gray-900);color:#fff;font-size:12px;padding-left:10px}
 .cvw-bar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cvw-bar button{min-width:44px;min-height:44px;background:none;border:0;color:#fff;font-size:18px;cursor:pointer}
-.cat-sil{width:46%;max-width:150px;color:var(--gray-600);opacity:.9}
 #cat-clave{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:16px}
 .ccl-box{background:#14161d;border:1px solid var(--gold);border-radius:12px;padding:20px;width:min(380px,100%)}
+/* v276i — diseño aprobado (DISENO_REFERENCIA_CATALOGO.html) */
+#screen-catalogo .screen-title h1{font-size:28px;font-weight:800;letter-spacing:0}
+.cat-modo{font-size:13px;font-weight:600;color:#FAC305;margin-left:12px}
+.cat-gen{min-height:44px;height:44px;border-radius:999px;padding:0 18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#F2F4F8;font-weight:700;font-size:12px;text-transform:none;letter-spacing:0;transition:transform .15s ease,filter .15s ease}
+.cat-gen:hover{background:rgba(255,255,255,.06);color:#F2F4F8;filter:brightness(1.14);transform:translateY(-1px)}
+.cat-gen-v{font-weight:600;font-size:11px;color:#A9B3C4;opacity:1}
+.cat-wrap{gap:12px}
+.cat-grid{gap:12px}
+@media(min-width:1200px){.cat-wrap{grid-template-columns:minmax(0,1fr) 470px}}
+.cat-card{border-radius:20px;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.10);color:#F2F4F8;transition:transform .2s ease}
+.cat-card:hover{transform:translateY(-3px)}
+.cat-card.sel{border-color:#FAC305;box-shadow:none}
+.cat-img{height:86px;background-color:transparent}
+.cat-body{padding:8px 12px 10px;display:flex;flex-direction:column;gap:3px}
+.cat-body .cat-name{font-size:14px;font-weight:800;margin:0}
+.cat-body .cat-price{font-size:15px;font-weight:800;color:#FAC305}
+.cat-comp{font-size:11px;font-weight:700}
+.cat-sil{width:64px;height:46px;color:inherit;opacity:1;max-width:none}
+.cat-panel{width:auto;border-radius:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);padding:14px;display:flex;flex-direction:column;gap:10px;color:#F2F4F8}
+.cat-panel>*{flex-shrink:0}
+.cat-panel>.cat-name{font-size:22px;font-weight:800;line-height:1.1}
+.cat-panel>.cat-spec{font-size:12px;color:#A9B3C4;margin:-8px 0 0}
+.cat-panel>.cat-price{font-size:15px;font-weight:800;color:#FAC305;margin:0}
+.cat-panel .cat-tabs{margin:0;gap:6px;flex-wrap:wrap}
+.cat-panel .cat-chip{height:44px;min-height:44px;padding:0 13px;font-size:12px;font-weight:700;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:#F2F4F8;transition:transform .15s ease,filter .15s ease}
+.cat-panel .cat-chip:hover{filter:brightness(1.14);transform:translateY(-1px)}
+.cat-panel .cat-chip.on{background:#FAC305;border-color:#FAC305;color:#111}
+.cat-auto{border-radius:16px;background:rgba(80,200,140,.10);border:1px solid rgba(80,200,140,.5);padding:12px;display:flex;flex-direction:column;gap:6px}
+.cat-auto-t{font-size:13px;font-weight:800;color:#8DE3B5}
+.cat-auto-d{font-size:12px;color:#C9D1DE}
+.cat-auto-s{font-size:11px;color:#A9B3C4}
+.cat-auto-s b{color:#FAC305}
+button:focus-visible,input:focus-visible{outline:2px solid #FAC305;outline-offset:2px}
 #cat-hoja{display:none;background:#fff;color:#000;padding:24px;font-size:12px}
 #cat-hoja table{width:100%;border-collapse:collapse;margin-top:10px}
 #cat-hoja th,#cat-hoja td{border:1px solid #999;padding:4px 6px;text-align:right}
@@ -1845,7 +1877,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
   <!-- ══ SCREEN: CATÁLOGO (v267) — todo el equipo ve precios vigentes; Incremento solo admin/commercial_lead. Datos solo vía Edge Function catalogo-admin. ══ -->
   <section id="screen-catalogo" class="screen">
     <div class="screen-title">
-      <h1>🏠 <span class="gold">Catálogo</span> de modelos</h1>
+      <h1>Catálogo<span id="cat-modo" class="cat-modo"></span></h1>
       <div id="cat-gen-head" class="cat-gen-head"></div>
     </div>
     <div id="catalogo-body"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
@@ -2750,7 +2782,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276h';
+  var CURRENT_VERSION='276i';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20319,6 +20351,7 @@ function _catPintar(){
   h+='<div class="cat-wrap"><div id="cat-grid-wrap">'+_catGrid(verBor)+'</div><div class="cat-panel">'+_catPanel()+'</div></div>';
   el.innerHTML=h;
   const gh=document.getElementById('cat-gen-head');if(gh)gh.innerHTML=_catGenerales();
+  const gm=document.getElementById('cat-modo');if(gm)gm.textContent=_cat.edit&&cu?'Modo Editor · '+String(cu.nombre||'').split(' ').slice(0,2).join(' '):'';
 }
 function _catGrid(verBor){
   const lista=_catFiltrados();
@@ -20329,13 +20362,15 @@ function _catGrid(verBor){
     const tot=verBor?_catNuevoTotal(m):m.precio_total_usd;
     const specs=[m.plantas!=null?m.plantas+' planta'+(Number(m.plantas)===1?'':'s'):null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
     const en=_cat.selm.indexOf(m.id)>=0;
-    /* v276 — el equipo ve solo el total llave en mano; el precio por m² es de los editores */
+    /* v276i — tarjeta del diseño aprobado: miniatura 86 px, nombre 14/800, precio total 15/800 dorado, estado de ficha 11/700 (solo editores). El precio por m² vive en la Tabla oficial. */
+    const fondo=_CAT_FONDOS[Math.max(0,_cat.modelos.indexOf(m))%4];
+    const comp=_cat.edit?_catComp(m):null;
     return '<div class="cat-card'+(_cat.sel===m.id?' sel':'')+'" onclick="catSel('+m.id+')">'
-      +'<div class="cat-img"'+(img?' style="background-image:url(&quot;'+_catE(img)+'&quot;)"':'')+'>'+(img?'':_CAT_SIL)
+      +'<div class="cat-img" style="'+(img?'background-image:url(&quot;'+_catE(img)+'&quot;)':'background:'+fondo)+'">'+(img?'':_CAT_SIL)
       +'<button class="cat-pick'+(en?' on':'')+'" title="'+(en?'Quitar de mi selección':'Agregar a mi selección')+'" onclick="event.stopPropagation();catPick('+m.id+')">'+(en?'✓':'+')+'</button></div>'
-      +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div><div class="cat-spec">'+_catE(specs||'—')+'</div>'
-      +(_cat.edit?'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(m2,2)+' /m²</div>':'')
-      +'<div class="cat-total'+(_cat.edit?'':' cat-price')+'">'+(_cat.edit?'Total USD ':'Aprox. USD ')+_catN(tot,0)+(verBor?' (nuevo)':'')+(_cat.edit?'':' llave en mano')+'</div></div></div>';
+      +'<div class="cat-body"><div class="cat-name">'+_catE(m.nombre)+'</div>'
+      +'<div class="cat-price'+(verBor?' cat-new':'')+'">USD '+_catN(tot,0)+' total'+(verBor?' (nuevo)':'')+'</div>'
+      +(comp?'<div class="cat-comp" style="color:'+comp.c+'">'+comp.t+'</div>':'')+'</div></div>';
   }).join('')+'</div>';
 }
 function _catPanel(){
@@ -20521,6 +20556,7 @@ function _catFicha(m){
     if(_cat.edit){
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
     }
+    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div><div class="cat-auto-s">Precio vigente: <b>Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div></div>';
     setTimeout(()=>_catPintarCanvas(m.id),0);
   }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
     h+=_catListaDocs(_cat.sub,m.id);
@@ -20837,7 +20873,13 @@ async function catDescargarImg(id){
 function catCopiarSel(){_catEntregar(_cat.selm.slice(),'GEAT-seleccion');}
 
 /* v276g — silueta de casa para los modelos sin render */
-const _CAT_SIL='<svg class="cat-sil" viewBox="0 0 120 90" aria-label="Sin render" role="img"><path d="M8 46 L60 8 L112 46 Z" fill="currentColor"/><rect x="18" y="46" width="84" height="38" fill="currentColor"/><rect x="54" y="58" width="14" height="26" fill="#1a1a1a" opacity=".55"/><rect x="26" y="54" width="18" height="14" fill="#1a1a1a" opacity=".55"/><rect x="76" y="54" width="18" height="14" fill="#1a1a1a" opacity=".55"/></svg>';
+const _CAT_SIL='<svg class="cat-sil" width="64" height="46" viewBox="0 0 86 62" aria-hidden="true"><path d="M4 30 L43 4 L82 30 L82 58 L4 58 Z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="2"/><rect x="34" y="36" width="18" height="22" fill="rgba(255,255,255,0.35)"/></svg>';
+const _CAT_FONDOS=['linear-gradient(135deg,#2B4A7A,#1B2C4A)','linear-gradient(135deg,#3C6B5A,#21392F)','linear-gradient(135deg,#7A5B2B,#3F2E14)','linear-gradient(135deg,#5A3C6B,#2E1F38)'];
+function _catComp(m){
+  const falt=[['planos','planos'],['presentacion','presentación'],['especificaciones','especificaciones'],['materiales','materiales']].filter(function(t){return !_catArch(t[0],m.id).length;}).map(function(t){return t[1];});
+  if(!falt.length)return {t:'✓ Ficha completa',c:'#8DE3B5'};
+  return {t:falt.length===1?'● Falta '+falt[0]:'● Faltan '+falt.length+' archivos',c:'#FFB48A'};
+}
 /* v276g — segunda clave de precios. El 'unlock' vive SOLO en memoria (nunca localStorage); la clave nunca se guarda ni se imprime. */
 let _catUnlock={tok:null,exp:0};
 function _catPedirClave(){
