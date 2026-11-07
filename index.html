@@ -1408,6 +1408,11 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .ctb-txw{overflow:visible!important}
 .ctb-tx .ctb-in{min-width:0}
 @media(max-width:760px){.ctb-body{flex-direction:column}.ctb-menu{width:auto;flex:0 0 auto;flex-direction:row;overflow-x:auto}.ctb-mi{white-space:nowrap;flex:0 0 auto}.ctb-box{height:100%}}
+#toast{z-index:10100}
+.ctb-incr{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px 12px;background:rgba(255,255,255,.04);font-size:13px}
+.ctb-incr .ctb-in{width:100px}
+.ctb-incr .btn-primary,.ctb-incr .btn-ghost{min-height:44px}
+.ctb-cont>.ctb-conf{flex:0 0 auto}
 .ctb-rojo td{background:rgba(255,90,60,.18)!important;color:#FFB48A}
 #ctb-diff{position:fixed;inset:0;z-index:10002;background:rgba(3,6,12,.8);display:flex;align-items:center;justify-content:center;padding:16px}
 .ctb-foot button[disabled]{opacity:.45;cursor:not-allowed}
@@ -2860,7 +2865,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278c';
+  var CURRENT_VERSION='278d';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -21060,7 +21065,7 @@ function catClaveCerrar(){const o=document.getElementById('cat-clave');if(o)o.re
 let _catTbl={abierta:false,v:{},conf:false};
 function _catTbNum(t){const v=Number(String(t==null?'':t).replace(',','.'));return isFinite(v)?v:NaN;}
 function _catTbBor(){const o={};(_cat.tb||[]).forEach(x=>{o[x.modelo_id]=Number(x.precio_m2);});return o;}
-function _catTbInit(){const b=_catTbBor();_catTbl.v={};_cat.modelos.forEach(m=>{const x=b[m.id]!=null?b[m.id]:Number(m.precio_desde_usd_m2);_catTbl.v[m.id]=_catTb2(x);});_catTbl.conf=false;}
+function _catTbInit(){const b=_catTbBor();_catTbl.v={};_cat.modelos.forEach(m=>{const x=b[m.id]!=null?b[m.id]:Number(m.precio_desde_usd_m2);_catTbl.v[m.id]=_catTb2(x);});_catTbl.conf=false;_catTbl.incrConf=null;}
 function _catTbSt(m){
   const act=Number(m.precio_desde_usd_m2),n=_catTbNum(_catTbl.v[m.id]);
   const ok=isFinite(n)&&n>0&&act>0&&Math.abs(n-act)/act<=0.5;
@@ -21102,8 +21107,8 @@ function _catTbPintar(){
   else cont=_catTbSecHist();
   let conf='';
   if(_catTbl.todo){
-    const np=_catTbPendPrecios(),na=_catTbPendArch();
-    conf=`<div class="ctb-conf">Se publica para todo el equipo: <b>${np} precio(s)</b> y <b>${na} archivo(s)</b>.${np?' Los precios piden la clave de precios.':''} ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbTodoOk()">Sí, publicar todo</button><button class="btn-ghost" onclick="catTbTodoConf(false)">Cancelar</button></div></div>`;
+    const np=_catTbPendPrecios(),na=_catTbPendArch(),gen=_catTbIncrGeneral();
+    conf=`<div class="ctb-conf">Se publica para todo el equipo: ${gen!=null?`<b>Incremento general ${_catTbPctTxt(gen)} %</b> · `:''}<b>${np} precio(s)</b> y <b>${na} archivo(s)</b>.${np?' Los precios piden la clave de precios.':''} ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbTodoOk()">Sí, publicar todo</button><button class="btn-ghost" onclick="catTbTodoConf(false)">Cancelar</button></div></div>`;
   }
   o.innerHTML=`<div class="ctb-box" role="dialog" aria-label="${_catE(_catTx('titulo','Tabla oficial de cambios'))}">
     <div class="ctb-head"><div class="ctb-t">${_catE(_catTx('titulo','Tabla oficial de cambios'))}</div><button class="ctb-x" onclick="catTablaCerrar()" aria-label="Cerrar">✕</button></div>
@@ -21311,10 +21316,58 @@ function _catTbSecHist(){
   return h;
 }
 
+/* v278d — Incremento general: USD/m2 nuevo = vigente x (1 + %/100), 2 decimales, SIEMPRE sobre el vigente. Solo carga la tabla (no guarda ni publica). Aritmética en centavos enteros para no caer en 397,42 por binario. */
+function _catTbPctTxt(p){return (p>0?'+':'')+String(Math.round(p*100)/100).replace('.',',');}
+function _catTbPctNum(){const t=String(_catTbl.pct==null?'':_catTbl.pct).trim().replace(',','.');if(!t)return NaN;const n=Number(t);return isFinite(n)?n:NaN;}
+function _catTbPrecioIncr(act,p){const c=Math.round(Number(act)*100),p100=Math.round(p*100);return Math.round(c*(10000+p100)/10000)/100;}
+function _catTbIncrBar(){
+  const c=_catTbl.incrConf;
+  return `<div class="ctb-incr"><b>Incremento general</b><input class="ctb-in" id="ctb-pct" inputmode="decimal" placeholder="Ej. 5 o -3,5" value="${_catE(_catTbl.pct==null?'':_catTbl.pct)}" oninput="catTbIncrPct(this.value)" onkeydown="if(event.key==='Enter')catTbIncrAplicar()" aria-label="Porcentaje de incremento general"><span>%</span><button class="btn-primary" onclick="catTbIncrAplicar()">Aplicar a todos</button><button class="btn-ghost" onclick="catTbIncrDeshacer()">Deshacer incremento</button><span class="ctb-cm">Se calcula sobre el precio vigente. Solo carga la tabla: no guarda ni publica.</span></div>`
+   +(c!=null?`<div class="ctb-conf" id="ctb-incr-conf">Vas a cambiar todos los precios en <b>${_catTbPctTxt(c)} %</b>. ¿Confirmás?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbIncrOk()">Sí, aplicar</button><button class="btn-ghost" onclick="catTbIncrCancelar()">Cancelar</button></div></div>`:'');
+}
+function catTbIncrPct(v){
+  _catTbl.pct=v;
+  if(_catTbl.incrConf!=null){_catTbl.incrConf=null;const e=document.getElementById('ctb-incr-conf');if(e)e.remove();}
+}
+function catTbIncrAplicar(){
+  const raw=String(_catTbl.pct==null?'':_catTbl.pct).trim(),p=_catTbPctNum();
+  if(!raw||p===0){toast('No hay incremento para aplicar (0 % o vacío)');return;}
+  if(!isFinite(p)){toast('Porcentaje inválido','error');return;}
+  if(Math.abs(p)>50){toast('El incremento no puede pasar de ±50 % (el servidor lo rechaza igual)','error');return;}
+  if(Math.abs(p)>15){_catTbl.incrConf=p;_catTbPintar();return;}
+  _catTbIncrAplicarOk(p);
+}
+function catTbIncrOk(){const p=_catTbl.incrConf;if(p==null)return;if(Math.abs(p)>50){toast('El incremento no puede pasar de ±50 %','error');return;}_catTbIncrAplicarOk(p);}
+function catTbIncrCancelar(){_catTbl.incrConf=null;_catTbPintar();}
+function _catTbIncrAplicarOk(p){
+  let n=0;
+  _cat.modelos.forEach(function(m){const a=Number(m.precio_desde_usd_m2);if(!(a>0))return;_catTbl.v[m.id]=_catTb2(_catTbPrecioIncr(a,p));n++;});
+  _catTbl.incrConf=null;_catTbl.conf=false;_catTbl.todo=false;
+  _catTbPintar();
+  toast('Incremento '+_catTbPctTxt(p)+' % cargado en '+n+' modelos. Falta Guardar borrador','ok');
+}
+/* vuelve la columna "nuevo" al último borrador guardado (o al vigente si no hay) */
+function catTbIncrDeshacer(){_catTbInit();_catTbl.pct='';_catTbPintar();toast('Incremento deshecho','ok');}
+/* % común si TODOS los modelos cambiaron por el mismo incremento (para el texto de publicar); null si no */
+function _catTbIncrGeneral(){
+  const ms=_cat.modelos.filter(m=>Number(m.precio_desde_usd_m2)>0);
+  if(!ms.length||ms.length!==_cat.modelos.length)return null;
+  const big=ms.reduce((a,b)=>Number(b.precio_desde_usd_m2)>Number(a.precio_desde_usd_m2)?b:a),sb0=_catTbSt(big);
+  if(!sb0.ok||!sb0.cambio)return null;
+  const p=Math.round((sb0.n/sb0.act-1)*10000)/100;if(!p)return null;
+  return ms.every(function(m){const t=_catTbSt(m);return t.ok&&Math.round(t.n*100)===Math.round(_catTbPrecioIncr(t.act,p)*100);})?p:null;
+}
+function _catTbPendRefrescar(){
+  const n=_catTbPendTotal(),p=document.querySelector('.ctb-pend');
+  if(p){p.innerHTML='<b>'+n+'</b> cambio(s) sin publicar';p.classList.toggle('hay',n>0);}
+  const b=document.querySelector('.ctb-top .btn-primary');if(b)b.disabled=!n;
+}
+
 /* — 1. Precios (la tabla de v277) — */
 function _catTbSecPrecios(){
   const r=_catTbResumen();
   return '<div class="ctb-sub">Precio por m² de cada modelo. Editá el campo y guardá el borrador; se publica con "Aprobar y publicar todo". El equipo sigue viendo los precios vigentes hasta entonces. El total se calcula como m² × precio.</div>'
+    +_catTbIncrBar()
     +(r.g?'<div class="ctb-bor"><b>'+r.g+' modelo(s) con cambio en borrador guardado.</b> Los captadores todavía ven la versión anterior.</div>':'')
     +'<div class="ctb-scroll ctb-prec"><table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Total vigente</th><th>Total nuevo</th><th>Variación</th></tr></thead><tbody>'
     +_cat.modelos.map(_catTbFila).join('')+'</tbody></table></div>'
@@ -21426,6 +21479,7 @@ function catTbInput(id,val){
   if(t)t.textContent=tn==null?'—':_catN(tn,0);
   if(d)d.textContent=_ctbDelta(st);
   const rs=document.getElementById('ctb-res');if(rs)rs.textContent=_catTbResumen().n+' modelo(s) con cambio';
+  _catTbPendRefrescar();
 }
 /* filas a mandar: las que cambian + las que vuelven al vigente teniendo borrador (el servidor las borra). null = hay un valor invalido */
 function _catTbItems(){
