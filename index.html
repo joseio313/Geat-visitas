@@ -2898,7 +2898,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278g';
+  var CURRENT_VERSION='278h';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20726,60 +20726,11 @@ function catVerFull(id){
   const ov=document.getElementById('cat-visor');
   try{if(ov&&ov.requestFullscreen){const p=ov.requestFullscreen();if(p&&p.catch)p.catch(function(){});}}catch(e){}
 }
-let _catPv={id:null,pag:1};
-const _catPvCache=new Map();
+/* v278h — sin descarga automatica: el cuadro solo muestra nombre/version; el PDF se baja al tocar Ver (catVer) */
 function _catPvBox(tipo,mid){
   const a=_catArch(tipo,mid)[0];
-  return '<div class="cpc-pv" id="cpc-pv" oncontextmenu="return false">'+(a?'<div class="loading-state"><span class="spin"></span></div>':'Todavía no hay archivo cargado')+'</div>';
-}
-async function _catPvCargar(tipo,mid){
-  const box=document.getElementById('cpc-pv'),a=_catArch(tipo,mid)[0];
-  if(!box||!a)return;
-  _catPv={id:a.id,pag:1};
-  try{
-    let it=_catPvCache.get(a.id);
-    if(!it){
-      const r=await _catCall({action:'archivo_ver',id:a.id});
-      const resp=await fetch(r.url);
-      if(!resp.ok)throw new Error('No se pudo abrir el archivo');
-      const buf=await resp.arrayBuffer();
-      const b4=new Uint8Array(buf.slice(0,5)),cab=String.fromCharCode.apply(null,b4),ct=resp.headers.get('content-type')||'';
-      it={marca:r.marca_agua,tipo:'otro',pdf:null,url:null};
-      if(cab==='%PDF-'){const lib=await _catCargarPdfJs();it.pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;it.tipo='pdf';}
-      else if(/^image\//.test(ct)||b4[0]===0xFF||cab.indexOf('PNG')===1){it.url=URL.createObjectURL(new Blob([buf],{type:ct||'image/jpeg'}));it.tipo='img';}
-      _catPvCache.set(a.id,it);
-      if(_catPvCache.size>5){const k=_catPvCache.keys().next().value,o=_catPvCache.get(k);if(o&&o.url)URL.revokeObjectURL(o.url);_catPvCache.delete(k);}
-    }
-    if(document.getElementById('cpc-pv')!==box||_catPv.id!==a.id)return;
-    await _catPvPagina();
-  }catch(e){
-    if(document.getElementById('cpc-pv')===box)box.textContent='No se pudo abrir la vista previa';
-  }
-}
-async function _catPvPagina(){
-  const box=document.getElementById('cpc-pv'),it=_catPvCache.get(_catPv.id);
-  if(!box||!it)return;
-  const wm='<div class="cvz-marca" style="background-image:'+_catMarca(it.marca)+'"></div>';
-  if(it.tipo==='pdf'){
-    const id=_catPv.id,pg=await it.pdf.getPage(_catPv.pag),v0=pg.getViewport({scale:1}),dpr=window.devicePixelRatio||1;
-    const sc=Math.min(150/v0.height,Math.max(100,box.clientWidth-2)/v0.width),vp=pg.getViewport({scale:sc*dpr});
-    const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;cv.style.width=(vp.width/dpr)+'px';cv.style.height=(vp.height/dpr)+'px';
-    await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-    if(document.getElementById('cpc-pv')!==box||_catPv.id!==id)return;
-    box.innerHTML='';box.appendChild(cv);
-    box.insertAdjacentHTML('beforeend',wm+'<span class="cpc-pg">'+_catPv.pag+' / '+it.pdf.numPages+'</span>');
-  }else if(it.tipo==='img'){
-    box.innerHTML='<img src="'+it.url+'" draggable="false" alt="" style="height:100%;max-width:100%;object-fit:contain">'+wm;
-  }else{
-    box.textContent='Este formato no se puede ver en el CRM. Pedí que se cargue en PDF.';
-  }
-}
-function catPvIr(d){
-  const it=_catPvCache.get(_catPv.id);
-  if(!it||!it.pdf)return;
-  const n=Math.min(it.pdf.numPages,Math.max(1,_catPv.pag+d));
-  if(n===_catPv.pag)return;
-  _catPv.pag=n;_catPvPagina();
+  if(!a)return '<div class="cpc-pv">Todavía no hay archivo cargado</div>';
+  return '<div class="cpc-pv" style="flex-direction:column;gap:6px"><div style="font-size:13px;font-weight:800;color:#F2F4F8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_catE(a.titulo||tipo)+'</div><div>Versión '+_catE(a.version)+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</div><button class="cpc-b" style="flex:none;min-height:34px;padding:0 24px" onclick="catVer('+a.id+')">Ver</button></div>';
 }
 function _catFicha(m){
   const nb=Number(m.banos),pl=Number(m.plantas);
@@ -20800,12 +20751,10 @@ function _catFicha(m){
     const a=_catArch('planos',m.id)[0];
     h+=_catPvBox('planos',m.id)
       +'<div class="cpc-row">'+bp('Ver planos',!!a,'catVer('+(a?a.id:0)+')')+bp('Ver en pantalla completa',!!a,'catVerFull('+(a?a.id:0)+')',' cpc-g')+'</div>';
-    setTimeout(()=>_catPvCargar('planos',m.id),0);
   }else if(_cat.sub==='presentacion'){
     const a=_catArch('presentacion',m.id)[0];
     h+=_catPvBox('presentacion',m.id)
-      +'<div class="cpc-row">'+bp('Ver presentación',!!a,'catVer('+(a?a.id:0)+')')+'<button class="cpc-ic" aria-label="Lámina anterior" onclick="catPvIr(-1)">◀</button><button class="cpc-ic" aria-label="Lámina siguiente" onclick="catPvIr(1)">▶</button></div>';
-    setTimeout(()=>_catPvCargar('presentacion',m.id),0);
+      +'<div class="cpc-row">'+bp('Ver presentación',!!a,'catVer('+(a?a.id:0)+')')+'</div>';
   }else if(_cat.sub==='tec'){
     const e=_catArch('especificaciones',m.id)[0],ma=_catArch('materiales',m.id)[0];
     const filas=[['Superficie',m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null],['Plantas',m.plantas],['Dormitorios',m.dormitorios],['Baños',m.banos]].filter(f=>f[1]!=null&&f[1]!=='');
