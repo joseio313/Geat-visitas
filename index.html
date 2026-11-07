@@ -2865,7 +2865,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278e';
+  var CURRENT_VERSION='278f';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -21301,11 +21301,9 @@ async function catTbTxPublicar(){
 function _catTbSecHist(){
   const lst=_cat.arch.slice().sort((a,b)=>String(b.aprobado_at||b.subido_at||'').localeCompare(String(a.aprobado_at||a.subido_at||'')));
   const nomM=id=>{const m=_cat.modelos.find(x=>x.id===id);return m?m.nombre:'General';};
-  const hayArch=lst.some(a=>a.estado==='archivado');
   let h='<div class="ctb-sub">Cada archivo con su versión, quién lo cargó y cuándo. "Volver a esta" deja esa versión como la vigente.</div>';
   if(_cat.ult)h+=`<div class="ctb-card"><b>Último incremento de precios aprobado: +${_catE(_cat.ult.porcentaje)}%</b><div class="ctb-cm">${_catE(_cat.ult.base||'sin base')} · ${_catE(_cat.ult.resuelto_por||'—')} · ${_catFmtF(_cat.ult.resuelto_at)}</div></div>`;
   h+=lst.length?lst.map(a=>{const doc=['planos','presentacion','especificaciones','materiales','cronograma','contrato'].indexOf(a.tipo)>=0;return `<div class="ctb-card"><div class="ctb-ch"><b>${_catE(_CAT_TIPO_LBL[a.tipo]||a.tipo)} · ${_catE(nomM(a.modelo_id))}${a.version?' · v'+a.version:''}</b><span class="ctb-chip${a.estado==='vigente'?' ok':''}">${_catE(a.estado)}</span></div><div class="ctb-cm">${_catE(a.titulo||'')} · ${_catE(a.subido_por||'—')} · ${_catFmtF(a.aprobado_at||a.subido_at)}</div>${a.estado==='archivado'&&doc?`<button class="btn-ghost" onclick="catTbRevertirId(${a.id})">Volver a esta</button>`:''}</div>`;}).join(''):'<div class="ctb-card falta"><b>Todavía no hay cambios de archivos.</b></div>';
-  if(!hayArch)h+='<div class="ctb-cm">Las versiones anteriores (archivadas) aparecen acá apenas el servidor las entregue; hoy el listado trae solo vigentes y borradores.</div>';
   return h;
 }
 
