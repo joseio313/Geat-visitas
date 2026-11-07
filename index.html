@@ -2865,7 +2865,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278d';
+  var CURRENT_VERSION='278e';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20471,7 +20471,7 @@ function _catPanel(){
   if(CAT_INCR_VISIBLE&&_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
   const m=_cat.modelos.find(x=>x.id===_cat.sel);
   if(!m)return h+'<div style="font-size:13px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
-  return h+_catFicha(m)+(_cat.edit?'<div class="cat-foot">Nada llega al equipo hasta que lo aprobás. Cada carga queda con versión, fecha y quién la hizo.</div>':'');
+  return h+_catFicha(m);
 }
 function _catEquipoBtn(){
   return '<div style="margin-top:12px"><button class="btn-ghost" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
@@ -20695,13 +20695,6 @@ function _catFicha(m){
     if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button><button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
     else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
-    if(_cat.edit){
-      if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
-    }
-    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div>'
-      +'<div class="cat-auto-s">Precio vigente: <b>'+_catE(_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div>'
-      +'<div class="cat-auto-s">Pie de la imagen: <b>'+_catE(_catTxFmt(_catTx('pie','Precio referencial al {fecha} · Imagen referencial'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b></div>'
-      +'<div class="cat-auto-s">Frase de marca: <b>'+_catE(_catTx('marca','Consultá por tu visita sin compromiso'))+'</b></div></div>';
     setTimeout(()=>_catPintarCanvas(m.id),0);
   }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
     h+=_catListaDocs(_cat.sub,m.id);
