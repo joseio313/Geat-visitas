@@ -1413,6 +1413,16 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .ctb-foot button[disabled]{opacity:.45;cursor:not-allowed}
 .ctb-box>.ctb-conf{flex:0 0 auto}
 .ctb-conf{flex:1 1 100%;border:1px solid #FAC305;border-radius:12px;padding:10px;font-size:13px}
+.cat-pen{min-width:44px;min-height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:transparent;color:#FAC305;cursor:pointer;font-size:16px;font-family:inherit;padding:0}
+.cat-pen:hover{background:rgba(250,195,5,.12)}
+.cat-tabw{display:inline-flex;align-items:center;gap:2px}
+.cat-desc{font-size:13px;color:#C9D1DE;display:flex;align-items:center;gap:4px;margin-top:-4px}
+.cat-desc.ph{color:#6f7a8c;font-style:italic}
+.cat-txedit{border:1px solid #FAC305;border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:rgba(250,195,5,.06)}
+.cat-txedit .form-control{height:44px;font-size:14px}
+.cat-cm{font-size:11px;color:#A9B3C4}
+.cat-auto-s{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px}
+.cat-auto-s .cat-pen{margin-left:0}
 .cat-sinrender{font-size:12px;font-weight:700;color:#FFB48A;margin-bottom:8px}
 .cat-img{position:relative}
 .cat-gen{height:44px;min-height:44px;padding:0 16px;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;background:var(--gray-800)}
@@ -2850,7 +2860,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278';
+  var CURRENT_VERSION='278b';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20498,7 +20508,7 @@ function _catPrevTxt(v){
 function catBuscar(v){_cat.busca=v;const w=document.getElementById('cat-grid-wrap');if(w)w.innerHTML=_catGrid(_cat.edit&&_cat.bor&&_cat.vista==='borrador');}
 function catFiltro(f){_cat.filtro=f;_catPintar();}
 function catVista(v){_cat.vista=v;_catPintar();}
-function catSel(id){_cat.sel=id;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();
+function catSel(id){_cat.sel=id;_cat.txEdit=null;if(_cat.tab==='incr')_cat.tab='modelo';_catPintar();
   /* v276e — en celular el panel queda debajo de la grilla: bajar hasta él al elegir un modelo */
   if(window.innerWidth<=900)setTimeout(function(){const pn=document.querySelector('.cat-panel');if(pn)pn.scrollIntoView({behavior:'smooth',block:'start'});},80);}
 function catTab(t){_cat.tab=t;_cat.confirmando=false;_cat.confirmandoRev=false;_catPintar();}
@@ -20621,20 +20631,72 @@ function catPick(id){
   else _cat.selm.push(id);
   _catPintar();
 }
+/* v278b — textos globales y descripción por modelo: se leen de listar.textos y se editan EN el panel (solo editores, ✎). Una sola fuente: catalogo_textos. */
+function _catSubs(){return [['cat',_catTx('tab_catalogo','Catálogo'),'tab_catalogo'],['planos',_catTx('tab_planos','Planos'),'tab_planos'],['presentacion',_catTx('tab_pres','Presentación'),'tab_pres'],['obras',_catTx('tab_obras','Obras'),'tab_obras'],['tec',_catTx('tab_tec','Técnico'),'tab_tec']];}
+function _catPenBtn(clave){return _cat.edit?`<button class="cat-pen" title="Editar este texto" aria-label="Editar este texto" onclick="event.stopPropagation();catTxEdit('${clave}')">✎</button>`:'';}
+function _catTxEtiqueta(clave){const t=(_cat.txd||[]).find(x=>x.clave===clave);return t?(t.etiqueta||clave):clave;}
+function _catDescHTML(m){
+  const d=m.descripcion?String(m.descripcion):'';
+  if(!d&&!_cat.edit)return '';
+  return `<div class="cat-desc${d?'':' ph'}">${d?_catE(d):'Sin descripción'}${_cat.edit?`<button class="cat-pen" title="Editar la descripción de este modelo" aria-label="Editar la descripción" onclick="catDescEdit(${m.id})">✎</button>`:''}</div>`;
+}
+function _catTxEditor(m){
+  const e=_cat.txEdit;if(!e||!_cat.edit)return '';
+  const esDesc=e.tipo==='desc';
+  return `<div class="cat-txedit"><label class="form-label" for="cat-txin">${esDesc?'Descripción de '+_catE(m.nombre)+' (propia de este modelo)':_catE(_catTxEtiqueta(e.clave))}</label>
+    <input class="form-control" id="cat-txin" maxlength="${esDesc?300:200}" value="${_catE(e.valor)}" onkeydown="if(event.key==='Enter')catTxGuardar();if(event.key==='Escape')catTxCancel()">
+    <div class="cat-cm">${esDesc?'Se ve en el panel de este modelo.':'Se pueden usar {precio} y {fecha}. Es el mismo texto de la Tabla oficial: cambia en pantalla y en la imagen.'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-primary" style="min-height:44px" onclick="catTxGuardar()">Publicar</button><button class="btn-ghost" style="min-height:44px" onclick="catTxCancel()">Cancelar</button>${esDesc?'':`<button class="btn-ghost" style="min-height:44px" onclick="catTxRestaurar()">Restaurar</button>`}</div></div>`;
+}
+function catTxEdit(clave){if(!_cat.edit)return;_cat.txEdit={tipo:'g',clave:clave,valor:_catTx(clave,'')};_catPintar();setTimeout(function(){const i=document.getElementById('cat-txin');if(i){i.focus();i.select();}},50);}
+function catDescEdit(mid){
+  if(!_cat.edit)return;const m=_cat.modelos.find(x=>x.id===mid);if(!m)return;
+  _cat.txEdit={tipo:'desc',mid:mid,valor:m.descripcion||''};_catPintar();setTimeout(function(){const i=document.getElementById('cat-txin');if(i){i.focus();i.select();}},50);
+}
+function catTxCancel(){_cat.txEdit=null;_catPintar();}
+function catTxRestaurar(){const e=_cat.txEdit;if(!e||e.tipo!=='g')return;const t=(_cat.txd||[]).find(x=>x.clave===e.clave);if(!t)return;const i=document.getElementById('cat-txin');if(i)i.value=t.por_defecto;}
+async function catTxGuardar(){
+  const e=_cat.txEdit,i=document.getElementById('cat-txin');
+  if(!e||!i||!_cat.edit)return;
+  const v=i.value.trim();
+  try{
+    if(e.tipo==='desc'){
+      await _catCall({action:'modelo_texto_guardar',modelo_id:e.mid,descripcion:v});
+      toast(v?'Descripción publicada':'Descripción quitada','ok');
+    }else{
+      if(!v){toast('El texto no puede quedar vacío (usá Restaurar)','error');return;}
+      await _catCall({action:'texto_guardar',items:[{clave:e.clave,valor:v}]});
+      toast('Texto publicado','ok');
+    }
+    _cat.txEdit=null;
+  }catch(er){toast('Error: '+er.message,'error');return;}
+  await renderCatalogo();
+}
+function _catMarcaLineas(ctx,t,mw){
+  const pal=String(t).split(' ').filter(Boolean);
+  if(!pal.length)return [];
+  if(pal.length<2||ctx.measureText(pal.join(' ')).width<=mw)return [pal.join(' ')];
+  let best=1,bd=1e9;
+  for(let i=1;i<pal.length;i++){const d=Math.abs(pal.slice(0,i).join(' ').length-pal.slice(i).join(' ').length);if(d<bd){bd=d;best=i;}}
+  return [pal.slice(0,best).join(' '),pal.slice(best).join(' ')];
+}
 function catSub(s){_cat.sub=s;_catPintar();}
 function _catFicha(m){
   const specs=[m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
-  let h='<div class="cat-name" style="font-size:22px;font-weight:800;line-height:1.15">'+_catE(m.nombre)+'</div><div class="cat-spec" style="font-size:12px;margin-bottom:4px">'+_catE(specs)+'</div>'
-    +'<div class="cat-price" style="margin-bottom:10px">'+(_cat.edit?'USD '+_catN(m.precio_desde_usd_m2,2)+' /m² · total USD '+_catN(m.precio_total_usd,0):'Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano')+'</div>';
-  h+='<div class="cat-tabs" style="flex-wrap:wrap">'+CAT_SUBS.map(s=>'<button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
+  let h=_catTxEditor(m)+'<div class="cat-name" style="font-size:22px;font-weight:800;line-height:1.15">'+_catE(m.nombre)+'</div><div class="cat-spec" style="font-size:12px;margin-bottom:4px">'+_catE(specs)+'</div>'+_catDescHTML(m)
+    +'<div class="cat-price" style="margin-bottom:10px">'+(_cat.edit?'USD '+_catN(m.precio_desde_usd_m2,2)+' /m² · total USD '+_catN(m.precio_total_usd,0):_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</div>';
+  h+='<div class="cat-tabs" style="flex-wrap:wrap">'+_catSubs().map(s=>'<span class="cat-tabw"><button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+_catE(s[1])+'</button>'+_catPenBtn(s[2])+'</span>').join('')+'</div>';
   if(_cat.sub==='cat'){
-    if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ Copiar imagen</button><button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
-    else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ Copiar imagen</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
+    if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button>'+_catPenBtn('btn_copiar')+'<button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
+    else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button>'+_catPenBtn('btn_copiar')+'<button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
     if(_cat.edit){
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
     }
-    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div><div class="cat-auto-s">Precio vigente: <b>Aprox. USD '+_catN(m.precio_total_usd,0)+' llave en mano</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div><button class="btn-secondary cat-gen-tabla" style="min-height:44px;border-radius:12px" onclick="catTabla()">Cambiar precio en la Tabla oficial</button></div>';
+    if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div>'
+      +'<div class="cat-auto-s">Precio vigente: <b>'+_catE(_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+_catPenBtn('precio_txt')+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div>'
+      +'<div class="cat-auto-s">Pie de la imagen: <b>'+_catE(_catTxFmt(_catTx('pie','Precio referencial al {fecha} · Imagen referencial'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+_catPenBtn('pie')+'</div>'
+      +'<div class="cat-auto-s">Frase de marca: <b>'+_catE(_catTx('marca','Consultá por tu visita sin compromiso'))+'</b>'+_catPenBtn('marca')+'</div></div>';
     setTimeout(()=>_catPintarCanvas(m.id),0);
   }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
     h+=_catListaDocs(_cat.sub,m.id);
@@ -20645,7 +20707,7 @@ function _catFicha(m){
     h+='<input class="form-control" id="cat-obra-q" placeholder="Buscar obra…" value="'+_catE(_cat.obraQ||'')+'" oninput="catObraQ(this.value)" style="height:44px;margin-bottom:10px"><div id="cat-obras-grid">'+_catObrasHTML(m.id)+'</div>';
     setTimeout(()=>_catObrasFotos(m.id),0);
   }
-  return h+_catEquipoBtn();
+  return h+(_cat.edit?'<div style="margin-top:12px"><button class="btn-secondary cat-gen-tabla" style="min-height:44px" onclick="catTabla({sec:\'archivos\',modelo:'+m.id+'})">Editar en la Tabla oficial</button></div>':'')+_catEquipoBtn();
 }
 function _catListaDocs(tipo,mid){
   const l=_catArch(tipo,mid);
@@ -20852,12 +20914,17 @@ function _catDibujarCard(ctx,m,img,x,y,w,h,vista){
   ctx.fillText(sp,48,ty+40);
   if(m.superficie_m2!=null)ctx.fillText(_catN(m.superficie_m2,1)+' m² construidos',48,ty+92);
   ty+=104+24;
-  const ptxt=m.precio_total_usd!=null?'Aprox. USD '+_catN(m.precio_total_usd,0):'Consultar precio';
+  /* v278b — texto del precio desde catalogo_textos.precio_txt: hasta {precio} en dorado, lo que sigue debajo en blanco */
+  const _fe=_catFechaRef(),_pn=m.precio_total_usd!=null?_catN(m.precio_total_usd,0):'',_tpl=_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_pi=_tpl.indexOf('{precio}');
+  let ptxt,ptxt2='';
+  if(m.precio_total_usd==null)ptxt='Consultar precio';
+  else if(_pi>=0){const _c=_pi+8;ptxt=_catTxFmt(_tpl.slice(0,_c),_pn,_fe).trim();ptxt2=_catTxFmt(_tpl.slice(_c),_pn,_fe).trim();}
+  else ptxt=_catTxFmt(_tpl,_pn,_fe);
+  const _pw=W-48-300-48-24;
   let pfs=66;ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,pfs);
-  while(pfs>40&&ctx.measureText(ptxt).width>W-48-300-48-24){pfs-=2;ctx.font=_catFuente(800,pfs);}
+  while(pfs>40&&ctx.measureText(ptxt).width>_pw){pfs-=2;ctx.font=_catFuente(800,pfs);}
   ctx.fillText(ptxt,48,ty+62);
-  ctx.fillStyle=_CATC.tx;ctx.font=_catFuente(600,40);
-  ctx.fillText('llave en mano',48,ty+62+50);
+  if(ptxt2){let sfs=40;ctx.fillStyle=_CATC.tx;ctx.font=_catFuente(600,sfs);while(sfs>22&&ctx.measureText(ptxt2).width>_pw){sfs-=2;ctx.font=_catFuente(600,sfs);}ctx.fillText(ptxt2,48,ty+62+50);}
   /* plano referencial pequeño a la derecha */
   const pw=300,ph=250,px=W-48-pw,py=nat.rh+40;
   _catPlano(ctx,px,py,pw,ph,m.dormitorios);
@@ -20868,7 +20935,7 @@ function _catDibujarCard(ctx,m,img,x,y,w,h,vista){
   /* 4) pie legible, pegado abajo */
   ctx.strokeStyle=_CATC.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(48,H-92);ctx.lineTo(W-48,H-92);ctx.stroke();
   ctx.fillStyle=_CATC.sub;ctx.font=_catFuente(500,24);
-  ctx.fillText('Precio referencial al '+_catFechaRef()+' · Imagen referencial',48,H-42);
+  {const _pt=_catTxFmt(_catTx('pie','Precio referencial al {fecha} · Imagen referencial'),m.precio_total_usd!=null?_catN(m.precio_total_usd,0):'',_catFechaRef());let _pf=24;ctx.font=_catFuente(500,_pf);while(_pf>14&&ctx.measureText(_pt).width>W-96-200){_pf-=1;ctx.font=_catFuente(500,_pf);}ctx.fillText(_pt,48,H-42);}
   ctx.fillStyle=_CATC.oro;ctx.font=_catFuente(800,36);ctx.textAlign='right';ctx.fillText('GEAT',W-48,H-40);
   ctx.restore();
 }
@@ -20880,8 +20947,9 @@ function _catDibujarMarca(ctx,x,y,w,h){
   const k=w/1000;
   ctx.fillStyle='#E0B13A';ctx.font=_catFuente(800,Math.round(150*k));ctx.fillText('GEAT',w/2,h/2);
   ctx.fillStyle=_CATC.bg;ctx.font=_catFuente(600,Math.round(42*k));
-  ctx.fillText('Consultá por tu visita',w/2,h/2+Math.round(80*k));
-  ctx.fillText('sin compromiso',w/2,h/2+Math.round(134*k));
+  {const _mt=_catTx('marca','Consultá por tu visita sin compromiso'),_mw=w*0.86;let _fs=Math.round(42*k);ctx.font=_catFuente(600,_fs);let _ml=_catMarcaLineas(ctx,_mt,_mw);
+  while(_fs>10&&_ml.some(l=>ctx.measureText(l).width>_mw)){_fs-=2;ctx.font=_catFuente(600,_fs);_ml=_catMarcaLineas(ctx,_mt,_mw);}
+  _ml.forEach((l,i)=>ctx.fillText(l,w/2,h/2+Math.round(80*k)+i*Math.round(54*k)));}
   ctx.restore();
 }
 async function _catComponer(ids,vista){
