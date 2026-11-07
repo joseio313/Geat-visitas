@@ -1397,6 +1397,8 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-body .cat-price{font-size:15px;font-weight:800;color:#FAC305}
 .cat-comp{font-size:11px;font-weight:700}
 .cat-sil{width:64px;height:46px;color:inherit;opacity:1;max-width:none}
+.cat-foot{font-size:11px;color:#A9B3C4;border-top:1px solid rgba(255,255,255,.10);padding-top:8px;margin-top:auto}
+@media(min-width:901px){#screen-catalogo{padding:16px 24px 16px 20px}}
 .cat-panel{width:auto;border-radius:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);padding:14px;display:flex;flex-direction:column;gap:10px;color:#F2F4F8}
 .cat-panel>*{flex-shrink:0}
 .cat-panel>.cat-name{font-size:22px;font-weight:800;line-height:1.1}
@@ -2782,7 +2784,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276j';
+  var CURRENT_VERSION='276k';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20381,7 +20383,7 @@ function _catPanel(){
   if(CAT_INCR_VISIBLE&&_cat.tab==='incr'&&_cat.edit)return h+_catPanelIncr();
   const m=_cat.modelos.find(x=>x.id===_cat.sel);
   if(!m)return h+'<div style="font-size:13px;color:var(--gray-400)">Tocá un modelo para ver el detalle.</div>'+_catEquipoBtn();
-  return h+_catFicha(m);
+  return h+_catFicha(m)+(_cat.edit?'<div class="cat-foot">Nada llega al equipo hasta que lo aprobás. Cada carga queda con versión, fecha y quién la hizo.</div>':'');
 }
 function _catEquipoBtn(){
   return '<div style="margin-top:12px"><button class="btn-ghost" onclick="catCopiarWA()">📋 Copiar texto para WhatsApp</button></div>';
