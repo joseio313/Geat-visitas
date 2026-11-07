@@ -2811,7 +2811,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='277a';
+  var CURRENT_VERSION='277b';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -21042,7 +21042,7 @@ function _catTbDiff(rows){
     const n=vacio?NaN:_catTbNum(raw),st=_catTbSt(m);
     const valido=isFinite(n)&&n>0,pct=valido&&st.act>0?(n/st.act-1)*100:null;
     const cambia=valido&&Math.round(n*100)!==Math.round(st.n*100);
-    items.push({m:m,vacio:vacio,valido:valido,n:n,act:st.act,cur:st.n,pct:pct,cambia:cambia,rojo:(!valido)||(pct!=null&&Math.abs(pct)>15)});
+    items.push({m:m,vacio:vacio,valido:valido,n:n,act:st.act,cur:st.n,pct:pct,cambia:cambia,rojo:(!valido)||(pct!=null&&Math.abs(pct)>15),over:valido&&pct!=null&&Math.abs(pct)>15,marca:false});
   });
   _catTbl.diff={items:items,desconocidos:desconocidos};
   _catTbDiffPintar();
@@ -21050,24 +21050,25 @@ function _catTbDiff(rows){
 function _catTbDiffPintar(){
   const d=_catTbl.diff;if(!d)return;
   const mostrar=d.items.filter(x=>x.cambia||!x.valido);
-  const aplicables=d.items.filter(x=>x.cambia),rojos=aplicables.filter(x=>x.rojo).length,malos=d.items.filter(x=>!x.valido).length;
+  const aplicables=d.items.filter(x=>x.cambia&&(!x.over||x.marca)),rojos=aplicables.filter(x=>x.over).length,pend=d.items.filter(x=>x.cambia&&x.over&&!x.marca).length,malos=d.items.filter(x=>!x.valido).length;
   let o=document.getElementById('ctb-diff');
   if(!o){o=document.createElement('div');o.id='ctb-diff';document.body.appendChild(o);}
   let h='<div class="ctb-box" role="dialog" aria-label="Diferencias del Excel"><div class="ctb-head"><div class="ctb-t">Diferencias del Excel</div><button class="ctb-x" onclick="catTbDiffCerrar()" aria-label="Cerrar">✕</button></div>'
-    +'<div class="ctb-sub">Revisá antes de aplicar. <b>Nada se guardó.</b> Al confirmar, los valores entran a los campos de la tabla; después hay que tocar Guardar borrador. En rojo: variación de más de 15 % contra el vigente, o celda vacía / inválida (esas no se aplican).</div>';
+    +'<div class="ctb-sub">Revisá antes de aplicar. <b>Nada se guardó.</b> Al confirmar, los valores entran a los campos de la tabla; después hay que tocar Guardar borrador. En rojo: variación de más de 15 % contra el vigente (NO se aplica salvo que la marques una por una) o celda vacía / inválida (nunca se aplican).</div>';
   if(!mostrar.length)h+='<div class="ctb-bor">El Excel no trae ningún cambio respecto de lo que hay en la tabla.</div>';
-  else h+='<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>USD/m² vigente</th><th>En la tabla ahora</th><th>En el Excel</th><th>Variación vs vigente</th></tr></thead><tbody>'
-    +mostrar.map(x=>'<tr class="'+(x.rojo?'ctb-rojo':'')+'"><td>'+_catE(x.m.nombre)+'</td><td>'+_catN(x.act,2)+'</td><td>'+_catN(x.cur,2)+'</td><td>'+(x.vacio?'(vacía)':(x.valido?_catN(x.n,2):'inválida'))+'</td><td>'+(x.pct==null?'—':(x.pct>0?'+':'')+_catN(x.pct,2)+'%')+(x.rojo&&x.valido?' ⚠':'')+'</td></tr>').join('')+'</tbody></table></div>';
+  else h+='<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>USD/m² vigente</th><th>En la tabla ahora</th><th>En el Excel</th><th>Variación vs vigente</th><th>Aplicar</th></tr></thead><tbody>'
+    +mostrar.map(x=>'<tr class="'+(x.rojo?'ctb-rojo':'')+'"><td>'+_catE(x.m.nombre)+'</td><td>'+_catN(x.act,2)+'</td><td>'+_catN(x.cur,2)+'</td><td>'+(x.vacio?'(vacía)':(x.valido?_catN(x.n,2):'inválida'))+'</td><td>'+(x.pct==null?'—':(x.pct>0?'+':'')+_catN(x.pct,2)+'%')+(x.over?' ⚠':'')+'</td><td>'+(x.over?'<label style="display:inline-flex;align-items:center;gap:6px;min-height:44px;cursor:pointer"><input type="checkbox" '+(x.marca?'checked ':'')+'onchange="catTbDiffMarca('+x.m.id+',this.checked)" style="width:22px;height:22px"> Aplicar</label>':(x.cambia?'✓':'—'))+'</td></tr>').join('')+'</tbody></table></div>';
   if(d.desconocidos.length)h+='<div class="ctb-bor">Modelos del Excel que no existen en el catálogo (se ignoran): '+d.desconocidos.map(_catE).join(', ')+'</div>';
-  h+='<div class="ctb-foot"><button class="btn-primary" '+(aplicables.length?'':'disabled ')+'onclick="catTbExcelAplicar()">Aplicar '+aplicables.length+' cambio(s) a la tabla'+(rojos?' ('+rojos+' en rojo)':'')+'</button><button class="btn-ghost" onclick="catTbDiffCerrar()">Cancelar</button>'
-    +(malos?'<span style="font-size:12px;color:#FFB48A">'+malos+' celda(s) vacía(s) o inválida(s) sin aplicar</span>':'')+'</div></div>';
+  h+='<div class="ctb-foot"><button class="btn-primary" '+(aplicables.length?'':'disabled ')+'onclick="catTbExcelAplicar()">Aplicar '+aplicables.length+' cambio(s) a la tabla'+(rojos?' ('+rojos+' marcado(s) en rojo)':'')+'</button><button class="btn-ghost" onclick="catTbDiffCerrar()">Cancelar</button>'
+    +(pend?'<span style="font-size:12px;color:#FFB48A">'+pend+' con más de 15 % sin marcar (no se aplican)</span>':'')+(malos?'<span style="font-size:12px;color:#FFB48A">'+malos+' celda(s) vacía(s) o inválida(s) sin aplicar</span>':'')+'</div></div>';
   o.innerHTML=h;
 }
+function catTbDiffMarca(id,v){const d=_catTbl.diff;if(!d)return;const x=d.items.find(i=>i.m.id===id);if(x){x.marca=!!v;const sc=document.querySelector('#ctb-diff .ctb-scroll'),t=sc?sc.scrollTop:0;_catTbDiffPintar();const s2=document.querySelector('#ctb-diff .ctb-scroll');if(s2)s2.scrollTop=t;}}
 function catTbDiffCerrar(){_catTbl.diff=null;const o=document.getElementById('ctb-diff');if(o)o.remove();}
 function catTbExcelAplicar(){
   const d=_catTbl.diff;if(!d)return;
   let n=0;
-  d.items.forEach(function(x){if(x.cambia){_catTbl.v[x.m.id]=_catTb2(x.n);n++;}});
+  d.items.forEach(function(x){if(x.cambia&&(!x.over||x.marca)){_catTbl.v[x.m.id]=_catTb2(x.n);n++;}});
   catTbDiffCerrar();
   _catTbPintar();
   toast(n+' cambio(s) cargados en la tabla. Falta Guardar borrador','ok');
