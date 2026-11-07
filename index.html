@@ -1400,8 +1400,8 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .cat-panel{width:auto;border-radius:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);padding:14px;display:flex;flex-direction:column;gap:10px;color:#F2F4F8}
 .cat-panel>*{flex-shrink:0}
 .cat-panel>.cat-name{font-size:22px;font-weight:800;line-height:1.1}
-.cat-panel>.cat-spec{font-size:12px;color:#A9B3C4;margin:-8px 0 0}
-.cat-panel>.cat-price{font-size:15px;font-weight:800;color:#FAC305;margin:0}
+.cat-panel>.cat-spec{font-size:12px;color:#A9B3C4;margin:-8px 0 0!important}
+.cat-panel>.cat-price{font-size:15px;font-weight:800;color:#FAC305;margin:-4px 0 0!important}
 .cat-panel .cat-tabs{margin:0;gap:6px;flex-wrap:wrap}
 .cat-panel .cat-chip{height:44px;min-height:44px;padding:0 13px;font-size:12px;font-weight:700;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:#F2F4F8;transition:transform .15s ease,filter .15s ease}
 .cat-panel .cat-chip:hover{filter:brightness(1.14);transform:translateY(-1px)}
@@ -2782,7 +2782,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='276i';
+  var CURRENT_VERSION='276j';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20529,7 +20529,7 @@ function _catFechaRef(){
 function _catGenerales(){
   const bt=(tipo,lbl)=>{const a=_catArch(tipo,null)[0];
     return '<button class="btn-secondary cat-gen" onclick="'+(a?'catVer('+a.id+')':'catSinGeneral(\''+tipo+'\')')+'">'+lbl+(a?' <span class="cat-gen-v">v'+a.version+' · '+_catFmtF(a.aprobado_at||a.subido_at)+'</span>':'')+'</button>';};
-  return '<div class="cat-gen-row">'+bt('cronograma','📅 Cronograma modelo')+bt('contrato','📄 Contrato modelo')+'</div>';
+  return '<div class="cat-gen-row">'+bt('cronograma','Cronograma modelo')+bt('contrato','Contrato modelo')+'</div>';
 }
 function _catSeleccion(){
   if(!_cat.selm.length)return '';
