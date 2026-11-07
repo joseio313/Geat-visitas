@@ -2860,7 +2860,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278b';
+  var CURRENT_VERSION='278c';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20636,9 +20636,9 @@ function _catSubs(){return [['cat',_catTx('tab_catalogo','Catálogo'),'tab_catal
 function _catPenBtn(clave){return _cat.edit?`<button class="cat-pen" title="Editar este texto" aria-label="Editar este texto" onclick="event.stopPropagation();catTxEdit('${clave}')">✎</button>`:'';}
 function _catTxEtiqueta(clave){const t=(_cat.txd||[]).find(x=>x.clave===clave);return t?(t.etiqueta||clave):clave;}
 function _catDescHTML(m){
+  /* v278c — solo lectura en el panel; se edita en la Tabla oficial > Archivos por modelo */
   const d=m.descripcion?String(m.descripcion):'';
-  if(!d&&!_cat.edit)return '';
-  return `<div class="cat-desc${d?'':' ph'}">${d?_catE(d):'Sin descripción'}${_cat.edit?`<button class="cat-pen" title="Editar la descripción de este modelo" aria-label="Editar la descripción" onclick="catDescEdit(${m.id})">✎</button>`:''}</div>`;
+  return d?`<div class="cat-desc">${_catE(d)}</div>`:'';
 }
 function _catTxEditor(m){
   const e=_cat.txEdit;if(!e||!_cat.edit)return '';
@@ -20685,18 +20685,18 @@ function _catFicha(m){
   const specs=[m.plantas!=null?m.plantas+' planta(s)':null,m.dormitorios!=null?m.dormitorios+' dorm.':null,m.banos!=null?m.banos+' baños':null,m.superficie_m2!=null?_catN(m.superficie_m2,1)+' m²':null].filter(Boolean).join(' · ');
   let h=_catTxEditor(m)+'<div class="cat-name" style="font-size:22px;font-weight:800;line-height:1.15">'+_catE(m.nombre)+'</div><div class="cat-spec" style="font-size:12px;margin-bottom:4px">'+_catE(specs)+'</div>'+_catDescHTML(m)
     +'<div class="cat-price" style="margin-bottom:10px">'+(_cat.edit?'USD '+_catN(m.precio_desde_usd_m2,2)+' /m² · total USD '+_catN(m.precio_total_usd,0):_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</div>';
-  h+='<div class="cat-tabs" style="flex-wrap:wrap">'+_catSubs().map(s=>'<span class="cat-tabw"><button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+_catE(s[1])+'</button>'+_catPenBtn(s[2])+'</span>').join('')+'</div>';
+  h+='<div class="cat-tabs" style="flex-wrap:wrap">'+_catSubs().map(s=>'<span class="cat-tabw"><button class="cat-chip'+(_cat.sub===s[0]?' on':'')+'" onclick="catSub(\''+s[0]+'\')">'+_catE(s[1])+'</button></span>').join('')+'</div>';
   if(_cat.sub==='cat'){
-    if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button>'+_catPenBtn('btn_copiar')+'<button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
-    else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button>'+_catPenBtn('btn_copiar')+'<button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
+    if(_catSinRender(m))h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn-primary cat-off" aria-disabled="true" onclick="catAvisoRender()">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button><button class="btn-ghost cat-off" aria-disabled="true" onclick="catAvisoRender()">⬇ Descargar imagen</button></div><div class="cat-sinrender">'+CAT_SIN_RENDER+': sin render no se puede copiar ni descargar. La silueta es solo para esta pantalla.</div>';
+    else h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn-primary" onclick="catCopiarImg('+m.id+')">🖼️ '+_catE(_catTx('btn_copiar','Copiar imagen'))+'</button><button class="btn-ghost" onclick="catDescargarImg('+m.id+')">⬇ Descargar imagen</button></div>';
     h+='<div id="cat-canvas-box" class="cat-canvasbox"><div class="loading-state"><span class="spin"></span></div></div>';
     if(_cat.edit){
       if(m.precio_borrador_usd_m2!=null)h+='<div class="cat-total cat-new" style="margin-top:6px">Borrador: USD '+_catN(m.precio_borrador_usd_m2,2)+' /m² · total '+_catN(_catNuevoTotal(m),0)+'</div>';
     }
     if(_cat.edit)h+='<div class="cat-auto"><div class="cat-auto-t">Automático · no hay nada que subir</div><div class="cat-auto-d">El catálogo-imagen se dibuja solo con la plantilla oficial y el precio vigente de la Tabla oficial. Si cambiás el precio y aprobás, se actualiza para todos al instante.</div>'
-      +'<div class="cat-auto-s">Precio vigente: <b>'+_catE(_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+_catPenBtn('precio_txt')+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div>'
-      +'<div class="cat-auto-s">Pie de la imagen: <b>'+_catE(_catTxFmt(_catTx('pie','Precio referencial al {fecha} · Imagen referencial'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+_catPenBtn('pie')+'</div>'
-      +'<div class="cat-auto-s">Frase de marca: <b>'+_catE(_catTx('marca','Consultá por tu visita sin compromiso'))+'</b>'+_catPenBtn('marca')+'</div></div>';
+      +'<div class="cat-auto-s">Precio vigente: <b>'+_catE(_catTxFmt(_catTx('precio_txt','Aprox. USD {precio} llave en mano'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b>'+(_cat.conf?' · confirmado '+_catFmtF(_cat.conf):'')+'</div>'
+      +'<div class="cat-auto-s">Pie de la imagen: <b>'+_catE(_catTxFmt(_catTx('pie','Precio referencial al {fecha} · Imagen referencial'),_catN(m.precio_total_usd,0),_catFechaRef()))+'</b></div>'
+      +'<div class="cat-auto-s">Frase de marca: <b>'+_catE(_catTx('marca','Consultá por tu visita sin compromiso'))+'</b></div></div>';
     setTimeout(()=>_catPintarCanvas(m.id),0);
   }else if(_cat.sub==='planos'||_cat.sub==='presentacion'){
     h+=_catListaDocs(_cat.sub,m.id);
@@ -21163,7 +21163,21 @@ function catTbSideCerrar(){_catTbl.side=null;_catTbPintar();}
 function _catTbSide(){
   const sd=_catTbl.side;if(!sd)return '';
   const m=sd.mid==null?null:_cat.modelos.find(x=>x.id===sd.mid);
-  return `<div class="ctb-side" role="dialog"><div class="ctb-head"><div class="ctb-t" style="font-size:16px">${_catE((m?m.nombre+' · ':'')+(_CAT_TIPO_LBL[sd.tipo]||sd.tipo))}</div><button class="ctb-x" onclick="catTbSideCerrar()" aria-label="Cerrar">✕</button></div><div class="ctb-sideb">${sd.tipo==='obras'?_catTbSideObras(sd.mid):_catTbSideDoc(sd.tipo,sd.mid)}</div></div>`;
+  return `<div class="ctb-side" role="dialog"><div class="ctb-head"><div class="ctb-t" style="font-size:16px">${_catE((m?m.nombre+' · ':'')+(_CAT_TIPO_LBL[sd.tipo]||sd.tipo))}</div><button class="ctb-x" onclick="catTbSideCerrar()" aria-label="Cerrar">✕</button></div><div class="ctb-sideb">${_catTbDescCard(m)}${sd.tipo==='obras'?_catTbSideObras(sd.mid):_catTbSideDoc(sd.tipo,sd.mid)}</div></div>`;
+}
+/* v278c — descripción/subtítulo propio del modelo (modelo_texto_guardar) */
+function _catTbDescCard(m){
+  if(!m)return '';
+  return `<div class="ctb-card"><b>Descripción de ${_catE(m.nombre)}</b><input class="form-control" id="ctb-desc" maxlength="300" value="${_catE(m.descripcion||'')}" placeholder="Subtítulo que se ve en el panel del modelo" style="height:44px" onkeydown="if(event.key==='Enter')catTbDescGuardar(${m.id})"><div class="ctb-cm">Es propia de este modelo. Se publica al guardar.</div><button class="btn-primary" onclick="catTbDescGuardar(${m.id})">Guardar</button></div>`;
+}
+async function catTbDescGuardar(mid){
+  const i=document.getElementById('ctb-desc');if(!i||!_cat.edit)return;
+  const v=i.value.trim();
+  try{
+    await _catCall({action:'modelo_texto_guardar',modelo_id:mid,descripcion:v});
+    toast(v?'Descripción guardada':'Descripción quitada','ok');
+  }catch(e){toast('Error: '+e.message,'error');return;}
+  await renderCatalogo();
 }
 function _catTbSideDoc(tipo,mid){
   const vig=_catArch(tipo,mid)[0],bor=_cat.arch.filter(a=>a.tipo===tipo&&a.estado==='borrador'&&(mid==null?a.modelo_id==null:a.modelo_id===mid)).sort((x,y)=>(y.version||0)-(x.version||0))[0];
