@@ -1370,6 +1370,9 @@ body.tema-ceo .mia-h3-row,body.tema-ceo .mia-t-row,body.tema-ceo .mia-i-row{padd
 .ctb-in.mal{border-color:#FF7A5C;color:#FFB48A}
 .ctb-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ctb-foot .btn-primary,.ctb-foot .btn-ghost{min-height:48px}
+.ctb-rojo td{background:rgba(255,90,60,.18)!important;color:#FFB48A}
+#ctb-diff{position:fixed;inset:0;z-index:10002;background:rgba(3,6,12,.8);display:flex;align-items:center;justify-content:center;padding:16px}
+.ctb-foot button[disabled]{opacity:.45;cursor:not-allowed}
 .ctb-conf{flex:1 1 100%;border:1px solid #FAC305;border-radius:12px;padding:10px;font-size:13px}
 .cat-sinrender{font-size:12px;font-weight:700;color:#FFB48A;margin-bottom:8px}
 .cat-img{position:relative}
@@ -2808,7 +2811,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='277';
+  var CURRENT_VERSION='277a';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -20950,7 +20953,7 @@ function catClaveCerrar(){const o=document.getElementById('cat-clave');if(o)o.re
 let _catTbl={abierta:false,v:{},conf:false};
 function _catTbNum(t){const v=Number(String(t==null?'':t).replace(',','.'));return isFinite(v)?v:NaN;}
 function _catTbBor(){const o={};(_cat.tb||[]).forEach(x=>{o[x.modelo_id]=Number(x.precio_m2);});return o;}
-function _catTbInit(){const b=_catTbBor();_catTbl.v={};_cat.modelos.forEach(m=>{const x=b[m.id]!=null?b[m.id]:Number(m.precio_desde_usd_m2);_catTbl.v[m.id]=isFinite(x)?String(x).replace('.',','):'';});_catTbl.conf=false;}
+function _catTbInit(){const b=_catTbBor();_catTbl.v={};_cat.modelos.forEach(m=>{const x=b[m.id]!=null?b[m.id]:Number(m.precio_desde_usd_m2);_catTbl.v[m.id]=_catTb2(x);});_catTbl.conf=false;}
 function _catTbSt(m){
   const act=Number(m.precio_desde_usd_m2),n=_catTbNum(_catTbl.v[m.id]);
   const ok=isFinite(n)&&n>0&&act>0&&Math.abs(n-act)/act<=0.5;
@@ -20958,9 +20961,9 @@ function _catTbSt(m){
 }
 function _ctbDelta(st){return (st.ok&&st.cambio)?(st.n>st.act?'+':'')+_catN((st.n/st.act-1)*100,2)+'%':'—';}
 function _catTbFila(m){
-  const st=_catTbSt(m),tn=st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;
+  const st=_catTbSt(m),tn=_catTbTot(m,st);
   return '<tr id="ctb-r-'+m.id+'" class="'+(st.cambio?'cambio':'')+'"><td>'+_catE(m.nombre)+'</td><td>'+_catN(m.superficie_m2,1)+'</td><td>'+_catN(st.act,2)+'</td>'
-    +'<td><input class="ctb-in'+(st.ok?'':' mal')+'" id="ctb-i-'+m.id+'" inputmode="decimal" value="'+_catE(_catTbl.v[m.id])+'" oninput="catTbInput('+m.id+',this.value)" aria-label="Precio por m2 de '+_catE(m.nombre)+'"></td>'
+    +'<td><input class="ctb-in'+(st.ok?'':' mal')+'" id="ctb-i-'+m.id+'" inputmode="decimal" value="'+_catE(_catTbl.v[m.id])+'" oninput="catTbInput('+m.id+',this.value)" onblur="catTbBlur('+m.id+',this)" aria-label="Precio por m2 de '+_catE(m.nombre)+'"></td>'
     +'<td>'+_catN(m.precio_total_usd,0)+'</td><td id="ctb-t-'+m.id+'">'+(tn==null?'—':_catN(tn,0))+'</td><td id="ctb-d-'+m.id+'">'+_ctbDelta(st)+'</td></tr>';
 }
 function _catTbResumen(){
@@ -20977,17 +20980,97 @@ function _catTbPintar(){
     +'<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>m²</th><th>USD/m² vigente</th><th>USD/m² nuevo</th><th>Total vigente</th><th>Total nuevo</th><th>Variación</th></tr></thead><tbody>'
     +_cat.modelos.map(_catTbFila).join('')+'</tbody></table></div>'
     +'<div class="ctb-foot" id="ctb-foot">'+_catTbFoot()+'</div></div>';
-  o.innerHTML=h;
+  o.innerHTML=h+'<input type="file" id="ctb-file" accept=".xlsx,.xls" hidden onchange="catTbExcelLeer(this)">';
 }
 function _catTbFoot(){
-  const r=_catTbResumen();
-  if(_catTbl.conf==='pub')return '<div class="ctb-conf">Esto cambia el precio de <b>'+r.n+' modelo(s)</b> para todo el equipo. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
-  if(_catTbl.conf==='desc')return '<div class="ctb-conf">Se descarta el borrador guardado y los campos vuelven al precio vigente. ¿Descartar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbDescartar()">Sí, descartar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
-  return '<button class="btn-ghost" onclick="catTbGuardar()">Guardar borrador</button><button class="btn-primary" onclick="catTbConf(\'pub\')">Aprobar y publicar</button>'+(r.g?'<button class="btn-ghost" onclick="catTbConf(\'desc\')">Descartar borrador</button>':'')+'<span id="ctb-res" style="font-size:12px;color:#A9B3C4">'+r.n+' modelo(s) con cambio</span>';
+  const r=_catTbResumen();let h='';
+  if(_catTbl.conf==='pub')h+='<div class="ctb-conf">Esto cambia el precio de <b>'+r.n+' modelo(s)</b> para todo el equipo. ¿Publicar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbAprobar()">Sí, publicar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
+  if(_catTbl.conf==='desc')h+='<div class="ctb-conf">Se descarta el borrador guardado y los campos vuelven al precio vigente. ¿Descartar?<div style="display:flex;gap:6px;margin-top:8px"><button class="btn-primary" onclick="catTbDescartar()">Sí, descartar</button><button class="btn-ghost" onclick="catTbConf(false)">Cancelar</button></div></div>';
+  h+='<button class="btn-ghost" onclick="catTbGuardar()">Guardar borrador</button><button class="btn-primary" onclick="catTbPubConf()">Aprobar y publicar</button>';
+  /* v277a — Descartar borrador SIEMPRE que haya un borrador guardado (r.g), tambien con una confirmacion abierta */
+  if(r.g)h+='<button class="btn-ghost ctb-desc" onclick="catTbDescConf()">Descartar borrador</button>';
+  h+='<button class="btn-ghost" onclick="catTbExcelBajar()">Descargar Excel</button><button class="btn-ghost" onclick="catTbExcelSubir()">Subir Excel</button><span id="ctb-res" style="font-size:12px;color:#A9B3C4">'+r.n+' modelo(s) con cambio</span>';
+  return h;
 }
-function catTabla(){
+function catTbPubConf(){catTbConf('pub');}
+function catTbDescConf(){catTbConf('desc');}
+/* v277a — la clave de precios se pide al ABRIR la tabla (el unlock vive solo en memoria; si vence, _catPrecio la vuelve a pedir al guardar) */
+async function catTabla(){
   if(!_cat.edit){toast('Solo José Miguel o David','error');return;}
+  const vig=_catUnlock.tok&&Date.now()<_catUnlock.exp-5000;
+  if(!vig&&!(await _catPedirClave())){toast('Hace falta la clave de precios para abrir la Tabla oficial','error');return;}
   _catTbl.abierta=true;_catTbInit();_catTbPintar();
+}
+function _catTb2(x){const n=Number(x);return isFinite(n)?(Math.round(n*100)/100).toFixed(2).replace('.',','):'';}
+function _catTbTot(m,st){if(!st.cambio)return Number(m.precio_total_usd);return st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;}
+function catTbBlur(id,el){const n=_catTbNum(el.value);if(isFinite(n)){el.value=_catTb2(n);_catTbl.v[id]=el.value;}}
+/* — Excel — */
+function _catTbNorm(t){return String(t==null?'':t).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();}
+function catTbExcelBajar(){
+  const rows=_cat.modelos.map(m=>{const st=_catTbSt(m);return {'Modelo':m.nombre,'m²':Number(m.superficie_m2),'USD/m² vigente':Math.round(st.act*100)/100,'USD/m² nuevo':isFinite(st.n)?Math.round(st.n*100)/100:Math.round(st.act*100)/100};});
+  xlsxExport([{name:'Tabla oficial',rows:rows}],'GEAT_Tabla_oficial_'+ymdLocal(new Date())+'.xlsx');
+}
+function catTbExcelSubir(){const f=document.getElementById('ctb-file');if(f)f.click();}
+function catTbExcelLeer(inp){
+  const f=inp.files&&inp.files[0];inp.value='';
+  if(!f)return;
+  if(typeof XLSX==='undefined'){toast('SheetJS no disponible','error');return;}
+  const rd=new FileReader();
+  rd.onerror=function(){toast('No se pudo leer el archivo','error');};
+  rd.onload=function(){
+    try{
+      const wb=XLSX.read(rd.result,{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null,raw:true});
+      _catTbDiff(rows);
+    }catch(e){toast('No se pudo leer el Excel: '+e.message,'error');}
+  };
+  rd.readAsArrayBuffer(f);
+}
+/* Compara el Excel contra la tabla y muestra el diff. NADA se aplica ni se guarda hasta confirmar; al confirmar solo entra a los campos de la tabla (guardar el borrador es otro paso). */
+function _catTbDiff(rows){
+  if(!rows.length){toast('El Excel está vacío','error');return;}
+  const keys=Object.keys(rows[0]);
+  const kM=keys.find(k=>_catTbNorm(k).indexOf('modelo')===0),kN=keys.find(k=>_catTbNorm(k).indexOf('nuevo')>=0);
+  if(!kM||!kN){toast('El Excel debe tener las columnas "Modelo" y "USD/m² nuevo"','error');return;}
+  const items=[],desconocidos=[],vistos={};
+  rows.forEach(function(r){
+    const nom=_catTbNorm(r[kM]);if(!nom)return;
+    const m=_cat.modelos.find(x=>_catTbNorm(x.nombre)===nom);
+    if(!m){desconocidos.push(String(r[kM]));return;}
+    if(vistos[m.id])return;vistos[m.id]=1;
+    const raw=r[kN],vacio=raw==null||String(raw).trim()==='';
+    const n=vacio?NaN:_catTbNum(raw),st=_catTbSt(m);
+    const valido=isFinite(n)&&n>0,pct=valido&&st.act>0?(n/st.act-1)*100:null;
+    const cambia=valido&&Math.round(n*100)!==Math.round(st.n*100);
+    items.push({m:m,vacio:vacio,valido:valido,n:n,act:st.act,cur:st.n,pct:pct,cambia:cambia,rojo:(!valido)||(pct!=null&&Math.abs(pct)>15)});
+  });
+  _catTbl.diff={items:items,desconocidos:desconocidos};
+  _catTbDiffPintar();
+}
+function _catTbDiffPintar(){
+  const d=_catTbl.diff;if(!d)return;
+  const mostrar=d.items.filter(x=>x.cambia||!x.valido);
+  const aplicables=d.items.filter(x=>x.cambia),rojos=aplicables.filter(x=>x.rojo).length,malos=d.items.filter(x=>!x.valido).length;
+  let o=document.getElementById('ctb-diff');
+  if(!o){o=document.createElement('div');o.id='ctb-diff';document.body.appendChild(o);}
+  let h='<div class="ctb-box" role="dialog" aria-label="Diferencias del Excel"><div class="ctb-head"><div class="ctb-t">Diferencias del Excel</div><button class="ctb-x" onclick="catTbDiffCerrar()" aria-label="Cerrar">✕</button></div>'
+    +'<div class="ctb-sub">Revisá antes de aplicar. <b>Nada se guardó.</b> Al confirmar, los valores entran a los campos de la tabla; después hay que tocar Guardar borrador. En rojo: variación de más de 15 % contra el vigente, o celda vacía / inválida (esas no se aplican).</div>';
+  if(!mostrar.length)h+='<div class="ctb-bor">El Excel no trae ningún cambio respecto de lo que hay en la tabla.</div>';
+  else h+='<div class="ctb-scroll"><table><thead><tr><th>Modelo</th><th>USD/m² vigente</th><th>En la tabla ahora</th><th>En el Excel</th><th>Variación vs vigente</th></tr></thead><tbody>'
+    +mostrar.map(x=>'<tr class="'+(x.rojo?'ctb-rojo':'')+'"><td>'+_catE(x.m.nombre)+'</td><td>'+_catN(x.act,2)+'</td><td>'+_catN(x.cur,2)+'</td><td>'+(x.vacio?'(vacía)':(x.valido?_catN(x.n,2):'inválida'))+'</td><td>'+(x.pct==null?'—':(x.pct>0?'+':'')+_catN(x.pct,2)+'%')+(x.rojo&&x.valido?' ⚠':'')+'</td></tr>').join('')+'</tbody></table></div>';
+  if(d.desconocidos.length)h+='<div class="ctb-bor">Modelos del Excel que no existen en el catálogo (se ignoran): '+d.desconocidos.map(_catE).join(', ')+'</div>';
+  h+='<div class="ctb-foot"><button class="btn-primary" '+(aplicables.length?'':'disabled ')+'onclick="catTbExcelAplicar()">Aplicar '+aplicables.length+' cambio(s) a la tabla'+(rojos?' ('+rojos+' en rojo)':'')+'</button><button class="btn-ghost" onclick="catTbDiffCerrar()">Cancelar</button>'
+    +(malos?'<span style="font-size:12px;color:#FFB48A">'+malos+' celda(s) vacía(s) o inválida(s) sin aplicar</span>':'')+'</div></div>';
+  o.innerHTML=h;
+}
+function catTbDiffCerrar(){_catTbl.diff=null;const o=document.getElementById('ctb-diff');if(o)o.remove();}
+function catTbExcelAplicar(){
+  const d=_catTbl.diff;if(!d)return;
+  let n=0;
+  d.items.forEach(function(x){if(x.cambia){_catTbl.v[x.m.id]=_catTb2(x.n);n++;}});
+  catTbDiffCerrar();
+  _catTbPintar();
+  toast(n+' cambio(s) cargados en la tabla. Falta Guardar borrador','ok');
 }
 function catTablaCerrar(){_catTbl.abierta=false;const o=document.getElementById('cat-tabla');if(o)o.remove();}
 function catTbConf(v){
@@ -20997,7 +21080,7 @@ function catTbConf(v){
 function catTbInput(id,val){
   _catTbl.v[id]=val;
   const m=_cat.modelos.find(x=>x.id===id);if(!m)return;
-  const st=_catTbSt(m),tn=st.ok?Math.round(Number(m.superficie_m2)*st.n*100)/100:null;
+  const st=_catTbSt(m),tn=_catTbTot(m,st);
   const i=document.getElementById('ctb-i-'+id),t=document.getElementById('ctb-t-'+id),d=document.getElementById('ctb-d-'+id),r=document.getElementById('ctb-r-'+id);
   if(i)i.classList.toggle('mal',!st.ok);
   if(r)r.classList.toggle('cambio',st.cambio);
