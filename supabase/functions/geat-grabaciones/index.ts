@@ -1,4 +1,4 @@
-// Edge Function: geat-grabaciones (v1) — GEAT v279
+// Edge Function: geat-grabaciones (v3) — GEAT v279a
 //
 // POR QUE EXISTE: public.grabaciones tenia RLS con policies `true` para el rol
 // publico: con la anon key (que viaja en el HTML) cualquiera leia, modificaba y
@@ -185,7 +185,11 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({ gb: 1, u: u.id, rol: u.rol, v: b.ver ?? null, op: b.op, n: r.n ?? (Array.isArray(r.data) ? r.data.length : r.count ?? null) }));
     return json({ ok: true, ...r });
   } catch (e) {
-    if (e instanceof Err) return json({ ok: false, error: e.message, code: e.code }, e.status);
+    // Un rechazo por regla (403/400) queda en el log con el codigo y el mensaje, SIN valores.
+    if (e instanceof Err) {
+      console.log(JSON.stringify({ gb: 1, err: e.code, st: e.status, msg: e.message.slice(0, 120), op: b?.op ?? null, v: b?.ver ?? null }));
+      return json({ ok: false, error: e.message, code: e.code }, e.status);
+    }
     return json({ ok: false, error: String((e as Error)?.message || e), code: "GRAB_500" }, 500);
   }
 });
