@@ -99,6 +99,10 @@ export function validarValores(op: "insert" | "update", v: any): Record<string, 
   if (!keys.length) throw new Err("values vacio");
   const out: Record<string, any> = {};
   for (const k of keys) {
+    // v279a: el front manda `colaborador` en el insert (autor = cu.nombre). El servidor
+    // lo IGNORA y pone el del token (index.ts), asi que no se rechaza: rechazarlo
+    // dejaba sin grabar a todos. En update sigue prohibido (el autor no se cambia).
+    if (op === "insert" && k === "colaborador") continue;
     if (!permitidas.includes(k)) throw new Err("columna no permitida en " + op + ": " + k, 403, "GRAB_COL");
     const x = v[k];
     if (k === "extraccion") {
