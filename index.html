@@ -2898,7 +2898,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='278h';
+  var CURRENT_VERSION='279';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3015,6 +3015,68 @@ async function _cobCallOk(payload){
 async function authCall(payload){
   const r=await fetch(AUTH_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},body:JSON.stringify(payload)});
   return await r.json();
+}
+/* ── v279 · GRABACIONES POR EDGE FUNCTION ─────────────────────────────────
+   public.grabaciones tenía policies `true` para el rol público: con la anon key
+   de este HTML cualquiera leía, editaba y borraba todas las transcripciones.
+   Ahora la tabla se toca SOLO por geat-grabaciones, que revalida el token de
+   geat-auth y decide qué ve cada rol (admin: todo menos privadas ajenas;
+   commercial_lead: las suyas + comerciales de no-admins; resto: las suyas;
+   privada=true: solo el autor). Regla en supabase/functions/geat-grabaciones.
+   gb() imita la forma de supabase-js (.select/.insert/.update/.delete/.eq/...,
+   y `await` devuelve {data,count,error}) para que el código de abajo no cambie.
+   El STORAGE del bucket sigue yendo directo por sb.storage (otro paso).
+   _grabDirecto es un respaldo SOLO para fallos de transporte (función caída):
+   mientras anon siga con acceso a la tabla evita cortar el registro. Cuando se
+   cierre el acceso anon deja de servir y se retira. */
+const GRAB_URL=SB_URL+'/functions/v1/geat-grabaciones';
+const GRAB_VER='279';
+function _GrabQ(){this.s={op:'select',cols:'*',count:null,head:false,values:null,filters:[],order:[],limit:null,single:null,ret:null};}
+_GrabQ.prototype.select=function(c,o){var s=this.s;if(s.op==='select'){s.cols=c||'*';if(o&&o.count)s.count=o.count;if(o&&o.head)s.head=true;}else{s.ret=c||'*';}return this;};
+_GrabQ.prototype.insert=function(v){this.s.op='insert';this.s.values=v;return this;};
+_GrabQ.prototype.update=function(v){this.s.op='update';this.s.values=v;return this;};
+_GrabQ.prototype.delete=function(){this.s.op='delete';return this;};
+['eq','neq','gte','lte','in','is'].forEach(function(m){_GrabQ.prototype[m]=function(c,v){this.s.filters.push({op:m,col:c,val:v});return this;};});
+_GrabQ.prototype.not=function(c,o,v){
+  if(o==='is')this.s.filters.push({op:'not_is',col:c,val:v});
+  else if(o==='in')this.s.filters.push({op:'not_in',col:c,val:(typeof v==='string'?v.replace(/^\(|\)$/g,'').split(',').map(function(x){return x.trim().replace(/^"|"$/g,'');}):v)});
+  else throw new Error('gb.not: operador no soportado: '+o);
+  return this;};
+_GrabQ.prototype.order=function(c,o){this.s.order.push({col:c,asc:!(o&&o.ascending===false)});return this;};
+_GrabQ.prototype.limit=function(n){this.s.limit=n;return this;};
+_GrabQ.prototype.single=function(){this.s.single='one';return this;};
+_GrabQ.prototype.maybeSingle=function(){this.s.single='maybe';return this;};
+_GrabQ.prototype.then=function(a,b){return _grabExec(this.s).then(a,b);};
+function gb(){return new _GrabQ();}
+function _grabDirecto(s){
+  var b=sb.from('grabaciones');
+  if(s.op==='select')b=b.select(s.cols,{count:s.count||undefined,head:s.head||undefined});
+  else if(s.op==='insert')b=b.insert(s.values);
+  else if(s.op==='update')b=b.update(s.values);
+  else b=b.delete();
+  s.filters.forEach(function(f){
+    if(f.op==='not_is')b=b.not(f.col,'is',f.val);
+    else if(f.op==='not_in')b=b.not(f.col,'in','('+f.val.map(function(x){return '"'+x+'"';}).join(',')+')');
+    else b=b[f.op](f.col,f.val);
+  });
+  if(s.ret&&s.op!=='select')b=b.select(s.ret);
+  s.order.forEach(function(o){b=b.order(o.col,{ascending:o.asc});});
+  if(s.limit)b=b.limit(s.limit);
+  if(s.single==='one')b=b.single();else if(s.single==='maybe')b=b.maybeSingle();
+  return b;
+}
+async function _grabExec(s){
+  var j=null,transporte=false;
+  try{
+    var r=await fetch(GRAB_URL,{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+      body:JSON.stringify({token:localStorage.getItem('geat_session_token'),ver:GRAB_VER,op:s.op,cols:s.cols,count:s.count,head:s.head,values:s.values,filters:s.filters,order:s.order,limit:s.limit,single:s.single,ret:s.ret})});
+    if(r.status===404||r.status===502||r.status===503||r.status===504)transporte=true;
+    else j=await r.json();
+  }catch(e){transporte=true;}
+  if(transporte||(j&&(j.code==='GRAB_500'||j.code==='GRAB_DB')))return await _grabDirecto(s);
+  if(!j||j.ok!==true)return{data:null,count:null,error:{message:(j&&j.error)||'error de grabaciones',code:(j&&j.code)||'GRAB'}};
+  return{data:j.data===undefined?null:j.data,count:j.count==null?null:j.count,error:null};
 }
 
 /* ════════════════════════════════════════
@@ -4303,7 +4365,7 @@ function startApp(){
 ════════════════════════════════════════ */
 async function initApp(){
   /* Marcar como 'interrumpida' cualquier grabación que quedó en estado 'grabando' */
-  try{await sb.from('grabaciones').update({estado:'interrumpida'}).eq('estado','grabando').eq('colaborador',cu.nombre);}catch(e){}
+  try{await gb().update({estado:'interrumpida'}).eq('estado','grabando').eq('colaborador',cu.nombre);}catch(e){}
   /* Aviso discreto al admin si hay interrumpidas de las últimas 24h con audio sin procesar */
   if(cu&&cu.rol==='admin')_avisarInterrumpidasPendientes();
   await Promise.all([loadCatalogs(),loadColaboradores()]);
@@ -5094,7 +5156,7 @@ async function _bdgReportesAma(){
    La pantalla es admin-only, así que no lleva alcance por rol. */
 async function _bdgAdminRojo(){
   const[g,l]=await Promise.all([
-    _bdgN(sb.from('grabaciones').select('id',{count:'exact',head:true})
+    _bdgN(gb().select('id',{count:'exact',head:true})
       .eq('activo',true).is('transcripcion',null).not('audio_path','is',null)
       .in('estado',['interrumpida','descartada'])),
     _bdgN(sb.from('leads').select('id',{count:'exact',head:true})
@@ -11593,10 +11655,11 @@ window.addEventListener('beforeunload',function(e){
       : 'Tenés una sesión activa, ¿seguro que querés salir?';
     e.preventDefault();e.returnValue=msg;
     if(_recHGrabId){
-      fetch(SB_URL+'/rest/v1/grabaciones?id=eq.'+_recHGrabId,{
-        method:'PATCH',
+      /* v279 — por geat-grabaciones (antes PATCH directo a /rest/v1/grabaciones) */
+      fetch(GRAB_URL,{
+        method:'POST',
         headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-        body:JSON.stringify({estado:'interrumpida'}),
+        body:JSON.stringify({token:localStorage.getItem('geat_session_token'),ver:GRAB_VER,op:'update',values:{estado:'interrumpida'},filters:[{op:'eq',col:'id',val:_recHGrabId}]}),
         keepalive:true
       }).catch(function(){});
     }
@@ -12008,7 +12071,7 @@ async function _grabExtraerYGuardar(grabId,transcript){
   if(!grabId||!transcript)return null;
   let g=null;
   try{
-    const{data}=await sb.from('grabaciones').select('id,colaborador,created_at,titulo').eq('id',grabId).single();
+    const{data}=await gb().select('id,colaborador,created_at,titulo').eq('id',grabId).single();
     g=data||null;
   }catch(e){}
   if(!g)g={id:grabId,colaborador:(typeof cu!=='undefined'&&cu&&cu.nombre)||null,created_at:new Date().toISOString()};
@@ -12045,7 +12108,7 @@ async function _grabExtraerYGuardar(grabId,transcript){
     }
     ext._tarea=await _grabCrearTareaAuto(g,contexto,ext);
   }
-  try{await sb.from('grabaciones').update({extraccion:ext,contexto:contexto}).eq('id',grabId);}catch(e){}
+  try{await gb().update({extraccion:ext,contexto:contexto}).eq('id',grabId);}catch(e){}
   /* v167 — Paso ADICIONAL y aislado: detectar compromisos/tareas para el CEO.
      Va en su propio try/catch: si falla, la transcripción/resumen/extracción ya
      quedaron guardados arriba y el pipeline NO se rompe. */
@@ -12210,7 +12273,7 @@ function _arrancarSegmento(){
               const{error}=await sb.storage.from('grabaciones').upload(path,blob,{upsert:true});
               if(error)throw error;
             },3);
-            if(idx===1){try{await sb.from('grabaciones').update({audio_path:String(gid)+'/'}).eq('id',gid);}catch(e){}}
+            if(idx===1){try{await gb().update({audio_path:String(gid)+'/'}).eq('id',gid);}catch(e){}}
             return true;
           }catch(e){
             toast('⚠️ No se pudo archivar un segmento de audio (backup en el servidor). La transcripción no se pierde.','warning');
@@ -12249,7 +12312,7 @@ async function _grabCerrarSinTexto(id){
   }catch(e){}
   const upd={estado:hayAudio?'interrumpida':'descartada'};
   if(hayAudio)upd.audio_path=String(id)+'/';
-  try{await sb.from('grabaciones').update(upd).eq('id',id);}catch(e){}
+  try{await gb().update(upd).eq('id',id);}catch(e){}
   if(hayAudio)toast('El audio quedó guardado — reintentá la transcripción desde Registro.','warning');
   return hayAudio;
 }
@@ -12361,7 +12424,7 @@ async function startGrabacionH(){
     const d=new Date();
     const titulo=_recHTitulo||('Reunión '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
       ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'}));
-    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
+    const{data:gr,error:ger}=await gb().insert({
       colaborador:cu?cu.nombre:'—',titulo:titulo,
       participantes:_recHParticipantes||null,
       lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
@@ -12453,7 +12516,7 @@ async function _finalizarConTranscript(transcript,opts){
         /* v99: grabación por segmentos — el audio ya está en seg_NNN, sólo apuntamos la carpeta. */
         updates.audio_path=opts.audioPath;
       }
-      await sb.from('grabaciones').update(updates).eq('id',_recHGrabId);
+      await gb().update(updates).eq('id',_recHGrabId);
       /* v172 — transcripción ya guardada: liberar el audio del storage.
          Se espera a que termine la subida para no borrar antes de que suba. */
       if(_subida){try{await _subida;}catch(e){}}
@@ -12467,7 +12530,7 @@ async function _finalizarConTranscript(transcript,opts){
           if(!_manualTit){
             const tit=(ext&&ext.titulo&&(''+ext.titulo).trim())||
               await _grabAutoTituloIA(JSON.stringify(_res));
-            if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',_gid);}catch(e){}}
+            if(tit){try{await gb().update({titulo:tit.slice(0,120)}).eq('id',_gid);}catch(e){}}
           }
         }catch(e){}
       })();
@@ -12486,7 +12549,7 @@ async function _contarTranscripcionesHoy(colaborador){
     const hoy=ymdLocal(new Date());
     const desde=new Date(hoy+'T00:00:00-04:00').toISOString();
     const hasta=new Date(hoy+'T23:59:59.999-04:00').toISOString();
-    const{count,error}=await sb.from('grabaciones')
+    const{count,error}=await gb()
       .select('id',{count:'exact',head:true})
       .eq('colaborador',colaborador)
       .gte('created_at',desde).lte('created_at',hasta);
@@ -12548,7 +12611,7 @@ async function _procesarAudiosSubidos(files){
     const d=new Date();
     const nombres=(files.length===1)?(files[0].name||'archivo'):(files.length+' audios');
     const titulo='Audio: '+nombres+' · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'});
-    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
+    const{data:gr,error:ger}=await gb().insert({
       colaborador:cu?cu.nombre:'—',titulo:titulo,
       participantes:null,
       lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
@@ -12575,7 +12638,7 @@ async function _procesarAudiosSubidos(files){
       }catch(e){}
     }
     if(_audioArchivado){
-      try{await sb.from('grabaciones').update({audio_path:String(_recHGrabId)+'/'}).eq('id',_recHGrabId);}catch(e){}
+      try{await gb().update({audio_path:String(_recHGrabId)+'/'}).eq('id',_recHGrabId);}catch(e){}
     }else{
       toast('⚠️ No se pudo archivar el audio en el servidor; se transcribe igual.','warning');
     }
@@ -12700,7 +12763,7 @@ async function capturarAudioPC(){
     const d=new Date();
     const titulo='Captura PC · '+d.toLocaleDateString('es-BO',{day:'2-digit',month:'2-digit',year:'numeric'})+
       ' '+d.toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-    const{data:gr,error:ger}=await sb.from('grabaciones').insert({
+    const{data:gr,error:ger}=await gb().insert({
       colaborador:cu?cu.nombre:'—',titulo:titulo,participantes:null,
       lead_id:currentLeadId||null,estado:'grabando',created_at:d.toISOString()
     }).select('id').single();
@@ -12814,7 +12877,7 @@ async function guardarGrabacionH(){
       nota:JSON.stringify(_recHResult), fecha_actividad:nowIso, created_at:nowIso
     });
     if(error)throw error;
-    if(_recHGrabId){try{await sb.from('grabaciones').update({lead_id:_recHLeadId}).eq('id',_recHGrabId);}catch(e){}}
+    if(_recHGrabId){try{await gb().update({lead_id:_recHLeadId}).eq('id',_recHGrabId);}catch(e){}}
     const leadId=_recHLeadId, resH=_recHResult;
     const nombreCliente=await _procesarPostGrabacion(leadId,resH);
     _waDraftMsg=_buildWaDraft(nombreCliente,resH);
@@ -13546,7 +13609,7 @@ async function saveLead(){
       const regId=_grabOrigenRegId; _grabOrigenRegId=null;
       const extInd=_grabOrigenExtraccion; _grabOrigenExtraccion=null;
       try{
-        await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',regId);
+        await gb().update({lead_creado_id:newLead.id}).eq('id',regId);
         if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
         /* Guardar campos de indagación extraídos por IA */
         if(extInd){
@@ -13688,7 +13751,7 @@ async function saveLeadPerdido(){
     if(_grabOrigenRegId&&newLead){
       const regId=_grabOrigenRegId; _grabOrigenRegId=null; _grabOrigenExtraccion=null;
       try{
-        await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',regId);
+        await gb().update({lead_creado_id:newLead.id}).eq('id',regId);
         if(_grabCache[regId])_grabCache[regId].lead_creado_id=newLead.id;
       }catch(e){}
     }
@@ -14846,7 +14909,7 @@ async function renderRegistroGrabaciones(){
   if(!_grabAbierto){
     /* Conteo sin traer filas (head:true) */
     try{
-      let qc=sb.from('grabaciones').select('id',{count:'exact',head:true}).eq('activo',true);
+      let qc=gb().select('id',{count:'exact',head:true}).eq('activo',true);
       if(_grabModo==='mios') qc=qc.eq('colaborador',cu.nombre);
       const{count,error}=await qc;
       if(error)throw error;
@@ -14855,8 +14918,8 @@ async function renderRegistroGrabaciones(){
     return;
   }
   try{
-    let q=sb.from('grabaciones')
-      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id,contexto,conservar_audio,audio_drive_url')
+    let q=gb()
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,audio_path,extraccion,lead_creado_id,contexto,conservar_audio,audio_drive_url,privada')
       .eq('activo',true).order('created_at',{ascending:false});
     if(_grabModo==='mios') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
@@ -14943,7 +15006,7 @@ async function _grabRecuperarUna(id){
   const updates={transcripcion:combinado,estado:'completa',audio_path:String(id)+'/'};
   if(resumen)updates.resumen=JSON.stringify(resumen);
   try{
-    const{error:eu}=await sb.from('grabaciones').update(updates).eq('id',id);
+    const{error:eu}=await gb().update(updates).eq('id',id);
     if(eu)throw eu;
   }catch(e){throw new Error('no se pudo guardar: '+(e&&e.message||'error'));}
   /* v172 — recuperación exitosa: la transcripción quedó guardada, liberar el audio */
@@ -14954,7 +15017,7 @@ async function _grabRecuperarUna(id){
       const ext=await _grabExtraerYGuardar(id,combinado);
       if(_esTituloGenerico(g.titulo)){
         const tit=(ext&&ext.titulo&&(''+ext.titulo).trim())||await _grabAutoTituloIA(combinado.slice(0,3000));
-        if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',id);}catch(e){}}
+        if(tit){try{await gb().update({titulo:tit.slice(0,120)}).eq('id',id);}catch(e){}}
       }
     }catch(e){}
   })();
@@ -15033,7 +15096,7 @@ function _grabFragmento(g,term){
 function _grabRowHtml(g,searchTerm){
   const estCol={completa:'var(--st-completo)',interrumpida:'var(--gold)',descartada:'var(--st-atrasado)',grabando:'#FFC107'};
   const col=estCol[g.estado]||'var(--gray-400)';
-  const titulo=_escPend(g.titulo||('Grabación #'+g.id));
+  const titulo=(g.privada?'🔒 ':'')+_escPend(g.titulo||('Grabación #'+g.id));
   const frag=searchTerm?_grabFragmento(g,searchTerm):'';
   return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-900)">'+
     '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="_grabToggle('+g.id+')">'+
@@ -15084,6 +15147,7 @@ function _grabToggle(id){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
       '<button class="btn-ghost btn-sm" style="font-size:11px" onclick="_grabArchivar('+id+')">🗄️ Archivar</button>'+
       '<button class="btn-ghost btn-sm" style="font-size:11px;color:var(--st-atrasado)" onclick="_grabEliminar('+id+')">🗑️ Eliminar</button>'+
+      _grabPrivadaHtml(g)+
       /* v172 puso un checkbox "conservar audio" porque el audio se borraba y se
          perdía. v175 ya no pierde nada: el audio vive en Drive. Dejar el checkbox
          sería invitar a volver a llenar el bucket, así que ahora se informa dónde
@@ -15285,7 +15349,7 @@ async function _grabCrearLeadDirecto(id){
     });
     if(e2&&e2.code!=='23505')throw e2;
     try{
-      await sb.from('grabaciones').update({lead_creado_id:newLead.id}).eq('id',id);
+      await gb().update({lead_creado_id:newLead.id}).eq('id',id);
       if(_grabCache[id])_grabCache[id].lead_creado_id=newLead.id;
       if(_mirCache[id])_mirCache[id].lead_creado_id=newLead.id;
     }catch(e){}
@@ -15382,7 +15446,7 @@ async function _driveCall(payload,timeoutMs){
    Nunca lanza: si algo falla, el audio queda y se limpia después. */
 async function _grabLiberarAudio(id){
   try{
-    const{data:g,error}=await sb.from('grabaciones')
+    const{data:g,error}=await gb()
       .select('id,estado,transcripcion').eq('id',id).single();
     if(error||!g)return false;
     if(g.estado!=='completa')return false;                      // no terminó bien
@@ -15394,15 +15458,33 @@ async function _grabLiberarAudio(id){
         toast('⚠️ El audio no se pudo pasar a Drive; queda en el servidor. La transcripción sí se guardó.','warning');
       return false;
     }
-    try{await sb.from('grabaciones').update({audio_path:null}).eq('id',id);}catch(e){}
+    try{await gb().update({audio_path:null}).eq('id',id);}catch(e){}
     if(_grabCache[id]){_grabCache[id].audio_path=null;_grabCache[id].audio_drive_url=r.url||null;}
     return true;
   }catch(e){return false;}
 }
+/* v279 — "🔒 Privada": solo el autor ve la grabación (ni admin ni commercial_lead).
+   El checkbox lo ve únicamente el autor; la regla la hace cumplir geat-grabaciones,
+   que además rechaza el cambio si quien lo pide no es el autor. */
+function _grabPrivadaHtml(g){
+  if(!g||!cu||g.colaborador!==cu.nombre)return'';
+  return '<label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--gray-200);cursor:pointer">'+
+    '<input type="checkbox" '+(g.privada?'checked ':'')+'onchange="_grabTogglePrivada('+g.id+',this.checked)"> 🔒 Privada — solo yo la veo</label>';
+}
+async function _grabTogglePrivada(id,val){
+  try{
+    const{data,error}=await gb().update({privada:!!val}).eq('id',id).select('id');
+    if(error)throw error;
+    if(!data||!data.length)throw new Error('No se pudo cambiar: la grabación no es tuya');
+    if(typeof _grabCache!=='undefined'&&_grabCache[id])_grabCache[id].privada=!!val;
+    if(typeof _mirCache!=='undefined'&&_mirCache[id])_mirCache[id].privada=!!val;
+    toast(val?'🔒 Grabación privada — nadie más la ve':'Grabación visible de nuevo según tu rol','ok');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
 /* v172 — protege/desprotege el audio de una grabación (checkbox del detalle) */
 async function _grabToggleConservarAudio(id,val){
   try{
-    const{error}=await sb.from('grabaciones').update({conservar_audio:!!val}).eq('id',id);
+    const{error}=await gb().update({conservar_audio:!!val}).eq('id',id);
     if(error)throw error;
     if(_grabCache[id])_grabCache[id].conservar_audio=!!val;
     toast(val?'🔒 Audio protegido — no se borrará al transcribir':'Audio desprotegido','ok');
@@ -15464,7 +15546,7 @@ async function _grabCargarAudio(id,audioPath){
 async function _grabArchivar(id){
   if(!confirm('¿Archivar esta grabación? Dejará de aparecer en el registro.'))return;
   try{
-    const{error}=await sb.from('grabaciones').update({activo:false}).eq('id',id);
+    const{error}=await gb().update({activo:false}).eq('id',id);
     if(error)throw error;
     try{await registrarAuditoria('archivar_grabacion','grabaciones',id,{});}catch(e){}
     toast('Grabación archivada','ok');
@@ -15493,7 +15575,7 @@ async function _grabEliminar(id){
       deleted_at:new Date().toISOString()
     });
     if(ei)throw new Error('No se pudo copiar al archivo permanente ('+ei.message+'). No se eliminó nada.');
-    const{data:del,error:ed}=await sb.from('grabaciones').delete().eq('id',id).select('id');
+    const{data:del,error:ed}=await gb().delete().eq('id',id).select('id');
     if(ed)throw ed;
     if(!del||!del.length)throw new Error('La base no permitió el DELETE. La copia ya quedó en registro_exportado.');
     try{await registrarAuditoria('eliminar_grabacion','grabaciones',id,{exportado_a:'registro_exportado'});}catch(e){}
@@ -15664,7 +15746,7 @@ async function _grabReprocesar(id){
     const resumen=await _resumirReunionIA(transcript);
     let dur=g.duracion_seg||0;
     if(!dur&&segs.length)dur=segs.length*_SEG_DURACION_SEG; // estimado: ~10 min por segmento
-    const{error:e3}=await sb.from('grabaciones').update({
+    const{error:e3}=await gb().update({
       transcripcion:transcript,
       resumen:JSON.stringify(resumen),
       duracion_seg:dur,
@@ -15675,7 +15757,7 @@ async function _grabReprocesar(id){
     if(_esTituloGenerico(g.titulo)){
       const nuevoTit=(ext&&ext.titulo&&(''+ext.titulo).trim())||
         await _grabAutoTituloIA(JSON.stringify(resumen));
-      if(nuevoTit){try{await sb.from('grabaciones').update({titulo:nuevoTit.slice(0,120)}).eq('id',id);}catch(e){}}
+      if(nuevoTit){try{await gb().update({titulo:nuevoTit.slice(0,120)}).eq('id',id);}catch(e){}}
     }
     /* v172 — reproceso exitoso: la transcripción quedó guardada, liberar el audio */
     await _grabLiberarAudio(id);
@@ -15692,7 +15774,7 @@ async function _grabGenerarTitulosFaltantes(){
   const btn=document.getElementById('grab-gen-titulos-btn');
   if(btn){btn.disabled=true;}
   try{
-    const{data,error}=await sb.from('grabaciones')
+    const{data,error}=await gb()
       .select('id,titulo,transcripcion,resumen')
       .eq('activo',true).eq('estado','completa').not('transcripcion','is',null);
     if(error)throw error;
@@ -15705,7 +15787,7 @@ async function _grabGenerarTitulosFaltantes(){
       if(btn)btn.textContent=''+(i+1)+'/'+faltantes.length;
       const texto=g.resumen||g.transcripcion||'';
       const tit=await _grabAutoTituloIA(texto);
-      if(tit){try{await sb.from('grabaciones').update({titulo:tit.slice(0,120)}).eq('id',g.id);}catch(e){}}
+      if(tit){try{await gb().update({titulo:tit.slice(0,120)}).eq('id',g.id);}catch(e){}}
       done++;
     }
     toast('✅ '+done+' título(s) generados','ok');
@@ -15717,7 +15799,7 @@ async function _grabGenerarTitulosFaltantes(){
 async function _avisarInterrumpidasPendientes(){
   try{
     const desde=new Date(Date.now()-24*60*60*1000).toISOString();
-    const{data,error}=await sb.from('grabaciones').select('id,audio_path')
+    const{data,error}=await gb().select('id,audio_path')
       .eq('estado','interrumpida').eq('activo',true).is('transcripcion',null)
       .gte('created_at',desde).limit(20);
     if(error||!data||!data.length)return;
@@ -18836,13 +18918,10 @@ async function renderMiRegistro(){
   cont.innerHTML='<div class="loading-state"><span class="spin"></span> Cargando...</div>';
   if(!_mirAbierto){
     try{
-      let qc=sb.from('grabaciones').select('id',{count:'exact',head:true}).eq('activo',true);
+      let qc=gb().select('id',{count:'exact',head:true}).eq('activo',true);
+      /* v279 — qué ve cada rol lo decide geat-grabaciones (el "excluir admin" de
+         modo 'todos' pasó al servidor); acá solo queda el modo "mías". */
       if(cu.rol==='field_capturer'||_mirModo==='mios') qc=qc.eq('colaborador',cu.nombre);
-      else{
-        /* modo 'todos': el listado excluye a los admin, el conteo también */
-        const adminNoms=(colaboradores||[]).filter(c=>c.rol==='admin').map(c=>c.nombre);
-        if(adminNoms.length)qc=qc.not('colaborador','in','('+adminNoms.map(n=>'"'+n+'"').join(',')+')');
-      }
       const{count,error}=await qc;
       if(error)throw error;
       cont.innerHTML=_mirBotonHtml(count||0);
@@ -18862,17 +18941,14 @@ async function renderMiRegistro(){
     }
   }
   try{
-    let q=sb.from('grabaciones')
-      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion,lead_creado_id')
+    let q=gb()
+      .select('id,titulo,participantes,colaborador,duracion_seg,estado,created_at,lead_id,transcripcion,resumen,extraccion,lead_creado_id,privada')
       .eq('activo',true).order('created_at',{ascending:false});
     if(cu.rol==='field_capturer'||_mirModo==='mios') q=q.eq('colaborador',cu.nombre);
     const{data,error}=await q;
     if(error)throw error;
+    /* v279 — sin filtro de admins acá: el servidor ya entrega solo lo que este rol puede ver */
     let list=data||[];
-    if(cu.rol==='commercial_lead'&&_mirModo==='todos'){
-      const adminSet=new Set((colaboradores||[]).filter(c=>c.rol==='admin').map(c=>c.nombre));
-      list=list.filter(function(g){return!adminSet.has(g.colaborador);});
-    }
     _mirListAll=list;
     _mirCache={};
     _mirDedup={};
@@ -18943,7 +19019,7 @@ function _mirRenderFiltrado(){
 function _mirRowHtml(g,searchTerm){
   const estCol={completa:'var(--st-completo)',interrumpida:'var(--gold)',descartada:'var(--st-atrasado)',grabando:'#FFC107'};
   const col=estCol[g.estado]||'var(--gray-400)';
-  const titulo=_escPend(g.titulo||('Registro #'+g.id));
+  const titulo=(g.privada?'🔒 ':'')+_escPend(g.titulo||('Registro #'+g.id));
   const frag=searchTerm?_grabFragmento(g,searchTerm):'';
   return '<div style="border:1px solid var(--gray-600);border-radius:8px;margin-bottom:8px;background:var(--gray-900)">'+
     '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="_mirToggle('+g.id+')">'+
@@ -18990,6 +19066,7 @@ function _mirToggle(id){
   const accionDet=_mirAccionHtml(g);
   det.innerHTML='<div style="border-top:1px solid var(--gray-600);padding-top:10px">'+
     (accionDet?'<div style="margin-bottom:10px">'+accionDet+'</div>':'')+
+    (_grabPrivadaHtml(g)?'<div style="margin-bottom:10px">'+_grabPrivadaHtml(g)+'</div>':'')+
     (resumenHtml?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">📝 Resumen</div>'+resumenHtml+'</div>':'')+
     extHtml+
     (g.transcripcion?'<div style="margin-bottom:10px"><div class="section-title" style="font-size:12px;margin-bottom:4px">🗒️ Transcripción</div><div style="font-size:12px;color:var(--gray-200);white-space:pre-wrap;max-height:240px;overflow-y:auto;background:var(--gray-800);border:1px solid var(--gray-600);border-radius:6px;padding:8px">'+_escPend(g.transcripcion)+'</div></div>':'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Sin transcripción disponible.</div>')+
