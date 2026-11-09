@@ -2898,7 +2898,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='279';
+  var CURRENT_VERSION='279a';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3030,7 +3030,7 @@ async function authCall(payload){
    mientras anon siga con acceso a la tabla evita cortar el registro. Cuando se
    cierre el acceso anon deja de servir y se retira. */
 const GRAB_URL=SB_URL+'/functions/v1/geat-grabaciones';
-const GRAB_VER='279';
+const GRAB_VER='279a';
 function _GrabQ(){this.s={op:'select',cols:'*',count:null,head:false,values:null,filters:[],order:[],limit:null,single:null,ret:null};}
 _GrabQ.prototype.select=function(c,o){var s=this.s;if(s.op==='select'){s.cols=c||'*';if(o&&o.count)s.count=o.count;if(o&&o.head)s.head=true;}else{s.ret=c||'*';}return this;};
 _GrabQ.prototype.insert=function(v){this.s.op='insert';this.s.values=v;return this;};
@@ -3074,7 +3074,12 @@ async function _grabExec(s){
     if(r.status===404||r.status===502||r.status===503||r.status===504)transporte=true;
     else j=await r.json();
   }catch(e){transporte=true;}
-  if(transporte||(j&&(j.code==='GRAB_500'||j.code==='GRAB_DB')))return await _grabDirecto(s);
+  /* v279a — respaldo directo (mientras anon siga abierto) ante: caida de la funcion,
+     bug interno (GRAB_500/GRAB_DB) y rechazo por regla (400/403, p.ej. GRAB_COL de
+     una lista blanca incompleta). Grabar no puede fallar por una regla del servidor.
+     NO cae al respaldo: 401 (sesion) ni 406 (PGRST116, "sin fila unica": es un
+     resultado valido que el llamador espera). Se retira junto con el cierre (v280). */
+  if(transporte||(j&&(j.code==='GRAB_500'||j.code==='GRAB_DB'))||(!transporte&&r&&(r.status===400||r.status===403)))return await _grabDirecto(s);
   if(!j||j.ok!==true)return{data:null,count:null,error:{message:(j&&j.error)||'error de grabaciones',code:(j&&j.code)||'GRAB'}};
   return{data:j.data===undefined?null:j.data,count:j.count==null?null:j.count,error:null};
 }
