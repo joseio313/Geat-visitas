@@ -6,6 +6,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
+<!-- v280 — instalable como app: el manifest, el SW y los íconos ya estaban en el repo
+     pero el HTML no los enlazaba (por eso Chrome nunca ofrecía instalar). -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="GEAT">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>GEAT CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1622,6 +1628,12 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
   .cw-panel{top:auto;left:0;width:100%;max-height:88vh;border-radius:18px 18px 0 0;transform:translateY(105%)}
   .cw-panel.on{transform:none}
 }
+.pwa-banner{position:fixed;left:12px;bottom:12px;z-index:9000;display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:calc(100vw - 24px);background:var(--gray-900);color:var(--white);border:1px solid var(--gold);border-radius:12px;padding:8px 10px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.pwa-dlg{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.pwa-dlg-box{background:var(--gray-900);color:var(--white);border:1px solid var(--gold);border-radius:14px;padding:18px;max-width:360px;width:100%;font-size:13px}
+.pwa-dlg-t{font-weight:800;color:var(--gold);margin-bottom:10px;font-size:14px}
+.pwa-dlg-l{margin:0;padding-left:20px;line-height:1.7}
+.pwa-dlg-p{margin:6px 0}
 </style>
 </head>
 <body>
@@ -2898,7 +2910,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='279a';
+  var CURRENT_VERSION='280';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -3155,6 +3167,182 @@ async function registrarAuditoria(accion,tabla,registroId,detalles){
     });
   }catch(e){}
 }
+/* ── v280 · INSTALAR COMO APP + MODO DE USO ───────────────────────────────
+   El manifest y el SW existían pero el HTML no los enlazaba: Chrome nunca
+   ofrecía instalar. Ahora: (1) banner chico "Instalar app" para TODOS los
+   roles, solo si el CRM NO está abierto como app; (2) al iniciar sesión se
+   registra UNA vez por día (colaborador, modo app/navegador, dispositivo)
+   por geat-auth action='uso_app' → tabla uso_app; (3) el admin lo ve en su
+   panel (action='admin_uso_app'). Si el servidor aún no tiene esas acciones,
+   el registro falla en silencio y el panel avisa "pendiente de activar". */
+var _pwaEvt=null;
+function pwaStandalone(){
+  try{return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}
+  catch(e){return false;}
+}
+function pwaDispositivo(){
+  var ua=navigator.userAgent||'';
+  if(/iPhone|iPad|iPod/i.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))return 'ios';
+  if(/Android/i.test(ua))return 'android';
+  return 'pc';
+}
+/* 'instalada' | 'otro' (Firefox / navegador interno de WhatsApp, Instagram…) |
+   'ios' (pasos manuales) | 'prompt' (beforeinstallprompt capturado) | 'ninguno' */
+function pwaModo(){
+  if(pwaStandalone())return 'instalada';
+  var ua=navigator.userAgent||'';
+  if(/Firefox\/|FxiOS|FBAN|FBAV|Instagram|WhatsApp|TikTok|Snapchat|Messenger|Line\/|; wv\)/i.test(ua))return 'otro';
+  if(pwaDispositivo()==='ios')return 'ios';
+  if(_pwaEvt)return 'prompt';
+  return 'ninguno';
+}
+function pwaOculto(){
+  try{return Number(localStorage.getItem('geat_pwa_ocultar_hasta')||0)>Date.now();}catch(e){return false;}
+}
+function pwaAhoraNo(){
+  try{localStorage.setItem('geat_pwa_ocultar_hasta',String(Date.now()+7*86400000));}catch(e){}
+  pwaQuitarBanner();
+}
+function pwaQuitarBanner(){
+  var b=document.getElementById('pwa-banner');
+  if(b&&b.parentNode)b.parentNode.removeChild(b);
+}
+function pwaRenderBanner(){
+  pwaQuitarBanner();
+  if(!cu||pwaOculto())return;
+  var m=pwaModo();
+  if(m==='instalada'||m==='ninguno')return;
+  var b=document.createElement('div');
+  b.id='pwa-banner';
+  b.className='pwa-banner';
+  b.innerHTML='<span>📲 Instalá GEAT como app</span>'+
+    '<button type="button" class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="pwaInstalar()">Instalar app</button>'+
+    '<button type="button" class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="pwaAhoraNo()">Ahora no</button>';
+  document.body.appendChild(b);
+}
+function pwaCerrarDialogo(){
+  var d=document.getElementById('pwa-dlg');
+  if(d&&d.parentNode)d.parentNode.removeChild(d);
+}
+function pwaDialogo(tipo){
+  pwaCerrarDialogo();
+  var cuerpo=tipo==='ios'
+    ?'<div class="pwa-dlg-t">Instalar en iPhone / iPad</div>'+
+     '<ol class="pwa-dlg-l"><li>Tocá <b>Compartir</b> <span style="font-size:16px">⬆️</span> en la barra de Safari.</li>'+
+     '<li>Deslizá y elegí <b>Agregar a pantalla de inicio</b>.</li>'+
+     '<li>Tocá <b>Agregar</b>. Listo: GEAT queda como una app.</li></ol>'
+    :'<div class="pwa-dlg-t">Este navegador no permite instalar</div>'+
+     '<p class="pwa-dlg-p">Abrí este link en <b>Chrome</b> o <b>Safari</b>:</p>'+
+     '<p class="pwa-dlg-p" style="word-break:break-all;color:var(--gold)">'+_escPend(location.origin+location.pathname)+'</p>';
+  var d=document.createElement('div');
+  d.id='pwa-dlg';
+  d.className='pwa-dlg';
+  d.onclick=function(ev){if(ev.target===d)pwaCerrarDialogo();};
+  d.innerHTML='<div class="pwa-dlg-box">'+cuerpo+
+    '<div style="text-align:right;margin-top:12px"><button type="button" class="btn-primary" onclick="pwaCerrarDialogo()">Entendido</button></div></div>';
+  document.body.appendChild(d);
+}
+async function pwaInstalar(){
+  var m=pwaModo();
+  if(m==='prompt'&&_pwaEvt){
+    var ev=_pwaEvt;
+    try{
+      ev.prompt();
+      var r=await ev.userChoice;
+      if(r&&r.outcome==='accepted'){_pwaEvt=null;pwaQuitarBanner();}
+    }catch(e){toast('No se pudo abrir el instalador: '+e.message,'error');}
+    return;
+  }
+  if(m==='ios'){pwaDialogo('ios');return;}
+  pwaDialogo('otro');
+}
+window.addEventListener('beforeinstallprompt',function(ev){
+  ev.preventDefault();
+  _pwaEvt=ev;
+  pwaRenderBanner();
+});
+window.addEventListener('appinstalled',function(){
+  _pwaEvt=null;
+  pwaQuitarBanner();
+});
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./sw.js').then(function(){},function(){});
+  });
+}
+/* Una fila por (colaborador, modo, dispositivo, día): el servidor además la
+   deduplica con un índice único. Solo datos de uso, nada sensible. */
+async function pwaRegistrarUso(){
+  if(!cu)return;
+  var modo=pwaStandalone()?'app':'navegador';
+  var disp=pwaDispositivo();
+  var hoy=ymdLocal(new Date());
+  var key='geat_uso_'+cu.id+'_'+hoy+'_'+modo+'_'+disp;
+  try{
+    if(localStorage.getItem(key))return;
+    Object.keys(localStorage).forEach(function(k){
+      if(k.indexOf('geat_uso_')===0&&k.indexOf('_'+hoy+'_')<0)localStorage.removeItem(k);
+    });
+  }catch(e){}
+  try{
+    var r=await authCall({action:'uso_app',token:localStorage.getItem('geat_session_token'),modo:modo,dispositivo:disp});
+    if(r&&r.ok){try{localStorage.setItem(key,'1');}catch(e){}}
+  }catch(e){}
+}
+function pwaAlIniciarSesion(){
+  pwaRegistrarUso();
+  pwaRenderBanner();
+}
+/* Panel admin: cuántos abren el CRM instalado vs navegador (últimos 30 días). */
+async function _adminCargarUsoApp(){
+  var el=document.getElementById('admin-uso-app');
+  if(!el)return;
+  try{
+    var tk=localStorage.getItem('geat_session_token');
+    var rs=await Promise.all([
+      authCall({action:'admin_uso_app',token:tk,dias:30}),
+      authCall({action:'admin_list',token:tk})
+    ]);
+    var r=rs[0],u=rs[1];
+    if(!r||r.ok===false){
+      el.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Pendiente de activar en el servidor ('+_escPend((r&&r.error)||'sin respuesta')+').</div>';
+      return;
+    }
+    var filas=r.filas||[];
+    var activos=((u&&u.usuarios)||[]).filter(function(x){return x.activo&&!/mar[ií]a\s+luisa/i.test(x.nombre||'');});
+    var porId={};
+    filas.forEach(function(f){
+      var o=porId[f.colaborador_id]||(porId[f.colaborador_id]={app:0,nav:0,ultimo:'',disp:''});
+      if(f.modo==='app')o.app++;else o.nav++;
+      if(String(f.dia)>=o.ultimo){o.ultimo=String(f.dia);o.disp=f.dispositivo;}
+    });
+    var conApp=0,soloNav=0,sinDatos=0;
+    var rows=activos.map(function(x){
+      var o=porId[x.id];
+      var est=!o?'sin':(o.app>0?'app':'nav');
+      if(est==='app')conApp++;else if(est==='nav')soloNav++;else sinDatos++;
+      return{x:x,o:o,est:est};
+    });
+    rows.sort(function(a,b){var ord={app:0,nav:1,sin:2};return(ord[a.est]-ord[b.est])||String(a.x.nombre).localeCompare(String(b.x.nombre));});
+    var etq={app:'<span style="color:#2E7D32;font-weight:700">📲 App</span>',nav:'<span style="color:var(--gold);font-weight:700">🌐 Solo navegador</span>',sin:'<span style="color:var(--gray-400)">— sin datos</span>'};
+    el.innerHTML=
+      '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">'+
+        '<div><b style="font-size:20px">'+conApp+'</b> abren la app instalada</div>'+
+        '<div><b style="font-size:20px">'+soloNav+'</b> solo navegador</div>'+
+        '<div><b style="font-size:20px">'+sinDatos+'</b> sin datos</div>'+
+        '<div style="color:var(--gray-400);align-self:flex-end">de '+activos.length+' activos · últimos 30 días</div>'+
+      '</div>'+
+      '<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+      '<tr style="text-align:left;color:var(--gray-400)"><th style="padding:4px 8px">Colaborador</th><th>Modo</th><th>Días app</th><th>Días navegador</th><th>Último</th><th>Dispositivo</th></tr>'+
+      rows.map(function(w){
+        return '<tr style="border-top:1px solid var(--gray-600)"><td style="padding:5px 8px">'+_escPend(w.x.nombre)+'</td><td>'+etq[w.est]+'</td>'+
+          '<td>'+(w.o?w.o.app:0)+'</td><td>'+(w.o?w.o.nav:0)+'</td><td>'+(w.o?_escPend(w.o.ultimo):'—')+'</td><td>'+(w.o?_escPend(w.o.disp):'—')+'</td></tr>';
+      }).join('')+'</table></div>';
+  }catch(e){
+    el.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">No se pudo cargar: '+_escPend(e.message)+'</div>';
+  }
+}
+
 /* v197 — acá vivía registrarLoginAuditoria(): insertaba en auditoria_logins
    desde el navegador con el PIN COMPLETO en texto plano. Quedó sin llamadas
    cuando el login pasó a geat-auth (v126), pero seguía en el archivo: 420
@@ -4287,6 +4475,7 @@ function startApp(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('user-name').textContent=cu.nombre;
+  try{pwaAlIniciarSesion();}catch(_e){}   // v280
   // Asistente IA flotante — visible para cualquier usuario logueado
   const _fab=document.getElementById('asistFab'); if(_fab)_fab.style.display='flex';
   // Admin tab
@@ -14700,6 +14889,12 @@ async function renderAdmin(){
       </div>
     </div>
 
+    <!-- v280 — Uso: app instalada vs navegador -->
+    <div class="admin-section">
+      <div class="admin-section-title">📲 Uso del CRM: app instalada vs navegador</div>
+      <div id="admin-uso-app"><div class="loading-state"><span class="spin"></span> Cargando...</div></div>
+    </div>
+
     <!-- C. Acciones sensibles -->
     <div class="admin-section">
       <div class="admin-section-title">📋 Últimas 100 acciones sensibles</div>
@@ -14715,6 +14910,7 @@ async function renderAdmin(){
     _pendTab(_pendTabActiva);
     renderRegistroGrabaciones();
     renderCampanasLista(); // v185
+    _adminCargarUsoApp();  // v280
 
   }catch(e){
     body.innerHTML='<div style="color:var(--st-atrasado);padding:20px">Error cargando panel admin: '+e.message+'</div>';

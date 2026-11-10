@@ -1,0 +1,37 @@
+PARCHE PROPUESTO a geat-auth v9 -> v10 (NO DESPLEGADO; espera OK del CEO).
+Orden obligatorio: 1) respaldar v9  2) correr sql/v280_uso_app.sql  3) desplegar.
+El resto del archivo NO se toca: solo se agregan estos dos bloques.
+
+── A) ACCIÓN 'uso_app' — cualquier sesión válida, ANTES de la línea
+      const admin = await validarToken(...)   (junto al bloque action === 'audit')
+   La identidad sale del TOKEN, nunca del body; modo y dispositivo van por lista cerrada.
+
+    if (action === 'uso_app') {
+      const col = await validarToken(String(body.token || ''));
+      if (!col) return json({ ok: false, error: 'Sesión expirada' }, 401);
+      const modo = String(body.modo || '');
+      const disp = String(body.dispositivo || '');
+      if (!['app', 'navegador'].includes(modo) || !['android', 'ios', 'pc'].includes(disp))
+        return json({ ok: false, error: 'Datos inválidos' }, 400);
+      const { error } = await sb.from('uso_app').upsert(
+        { colaborador_id: col.id, colaborador_nombre: col.nombre, modo, dispositivo: disp, dia: hoyBolivia() },
+        { onConflict: 'colaborador_id,modo,dispositivo,dia', ignoreDuplicates: true },
+      );
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
+── B) ACCIÓN 'admin_uso_app' — DESPUÉS del chequeo de admin (junto a admin_acciones)
+
+    if (action === 'admin_uso_app') {
+      const dias = Math.min(Math.max(parseInt(String(body.dias ?? 30), 10) || 30, 1), 180);
+      const desde = new Date(Date.now() - 4 * 3600000 - dias * 86400000).toISOString().slice(0, 10);
+      const { data, error } = await sb.from('uso_app')
+        .select('colaborador_id,colaborador_nombre,modo,dispositivo,dia')
+        .gte('dia', desde).order('dia', { ascending: false }).limit(5000);
+      if (error) throw error;
+      return json({ ok: true, filas: data || [] });
+    }
+
+Probar después: login -> en la base debe aparecer 1 fila (modo=navegador); recargar
+el mismo día NO agrega otra; Admin -> "Uso del CRM" deja de decir "Pendiente de activar".
