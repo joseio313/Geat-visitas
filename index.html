@@ -2910,7 +2910,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='280';
+  var CURRENT_VERSION='281';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -11964,7 +11964,8 @@ async function _extraerProspectoIA(transcript,fechaRef){
     vivienda_o_inversion:null,temas_clave:[],compromisos:[]};
   const userMsg=_PROMPT_ANTI_INVENCION+
     'Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
-    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null}]}\n'+
+    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null,"hora":"HH:MM"|null,"momento_dia":"manana|tarde|noche"|null}]}\n'+
+    'hora=la hora TAL COMO SE DIJO ("7", "19:30"), null si no se dijo; momento_dia=SOLO si se dijo explícito ("de la noche", "de la tarde", "de la mañana"), si no null; no deduzcas am/pm.\n'+
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha calendario explícita.\n'+
     _promptFechas(fechaRef)+'\n'+transcript;
   return JSON.parse(await _gptMiniIA(userMsg,1500,true));
@@ -12011,6 +12012,18 @@ function _nombresParecidos(a,b){
 function _telNorm(t){
   const d=(''+(t||'')).replace(/\D/g,'');
   return d.length>=8?d.slice(-8):'';
+}
+/* v281 — Hora hablada → 'HH:MM' (24h) o null. Con momento tarde/noche suma 12 a 1–11
+   ("9 de la noche"=21:00); con momento manana se toma tal cual. SIN momento: 1–8 es
+   ambiguo → null (no se inventa hora, el llamador marca sin_hora); 9–11 y 12+ tal cual. */
+function _resolverHoraIA(hora,momento){
+  const m=(''+(hora||'')).trim().match(/^(\d{1,2})(?:[:.](\d{2}))?$/);
+  if(!m)return null;
+  let hh=parseInt(m[1],10);const mm=m[2]||'00';
+  const mo=(''+(momento||'')).toLowerCase();
+  if(mo==='tarde'||mo==='noche'){if(hh>=1&&hh<=11)hh+=12;}
+  else if(mo!=='manana'&&hh>=1&&hh<=8)return null;
+  return(hh>=0&&hh<=23&&parseInt(mm,10)<=59)?String(hh).padStart(2,'0')+':'+mm:null;
 }
 /* Timestamp de una cita en hora de Bolivia (America/La_Paz, UTC-4 fijo, sin DST).
    fecha='YYYY-MM-DD'; hora='HH:MM' (acepta "11 am"/"3pm"); sin hora → 09:00. */
@@ -12156,7 +12169,7 @@ function _grabDatosTarea(ext){
   const comps=ext.compromisos||[];
   const conFecha=comps.filter(function(c){return c&&c.fecha_sugerida;})[0]||null;
   return{persona:ext.nombre||null,
-    cita:conFecha?{fecha:conFecha.fecha_sugerida,hora:null,lugar:null}:null,
+    cita:conFecha?{fecha:conFecha.fecha_sugerida,hora:conFecha.hora||null,lugar:null,sin_hora:!conFecha.hora}:null,
     proximo_paso:(conFecha&&conFecha.texto)||((comps[0]||{}).texto)||null,
     alertas:[]};
 }
@@ -12244,6 +12257,7 @@ async function _grabCrearTareaAuto(g,contexto,ext){
   const nota=[d.proximo_paso||'',
     (d.alertas||[]).length?'⚠️ '+d.alertas.join('; '):'',
     (d.cita&&d.cita.lugar)?'📍 '+d.cita.lugar:'',
+    (teniaFecha&&d.cita&&d.cita.sin_hora)?'⏰ hora sin confirmar (09:00 por defecto)':'',
     'Generada desde grabación #'+g.id].filter(Boolean).join('\n');
   try{
     const{data:ins,error}=await sb.from('agenda_personal').insert({
@@ -12291,6 +12305,8 @@ async function _grabExtraerYGuardar(grabId,transcript){
     (ext.compromisos||[]).forEach(function(c){
       if(!c)return;
       c.fecha_sugerida=_limpiarFechaIA(_fechaDe(c,'fecha_sugerida'));
+      c.hora=_resolverHoraIA(c.hora,c.momento_dia);
+      c.sin_hora=!c.hora;
     });
     if(ext.cita){
       ext.cita.fecha=_limpiarFechaIA(_fechaDe(ext.cita,'fecha'));
