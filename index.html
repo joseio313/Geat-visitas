@@ -2910,7 +2910,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='281';
+  var CURRENT_VERSION='282';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -12170,6 +12170,8 @@ function _grabDatosTarea(ext){
   const conFecha=comps.filter(function(c){return c&&c.fecha_sugerida;})[0]||null;
   return{persona:ext.nombre||null,
     cita:conFecha?{fecha:conFecha.fecha_sugerida,hora:conFecha.hora||null,lugar:null,sin_hora:!conFecha.hora}:null,
+    /* v282 — el resto de compromisos CON fecha también merecen su tarea (antes solo el primero) */
+    extras:comps.filter(function(c){return c&&c.fecha_sugerida&&c!==conFecha;}).slice(0,4),
     proximo_paso:(conFecha&&conFecha.texto)||((comps[0]||{}).texto)||null,
     alertas:[]};
 }
@@ -12211,7 +12213,7 @@ async function _grabVincularPostulacion(grabId,ext,fechaRef){
 /* Crea la tarea automática en agenda_personal del colaborador que grabó.
    Devuelve {creada,titulo,fecha,agenda_id} o {creada:false,motivo} — el
    resultado se guarda en extraccion._tarea y se muestra en la ficha. */
-async function _grabCrearTareaAuto(g,contexto,ext){
+async function _grabCrearTareaAuto(g,contexto,ext,tituloProp){
   const colab=g&&g.colaborador;
   if(!colab)return{creada:false,motivo:'La grabación no tiene colaborador asignado'};
   const d=_grabDatosTarea(ext);
@@ -12237,7 +12239,7 @@ async function _grabCrearTareaAuto(g,contexto,ext){
     fp=_fechaHoraLaPaz(ymdBase,'09:00');
   }
   if(!fp)return{creada:false,motivo:'No se pudo interpretar la fecha de la cita'};
-  const tit=('🎯 ['+contexto+'] '+(persona||'seguimiento')).slice(0,120);
+  const tit=('🎯 ['+contexto+'] '+(tituloProp||persona||'seguimiento')).slice(0,120);
   /* Anti-duplicado: mismo día calendario boliviano, ±2h, mismo nombre en el título */
   try{
     const t=new Date(fp).getTime();
@@ -12317,6 +12319,17 @@ async function _grabExtraerYGuardar(grabId,transcript){
       ext._postulacion=await _grabVincularPostulacion(grabId,ext,fechaRef);
     }
     ext._tarea=await _grabCrearTareaAuto(g,contexto,ext);
+    /* v282 — un compromiso con fecha = una tarea. Cada extra va en su try: si uno falla no tumba al resto. */
+    ext._tareas_extra=[];
+    if(contexto!=='reclutamiento'){
+      const _ex=(_grabDatosTarea(ext)||{}).extras||[];
+      for(let _i=0;_i<_ex.length;_i++){
+        try{
+          ext._tareas_extra.push(await _grabCrearTareaAuto(g,contexto,
+            {nombre:ext.nombre,compromisos:[_ex[_i]]},(''+(_ex[_i].texto||'')).trim().slice(0,100)||undefined));
+        }catch(e){ext._tareas_extra.push({creada:false,motivo:'Error: '+(e.message||'desconocido')});}
+      }
+    }
   }
   try{await gb().update({extraccion:ext,contexto:contexto}).eq('id',grabId);}catch(e){}
   /* v167 — Paso ADICIONAL y aislado: detectar compromisos/tareas para el CEO.
