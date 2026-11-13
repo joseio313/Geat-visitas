@@ -609,6 +609,15 @@ body.mia-flotantes-izq #tareasPanel{right:auto !important;left:20px !important}
 .duplicate-warning{display:none;background:rgba(211,47,47,0.1);border:1px solid var(--st-atrasado);color:var(--white);padding:11px 13px;border-radius:8px;margin-top:7px;font-size:11px;line-height:1.5}
 .duplicate-warning.show{display:block}
 .duplicate-warning strong{color:var(--st-atrasado)}
+/* v283 — Crear lead: numero ya registrado */
+.nl-chip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:10px}
+.nl-steps{display:flex;gap:6px;font-size:10px;margin:8px 0;color:var(--gray-400)}
+.nl-steps span.on{color:var(--gold);font-weight:700}
+.nl-steps span.done{color:var(--st-reserva);font-weight:700}
+.nl-mchip{border:1px solid var(--gray-600);background:var(--gray-900);color:var(--white);padding:5px 11px;border-radius:14px;font-size:11px;cursor:pointer}
+.nl-mchip.sel{border-color:var(--gold);color:var(--gold);font-weight:700}
+.duplicate-warning.ok{background:rgba(67,160,71,0.1);border-color:var(--st-reserva)}
+.nl-locked .form-group:not(.nl-cel-grp),.nl-locked .section:not(#nl-sec-datos){opacity:.4;pointer-events:none}
 .who-has{background:var(--gray-900);padding:7px 9px;border-radius:6px;margin-top:7px;font-family:'Playfair Display',serif;font-size:13px}
 .who-has .name{color:var(--gold);font-weight:700}
 
@@ -2395,23 +2404,17 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
     </div>
     <div class="modal-body">
       <div class="mobile-note"><strong>👋 Solo registro del cliente.</strong> Al guardar aparece en la agenda para programar el 1er intento.</div>
-      <div class="section">
+      <div class="section" id="nl-sec-datos">
         <div class="section-title">Datos del cliente</div>
         <div class="form-group">
           <label class="form-label">Nombre / Familia <span style="color:var(--st-atrasado)">*</span></label>
           <input class="form-control" type="text" id="nl-nombre" placeholder="Ej: Flía Quispe Mamani">
         </div>
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group nl-cel-grp">
             <label class="form-label">Celular <span style="color:var(--st-atrasado)">*</span></label>
             <input class="form-control" type="tel" id="nl-celular" placeholder="78912345" oninput="checkDuplicate(this.value)">
-            <div class="duplicate-warning" id="dupWarning">
-              <strong>⚠️ Este número ya está registrado</strong>
-              <div id="dup-detalle" class="who-has">—</div>
-              <div style="margin-top:8px;font-size:10px">
-                · Si está <strong style="color:var(--gold)">abierto</strong>: no se puede duplicar — usá "📂 Abrir lead".<br>
-                · Si está <strong style="color:var(--st-perdido-tx)">perdido</strong>: reabrilo con "🔄 Nueva Oportunidad".
-              </div>
+            <div class="duplicate-warning" id="dupWarning"><div id="dup-detalle">—</div>
             </div>
           </div>
           <div class="form-group">
@@ -2530,7 +2533,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
         </div>
       </div>
       <div class="action-row">
-        <button class="btn-primary" id="btn-guardar-lead" data-orig-label="💾 Guardar y programar 1er intento" onclick="saveLead()">💾 Guardar y programar 1er intento</button>
+        <button class="btn-primary" id="btn-guardar-lead" data-orig-label="💾 Guardar y programar 1er intento" onclick="nlGuardarOSalvar()">💾 Guardar y programar 1er intento</button>
         <button class="btn-ghost" onclick="closeModal('modalNewLead')">Cancelar</button>
         <button type="button" class="btn btn-red btn-sm" onclick="toggleNLPerdido()" style="margin-left:auto">❌ Marcar como perdido</button>
       </div>
@@ -2910,7 +2913,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='282';
+  var CURRENT_VERSION='283';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -13691,25 +13694,157 @@ async function saveSeguimiento(){
 /* ════════════════════════════════════════
    CREAR LEAD (anti-duplicados)
 ════════════════════════════════════════ */
-async function checkDuplicate(cel){
+/* v283 — numero ya registrado: 4 casos. Reactivar SOLO en archivado/perdido y SOLO
+   por la RPC fn_lead_reactivar (devuelve jsonb {ok,...}, nunca lanza). En
+   seguimiento y cliente solo "Abrir lead". Nunca se crea un duplicado. */
+let _nlDupSeq=0,_nlDup=null,_nlMotivo='',_nlReactivado=false,_nlReactBusy=false;
+function _nlEsc(x){return (x==null?'':String(x)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _nlDupCaso(l){
+  if(l.estado==='cerrado_ganado')return'cliente';
+  if(l.archivado===true)return'archivado';
+  if(l.estado==='cerrado_perdido')return'perdido';
+  return'seguimiento';
+}
+function _nlLock(on){
+  const b=document.querySelector('#modalNewLead .modal-body');
+  if(b)b.classList.toggle('nl-locked',!!on);
+  const btn=document.getElementById('btn-guardar-lead');
+  if(btn){btn.disabled=!!on;btn.style.opacity=on?'0.5':'1';btn.style.cursor=on?'not-allowed':'pointer';}
+}
+/* en modo reactivado el alta no aplica: solo medio de difusion y origen */
+function _nlReactVista(on){
+  ['nl-nombre','nl-ciudad','nl-ciudad-otra','nl-captador','nl-captador-sel','nl-grado-interes','nl-correo','nl-fecha-contacto','nl-nota'].forEach(function(id){
+    const g=document.getElementById(id);const fg=g&&g.closest('.form-group');
+    if(fg)fg.style.display=on?'none':'';
+  });
+  const p1=document.getElementById('section-programar-1er');if(p1)p1.style.display=on?'none':'';
+  const cm=document.getElementById('section-cliente-mujer');if(cm&&on)cm.style.display='none';
+  const ex=document.getElementById('nl-datos-extra-body');const sec=ex&&ex.parentElement;if(sec)sec.style.display=on?'none':'';
+  const pb=document.querySelector('#modalNewLead .action-row button[onclick="toggleNLPerdido()"]');if(pb)pb.style.display=on?'none':'';
+}
+function _nlDupReset(){
+  _nlDupSeq++;_nlDup=null;_nlMotivo='';_nlReactivado=false;_nlReactBusy=false;
   dupBlocked=false;
-  document.getElementById('dupWarning').classList.remove('show');
+  _nlLock(false);_nlReactVista(false);
+  const dw=document.getElementById('dupWarning');if(dw){dw.classList.remove('show','ok');}
+}
+async function checkDuplicate(cel){
+  const seq=++_nlDupSeq;
+  if(_nlReactivado||_nlDup){/* el numero cambio: se descarta la reactivacion en curso */
+    _nlDup=null;_nlMotivo='';_nlReactivado=false;_nlReactVista(false);
+  }
+  dupBlocked=false;_nlLock(false);
+  const dw=document.getElementById('dupWarning');
+  if(dw)dw.classList.remove('show','ok');
+  cel=(cel||'').trim();
   if(!cel||cel.length<7)return;
-  const{data}=await sb.from('leads').select('id,nombre,captador,estado,etapa').eq('celular',cel).limit(1);
-  if(data&&data.length){
-    const l=data[0];
-    dupBlocked=true;
-    const esPerdido=l.estado==='cerrado_perdido';
-    const estadoTxt=esPerdido?'<span style="color:var(--st-perdido-tx);font-weight:700">PERDIDO</span>':(l.estado||'abierto');
-    document.getElementById('dupWarning').classList.add('show');
-    document.getElementById('dup-detalle').innerHTML=`
-      <div>👤 Cliente: <span class="name">${l.nombre||'—'}</span></div>
-      <div>📌 Asignado a: <span class="name">${l.captador||'Sin asignar'}</span></div>
-      <div style="font-size:10px;color:var(--gray-400);margin-top:3px">Estado: ${estadoTxt} · ${l.etapa||'—'}</div>
+  let data=null;
+  try{
+    const r=await sb.from('leads').select('id,nombre,captador,estado,etapa,archivado,created_at,canal,ultima_gestion').eq('celular',cel).limit(10);
+    if(r.error)throw r.error;
+    data=r.data;
+  }catch(e){toast('No se pudo verificar el número: '+e.message,'error');return;}
+  if(seq!==_nlDupSeq)return; /* llego tarde: ya hay otra consulta */
+  if(!data||!data.length)return;
+  const rank={seguimiento:0,cliente:1,perdido:2,archivado:3};
+  data.sort(function(a,b){return rank[_nlDupCaso(a)]-rank[_nlDupCaso(b)];});
+  _nlDup=data[0];
+  dupBlocked=true;
+  _nlLock(true);
+  _nlDupRender('detectado');
+}
+function _nlDupRender(paso,extra){
+  const l=_nlDup;if(!l)return;
+  const caso=_nlDupCaso(l);
+  const dw=document.getElementById('dupWarning');
+  const chips={
+    archivado:['ARCHIVADO','var(--gray-600)','var(--white)'],
+    perdido:['PERDIDO','var(--st-perdido)','var(--st-perdido-tx)'],
+    seguimiento:['EN SEGUIMIENTO','var(--gold)','#000'],
+    cliente:['CLIENTE','var(--st-reserva)','#fff']
+  }[caso];
+  const puede=(caso==='archivado'||caso==='perdido');
+  const pasos=puede?`<div class="nl-steps"><span class="${paso==='detectado'?'on':'done'}">① Detectado</span>›<span class="${paso==='motivo'?'on':(paso==='ok'?'done':'')}">② Motivo</span>›<span class="${paso==='ok'?'on':''}">③ Reactivado</span></div>`:'';
+  const ficha=`
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong style="color:var(--white)">⚠️ Este número ya está registrado</strong><span class="nl-chip" style="background:${chips[1]};color:${chips[2]}">${chips[0]}</span></div>
+    ${pasos}
+    <div class="who-has">
+      <div>👤 <span class="name">${_nlEsc(l.nombre||'—')}</span></div>
+      <div style="font-size:11px;margin-top:3px">📌 Captador: ${_nlEsc(l.captador||'Sin asignar')}</div>
+      <div style="font-size:10px;color:var(--gray-400);margin-top:3px">Registrado: ${_fechaDiaTxt(l.created_at)} · Canal: ${_nlEsc(l.canal||'—')} · Última gestión: ${l.ultima_gestion?_fechaDiaTxt(l.ultima_gestion):'—'}</div>
+    </div>`;
+  const abrir=`<button type="button" class="btn-ghost" style="font-size:11px" onclick="closeModal('modalNewLead');openLeadReadOnly(${Number(l.id)})">📂 Abrir lead</button>`;
+  let cuerpo='';
+  if(!puede){
+    cuerpo=`<div style="font-size:10px;margin-top:8px;color:var(--gray-400)">${caso==='cliente'?'Ya es cliente: no se puede reactivar ni duplicar.':'Está en seguimiento: no se puede duplicar ni reactivar.'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${abrir}</div>`;
+  }else if(paso==='detectado'){
+    cuerpo=`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <button type="button" class="btn-primary" style="font-size:11px" onclick="nlReactPaso('motivo')">🔄 Reactivar · nueva oportunidad</button>${abrir}</div>`;
+  }else if(paso==='motivo'){
+    const ms=['Volvió a escribir','Nueva campaña','Referido','Otro'];
+    cuerpo=`<div style="font-size:11px;margin-top:8px"><strong style="color:var(--white)">Motivo de la reactivación *</strong></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${ms.map(function(m){return `<button type="button" class="nl-mchip${_nlMotivo===m?' sel':''}" onclick="nlReactMotivo(this.dataset.m)" data-m="${m}">${m}</button>`;}).join('')}</div>
+      <ul style="margin:8px 0 0 16px;padding:0;font-size:10px;color:var(--gray-400);line-height:1.6">
+        <li>Vuelve a <strong>1er intento</strong> (Presentación)</li>
+        <li>Queda con el captador original${l.captador?' ('+_nlEsc(l.captador)+')':''}</li>
+        <li>Se conserva el historial y suma 1 reactivación</li>
+        <li>Tarea de 1er intento para hoy</li></ul>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-        <button type="button" class="btn-ghost btn-sm" onclick="closeModal('modalNewLead');openLeadReadOnly(${l.id})">📂 Abrir lead</button>
-        ${esPerdido?`<button type="button" class="btn-primary btn-sm" onclick="closeModal('modalNewLead');openLeadReactivar(${l.id})">🔄 Nueva Oportunidad</button>`:''}
-      </div>`;
+        <button type="button" class="btn-primary" id="nl-react-ok" style="font-size:11px"${_nlMotivo&&!_nlReactBusy?'':' disabled'} onclick="nlReactConfirmar()">${_nlReactBusy?'⏳ Reactivando...':'✅ Confirmar reactivación'}</button>
+        <button type="button" class="btn-ghost" style="font-size:11px" onclick="nlReactPaso('detectado')">Atrás</button>${abrir}</div>`;
+  }else if(paso==='ok'){
+    cuerpo=`<div style="margin-top:8px;font-size:12px;color:var(--st-reserva);font-weight:700">♻️ Reactivado · ciclo ${_nlEsc(extra)}</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--gray-400)">Tarea de 1er intento creada para hoy. Completá de dónde vino esta vez y guardá.</div>`;
+  }
+  dw.classList.add('show');dw.classList.toggle('ok',paso==='ok');
+  document.getElementById('dup-detalle').innerHTML=ficha+cuerpo;
+}
+function nlReactPaso(p){if(_nlReactBusy)return;_nlDupRender(p);}
+function nlReactMotivo(m){if(_nlReactBusy)return;_nlMotivo=m;_nlDupRender('motivo');}
+async function nlReactConfirmar(){
+  if(_nlReactBusy||!_nlDup||!_nlMotivo)return;
+  const caso=_nlDupCaso(_nlDup);
+  if(caso!=='archivado'&&caso!=='perdido')return;
+  _nlReactBusy=true;_nlDupRender('motivo');
+  const r=await _reactivarRpc(_nlDup.id,_nlMotivo);
+  _nlReactBusy=false;
+  if(!r.ok){toast(r.error,'error');_nlDupRender('motivo');return;}
+  _nlReactivado=true;dupBlocked=false;
+  _nlLock(false);_nlReactVista(true);
+  _nlDupRender('ok',r.ciclo);
+  try{renderWeek();cargarMarcadoresDia();}catch(e){}
+}
+/* UNICA via de reactivacion: la RPC. Nunca updates sueltos desde el front. */
+async function _reactivarRpc(leadId,motivo){
+  if(!cu)return{ok:false,error:'Sesión no válida'};
+  try{
+    const{data,error}=await sb.rpc('fn_lead_reactivar',{p_lead_id:leadId,p_motivo:motivo,p_usuario:cu.nombre||null,p_rol:cu.rol||'field_capturer'});
+    if(error)return{ok:false,error:'Error: '+error.message};
+    if(!data||data.ok!==true)return{ok:false,error:(data&&data.error)||'No se pudo reactivar'};
+    try{registrarAuditoria('reactivar_lead','leads',leadId,{motivo:motivo,ciclo:data.ciclo});}catch(e){}
+    return{ok:true,ciclo:data.ciclo,captador:data.captador};
+  }catch(e){return{ok:false,error:'Error: '+e.message};}
+}
+/* Guardar en modo reactivado: el lead YA existe, no se inserta nada. */
+async function nlGuardarOSalvar(){
+  if(!_nlReactivado||!_nlDup)return saveLead();
+  const btn=document.getElementById('btn-guardar-lead');
+  const medio=document.getElementById('nl-medio')?.value||null;
+  const orig=_nlOrigen();
+  if(!orig){toast('Elegí de dónde vino esta vez: una campaña o un origen sin pauta','error');document.getElementById('nl-campana')?.focus();return;}
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Guardando...';}
+  try{
+    const{error}=await sb.from('leads').update({medio_difusion:medio,campana_id:orig.campana_id,campana:orig.campana}).eq('id',_nlDup.id);
+    if(error)throw error;
+    const nom=_nlDup.nombre;
+    closeModal('modalNewLead');
+    toast('♻️ "'+(nom||'Lead')+'" reactivado — 1er intento en tu agenda de hoy');
+    try{renderWeek();cargarMarcadoresDia();if(cu.rol==='field_capturer'||cu.rol==='commercial_lead')renderParaHoy();}catch(e){}
+  }catch(e){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML=btn.dataset.origLabel;}
+    toast('Error: '+e.message,'error');
   }
 }
 
@@ -14003,6 +14138,7 @@ function resetModalSave(modalId){
   });
   var dw=modal.querySelector('#dupWarning');
   if(dw)dw.classList.remove('show');
+  if(modalId==='modalNewLead'){try{_nlDupReset();}catch(_e){}}
 }
 function openModal(id){
   if(id==='modalNewLead'){
@@ -14022,6 +14158,7 @@ function closeModal(id){
   /* Si se cancela crear lead, soltar el vínculo con el registro de grabación */
   if(id==='modalNewLead'){
     _grabOrigenRegId=null;_grabOrigenExtraccion=null;
+    try{_nlDupReset();}catch(_e){}
     const _pw=document.getElementById('nl-perdido-wrap');if(_pw)_pw.style.display='none';
     const _pm=document.getElementById('nl-perdido-motivo');if(_pm)_pm.value='';
     const _pow=document.getElementById('nl-perdido-otro-wrap');if(_pow)_pow.style.display='none';
@@ -14208,102 +14345,48 @@ function openLeadReactivar(leadId){
 
 /* Formulario de reactivación (inyectado en el modal de detalle) */
 function renderReactivarForm(lead){
-  const optsEtapas=itemsSeg.map(s=>`<option>${s.nombre}</option>`).join('');
-  const optsColab=colaboradores.filter(c=>c.activo).map(c=>`<option value="${c.nombre}"${c.nombre===cu.nombre?' selected':''}>${c.nombre}</option>`).join('');
+  const ms=['Volvió a escribir','Nueva campaña','Referido','Otro'];
   return `<div class="section" style="border-color:var(--gold);background:rgba(242,197,0,0.04)">
     <div class="section-title">♻️ REACTIVAR ESTE CLIENTE</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Etapa</label>
-        <select class="form-control" id="reac-etapa">${optsEtapas}</select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Asignar a</label>
-        <select class="form-control" id="reac-asignado">${optsColab}</select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">📅 Fecha</label>
-        <input class="form-control" type="date" id="reac-fecha" value="${ymdLocal(addDays(new Date(),1))}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">🕐 Hora</label>
-        <input class="form-control" type="time" id="reac-hora" value="10:00">
-      </div>
-    </div>
     <div class="form-group">
-      <label class="form-label">Nota · Objetivo del contacto</label>
-      <textarea class="form-control" id="reac-nota" rows="2" placeholder="¿Por qué se reactiva? ¿Qué querés lograr?"></textarea>
+      <label class="form-label">Motivo <span style="color:var(--st-atrasado)">*</span></label>
+      <select class="form-control" id="reac-motivo"><option value="">— Elegir —</option>${ms.map(m=>`<option>${m}</option>`).join('')}</select>
+      <div class="form-help">Vuelve a 1er intento con el captador original, se conserva el historial y se crea la tarea de 1er intento para hoy.</div>
     </div>
     <div class="action-row">
-      <button class="btn-primary" id="btn-reactivar" onclick="confirmarReactivar(${lead.id},'${(lead.nombre||'').replace(/'/g,"\\'")}')">📅 Reactivar y agendar</button>
+      <button class="btn-primary" id="btn-reactivar" onclick="confirmarReactivar(${lead.id},'${(lead.nombre||'').replace(/'/g,"\\'")}')">♻️ Reactivar (1er intento hoy)</button>
       <button class="btn-ghost" onclick="closeModal('modalLead')">Cancelar</button>
     </div>
   </div>`;
 }
 
+/* v283 — confirmarReactivar y reactivarLeadDesdePerfil llaman SOLO a la RPC
+   (_reactivarRpc). Sin updates directos: la RPC deja 1er intento para hoy,
+   historial y ciclo. */
 async function confirmarReactivar(leadId,nombre){
-  const etapa=document.getElementById('reac-etapa')?.value||'1er intento';
-  const asignado=document.getElementById('reac-asignado')?.value||cu.nombre;
-  const fecha=document.getElementById('reac-fecha')?.value;
-  const hora=document.getElementById('reac-hora')?.value||'10:00';
-  const nota=document.getElementById('reac-nota')?.value||'';
-  if(!fecha){toast('Ingresá la fecha del seguimiento','error');return;}
-
   const btn=document.getElementById('btn-reactivar');
   if(btn&&btn.disabled)return;
+  const motivo=document.getElementById('reac-motivo')?.value||'';
+  if(!motivo){toast('Elegí el motivo de la reactivación','error');return;}
   if(btn){btn.disabled=true;btn.style.opacity='0.6';btn.innerHTML='⏳ Reactivando...';}
-
-  const lockKey=`reac-${leadId}-${fecha}`;
+  const lockKey=`reac-${leadId}`;
   if(!checkDupLock(lockKey)){
     toast('Ya se está procesando. Esperá.','error');
-    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='📅 Reactivar y agendar';}
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar (1er intento hoy)';}
     return;
   }
-
-  const now=new Date().toISOString();
-  /* v195 — mismo criterio que el alta: offset de Bolivia fijo. */
-  const fp=_dtBoliviaToIso(fecha+'T'+hora)||new Date().toISOString();
-  try{
-    await sb.from('leads').update({
-      estado:'nuevo',etapa,captador:asignado,proximo_contacto:fp,archivado:false,
-      ultima_gestion:ymdBolivia(new Date()),updated_at:now
-    }).eq('id',leadId);
-    const{error}=await sb.from('agenda_personal').insert({
-      colaborador:asignado,lead_id:leadId,tipo:etapa,
-      titulo:nombre,nota:nota||'Reactivación',
-      fecha_programada:fp,completada:false
-    });
-    if(error){
-      if(error.code==='23505'){toast('Actividad ya existe. Lead reactivado igualmente.','error');}
-      else throw error;
-    }
-    /* v82: dejar constancia de la reapertura en el historial del lead */
-    try{
-      await sb.from('historial_lead').insert({
-        lead_id:leadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
-        etapa, tipo_actividad:'reactivacion',
-        nota:'♻️ Nueva Oportunidad — lead reabierto por '+cu.nombre+'. Estado: nuevo · Captador: '+asignado,
-        fecha_actividad:now, created_at:now
-      });
-    }catch(eh){}
-    registrarAuditoria('reactivar_lead','leads',leadId,{etapa,asignado,fecha_prog:fecha});
-    closeModal('modalLead');
-    toast('♻️ "'+nombre+'" reactivado y asignado a '+asignado);
-    currentLeadMode='normal';
-    renderWeek();
-    cargarMarcadoresDia();
-  }catch(e){
-    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='📅 Reactivar y agendar';}
-    toast('Error: '+e.message,'error');
+  const r=await _reactivarRpc(leadId,motivo);
+  if(!r.ok){
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar (1er intento hoy)';}
+    toast(r.error,'error');return;
   }
+  closeModal('modalLead');
+  toast('♻️ "'+nombre+'" reactivado · ciclo '+r.ciclo);
+  currentLeadMode='normal';
+  try{renderWeek();cargarMarcadoresDia();}catch(e){}
 }
 
-/* v133 — Reactivar lead perdido/archivado desde su propio perfil (buscador → lead propio).
-   Deja archivado=false, estado='nuevo' y proximo_contacto=HOY (misma lógica de
-   sincronización que confirmarReactivar en v131: nunca queda una fecha vencida vieja).
-   Luego el lead entra al flujo normal: completar indagación (gate v130) → agendar visita. */
+/* Reactivar lead perdido/archivado desde su propio perfil (buscador → lead propio). */
 async function reactivarLeadDesdePerfil(leadId){
   if(!cu){toast('Sesión no válida','error');return;}
   const btn=document.getElementById('btn-reactivar-inline');
@@ -14315,34 +14398,15 @@ async function reactivarLeadDesdePerfil(leadId){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar lead';}
     return;
   }
-  const now=new Date().toISOString();
-  /* v195 — timestamptz: hoy a las 09:00 de Bolivia, no un día pelado. */
-  const hoy=_dtBoliviaToIso(ymdBolivia(new Date())+'T09:00');
-  try{
-    const{data:l}=await sb.from('leads').select('nombre,etapa').eq('id',leadId).single();
-    const{error}=await sb.from('leads').update({
-      archivado:false,estado:'nuevo',proximo_contacto:hoy,
-      ultima_gestion:ymdBolivia(new Date()),updated_at:now
-    }).eq('id',leadId);
-    if(error)throw error;
-    try{
-      await sb.from('historial_lead').insert({
-        lead_id:leadId, colaborador:cu.nombre, rol_colaborador:cu.rol||'—',
-        etapa:(l&&l.etapa)||'—', tipo_actividad:'reactivacion',
-        nota:'♻️ Lead reactivado desde el buscador por '+cu.nombre+' — desarchivado · Estado: nuevo · Próximo contacto: '+hoy,
-        fecha_actividad:now, created_at:now
-      });
-    }catch(eh){}
-    try{registrarAuditoria('reactivar_lead','leads',leadId,{origen:'perfil_buscador',proximo_contacto:hoy});}catch(e){}
-    toast('♻️ "'+((l&&l.nombre)||'Lead')+'" reactivado — ya podés operarlo');
-    renderWeek();
-    cargarMarcadoresDia();
-    try{if(cu.rol==='field_capturer'||cu.rol==='commercial_lead')renderParaHoy();}catch(e){}
-    openLeadDetail(leadId,null,'normal');
-  }catch(e){
+  const r=await _reactivarRpc(leadId,'Volvió a escribir');
+  if(!r.ok){
     if(btn){btn.disabled=false;btn.style.opacity='1';btn.innerHTML='♻️ Reactivar lead';}
-    toast('Error: '+e.message,'error');
+    toast(r.error,'error');return;
   }
+  toast('♻️ Lead reactivado · ciclo '+r.ciclo+' — ya podés operarlo');
+  try{renderWeek();cargarMarcadoresDia();}catch(e){}
+  try{if(cu.rol==='field_capturer'||cu.rol==='commercial_lead')renderParaHoy();}catch(e){}
+  openLeadDetail(leadId,null,'normal');
 }
 
 /* CAMBIO 5 — Cargar leads recientes (tabla cronológica) */
