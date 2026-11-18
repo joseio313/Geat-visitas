@@ -2913,7 +2913,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='283';
+  var CURRENT_VERSION='284';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -11967,9 +11967,13 @@ async function _extraerProspectoIA(transcript,fechaRef){
     vivienda_o_inversion:null,temas_clave:[],compromisos:[]};
   const userMsg=_PROMPT_ANTI_INVENCION+
     'Analizá esta transcripción de reunión comercial de GEAT (construcción de viviendas) y extraé los datos del posible prospecto. Devolvé SOLO JSON válido, sin markdown ni texto adicional. Usá null cuando un dato no se haya mencionado:\n'+
-    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null,"hora":"HH:MM"|null,"momento_dia":"manana|tarde|noche"|null}]}\n'+
+    '{"titulo":null,"es_prospecto":true|false,"nombre":null,"celular":null,"ciudad":null,"lugar_terreno":null,"financiamiento":"financiamiento"|"contado"|null,"plantas":1|2|null,"cuando_construir":null,"presupuesto":null,"vivienda_o_inversion":null,"temas_clave":["..."],"compromisos":[{"texto":"...","fecha_sugerida":"YYYY-MM-DD"|null,"dia_semana":"lunes|martes|miercoles|jueves|viernes|sabado|domingo"|null,"semana":"esta"|"proxima"|null,"frase_fecha":null,"hora":"HH:MM"|null,"momento_dia":"manana|tarde|noche"|null,"accion":null,"tema":null,"cita_textual":null}]}\n'+
     'hora=la hora TAL COMO SE DIJO ("7", "19:30"), null si no se dijo; momento_dia=SOLO si se dijo explícito ("de la noche", "de la tarde", "de la mañana"), si no null; no deduzcas am/pm.\n'+
     'titulo=título corto de 3 a 6 palabras que describa el tema central de la grabación (ej: "Cotización dúplex zona norte", "Seguimiento financiamiento banco"); siempre completalo. es_prospecto=true solo si la reunión es con un cliente potencial de construcción. nombre/celular/ciudad=datos del cliente; lugar_terreno=dónde tiene o busca terreno; financiamiento=cómo pagaría (financiamiento o contado); plantas=cantidad de plantas que quiere (1 o 2); cuando_construir=cuándo planea construir; presupuesto=monto aproximado mencionado; vivienda_o_inversion=si construye para vivir o como inversión; temas_clave=temas importantes tratados; compromisos=acuerdos asumidos en la reunión, con fecha_sugerida en formato YYYY-MM-DD solo si se mencionó una fecha calendario explícita.\n'+
+    /* v284 — nombre sin saludos, compromisos solo explícitos, y los 3 campos que arman el título de la tarea */
+    'nombre=SOLO si alguien lo dice como nombre del cliente o prospecto. NUNCA tomes el nombre de un saludo ("hola Fido", "buenas") ni el de quien graba o de alguien del equipo GEAT; ante la duda, null. '+
+    'compromisos=SOLO acuerdos explícitos de hacer algo concreto ("te mando la propuesta el jueves"); no incluyas cortesías ni intenciones vagas ("cualquier cosa me avisás"). Si no hay ninguno, lista vacía. '+
+    'Por cada compromiso: accion=verbo en infinitivo + objeto, tomado de lo que realmente se dijo (ej: "Enviar propuesta ajustada"); tema=2 a 5 palabras sobre de qué trata (ej: "ajustes de forma y costo"); cita_textual=frase corta (máx 120 caracteres) copiada TEXTUAL del audio donde se asume el compromiso, sin corregir ni resumir.\n'+
     _promptFechas(fechaRef)+'\n'+transcript;
   return JSON.parse(await _gptMiniIA(userMsg,1500,true));
 }
@@ -12166,17 +12170,48 @@ function _grabDatosTarea(ext){
   if(!ext||typeof ext!=='object')return null;
   if(ext.candidato!==undefined||ext.cita!==undefined){
     return{persona:ext.candidato||null,cita:ext.cita||null,
-      proximo_paso:ext.proximo_paso||null,alertas:ext.alertas||[]};
+      proximo_paso:ext.proximo_paso||null,alertas:ext.alertas||[],
+      accion:(''+(ext.proximo_paso||'')).trim().slice(0,70)||'Entrevista con candidato',tema:'reclutamiento',frase:null};
   }
-  /* Esquema venta: la cita sale del primer compromiso con fecha sugerida */
-  const comps=ext.compromisos||[];
-  const conFecha=comps.filter(function(c){return c&&c.fecha_sugerida;})[0]||null;
+  /* Esquema venta: la cita sale del primer compromiso con fecha sugerida.
+     v284 — un compromiso cuenta solo si tiene acción (accion o texto). */
+  const comps=(ext.compromisos||[]).filter(function(c){return c&&(c.accion||c.texto);});
+  const conFecha=comps.filter(function(c){return c.fecha_sugerida;})[0]||null;
+  const base=conFecha||comps[0]||null;
   return{persona:ext.nombre||null,
     cita:conFecha?{fecha:conFecha.fecha_sugerida,hora:conFecha.hora||null,lugar:null,sin_hora:!conFecha.hora}:null,
     /* v282 — el resto de compromisos CON fecha también merecen su tarea (antes solo el primero) */
-    extras:comps.filter(function(c){return c&&c.fecha_sugerida&&c!==conFecha;}).slice(0,4),
-    proximo_paso:(conFecha&&conFecha.texto)||((comps[0]||{}).texto)||null,
+    extras:comps.filter(function(c){return c.fecha_sugerida&&c!==conFecha;}).slice(0,4),
+    proximo_paso:(base&&base.texto)||null,
+    accion:base?(''+(base.accion||base.texto||'')).trim().slice(0,70):null,
+    tema:base?(''+(base.tema||'')).trim().slice(0,50):'',
+    frase:base?(''+(base.cita_textual||'')).trim().slice(0,160):'',
     alertas:[]};
+}
+/* v284 — Nombre del cliente para el título. Prioridad: lead vinculado a la grabación;
+   si no, el que dijo la IA, descartado si contiene un token del nombre de quien graba
+   (caso "Fido José Miguel": José Miguel es el usuario) o una palabra de saludo. Nunca se inventa. */
+function _grabNombreCliente(g,persona,leadNombre){
+  if(leadNombre&&(''+leadNombre).trim())return(''+leadNombre).trim();
+  const p=(''+(persona||'')).trim();
+  if(!p)return'';
+  const toks=function(s){return _normNom(s).split(' ').filter(function(t){return t.length>=3;});};
+  const colab=toks((g&&g.colaborador)||'');
+  const SALUDOS=['hola','buenas','buenos','buen','dias','tardes','noches','saludos'];
+  const mios=toks(p);
+  for(let i=0;i<mios.length;i++){
+    if(colab.indexOf(mios[i])>=0||SALUDOS.indexOf(mios[i])>=0)return'';
+  }
+  return p;
+}
+/* Arma "{Acción} · {Cliente} · {Tema}"; sin cliente claro: "Sin nombre (dd/mm de la grabación)" */
+function _grabTituloTarea(accion,cliente,tema,g){
+  let cli=cliente;
+  if(!cli){
+    const f=ymdBolivia(g&&g.created_at?g.created_at:new Date()).split('-');
+    cli='Sin nombre ('+f[2]+'/'+f[1]+')';
+  }
+  return[(accion||'Dar seguimiento'),cli,tema].filter(Boolean).join(' · ').slice(0,120);
 }
 /* Vincula la extracción de reclutamiento con una postulación ya existente
    (teléfono exacto, o nombre aproximado). NUNCA crea postulaciones fantasma:
@@ -12216,33 +12251,34 @@ async function _grabVincularPostulacion(grabId,ext,fechaRef){
 /* Crea la tarea automática en agenda_personal del colaborador que grabó.
    Devuelve {creada,titulo,fecha,agenda_id} o {creada:false,motivo} — el
    resultado se guarda en extraccion._tarea y se muestra en la ficha. */
-async function _grabCrearTareaAuto(g,contexto,ext,tituloProp){
+async function _grabCrearTareaAuto(g,contexto,ext,tituloProp,opts){
   const colab=g&&g.colaborador;
   if(!colab)return{creada:false,motivo:'La grabación no tiene colaborador asignado'};
   const d=_grabDatosTarea(ext);
   if(!d)return{creada:false,motivo:'Sin extracción para generar la tarea'};
-  const persona=d.persona||'';
+  /* v284 — nombre: lead vinculado primero; si no, el de la IA ya filtrado */
+  let leadNom='';
+  const _lid=g.lead_id||g.lead_creado_id;
+  if(_lid){
+    try{const{data:ld}=await sb.from('leads').select('nombre').eq('id',_lid).single();leadNom=(ld&&ld.nombre)||'';}catch(e){}
+  }
+  const persona=_grabNombreCliente(g,d.persona,leadNom);
   let fp=null,teniaFecha=false;
   /* v187: _limpiarFechaIA descarta la cita si la IA la ubicó en el pasado */
   if(d.cita&&_limpiarFechaIA(d.cita.fecha)){
     fp=_fechaHoraLaPaz(d.cita.fecha,d.cita.hora);
     teniaFecha=!!fp;
   }
-  if(!fp){
-    /* Próximo paso sin fecha → día siguiente a la grabación, 09:00 Bolivia.
-       v187: si la grabación es vieja (re-análisis) ese día ya pasó → mañana. */
-    if(!d.proximo_paso)return{creada:false,motivo:'La conversación no dejó cita ni próximo paso'};
-    const base=new Date(g.created_at||new Date().toISOString());
-    base.setTime(base.getTime()+24*60*60*1000);
-    let ymdBase=ymdBolivia(base);
-    if(!_limpiarFechaIA(ymdBase)){
-      const man=new Date(); man.setTime(man.getTime()+24*60*60*1000);
-      ymdBase=ymdBolivia(man);
-    }
-    fp=_fechaHoraLaPaz(ymdBase,'09:00');
+  /* v284 — SIN compromiso con fecha no se crea tarea (antes: mañana 09:00 por defecto).
+     Solo el botón manual pasa opts.fechaManual (YYYY-MM-DD elegido por la persona). */
+  if(!fp&&opts&&opts.fechaManual){
+    fp=_fechaHoraLaPaz(opts.fechaManual,null);
   }
-  if(!fp)return{creada:false,motivo:'No se pudo interpretar la fecha de la cita'};
-  const tit=('🎯 ['+contexto+'] '+(tituloProp||persona||'seguimiento')).slice(0,120);
+  if(!fp){
+    return{creada:false,manual:true,
+      motivo:'Sin compromiso explícito con acción y fecha — no se creó tarea automática'};
+  }
+  const tit=_grabTituloTarea(d.accion,persona,d.tema||(ext&&ext.titulo&&!ext.sin_contenido?(''+ext.titulo):''),g);
   /* Anti-duplicado: mismo día calendario boliviano, ±2h, mismo nombre en el título */
   try{
     const t=new Date(fp).getTime();
@@ -12260,10 +12296,12 @@ async function _grabCrearTareaAuto(g,contexto,ext,tituloProp){
       motivo:'Ya existe el evento #'+dup.id+' ("'+dup.titulo+'") ese día a esa hora'};
   }catch(e){}
   const nota=[d.proximo_paso||'',
+    d.frase?'🗣 "'+d.frase+'"':'',
     (d.alertas||[]).length?'⚠️ '+d.alertas.join('; '):'',
     (d.cita&&d.cita.lugar)?'📍 '+d.cita.lugar:'',
     (teniaFecha&&d.cita&&d.cita.sin_hora)?'⏰ hora sin confirmar (09:00 por defecto)':'',
-    'Generada desde grabación #'+g.id].filter(Boolean).join('\n');
+    (!teniaFecha)?'📅 sin fecha acordada (fecha elegida a mano)':'',
+    'Grabación #'+g.id].filter(Boolean).join('\n');
   try{
     const{data:ins,error}=await sb.from('agenda_personal').insert({
       colaborador:colab,tipo:'evento',titulo:tit,nota:nota.slice(0,2000),
@@ -12284,7 +12322,7 @@ async function _grabExtraerYGuardar(grabId,transcript){
   if(!grabId||!transcript)return null;
   let g=null;
   try{
-    const{data}=await gb().select('id,colaborador,created_at,titulo').eq('id',grabId).single();
+    const{data}=await gb().select('id,colaborador,created_at,titulo,lead_id,lead_creado_id').eq('id',grabId).single();
     g=data||null;
   }catch(e){}
   if(!g)g={id:grabId,colaborador:(typeof cu!=='undefined'&&cu&&cu.nombre)||null,created_at:new Date().toISOString()};
@@ -12312,6 +12350,8 @@ async function _grabExtraerYGuardar(grabId,transcript){
       c.fecha_sugerida=_limpiarFechaIA(_fechaDe(c,'fecha_sugerida'));
       c.hora=_resolverHoraIA(c.hora,c.momento_dia);
       c.sin_hora=!c.hora;
+      /* v284 — la cita literal solo se conserva si de verdad está en la transcripción */
+      if(c.cita_textual&&_normNom(transcript).indexOf(_normNom(c.cita_textual))<0)c.cita_textual=null;
     });
     if(ext.cita){
       ext.cita.fecha=_limpiarFechaIA(_fechaDe(ext.cita,'fecha'));
@@ -12329,7 +12369,7 @@ async function _grabExtraerYGuardar(grabId,transcript){
       for(let _i=0;_i<_ex.length;_i++){
         try{
           ext._tareas_extra.push(await _grabCrearTareaAuto(g,contexto,
-            {nombre:ext.nombre,compromisos:[_ex[_i]]},(''+(_ex[_i].texto||'')).trim().slice(0,100)||undefined));
+            {nombre:ext.nombre,titulo:ext.titulo,compromisos:[_ex[_i]]}));
         }catch(e){ext._tareas_extra.push({creada:false,motivo:'Error: '+(e.message||'desconocido')});}
       }
     }
@@ -15507,9 +15547,11 @@ function _grabExtraccionHtml(g){
   if(tk&&tk.creada){
     tareaHtml='<div style="font-size:11px;color:var(--st-completo);margin-top:6px">✅ Tarea creada: '+_escPend(tk.titulo||'')+
       (tk.fecha?' <span style="color:var(--gray-400)">('+_grabFmtFecha(tk.fecha)+')</span>':'')+
-      (tk.sin_fecha_acordada?' <span style="color:var(--gray-400)">— sin fecha acordada, agendada al día siguiente</span>':'')+'</div>';
+      (tk.sin_fecha_acordada?' <span style="color:var(--gray-400)">— sin fecha acordada (elegida a mano)</span>':'')+'</div>';
   }else if(tk){
-    tareaHtml='<div style="font-size:11px;color:var(--gold);margin-top:6px">⚠️ Tarea no creada: '+_escPend(tk.motivo||'—')+'</div>';
+    tareaHtml='<div style="font-size:11px;color:var(--gold);margin-top:6px">⚠️ Tarea no creada: '+_escPend(tk.motivo||'—')+'</div>'+
+      (tk.manual?'<div style="margin-top:4px;display:flex;gap:6px;align-items:center"><input type="date" class="form-control" id="grab-tfecha-'+g.id+'" value="'+ymdBolivia(new Date())+'" style="width:auto;font-size:11px">'+
+      '<button class="btn-secondary" style="font-size:11px" onclick="_grabCrearTareaManual('+g.id+')">➕ Crear tarea</button></div>':'');
   }
   /* v164 — re-analizar: vuelve a clasificar el contexto y re-corre la extracción
      sobre una grabación que ya tenía extracción del esquema viejo */
@@ -15532,6 +15574,23 @@ function _grabExtraccionHtml(g){
     accionHtml+
     reHtml+
   '</div>';
+}
+/* v284 — Botón manual: crea la tarea de una grabación que no tenía compromiso con fecha.
+   La fecha la elige la persona (input date); el resultado queda en extraccion._tarea. */
+async function _grabCrearTareaManual(id){
+  const g=_grabCache[id];
+  if(!g||!g.extraccion){toast('Sin extracción para crear la tarea','error');return;}
+  const inp=document.getElementById('grab-tfecha-'+id);
+  const f=inp&&inp.value;
+  if(!f){toast('Elegí una fecha','warning');return;}
+  try{
+    const r=await _grabCrearTareaAuto(g,g.contexto||g.extraccion._contexto||'venta',g.extraccion,undefined,{fechaManual:f});
+    if(!r.creada){toast('No se creó: '+(r.motivo||'error'),'warning');return;}
+    g.extraccion._tarea=r;
+    try{await gb().update({extraccion:g.extraccion}).eq('id',id);}catch(e){toast('Tarea creada, pero no se guardó el estado: '+e.message,'warning');}
+    toast('✅ Tarea creada');
+    _grabRefrescarDetalle(id);
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 /* Refresca el detalle abierto de una grabación tras cambiar su cache */
 function _grabRefrescarDetalle(id){
