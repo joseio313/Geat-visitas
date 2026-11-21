@@ -618,6 +618,17 @@ body.mia-flotantes-izq #tareasPanel{right:auto !important;left:20px !important}
 .nl-mchip.sel{border-color:var(--gold);color:var(--gold);font-weight:700}
 .duplicate-warning.ok{background:rgba(67,160,71,0.1);border-color:var(--st-reserva)}
 .nl-locked .form-group:not(.nl-cel-grp),.nl-locked .section:not(#nl-sec-datos){opacity:.4;pointer-events:none}
+/* v285 - cargar lead desde capturas (reusa --gold / --gray-*) */
+.cap-zone{border:2px dashed var(--gold);border-radius:8px;padding:14px;text-align:center;font-size:12px;color:var(--gray-100);cursor:pointer}
+.cap-zone.over{background:rgba(242,197,0,0.08)}
+.cap-zone a{color:var(--gold);text-decoration:underline}
+.cap-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.cap-th{position:relative;width:64px;height:64px;border:1px solid var(--gray-600);border-radius:6px;overflow:hidden}
+.cap-th img{width:100%;height:100%;object-fit:cover;display:block}
+.cap-th button{position:absolute;top:0;right:0;background:rgba(0,0,0,.75);color:var(--white);border:0;width:20px;height:20px;cursor:pointer;font-size:14px;line-height:20px;padding:0}
+.cap-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;color:#000;background:var(--gold)}
+.cap-tag.pend{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+.cap-need{border-color:var(--gold)!important}
 .who-has{background:var(--gray-900);padding:7px 9px;border-radius:6px;margin-top:7px;font-family:'Playfair Display',serif;font-size:13px}
 .who-has .name{color:var(--gold);font-weight:700}
 
@@ -2404,6 +2415,17 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
     </div>
     <div class="modal-body">
       <div class="mobile-note"><strong>👋 Solo registro del cliente.</strong> Al guardar aparece en la agenda para programar el 1er intento.</div>
+      <div class="section" id="nl-sec-capturas" style="display:none;border-color:var(--gold)">
+        <div class="section-title">Cargar desde capturas</div>
+        <div class="cap-zone" id="cap-zone" onclick="document.getElementById('cap-file').click()">
+          Arrastrá las capturas acá, pegalas con Ctrl+V o <a>buscá en tu equipo</a>
+        </div>
+        <input type="file" id="cap-file" accept="image/*" multiple style="display:none" onchange="_capAgregar(this.files);this.value=''">
+        <div class="cap-thumbs" id="cap-thumbs"></div>
+        <div class="form-help" id="cap-count">0 de 5 capturas</div>
+        <div class="form-help" id="cap-msg" style="display:none"></div>
+        <button type="button" class="btn-ghost" id="cap-btn" style="border-color:var(--gold);color:var(--gold);margin-top:8px" onclick="_capLeer()">Leer capturas</button>
+      </div>
       <div class="section" id="nl-sec-datos">
         <div class="section-title">Datos del cliente</div>
         <div class="form-group">
@@ -2913,7 +2935,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='284';
+  var CURRENT_VERSION='285';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -13762,10 +13784,127 @@ function _nlReactVista(on){
   const ex=document.getElementById('nl-datos-extra-body');const sec=ex&&ex.parentElement;if(sec)sec.style.display=on?'none':'';
   const pb=document.querySelector('#modalNewLead .action-row button[onclick="toggleNLPerdido()"]');if(pb)pb.style.display=on?'none':'';
 }
+/* v285 - CARGAR LEAD DESDE CAPTURAS. Las imagenes viven solo en memoria (_capImgs):
+   no se escriben en Storage, base ni localStorage; se descartan al guardar/cerrar.
+   La IA nunca elige Departamento, Medio ni "De donde vino". Rellenar != guardar. */
+const CAP_URL=SB_URL+'/functions/v1/geat-captura';
+const CAP_MAX=5;
+let _capImgs=[],_capBusy=false;
+function _capMsg(t,err){const m=document.getElementById('cap-msg');if(!m)return;m.style.display=t?'':'none';m.textContent=t||'';m.style.color=err?'var(--st-atrasado)':'var(--gray-400)';}
+function _capRender(){
+  const w=document.getElementById('cap-thumbs');if(!w)return;
+  w.innerHTML=_capImgs.map(function(im,i){return '<div class="cap-th"><img src="'+im.url+'" alt=""><button type="button" aria-label="Quitar" onclick="_capQuitar('+i+')">×</button></div>';}).join('');
+  const c=document.getElementById('cap-count');if(c)c.textContent=_capImgs.length+' de '+CAP_MAX+' capturas';
+}
+function _capQuitar(i){const im=_capImgs[i];if(im){try{URL.revokeObjectURL(im.url);}catch(e){}}_capImgs.splice(i,1);_capRender();_capMsg('');}
+function _capReset(){
+  _capImgs.forEach(function(im){try{URL.revokeObjectURL(im.url);}catch(e){}});
+  _capImgs=[];_capBusy=false;_capRender();_capMsg('');
+  const b=document.getElementById('cap-btn');if(b){b.disabled=false;b.textContent='Leer capturas';}
+  document.querySelectorAll('#modalNewLead .cap-tag').forEach(function(t){t.remove();});
+  document.querySelectorAll('#modalNewLead .cap-need').forEach(function(t){t.classList.remove('cap-need');});
+}
+function _capAgregar(files){
+  const arr=Array.from(files||[]).filter(function(f){return f&&/^image\//.test(f.type);});
+  if(!arr.length)return;
+  let rechazadas=0;
+  arr.forEach(function(f){
+    if(_capImgs.length>=CAP_MAX){rechazadas++;return;}
+    _capImgs.push({file:f,url:URL.createObjectURL(f)});
+  });
+  _capRender();
+  if(rechazadas)_capMsg('Máximo '+CAP_MAX+' capturas: se ignoraron '+rechazadas+'.',true);else _capMsg('');
+}
+/* reduce a 1600 px de lado, JPEG 0.8; devuelve base64 sin prefijo */
+function _capComprimir(file){
+  return new Promise(function(ok,ko){
+    const u=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){
+      try{
+        const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
+        const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*k));c.height=Math.max(1,Math.round(img.naturalHeight*k));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        const d=c.toDataURL('image/jpeg',0.8);URL.revokeObjectURL(u);
+        ok(d.split(',')[1]);
+      }catch(e){URL.revokeObjectURL(u);ko(e);}
+    };
+    img.onerror=function(){URL.revokeObjectURL(u);ko(new Error('imagen ilegible'));};
+    img.src=u;
+  });
+}
+function _capMarcar(id,leido){
+  const el=document.getElementById(id);if(!el)return;
+  const fg=el.closest('.form-group');const lb=fg&&fg.querySelector('.form-label');if(!lb)return;
+  const old=lb.querySelector('.cap-tag');if(old)old.remove();
+  const t=document.createElement('span');
+  t.className='cap-tag'+(leido?'':' pend');t.textContent=leido?'LEÍDO':'COMPLETAR';
+  lb.appendChild(t);
+  if(!leido)el.classList.add('cap-need');else el.classList.remove('cap-need');
+}
+async function _capLeer(){
+  if(_capBusy)return;
+  if(!_capImgs.length){_capMsg('Agregá al menos una captura.',true);return;}
+  const btn=document.getElementById('cap-btn');
+  _capBusy=true;if(btn){btn.disabled=true;btn.textContent='Leyendo…';}
+  _capMsg('');
+  const falla=function(t){_capMsg(t||'No pude leer las capturas. Cargá los datos a mano.',true);};
+  try{
+    const imagenes=[];
+    for(const im of _capImgs)imagenes.push({media_type:'image/jpeg',data:await _capComprimir(im.file)});
+    const r=await fetch(CAP_URL,{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY},
+      body:JSON.stringify({token:localStorage.getItem('geat_session_token'),imagenes:imagenes})});
+    let j=null;try{j=await r.json();}catch(e){}
+    if(!j||j.ok!==true){
+      if(j&&j.code==='CAP_SESION')falla('Tu sesión venció. Volvé a entrar al CRM. Mientras tanto cargá los datos a mano.');
+      else falla(j&&j.error?String(j.error)+' Cargá los datos a mano.':null);
+      return;
+    }
+    _capAplicar(j.datos||{});
+  }catch(e){falla();}
+  finally{_capBusy=false;if(btn){btn.disabled=false;btn.textContent='Leer capturas';}}
+}
+function _capAplicar(d){
+  const set=function(id,v){const el=document.getElementById(id);if(el&&v){el.value=v;return true;}return false;};
+  const nombre=String(d.nombre||'').trim();
+  const cel=String(d.telefono||'').replace(/\D/g,'').replace(/^591/,'').slice(-8);
+  const celOk=/^[67]\d{7}$/.test(cel);
+  _capMarcar('nl-nombre',set('nl-nombre',nombre));
+  _capMarcar('nl-celular',celOk&&set('nl-celular',cel));
+  let nota=String(d.resumen||'').trim();
+  const f=String(d.primer_mensaje_fecha||'').trim(),h=String(d.primer_mensaje_hora||'').trim();
+  if(f||h)nota+=(nota?'\n':'')+'1er mensaje del cliente: '+[f,h].filter(Boolean).join(' ');
+  _capMarcar('nl-nota',set('nl-nota',nota));
+  /* obligatorios que la IA NUNCA completa: los elige el captador */
+  _capMarcar('nl-ciudad',false);
+  _capMarcar('nl-campana',false);
+  if(celOk)checkDuplicate(cel);  /* flujo v283 intacto: aviso Abrir ficha / Reactivar */
+  _capMsg(nombre||celOk?'Datos leídos. Revisá y completá lo que falta antes de guardar.':'No encontré nombre ni teléfono. Cargá los datos a mano.',!(nombre||celOk));
+}
+function _capInit(){
+  const sec=document.getElementById('nl-sec-capturas');if(!sec)return;
+  sec.style.display=(cu&&['field_capturer','commercial_lead','admin'].indexOf(cu.rol)>=0)?'':'none';
+}
+(function(){
+  document.addEventListener('paste',function(e){
+    const m=document.getElementById('modalNewLead');
+    if(!m||!m.classList.contains('show'))return;
+    const sec=document.getElementById('nl-sec-capturas');if(!sec||sec.style.display==='none')return;
+    const fs=Array.from((e.clipboardData&&e.clipboardData.files)||[]).filter(function(f){return /^image\//.test(f.type);});
+    if(fs.length){e.preventDefault();_capAgregar(fs);}
+  });
+  document.addEventListener('DOMContentLoaded',function(){
+    const z=document.getElementById('cap-zone');if(!z)return;
+    ['dragenter','dragover'].forEach(function(t){z.addEventListener(t,function(e){e.preventDefault();z.classList.add('over');});});
+    ['dragleave','drop'].forEach(function(t){z.addEventListener(t,function(e){e.preventDefault();z.classList.remove('over');});});
+    z.addEventListener('drop',function(e){_capAgregar(e.dataTransfer&&e.dataTransfer.files);});
+  });
+})();
 function _nlDupReset(){
   _nlDupSeq++;_nlDup=null;_nlMotivo='';_nlReactivado=false;_nlReactBusy=false;
   dupBlocked=false;
   _nlLock(false);_nlReactVista(false);
+  _capReset();
   const dw=document.getElementById('dupWarning');if(dw){dw.classList.remove('show','ok');}
 }
 async function checkDuplicate(cel){
@@ -14187,6 +14326,7 @@ function openModal(id){
     var _f=document.getElementById('nl-fecha'); if(_f)_f.value=ymdLocal(new Date());
     var _h=document.getElementById('nl-hora'); if(_h)_h.value='10:00';
     _nlResetFechaContacto();
+    _capInit();
   }
   document.getElementById(id).classList.add('show');
 }
