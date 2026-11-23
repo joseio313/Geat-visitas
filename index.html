@@ -619,8 +619,13 @@ body.mia-flotantes-izq #tareasPanel{right:auto !important;left:20px !important}
 .duplicate-warning.ok{background:rgba(67,160,71,0.1);border-color:var(--st-reserva)}
 .nl-locked .form-group:not(.nl-cel-grp),.nl-locked .section:not(#nl-sec-datos){opacity:.4;pointer-events:none}
 /* v285 - cargar lead desde capturas (reusa --gold / --gray-*) */
-.cap-zone{border:2px dashed var(--gold);border-radius:8px;padding:14px;text-align:center;font-size:12px;color:var(--gray-100);cursor:pointer}
-.cap-zone.over{background:rgba(242,197,0,0.08)}
+.cap-zone{border:2px dashed var(--gold);border-radius:8px;padding:16px 14px;min-height:110px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:var(--gray-100);cursor:pointer;outline:none}
+.cap-zone .cap-ico{font-size:28px;line-height:1}
+.cap-zone .cap-nota{font-size:11px;color:var(--gray-400)}
+.cap-zone .cap-pegar{display:none;font-size:13px;font-weight:700;color:var(--gold)}
+.cap-zone:focus{border-width:3px;border-color:var(--gold);background:rgba(242,197,0,0.06);box-shadow:0 0 0 2px rgba(242,197,0,0.35)}
+.cap-zone:focus .cap-pegar{display:block}
+.cap-zone.over{background:rgba(242,197,0,0.12);border-width:3px}
 .cap-zone a{color:var(--gold);text-decoration:underline}
 .cap-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cap-th{position:relative;width:64px;height:64px;border:1px solid var(--gray-600);border-radius:6px;overflow:hidden}
@@ -2417,8 +2422,11 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
       <div class="mobile-note"><strong>👋 Solo registro del cliente.</strong> Al guardar aparece en la agenda para programar el 1er intento.</div>
       <div class="section" id="nl-sec-capturas" style="display:none;border-color:var(--gold)">
         <div class="section-title">Cargar desde capturas</div>
-        <div class="cap-zone" id="cap-zone" onclick="document.getElementById('cap-file').click()">
-          Arrastrá las capturas acá, pegalas con Ctrl+V o <a>buscá en tu equipo</a>
+        <div class="cap-zone" id="cap-zone" tabindex="0" onclick="this.focus()">
+          <div class="cap-ico">🖼️</div>
+          <div>Arrastrá las capturas acá, hacé clic y pegalas con Ctrl+V, o <a role="button" tabindex="0" onclick="event.stopPropagation();document.getElementById('cap-file').click()" onkeydown="if(event.key==='Enter'){event.stopPropagation();document.getElementById('cap-file').click();}">buscá en tu equipo</a></div>
+          <div class="cap-pegar">Pegá ahora con Ctrl+V</div>
+          <div class="cap-nota">Hasta 5 capturas del mismo cliente · No se guardan</div>
         </div>
         <input type="file" id="cap-file" accept="image/*" multiple style="display:none" onchange="_capAgregar(this.files);this.value=''">
         <div class="cap-thumbs" id="cap-thumbs"></div>
@@ -2935,7 +2943,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='285';
+  var CURRENT_VERSION='286';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -13864,35 +13872,48 @@ async function _capLeer(){
   }catch(e){falla();}
   finally{_capBusy=false;if(btn){btn.disabled=false;btn.textContent='Leer capturas';}}
 }
+/* COMPLETAR solo en obligatorios vacios, y solo despues de leer */
+function _capFalta(id){
+  const el=document.getElementById(id);if(!el||!el.offsetParent)return;
+  if(!String(el.value||'').trim())_capMarcar(id,false);
+}
 function _capAplicar(d){
   const set=function(id,v){const el=document.getElementById(id);if(el&&v){el.value=v;return true;}return false;};
   const nombre=String(d.nombre||'').trim();
+  if(!nombre&&!String(d.telefono||'').replace(/\D/g,'')){
+    _capMsg('No encontré un chat de WhatsApp en estas capturas. Subí capturas de la conversación con el cliente.',true);
+    return;
+  }
   const cel=String(d.telefono||'').replace(/\D/g,'').replace(/^591/,'').slice(-8);
   const celOk=/^[67]\d{7}$/.test(cel);
-  _capMarcar('nl-nombre',set('nl-nombre',nombre));
-  _capMarcar('nl-celular',celOk&&set('nl-celular',cel));
+  if(set('nl-nombre',nombre))_capMarcar('nl-nombre',true);
+  if(celOk&&set('nl-celular',cel))_capMarcar('nl-celular',true);
   let nota=String(d.resumen||'').trim();
   const f=String(d.primer_mensaje_fecha||'').trim(),h=String(d.primer_mensaje_hora||'').trim();
   if(f||h)nota+=(nota?'\n':'')+'1er mensaje del cliente: '+[f,h].filter(Boolean).join(' ');
-  _capMarcar('nl-nota',set('nl-nota',nota));
-  /* obligatorios que la IA NUNCA completa: los elige el captador */
-  _capMarcar('nl-ciudad',false);
-  _capMarcar('nl-campana',false);
+  if(set('nl-nota',nota))_capMarcar('nl-nota',true);
+  /* obligatorios: lo que siga vacio se marca COMPLETAR (ciudad y campana los elige el captador, nunca la IA) */
+  ['nl-nombre','nl-celular','nl-ciudad','nl-campana'].forEach(_capFalta);
   if(celOk)checkDuplicate(cel);  /* flujo v283 intacto: aviso Abrir ficha / Reactivar */
-  _capMsg(nombre||celOk?'Datos leídos. Revisá y completá lo que falta antes de guardar.':'No encontré nombre ni teléfono. Cargá los datos a mano.',!(nombre||celOk));
+  _capMsg('Datos leídos. Revisá y completá lo que falta antes de guardar.');
 }
+/* v286 - Ctrl+V: listener a nivel document SOLO con el modal Crear Lead abierto.
+   Sin imagen en el portapapeles no hace nada ni preventDefault (pegar texto sigue igual). */
+function _capOnPaste(e){
+  const sec=document.getElementById('nl-sec-capturas');if(!sec||sec.style.display==='none')return;
+  const its=Array.from((e.clipboardData&&e.clipboardData.items)||[]);
+  const fs=[];
+  its.forEach(function(it){if(it&&it.kind==='file'&&/^image\//.test(it.type)){const f=it.getAsFile();if(f)fs.push(f);}});
+  if(!fs.length)return;
+  e.preventDefault();_capAgregar(fs);
+}
+function _capPasteOn(){document.addEventListener('paste',_capOnPaste);}
+function _capPasteOff(){document.removeEventListener('paste',_capOnPaste);}
 function _capInit(){
   const sec=document.getElementById('nl-sec-capturas');if(!sec)return;
   sec.style.display=(cu&&['field_capturer','commercial_lead','admin'].indexOf(cu.rol)>=0)?'':'none';
 }
 (function(){
-  document.addEventListener('paste',function(e){
-    const m=document.getElementById('modalNewLead');
-    if(!m||!m.classList.contains('show'))return;
-    const sec=document.getElementById('nl-sec-capturas');if(!sec||sec.style.display==='none')return;
-    const fs=Array.from((e.clipboardData&&e.clipboardData.files)||[]).filter(function(f){return /^image\//.test(f.type);});
-    if(fs.length){e.preventDefault();_capAgregar(fs);}
-  });
   document.addEventListener('DOMContentLoaded',function(){
     const z=document.getElementById('cap-zone');if(!z)return;
     ['dragenter','dragover'].forEach(function(t){z.addEventListener(t,function(e){e.preventDefault();z.classList.add('over');});});
@@ -14327,11 +14348,13 @@ function openModal(id){
     var _h=document.getElementById('nl-hora'); if(_h)_h.value='10:00';
     _nlResetFechaContacto();
     _capInit();
+    _capPasteOff();_capPasteOn();
   }
   document.getElementById(id).classList.add('show');
 }
 function closeModal(id){
   document.getElementById(id).classList.remove('show');
+  if(id==='modalNewLead'){try{_capPasteOff();}catch(_e){}}
   if(id==='modalConfLead'){
     _grabOrigenRegId=null;_grabOrigenExtraccion=null;
   }
