@@ -2943,7 +2943,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='286';
+  var CURRENT_VERSION='287';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -13845,7 +13845,9 @@ function _capMarcar(id,leido){
   const fg=el.closest('.form-group');const lb=fg&&fg.querySelector('.form-label');if(!lb)return;
   const old=lb.querySelector('.cap-tag');if(old)old.remove();
   const t=document.createElement('span');
-  t.className='cap-tag'+(leido?'':' pend');t.textContent=leido?'LEÍDO':'COMPLETAR';
+  /* v287: leido puede ser true (LEÍDO), false (COMPLETAR) o 'revisar' (REVISAR: fecha deducida de Hoy/Ayer/día de la semana) */
+  const rev=leido==='revisar';
+  t.className='cap-tag'+(leido&&!rev?'':' pend');t.textContent=rev?'REVISAR':(leido?'LEÍDO':'COMPLETAR');
   lb.appendChild(t);
   if(!leido)el.classList.add('cap-need');else el.classList.remove('cap-need');
 }
@@ -13877,24 +13879,71 @@ function _capFalta(id){
   const el=document.getElementById(id);if(!el||!el.offsetParent)return;
   if(!String(el.value||'').trim())_capMarcar(id,false);
 }
+/* v287 - nombre: un "nombre" hecho solo de digitos, +, espacios o guiones es un numero, no un nombre */
+function _capNombre(v){
+  const t=String(v||'').replace(/[‎‏‪-‮⁦-⁩]/g,'').trim();
+  return /^[\d+\s\-]*$/.test(t)?'':t;
+}
+/* v287 - celular: '+591 71348236' -> '71348236'. Saca todo lo que no sea digito,
+   el 591 solo si sobra (mas de 8 digitos) y devuelve '' si no quedan 8 digitos de movil. */
+function _capCelular(v){
+  let d=String(v||'').replace(/\D/g,'');
+  if(d.length>8&&d.indexOf('591')===0)d=d.slice(3);
+  return /^[67]\d{7}$/.test(d)?d:'';
+}
+/* v287 - "¿Cuando te contacto?" desde la fecha/hora del 1er mensaje del cliente.
+   Devuelve {v:'YYYY-MM-DDTHH:mm', rev:bool} o null (sin fecha o sin hora: no se toca el campo).
+   dd/mm o dd/mm/aaaa = fecha explicita (rev=false). Hoy / Ayer / dia de la semana se convierten
+   con la fecha de hoy en Bolivia (dia de la semana = el mas reciente YA pasado) y piden REVISAR.
+   ahoraIso es opcional (solo para probar). */
+function _capFechaContacto(fecha,hora,ahoraIso){
+  const h=String(hora||'').trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  const f=String(fecha||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(!h||!f)return null;
+  const hh=('0'+h[1]).slice(-2),mi=h[2];
+  const ahora=ahoraIso?new Date(ahoraIso):new Date();
+  const hoy=ymdBolivia(ahora).split('-').map(Number);
+  const hoyUTC=Date.UTC(hoy[0],hoy[1]-1,hoy[2]);
+  const ymd=function(ms){return new Date(ms).toISOString().slice(0,10);}; /* ms en UTC puro: aca toISOString es exacto */
+  let dia=null,rev=false;
+  const m=f.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2}|\d{4}))?$/);
+  if(m){
+    const dd=+m[1],mm=+m[2];let yy=m[3]?+m[3]:hoy[0];if(m[3]&&m[3].length===2)yy+=2000;
+    const ms=Date.UTC(yy,mm-1,dd),chk=new Date(ms);
+    if(chk.getUTCFullYear()!==yy||chk.getUTCMonth()!==mm-1||chk.getUTCDate()!==dd)return null;
+    if(!m[3]&&ms>hoyUTC)return null; /* dd/mm sin año en el futuro: no se adivina el año */
+    dia=ymd(ms);
+  }else{
+    const DIAS={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
+    if(f==='hoy')dia=ymd(hoyUTC);
+    else if(f==='ayer')dia=ymd(hoyUTC-864e5);
+    else if(DIAS.hasOwnProperty(f)){
+      const dow=new Date(hoyUTC).getUTCDay();
+      const atras=((dow-DIAS[f])+7)%7||7;
+      dia=ymd(hoyUTC-atras*864e5);
+    }else return null;
+    rev=true;
+  }
+  const v=dia+'T'+hh+':'+mi;
+  if(v>_dtLocalBolivia(ahora))return null; /* nunca una hora futura (el campo tiene max=ahora) */
+  return {v:v,rev:rev};
+}
 function _capAplicar(d){
   const set=function(id,v){const el=document.getElementById(id);if(el&&v){el.value=v;return true;}return false;};
-  const nombre=String(d.nombre||'').trim();
-  if(!nombre&&!String(d.telefono||'').replace(/\D/g,'')){
+  const nombre=_capNombre(d.nombre);
+  const cel=_capCelular(d.telefono);
+  if(!nombre&&!cel){
     _capMsg('No encontré un chat de WhatsApp en estas capturas. Subí capturas de la conversación con el cliente.',true);
     return;
   }
-  const cel=String(d.telefono||'').replace(/\D/g,'').replace(/^591/,'').slice(-8);
-  const celOk=/^[67]\d{7}$/.test(cel);
   if(set('nl-nombre',nombre))_capMarcar('nl-nombre',true);
-  if(celOk&&set('nl-celular',cel))_capMarcar('nl-celular',true);
-  let nota=String(d.resumen||'').trim();
-  const f=String(d.primer_mensaje_fecha||'').trim(),h=String(d.primer_mensaje_hora||'').trim();
-  if(f||h)nota+=(nota?'\n':'')+'1er mensaje del cliente: '+[f,h].filter(Boolean).join(' ');
-  if(set('nl-nota',nota))_capMarcar('nl-nota',true);
+  if(cel&&set('nl-celular',cel))_capMarcar('nl-celular',true);
+  /* v287: la nota NO se rellena (ni resumen ni "1er mensaje del cliente") */
+  const fc=_capFechaContacto(d.primer_mensaje_fecha,d.primer_mensaje_hora);
+  if(fc&&set('nl-fecha-contacto',fc.v))_capMarcar('nl-fecha-contacto',fc.rev?'revisar':true);
   /* obligatorios: lo que siga vacio se marca COMPLETAR (ciudad y campana los elige el captador, nunca la IA) */
   ['nl-nombre','nl-celular','nl-ciudad','nl-campana'].forEach(_capFalta);
-  if(celOk)checkDuplicate(cel);  /* flujo v283 intacto: aviso Abrir ficha / Reactivar */
+  if(cel)checkDuplicate(cel);  /* flujo v283 intacto: aviso Abrir ficha / Reactivar */
   _capMsg('Datos leídos. Revisá y completá lo que falta antes de guardar.');
 }
 /* v286 - Ctrl+V: listener a nivel document SOLO con el modal Crear Lead abierto.
