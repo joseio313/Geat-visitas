@@ -2943,7 +2943,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='287';
+  var CURRENT_VERSION='288';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -11532,10 +11532,14 @@ async function guardarAgendarVisita(){
     // v194 — .is('visita_nro',null): la fila de la visita recién creada NO puede
     // caer acá. Completarla dispararía fn_registrar_visita_atendida y el lead
     // pasaría a visita_realizada sin que el cliente haya venido.
+    // v288 — .lte('fecha_programada',ahora): solo se cierra la tarea de la etapa
+    // que ya venció. Un recordatorio FUTURO del mismo lead (ej. lead 8855, tarea
+    // 10480 "recordarle la visita" del 29/11) quedaba completado solo al agendar.
     try{
       const{data:actAbierta}=await sb.from('agenda_personal').select('id')
         .eq('lead_id',leadId).eq('colaborador',l.captador||'').eq('completada',false).eq('activo',true)
         .is('visita_nro',null)
+        .lte('fecha_programada',new Date().toISOString())
         .order('fecha_programada').limit(1);
       if(actAbierta&&actAbierta.length){
         await sb.from('agenda_personal').update({completada:true,completada_en:new Date().toISOString()}).eq('id',actAbierta[0].id);
