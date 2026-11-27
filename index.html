@@ -1648,6 +1648,32 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
 .cw-btn.pri{background:var(--ac1);color:var(--on-ac);border-color:var(--ac1)}
 .cw-x{float:right;min-width:44px;min-height:var(--ceo-tap,44px);font-size:20px;background:transparent;border:0;color:var(--ceo-ink);cursor:pointer}
 @media(max-width:1100px){.cw-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* ═══ v289 — Mi agenda del cerrador. Reusa cw-*; acá solo lo propio. ═══ */
+.cw-grid.cer-grid{grid-template-columns:repeat(7,minmax(0,1fr))}
+/* .screen dentro del flex-column de #app queda en shrink-to-fit: sin width:100% la
+   franja horizontal (max-content) la estira más allá de la ventana. */
+#screen-cerrador{width:100%;min-width:0;box-sizing:border-box}
+.cer-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 12px}
+.cer-kpi{background:var(--ceo-card);border:1px solid var(--ceo-line);border-radius:var(--ceo-radius);padding:10px 12px;color:var(--ceo-ink)}
+.cer-kpi .v{font-family:'Playfair Display',serif;font-weight:900;font-size:26px;line-height:1.1}
+.cer-kpi .l{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.cer-lane{border:1px solid var(--st-atrasado);background:color-mix(in srgb,var(--st-atrasado) 14%,transparent);border-radius:var(--ceo-radius);padding:10px 12px;margin-bottom:12px;color:var(--ceo-ink)}
+.cer-lane.res{border-color:var(--st-reserva);background:color-mix(in srgb,var(--st-reserva) 12%,transparent)}
+.cer-lane .t{font-weight:800;color:var(--st-atrasado);margin-bottom:8px;font-size:14px}
+.cer-lane.res .t{color:var(--st-reserva)}
+.cer-lane-list{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.cer-lane-list .cw-card{min-width:210px;width:auto;flex:0 0 auto}
+.cer-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.cer-rango{font-weight:800;color:var(--ceo-ink)}
+.cer-k-vis{--cwk:var(--st-vis-of)}.cer-k-reu{--cwk:var(--ac2,#2BB6FF)}.cer-k-res{--cwk:var(--st-reserva)}.cer-k-urg{--cwk:var(--st-atrasado)}
+.cw-card.cer-ok{background:color-mix(in srgb,var(--st-reserva) 28%,transparent);border-color:var(--st-reserva);border-left-color:var(--st-reserva)}
+.cw-card.cer-fin{opacity:.6}
+.cer-undo{margin-top:6px;min-height:34px;padding:0 12px;border-radius:17px;border:1px solid var(--ceo-ink);background:transparent;color:var(--ceo-ink);font-weight:700;cursor:pointer}
+.cer-cnt{font-size:11px;font-weight:700;opacity:.85;margin-top:2px}
+.cw-btn[disabled]{opacity:.45;cursor:not-allowed}
+.cer-lista-l{display:block;width:100%;text-align:left;margin-top:6px}
+@media(max-width:1100px){.cw-grid.cer-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){.cw-grid.cer-grid{grid-template-columns:minmax(0,1fr)}.cer-top{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){
   .cw-grid{grid-template-columns:minmax(0,1fr)}
   .cw-panel{top:auto;left:0;width:100%;max-height:88vh;border-radius:18px 18px 0 0;transform:translateY(105%)}
@@ -1738,6 +1764,9 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
          para todos menos admin (se prende en startApp, gate real en _SCREEN_ROLES). -->
     <div class="nav-tab" id="tab-inicio" style="display:none" onclick="switchTab(this,'screen-inicio');renderInicio()"><span class="nt-ic">🏠</span> <span class="nt-lb">Inicio</span></div>
     <div class="nav-tab" id="tab-mi-agenda" style="display:none" onclick="switchTab(this,'screen-mi-agenda');renderMiAgenda()"><span class="nt-ic">🗓️</span> <span class="nt-lb">Mi agenda</span></div>
+    <!-- v289 — "Mi agenda" del CERRADOR (solo commercial_lead). Es otra pantalla que
+         la Mi agenda del CEO: no se tocan ni screen-mi-agenda ni screen-inicio. -->
+    <div class="nav-tab" id="tab-cerrador" style="display:none" onclick="switchTab(this,'screen-cerrador')"><span class="nt-ic">🗓️</span> <span class="nt-lb">Mi agenda</span></div>
     <div class="nav-tab active" id="tab-week" onclick="switchTab(this,'screen-week')"><span class="nt-ic">📅</span> <span class="nt-lb" data-c="Semana">Agenda semanal</span></div>
     <!-- v225 — "🗓️ Vista mensual" y "📥 Sin asignar" salieron de la barra (el CEO lo
          confirmo). El mes vive dentro de Agenda semanal desde v218 (toggle MES) y
@@ -1922,6 +1951,25 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
   <!-- ══ SCREEN: MIS NÚMEROS (v237) — todos los roles ══
        Cada asesor ve LO SUYO sin pedírselo a nadie. admin y commercial_lead
        tienen además el selector de asesor y el total del equipo. -->
+  <!-- ══ SCREEN: MI AGENDA DEL CERRADOR (v289) — solo commercial_lead. La dibuja
+       renderAgendaCerrador(); reusa las clases cw-* de la agenda de captadoras. ══ -->
+  <section id="screen-cerrador" class="screen">
+    <div class="screen-title"><h1>Mi <span class="gold">agenda</span></h1></div>
+    <div id="cer-kpis" class="cer-top"></div>
+    <div id="cer-urg"></div>
+    <div id="cer-res"></div>
+    <div class="cer-bar">
+      <button type="button" class="cw-btn" onclick="cerSemana(-1)">◀</button>
+      <button type="button" class="cw-btn" onclick="cerSemana(0)">Hoy</button>
+      <button type="button" class="cw-btn" onclick="cerSemana(1)">▶</button>
+      <span id="cer-rango" class="cer-rango"></span>
+      <span style="flex:1"></span>
+      <button type="button" class="cw-btn pri" onclick="cerRegistrarReunion()">＋ Registrar reunión</button>
+      <button type="button" class="cw-btn" onclick="cerTodosMisLeads()">📋 Ver todos mis leads</button>
+    </div>
+    <div id="cer-grid" class="cw-grid cer-grid"></div>
+  </section>
+
   <section id="screen-misnumeros" class="screen">
     <div class="screen-title">
       <h1>Mis <span class="gold">números</span></h1>
@@ -2943,7 +2991,7 @@ body.tema-cap .btn-primary,body.tema-cap .btn-secondary,body.tema-cap .btn-ghost
    3. Si después de recargar sigue el skew, muestra toast manual, nunca loopea.
 ════════════════════════════════════════ */
 (function(){
-  var CURRENT_VERSION='288';
+  var CURRENT_VERSION='289';
   /* v157 — el <title> y el subtítulo del login decían "v80" hardcodeado desde la v80:
      mentían en cada diagnóstico de deploy. Ahora leen la versión real. */
   try{
@@ -4582,6 +4630,9 @@ function startApp(){
     const rbh=document.getElementById('recBtnHeader');
     if(rbh)rbh.style.display='inline-flex';
   }
+  /* v289 — cerrador (commercial_lead): menú propio. Va DESPUÉS de los bloques
+     de arriba porque Radar se prende para admin+commercial_lead y acá se apaga. */
+  if(cu.rol==='commercial_lead')aplicarTemaCerrador();
   // Idle logout
   iniciarIdleTimer();
   initApp();
@@ -4614,6 +4665,11 @@ async function initApp(){
   if(cu.rol==='admin'){
     const _tma=document.getElementById('tab-inicio')||document.getElementById('tab-mi-agenda');
     if(_tma)switchTab(_tma,_tma.id==='tab-inicio'?'screen-inicio':'screen-mi-agenda');
+  }
+  /* v289 — el cerrador entra directo a su Mi agenda (no tiene Inicio). */
+  if(cu.rol==='commercial_lead'){
+    const _tcer=document.getElementById('tab-cerrador');
+    if(_tcer)switchTab(_tcer,'screen-cerrador');
   }
   /* v226 — badges de la barra. Va al final: necesita los catálogos cargados
      (zonasPrecio para el matcher, motivosPerdida para el Radar) y las pestañas
@@ -5162,6 +5218,9 @@ const _SCREEN_ROLES={
   'screen-inicio'       :['admin'],   /* v260 — panel del CEO */
   /* v229 — Mi agenda: la agenda personal del CEO. Solo admin, ni socios. */
   'screen-mi-agenda'    :['admin'],
+  /* v289 — Mi agenda del CERRADOR: solo commercial_lead (David). Si se cambia
+     acá, cambiar también aplicarTemaCerrador(). */
+  'screen-cerrador'     :['commercial_lead'],
   'screen-gerencia'     :['admin'],
   'screen-cobranzas'    :['admin'],
   'screen-admin'        :['admin'],
@@ -5238,6 +5297,7 @@ function switchTab(tab,screenId){
   window.scrollTo(0,0);
   if(screenId==='screen-mi-agenda')renderMiAgenda();
   if(screenId==='screen-inicio')renderInicio();
+  if(screenId==='screen-cerrador')renderAgendaCerrador();
   if(screenId==='screen-week'){renderWeek();if(cu&&(cu.rol==='field_capturer'||cu.rol==='commercial_lead'))renderParaHoy();if(cu&&cu.rol==='admin')renderParteDia();}
   /* v225 — se quitó el `if(screenId==='screen-month')renderMonth()`: esa pestaña
      ya no existe y el mes lo dibuja renderWeek() cuando _weekView==='mes'. */
@@ -6253,6 +6313,595 @@ async function cwReprog(que){
     toast('📅 Reprogramada para '+_cwDiaTxt(iso)+' · '+_cwHm(iso));
     await _cwRefrescar();
   }catch(e){toast('Error: '+((e&&e.message)||'no se pudo reprogramar'),'error');}
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  v289 · MI AGENDA DEL CERRADOR (solo rol commercial_lead — David)     ║
+   ╚═══════════════════════════════════════════════════════════════════════╝
+   Semana lunes→domingo con SOLO el trabajo del cerrador (no las tareas de las
+   captadoras):
+     amarillo = visitas  → leads.visita_fecha en la semana y cerrador = yo
+     azul     = reuniones de seguimiento → agenda_personal mía, no-visita
+     verde    = reservas → leads.fecha_reserva, con el paso del protocolo
+   Franja roja "Piden acción hoy": visitó y no decidió (+3 días sin contacto) y
+   en seguimiento sin próxima acción (ninguna tarea abierta).
+   Arriba 4 números del MES (contratos por fecha_contrato, reservas, visitas
+   hechas, m²). Sin montos.
+
+   CÓMO ESCRIBE CADA BOTÓN (rutas que el CRM ya usa, ninguna nueva):
+   · Vino     → completada=true sobre la fila de la VISITA que ya empezó. La base
+                (fn_registrar_visita_atendida) pone visita_realizada +
+                visito_oficina. visito_oficina NUNCA se escribe a mano acá. Solo
+                se habilita desde la hora de la visita.
+   · No vino  → guardarResultadoVisita() con el chip no_asistio (v239): mismo
+                código, misma baja con activo=false.
+   · Reagendar visita → el modal de Reprogramar visita (v241, 3 tablas en orden).
+   · Se hizo  → PRIMERO la próxima acción (fila nueva), DESPUÉS completada=true:
+                trg_exigir_siguiente_paso rechaza el orden inverso (v144).
+   · Próxima acción / Poner fecha → fila nueva en agenda_personal +
+                leads.proximo_contacto + historial_lead.
+   · Marcar paso hecho → historial_lead tipo_actividad='paso_reserva',
+                resultado='paso N'. Sin migración: el paso actual sale del
+                último registro. No bloquea el cierre.
+   · Ningún botón toca leads.etapa: las fases no se saltan desde acá.
+   · DESHACER: los resultados (Vino, No vino, Se hizo, Paso, Escribir ahora) se
+     escriben CER_UNDO_MS después del toque. Antes de eso Deshacer cancela sin
+     haber escrito nada; deshacer DESPUÉS exigiría revertir lo que hizo el
+     trigger (visito_oficina a mano), que está prohibido. Si la pestaña se
+     oculta o se cierra, lo pendiente se escribe en el acto. */
+const CER_PASOS_RESERVA=[
+  'Conocer el motivo del cliente',
+  'Indagar: GPS del terreno, presupuesto, calificación, cuándo construir',
+  'Presentación de proyectos y de la empresa',
+  'Verificación de calificar a financiamiento bancario',
+  'Coordinar visita inmediata al terreno y llevar propuesta',
+  'Gestionar financiamiento bancario hasta el desembolso',
+  'Brindar beneficios extras según necesidades para cierre',
+  'Estrategia: hacer sentir que la ayuda depende de su confirmación'
+];
+const CER_UNDO_MS=6000;
+const CER_DIAS_SIN_CONTACTO=3;
+const CER_LCOLS='id,nombre,celular,etapa,estado,cerrador,visita_fecha,visito_oficina,fecha_visita_oficina,resultado_estado,proximo_contacto,fecha_reserva,archivado';
+const CER_ORD=['','1ra','2da','3ra','4ta','5ta','6ta','7ma','8va','9na','10ma'];
+let _cer={ws:null,items:{},pend:{},ok:{},data:null,leadsTodos:null};
+function _cerEsRol(){return !!(cu&&cu.rol==='commercial_lead');}
+function aplicarTemaCerrador(){
+  /* Mismo riel y mismo vidrio que admin/captadoras (body.tema-ceo). */
+  aplicarTemaCaptadora();
+  document.body.classList.add('tema-cer');
+  const show=function(id,on){const e=document.getElementById(id);if(e)e.style.display=on?'':'none';};
+  show('tab-cerrador',true);
+  /* Ocultos SOLO para este rol (el código sigue): Agenda semanal general, Mis números, Radar. */
+  show('tab-week',false); show('tab-misnumeros',false); show('tab-radar',false);
+}
+function _cerVivo(l){return l&&l.archivado!==true;}
+function _cerNoArch(arr){return (arr||[]).filter(_cerVivo);}
+async function _cerLeadsPorIds(ids){
+  const out={};
+  for(let i=0;i<ids.length;i+=150){
+    const{data,error}=await sb.from('leads').select(CER_LCOLS).in('id',ids.slice(i,i+150));
+    if(error)throw error;
+    (data||[]).forEach(function(l){out[l.id]=l;});
+  }
+  return out;
+}
+function _cerCel(l){const c=String((l&&l.celular)||'').replace(/\D/g,'');return c?c.slice(-8):'';}
+function _cerPasoActual(pasos,leadId){
+  /* el último paso hecho = el N más alto registrado para ese lead */
+  let n=0;
+  (pasos||[]).forEach(function(p){if(p.lead_id===leadId){const m=/paso\s*(\d+)/i.exec(p.resultado||'');if(m)n=Math.max(n,+m[1]);}});
+  return n;
+}
+function cerSemana(d){
+  if(d===0)_cer.ws=getMonday(new Date());
+  else _cer.ws=addDaysLP(_cer.ws||getMonday(new Date()),7*d);
+  renderAgendaCerrador();
+}
+async function renderAgendaCerrador(){
+  if(!_cerEsRol())return;
+  if(!_cer.ws)_cer.ws=getMonday(new Date());
+  const ws=_cer.ws, we=addDaysLP(ws,7), yo=cu.nombre, now=new Date();
+  const g=document.getElementById('cer-grid'); if(!g)return;
+  const pIni=_lpParts(ws), pFin=_lpParts(addDaysLP(ws,6));
+  const rg=document.getElementById('cer-rango'); if(rg)rg.textContent=pIni.d+'/'+(pIni.m+1)+' – '+pFin.d+'/'+(pFin.m+1);
+  let D;
+  try{
+    const[rVis,rReu,rRes,rUrg]=await Promise.all([
+      sb.from('leads').select(CER_LCOLS).eq('cerrador',yo).gte('visita_fecha',ws.toISOString()).lt('visita_fecha',we.toISOString()).order('visita_fecha').limit(500),
+      _sinCeo(sb.from('agenda_personal').select('id,lead_id,tipo,tipo_original,titulo,nota,fecha_programada,completada,nota_resultado'))
+        .eq('colaborador',yo).eq('activo',true).not('lead_id','is',null).not('tipo','ilike','visita%')
+        .gte('fecha_programada',ws.toISOString()).lt('fecha_programada',we.toISOString()).order('fecha_programada').limit(500),
+      sb.from('leads').select(CER_LCOLS).eq('cerrador',yo).not('fecha_reserva','is',null).limit(500),
+      sb.from('leads').select(CER_LCOLS).eq('cerrador',yo).in('estado',['visita_realizada','en_seguimiento']).limit(1000)
+    ]);
+    [rVis,rReu,rRes,rUrg].forEach(function(r){if(r.error)throw r.error;});
+    /* Visitas de DOS fuentes. Medido el 27-nov-2026: desde octubre casi todas las
+       visitas nuevas quedan con leads.cerrador NULL, pero la fila de la visita en
+       agenda_personal SÍ está a nombre del cerrador. Solo con leads.cerrador el
+       calendario salía vacío. */
+    const{data:apVis,error:eApV}=await sb.from('agenda_personal').select('id,lead_id,tipo,fecha_programada,completada,activo')
+      .eq('colaborador',yo).eq('activo',true).ilike('tipo','visita%').not('lead_id','is',null)
+      .gte('fecha_programada',ws.toISOString()).lt('fecha_programada',we.toISOString()).limit(500);
+    if(eApV)throw eApV;
+    const visLeadsCer=_cerNoArch(rVis.data);
+    const faltan=[...new Set((apVis||[]).map(function(a){return a.lead_id;}))].filter(function(id){return !visLeadsCer.some(function(l){return l.id===id;});});
+    const visLeadsAp=faltan.length?await _cerLeadsPorIds(faltan):{};
+    const vis=visLeadsCer.concat(Object.keys(visLeadsAp).map(function(k){return visLeadsAp[k];}).filter(_cerVivo));
+    const reu=rReu.data||[];
+    const wsY=ymdBolivia(ws), weY=ymdBolivia(we);
+    const res=_cerNoArch(rRes.data).filter(function(l){return l.estado==='reservado'||(l.fecha_reserva>=wsY&&l.fecha_reserva<weY);});
+    const urgL=_cerNoArch(rUrg.data);
+    /* datos de los leads de las reuniones (nombre, celular, estado) */
+    const reuIds=[...new Set(reu.map(function(a){return a.lead_id;}))];
+    const reuLeads=reuIds.length?await _cerLeadsPorIds(reuIds):{};
+    /* filas de visita de los leads con visita esta semana */
+    const visIds=vis.map(function(l){return l.id;});
+    let visRows=[];
+    if(visIds.length){
+      const{data,error}=await sb.from('agenda_personal').select('id,lead_id,tipo,fecha_programada,completada,activo')
+        .in('lead_id',visIds).ilike('tipo','visita%').limit(1000);
+      if(error)throw error; visRows=data||[];
+    }
+    /* ordinal de la reunión: cuántas reuniones de seguimiento mías tiene el lead hasta esa fecha (+1 por la visita) */
+    let segTodas=[];
+    if(reuIds.length){
+      const{data,error}=await sb.from('agenda_personal').select('id,lead_id,fecha_programada').eq('colaborador',yo)
+        .eq('activo',true).ilike('tipo','seguimiento').in('lead_id',reuIds).order('fecha_programada').limit(1000);
+      if(error)throw error; segTodas=data||[];
+    }
+    /* pasos del protocolo de reserva */
+    const resIds=res.map(function(l){return l.id;});
+    let pasos=[];
+    if(resIds.length){
+      const{data,error}=await sb.from('historial_lead').select('lead_id,resultado').eq('tipo_actividad','paso_reserva').in('lead_id',resIds).limit(1000);
+      if(error)throw error; pasos=data||[];
+    }
+    /* urgentes: último contacto (historial) y tareas abiertas */
+    const urgIds=urgL.map(function(l){return l.id;});
+    let ultimo={}, abiertas={};
+    if(urgIds.length){
+      const[rh,ra]=await Promise.all([
+        sb.from('historial_lead').select('lead_id,fecha_actividad').in('lead_id',urgIds).order('fecha_actividad',{ascending:false}).limit(1000),
+        sb.from('agenda_personal').select('lead_id').in('lead_id',urgIds).eq('activo',true).eq('completada',false).limit(1000)
+      ]);
+      if(rh.error)throw rh.error; if(ra.error)throw ra.error;
+      (rh.data||[]).forEach(function(h){if(h.fecha_actividad&&!ultimo[h.lead_id])ultimo[h.lead_id]=h.fecha_actividad;});
+      (ra.data||[]).forEach(function(a){abiertas[a.lead_id]=true;});
+    }
+    const urg=[];
+    urgL.forEach(function(l){
+      if(l.estado==='visita_realizada'){
+        const ref=ultimo[l.id]||(l.fecha_visita_oficina?l.fecha_visita_oficina+'T12:00:00-04:00':null)||l.visita_fecha;
+        const dias=ref?Math.floor((now-new Date(ref))/86400000):null;
+        if(dias!=null&&dias>CER_DIAS_SIN_CONTACTO)urg.push({l:l,motivo:'Visitó y no decidió · '+dias+' días sin contacto'});
+      }else if(l.estado==='en_seguimiento'&&!abiertas[l.id]){
+        urg.push({l:l,motivo:'En seguimiento sin próxima acción'});
+      }
+    });
+    /* 4 números del mes (Bolivia). Contratos por fecha_contrato (v240). */
+    const pm=_lpParts(now), mIni=pm.y+'-'+String(pm.m+1).padStart(2,'0')+'-01';
+    const pmS=_lpParts(_lpDate(pm.y,pm.m+1,1)), mFin=pmS.y+'-'+String(pmS.m+1).padStart(2,'0')+'-01';
+    const[kC,kR,kV]=await Promise.all([
+      sb.from('leads').select('id,metros_cuadrados').eq('cerrador',yo).gte('fecha_contrato',mIni).lt('fecha_contrato',mFin).limit(1000),
+      sb.from('leads').select('id',{count:'exact',head:true}).eq('cerrador',yo).gte('fecha_reserva',mIni).lt('fecha_reserva',mFin),
+      sb.from('leads').select('id',{count:'exact',head:true}).eq('cerrador',yo).eq('visito_oficina',true).gte('fecha_visita_oficina',mIni).lt('fecha_visita_oficina',mFin)
+    ]);
+    [kC,kR,kV].forEach(function(r){if(r.error)throw r.error;});
+    const m2=(kC.data||[]).reduce(function(s,l){return s+(Number(l.metros_cuadrados)||0);},0);
+    /* una tarjeta por visita: {l, iso, rowId}. Las de leads.cerrador usan visita_fecha;
+       las que vienen solo de mi agenda usan la fecha de MI fila. */
+    const visItems=[];
+    visLeadsCer.forEach(function(l){visItems.push({l:l,iso:l.visita_fecha,mia:false});});
+    (apVis||[]).forEach(function(a){
+      const l=visLeadsAp[a.lead_id]||visLeadsCer.find(function(x){return x.id===a.lead_id;});
+      if(!_cerVivo(l))return;
+      const dup=visItems.find(function(v){return v.l.id===a.lead_id&&ymdBolivia(new Date(v.iso))===ymdBolivia(new Date(a.fecha_programada));});
+      if(dup){dup.rowId=a.id;dup.iso=a.fecha_programada;dup.mia=true;return;}
+      visItems.push({l:l,iso:a.fecha_programada,rowId:a.id,mia:true});
+    });
+    D={vis:vis,visItems:visItems,visRows:visRows,reu:reu,reuLeads:reuLeads,segTodas:segTodas,res:res,pasos:pasos,urg:urg,
+       kpi:{contratos:(kC.data||[]).length,reservas:kR.count||0,visitas:kV.count||0,m2:m2,mes:new Intl.DateTimeFormat('es',{month:'long',timeZone:'America/La_Paz'}).format(now)}};
+  }catch(e){toast('Error cargando Mi agenda: '+((e&&e.message)||'error'),'error');return;}
+  _cer.data=D;
+  _cerPintar();
+}
+function _cerKey(k,id){return k+id;}
+function _cerVisRow(D,l,iso,rowId){
+  /* la fila de visita que corresponde: MI fila si la hay; si no, la más cercana a la fecha */
+  const rs=D.visRows.filter(function(r){return r.lead_id===l.id;});
+  if(rowId){const m=rs.find(function(r){return r.id===rowId;});if(m)return m;}
+  if(!rs.length)return null;
+  const t=new Date(iso||l.visita_fecha).getTime();
+  rs.sort(function(a,b){return Math.abs(new Date(a.fecha_programada)-t)-Math.abs(new Date(b.fecha_programada)-t);});
+  return rs[0];
+}
+function _cerVisEstado(D,l,iso,rowId){
+  if(/^cerrado_/.test(l.estado||''))return l.estado==='cerrado_ganado'?'Ganado':'Perdido';
+  const r=_cerVisRow(D,l,iso,rowId);
+  if((r&&r.completada)||l.estado==='visita_realizada'||l.estado==='reservado')return 'Vino';
+  if(l.resultado_estado==='no_asistio'&&(!r||r.activo===false))return 'No vino';
+  return null;
+}
+function _cerCard(it){
+  const key=it.key; _cer.items[key]=it;
+  const pend=_cer.pend[key], ok=_cer.ok[key]||it.hecho;
+  const cls='cw-card cer-k-'+it.k+(pend||ok?' cer-ok':'')+(it.fin&&!pend&&!ok?' cer-fin':'');
+  return `<div class="${cls}" role="button" tabindex="0" onclick="cerAbrir('${key}')">
+    <span class="cw-tag">${_escPend(it.tag)}</span>
+    <div class="cw-name">${_escPend(it.nombre||'—')}</div>
+    <div class="cw-time">${_escPend(it.sub||'')}</div>
+    ${pend?`<div class="cw-time">✓ ${_escPend(pend.label)} · se guarda en unos segundos</div><button type="button" class="cer-undo" onclick="event.stopPropagation();cerDeshacer('${key}')">↶ Deshacer</button>`:''}
+    ${!pend&&ok?`<div class="cw-time">✓ ${_escPend(typeof ok==='string'?ok:'Hecho')}</div>`:''}
+  </div>`;
+}
+function _cerPintar(){
+  const D=_cer.data; if(!D)return;
+  _cer.items={};
+  const now=new Date(), hoyY=ymdBolivia(now);
+  /* 4 números */
+  const k=document.getElementById('cer-kpis');
+  if(k)k.innerHTML=[['Contratos',D.kpi.contratos],['Reservas',D.kpi.reservas],['Visitas hechas',D.kpi.visitas],['m²',Math.round(D.kpi.m2*10)/10]]
+    .map(function(x){return `<div class="cer-kpi"><div class="l">${x[0]} · ${_escPend(D.kpi.mes)}</div><div class="v">${x[1]}</div></div>`;}).join('');
+  /* franja roja */
+  const u=document.getElementById('cer-urg');
+  if(u)u.innerHTML=D.urg.length?`<div class="cer-lane"><div class="t">🔴 Piden acción hoy · ${D.urg.length}</div><div class="cer-lane-list">`+
+    D.urg.map(function(x){return _cerCard({key:_cerKey('u',x.l.id),k:'urg',kind:'urg',tag:'Urgente',nombre:x.l.nombre,sub:x.motivo,lead:x.l});}).join('')+'</div></div>':'';
+  /* items por día */
+  const porDia={};
+  const add=function(ymd,html){(porDia[ymd]=porDia[ymd]||[]).push(html);};
+  D.visItems.forEach(function(v){
+    const l=v.l, est=_cerVisEstado(D,l,v.iso,v.rowId);
+    add(ymdBolivia(new Date(v.iso)),{t:new Date(v.iso).getTime(),h:_cerCard({key:_cerKey('v',l.id+'_'+(v.rowId||0)),k:'vis',kind:'vis',tag:'Visita',nombre:l.nombre,
+      sub:'🕘 '+_cwHm(v.iso)+(est?' · '+est:''),lead:l,iso:v.iso,rowId:v.rowId||null,hecho:est==='Vino'?'Vino':false,fin:!!est})});
+  });
+  D.reu.forEach(function(a){
+    const l=D.reuLeads[a.lead_id]; if(!l||!_cerVivo(l))return;
+    let tag=_cwTipo(a)||'Seguimiento';
+    if(/^seguimiento$/i.test(a.tipo||'')){
+      const mis=D.segTodas.filter(function(s){return s.lead_id===a.lead_id;});
+      const i=mis.findIndex(function(s){return s.id===a.id;});
+      const n=(i<0?0:i)+2; tag=(CER_ORD[n]||n+'ª')+' reunión';
+    }
+    add(ymdBolivia(new Date(a.fecha_programada)),{t:new Date(a.fecha_programada).getTime(),h:_cerCard({key:_cerKey('r',a.id),k:'reu',kind:'reu',tag:tag,nombre:l.nombre||a.titulo,
+      sub:'🕘 '+_cwHora(a),lead:l,row:a,hecho:a.completada?'Se hizo':false})});
+  });
+  const wsY=ymdBolivia(_cer.ws), weY=ymdBolivia(addDaysLP(_cer.ws,7));
+  const enCurso=[];
+  D.res.forEach(function(l){
+    const n=_cerPasoActual(D.pasos,l.id);
+    const it={key:_cerKey('s',l.id),k:'res',kind:'res',tag:'Reserva',nombre:l.nombre,
+      sub:n>=CER_PASOS_RESERVA.length?'Protocolo completo (8/8)':'Paso '+(n+1)+'/8: '+CER_PASOS_RESERVA[n],lead:l,paso:n};
+    if(l.fecha_reserva>=wsY&&l.fecha_reserva<weY)add(l.fecha_reserva,{t:0,h:_cerCard(it)});
+    else enCurso.push(_cerCard(it));
+  });
+  const r=document.getElementById('cer-res');
+  if(r)r.innerHTML=enCurso.length?`<div class="cer-lane res"><div class="t">🟢 Reservas en curso · ${enCurso.length}</div><div class="cer-lane-list">${enCurso.join('')}</div></div>`:'';
+  /* grilla lunes→domingo */
+  let html='';
+  for(let i=0;i<7;i++){
+    const day=addDaysLP(_cer.ws,i), ymd=ymdBolivia(day), isToday=ymd===hoyY;
+    const its=(porDia[ymd]||[]).sort(function(a,b){return a.t-b.t;});
+    html+=`<div class="cw-col${isToday?' today':''}"><div class="cw-head"><div class="n">${_cwDIAS[i]}${isToday?' · HOY':''}</div><div class="d">${_lpParts(day).d}</div><div class="cer-cnt">${its.length} ${its.length===1?'reunión':'reuniones'}</div></div><div class="cw-body">`+
+      (its.length?its.map(function(x){return x.h;}).join(''):'<div class="cw-empty">—</div>')+`</div></div>`;
+  }
+  const g=document.getElementById('cer-grid'); if(g)g.innerHTML=html;
+}
+/* ── pendientes con Deshacer ── */
+function _cerMarcar(key,label,fn){
+  if(_cer.pend[key])return;
+  const t=setTimeout(function(){_cerEjecutar(key);},CER_UNDO_MS);
+  _cer.pend[key]={t:t,fn:fn,label:label};
+  cwCerrar(); _cerPintar();
+}
+async function _cerEjecutar(key){
+  const p=_cer.pend[key]; if(!p)return;
+  clearTimeout(p.t); delete _cer.pend[key];
+  try{
+    await p.fn();
+    _cer.ok[key]=p.label;
+    toast('✅ '+p.label+' — guardado');
+  }catch(e){toast('No se guardó ('+p.label+'): '+((e&&e.message)||'error'),'error');}
+  try{await renderAgendaCerrador();}catch(e){}
+  try{refrescarBadges();}catch(e){}
+}
+function cerDeshacer(key){
+  const p=_cer.pend[key]; if(!p)return;
+  clearTimeout(p.t); delete _cer.pend[key];
+  toast('↶ Deshecho: no se guardó nada');
+  _cerPintar();
+}
+function _cerFlush(){Object.keys(_cer.pend).forEach(function(k){_cerEjecutar(k);});}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')_cerFlush();});
+window.addEventListener('pagehide',_cerFlush);
+/* ── escrituras ── */
+async function _cerHist(l,o){
+  const{error}=await sb.from('historial_lead').insert(Object.assign({
+    lead_id:l.id,colaborador:cu.nombre,rol_colaborador:cu.rol||'—',etapa:l.etapa||null,
+    fecha_actividad:new Date().toISOString()},o));
+  if(error)throw error;
+}
+async function _cerNuevaTarea(l,iso,nota){
+  const{error}=await sb.from('agenda_personal').insert({
+    colaborador:cu.nombre,lead_id:l.id,tipo:'seguimiento',titulo:l.nombre||'—',
+    nota:nota||null,fecha_programada:iso,activo:true,completada:false});
+  if(error)throw error;
+}
+async function _cerProximaAccion(l,iso,origen){
+  await _cerNuevaTarea(l,iso,'Próxima acción ('+origen+')');
+  const{error}=await sb.from('leads').update({proximo_contacto:iso}).eq('id',l.id);
+  if(error)throw error;
+  await _cerHist(l,{tipo_actividad:'proxima_accion',fecha_proxima:iso,
+    nota:'📅 Próxima acción: '+_cwDiaTxt(iso)+' · '+_cwHm(iso)+' ('+origen+')'});
+}
+function _cerProxIso(){
+  const v=(document.getElementById('cer-prox')||{}).value||'';
+  if(!v)return null;
+  return _dtBoliviaToIso(v);
+}
+function cerAtajo(dias){
+  const ymd=ymdBolivia(new Date(Date.now()+dias*86400000));
+  const el=document.getElementById('cer-prox'); if(el)el.value=ymd+'T09:00';
+}
+/* ── panel lateral ── */
+function _cerProxHtml(boton){
+  return `<div class="cw-sec"><div class="l">Próxima acción</div><div class="cw-btns">
+      <button type="button" class="cw-btn" onclick="cerAtajo(1)">Mañana</button>
+      <button type="button" class="cw-btn" onclick="cerAtajo(3)">En 3 días</button>
+      <button type="button" class="cw-btn" onclick="cerAtajo(7)">En 1 semana</button></div>
+    <input type="datetime-local" id="cer-prox" class="form-control" style="margin-top:8px">
+    ${boton?`<div class="cw-btns"><button type="button" class="cw-btn" onclick="cerGuardarProxima()">${boton}</button></div>`:''}</div>`;
+}
+function cerAbrir(key){
+  const it=_cer.items[key]; if(!it)return;
+  _cer.sel=it;
+  const l=it.lead, cel=_cerCel(l), p=_cwPanelEl();
+  document.getElementById('cw-ov').classList.add('on');
+  const pend=!!_cer.pend[key];
+  let acc='', extra='';
+  if(it.kind==='vis'){
+    const est=_cerVisEstado(_cer.data,l,it.iso,it.rowId), empezo=new Date(it.iso)<=new Date();
+    if(est)acc=`<div class="t">✓ Ya registrado: <strong>${_escPend(est)}</strong></div>`;
+    else if(!empezo)acc=`<div class="cw-btns"><button type="button" class="cw-btn" disabled>✅ Vino</button><button type="button" class="cw-btn" disabled>🚫 No vino</button><button type="button" class="cw-btn" onclick="cerReagendarVisita()">🔄 Reagendar</button></div><div class="t" style="opacity:.75;margin-top:6px">Disponible desde la hora de la visita</div>`;
+    else acc=`<div class="cw-btns"><button type="button" class="cw-btn pri" onclick="cerVino()">✅ Vino</button><button type="button" class="cw-btn" onclick="cerNoVino()">🚫 No vino</button><button type="button" class="cw-btn" onclick="cerReagendarVisita()">🔄 Reagendar</button></div>`;
+  }else if(it.kind==='reu'){
+    if(it.row.completada)acc=`<div class="t">✓ Esta reunión ya se hizo.</div>`;
+    else{
+      acc=`<div class="cw-btns"><button type="button" class="cw-btn pri" onclick="cerSeHizo()">✅ Se hizo</button></div>
+        <div class="t" style="opacity:.75;margin-top:6px">Para "Se hizo" elegí antes la próxima acción (abajo).</div>`;
+      extra=`<div class="cw-sec"><div class="l">Reagendar</div><input type="datetime-local" id="cer-reag" class="form-control" value="${_dtLocalBolivia(it.row.fecha_programada)}">
+        <div class="cw-btns"><button type="button" class="cw-btn" onclick="cerReagendarReunion()">🔄 Reagendar</button></div></div>`;
+    }
+  }else if(it.kind==='res'){
+    acc=`<ol style="margin:4px 0 0 18px;padding:0;font-size:13px;line-height:1.5">`+CER_PASOS_RESERVA.map(function(s,i){
+      return `<li style="${i<it.paso?'opacity:.6;text-decoration:line-through':i===it.paso?'font-weight:800':''}">${_escPend(s)}</li>`;}).join('')+`</ol>`+
+      (it.paso<CER_PASOS_RESERVA.length?`<div class="cw-btns"><button type="button" class="cw-btn pri" onclick="cerPasoHecho()">✅ Marcar paso ${it.paso+1} hecho</button></div>`:'<div class="t">✓ Protocolo completo.</div>');
+  }else if(it.kind==='urg'){
+    acc=`<div class="t">${_escPend(it.sub)}</div><div class="cw-btns">${cel?`<button type="button" class="cw-btn pri" onclick="cerEscribirAhora()">💬 Escribir ahora</button>`:''}<button type="button" class="cw-btn" onclick="document.getElementById('cer-prox').focus()">📅 Poner fecha</button></div>`;
+  }
+  p.innerHTML=`<button type="button" class="cw-x" onclick="cwCerrar()">✕</button>
+    <span class="cw-tag cer-k-${it.k}">${_escPend(it.tag)}</span>
+    <h3>${_escPend(l.nombre||'—')}</h3>
+    <div class="t" style="opacity:.8">${_escPend(it.sub||'')}${l.etapa?' · '+_escPend(l.etapa):''}</div>
+    <div class="cw-sec"><div class="l">${it.kind==='res'?'Protocolo de cierre':'Resultado'}</div>${pend?'<div class="t">✓ Marcado, se guarda en unos segundos (podés deshacer en la tarjeta).</div>':acc}</div>
+    <div class="cw-sec"><div class="l">Contacto</div><div class="cw-btns">
+      ${cel?`<a class="cw-btn" target="_blank" rel="noopener" href="https://wa.me/591${cel}">💬 WhatsApp</a><a class="cw-btn" href="tel:+591${cel}">📞 Llamar</a>`:'<span class="t" style="opacity:.7">Sin celular cargado</span>'}
+      <button type="button" class="cw-btn" onclick="cwCerrar();openLeadDetail(${l.id})">📋 Ver lead</button></div></div>
+    ${extra}
+    ${_cerProxHtml(it.kind==='reu'&&!it.row.completada?'💾 Guardar solo la próxima acción':'💾 Guardar próxima acción')}`;
+  p.classList.add('on');
+}
+function cerVino(){
+  const it=_cer.sel; if(!it||it.kind!=='vis')return;
+  const l=it.lead;
+  if(new Date(it.iso)>new Date()){toast('Disponible desde la hora de la visita','error');return;}
+  _cerMarcar(it.key,'Vino',async function(){
+    /* la fila de la visita que YA empezó (nunca una futura). Si la tarjeta salió
+       de MI fila, esa y no otra: hay leads con dos filas de visita (la mía y la
+       de la captadora) a horas distintas. */
+    let q=sb.from('agenda_personal').select('id')
+      .eq('lead_id',l.id).eq('activo',true).eq('completada',false).ilike('tipo','visita%')
+      .lte('fecha_programada',new Date().toISOString());
+    if(it.rowId)q=q.eq('id',it.rowId);
+    const{data:rows,error:e0}=await q.order('fecha_programada',{ascending:false}).limit(1);
+    if(e0)throw e0;
+    if(!rows||!rows.length)throw new Error('no encontré la visita en la agenda: registrala desde la ficha del lead');
+    const ahora=new Date().toISOString();
+    const{data:up,error:e1}=await sb.from('agenda_personal')
+      .update({completada:true,completada_en:ahora,nota_resultado:'✅ Vino a la visita (Mi agenda)'})
+      .eq('id',rows[0].id).eq('completada',false).select('id');
+    if(e1)throw e1;
+    if(!up||!up.length)throw new Error('la visita no se actualizó');
+    await _cerHist(l,{tipo_actividad:'resultado_visita',resultado:'asistio',nota:'✅ Resultado de visita: Vino (Mi agenda)'});
+  });
+}
+function cerNoVino(){
+  const it=_cer.sel; if(!it||it.kind!=='vis')return;
+  const l=it.lead;
+  if(new Date(it.iso)>new Date()){toast('Disponible desde la hora de la visita','error');return;}
+  _cerMarcar(it.key,'No vino',async function(){
+    /* misma función que el chip "🚫 No asistió" (v239) */
+    document.getElementById('rv-lead-id').value=l.id;
+    document.getElementById('rv-detalle').value='Marcado desde Mi agenda';
+    _rvSel=RV_NO_ASISTIO;
+    await guardarResultadoVisita();
+    const{data,error}=await sb.from('leads').select('resultado_estado').eq('id',l.id).single();
+    if(error)throw error;
+    if(!data||data.resultado_estado!==RV_NO_ASISTIO)throw new Error('el lead no quedó como "no asistió"');
+  });
+}
+async function cerReagendarVisita(){
+  const it=_cer.sel; if(!it||it.kind!=='vis')return;
+  const l=it.lead;
+  try{
+    let q=sb.from('agenda_personal').select('id,lead_id,tipo,fecha_programada,nota,visita_nro,colaborador,captador,activo,completada')
+      .eq('lead_id',l.id).eq('activo',true).eq('completada',false).ilike('tipo','visita%');
+    if(it.rowId)q=q.eq('id',it.rowId);
+    const{data,error}=await q.order('fecha_programada',{ascending:false}).limit(1);
+    if(error)throw error;
+    if(!data||!data.length){toast('Esta visita no tiene fila pendiente en la agenda: abrí la ficha','error');return;}
+    _rpVis=data[0];
+    _rpLead={id:l.id,nombre:l.nombre||'',celular:l.celular||'',captador:'',cerrador:l.cerrador||'',estado:l.estado||'',archivado:l.archivado===true};
+    cwCerrar();
+    abrirReprogramarVisita();
+  }catch(e){toast('Error: '+((e&&e.message)||'error'),'error');}
+}
+function cerSeHizo(){
+  const it=_cer.sel; if(!it||it.kind!=='reu')return;
+  const l=it.lead, row=it.row;
+  const iso=_cerProxIso();
+  const exenta=['reservado','cerrado_ganado','cerrado_perdido'].indexOf(l.estado||'')>=0;
+  if(!iso&&!exenta){toast('Elegí la próxima acción antes de marcar "Se hizo"','error');return;}
+  if(iso&&new Date(iso)<=new Date()){toast('La próxima acción tiene que ser a futuro','error');return;}
+  _cerMarcar(it.key,'Se hizo',async function(){
+    /* v144 — el siguiente paso ANTES de completar */
+    if(iso)await _cerProximaAccion(l,iso,'Mi agenda');
+    const{data:up,error}=await sb.from('agenda_personal')
+      .update({completada:true,completada_en:new Date().toISOString(),nota_resultado:'✅ Reunión hecha (Mi agenda)'})
+      .eq('id',row.id).eq('completada',false).select('id');
+    if(error)throw error;
+    if(!up||!up.length)throw new Error('la reunión no se actualizó');
+    const{error:eL}=await sb.from('leads').update({ultima_gestion:ymdLocal(new Date())}).eq('id',l.id);
+    if(eL)throw eL;
+    await _cerHist(l,{tipo_actividad:'reunion_seguimiento',resultado:'se_hizo',fecha_proxima:iso||null,
+      nota:'✅ '+it.tag+' hecha (Mi agenda)'});
+  });
+}
+async function cerReagendarReunion(){
+  const it=_cer.sel; if(!it||it.kind!=='reu')return;
+  const v=(document.getElementById('cer-reag')||{}).value||'';
+  const iso=_dtBoliviaToIso(v);
+  if(!iso){toast('Elegí fecha y hora','error');return;}
+  try{
+    const{error}=await sb.from('agenda_personal').update({fecha_programada:iso}).eq('id',it.row.id);
+    if(error)throw error;
+    const{error:eL}=await sb.from('leads').update({proximo_contacto:iso}).eq('id',it.lead.id);
+    if(eL)throw eL;
+    await _cerHist(it.lead,{tipo_actividad:'reprogramar_reunion',fecha_proxima:iso,
+      nota:'🔄 '+it.tag+' reagendada: '+_cwDiaTxt(it.row.fecha_programada)+' '+_cwHm(it.row.fecha_programada)+' → '+_cwDiaTxt(iso)+' '+_cwHm(iso)});
+    toast('📅 Reagendada para '+_cwDiaTxt(iso)+' · '+_cwHm(iso));
+    cwCerrar(); await renderAgendaCerrador();
+  }catch(e){toast('Error: '+((e&&e.message)||'no se pudo reagendar'),'error');}
+}
+async function cerGuardarProxima(){
+  const it=_cer.sel; if(!it)return;
+  const iso=_cerProxIso();
+  if(!iso){toast('Elegí la fecha (o un atajo)','error');return;}
+  if(new Date(iso)<=new Date()){toast('La próxima acción tiene que ser a futuro','error');return;}
+  try{
+    await _cerProximaAccion(it.lead,iso,'Mi agenda');
+    toast('📅 Próxima acción: '+_cwDiaTxt(iso)+' · '+_cwHm(iso));
+    cwCerrar(); await renderAgendaCerrador();
+  }catch(e){toast('Error: '+((e&&e.message)||'no se pudo guardar'),'error');}
+}
+function cerPasoHecho(){
+  const it=_cer.sel; if(!it||it.kind!=='res')return;
+  const n=it.paso+1; if(n>CER_PASOS_RESERVA.length)return;
+  _cerMarcar(it.key,'Paso '+n+' hecho',async function(){
+    await _cerHist(it.lead,{tipo_actividad:'paso_reserva',resultado:'paso '+n,
+      nota:'✅ Paso '+n+'/8 del protocolo: '+CER_PASOS_RESERVA[n-1]});
+  });
+}
+function cerEscribirAhora(){
+  const it=_cer.sel; if(!it||it.kind!=='urg')return;
+  const cel=_cerCel(it.lead); if(!cel)return;
+  window.open('https://wa.me/591'+cel,'_blank','noopener');
+  _cerMarcar(it.key,'Le escribiste',async function(){
+    const{error}=await sb.from('leads').update({ultima_gestion:ymdLocal(new Date())}).eq('id',it.lead.id);
+    if(error)throw error;
+    await _cerHist(it.lead,{tipo_actividad:'contacto_whatsapp',resultado:'escribio',nota:'💬 Le escribió por WhatsApp (Mi agenda)'});
+  });
+}
+/* ── Registrar reunión (carga rápida) y Ver todos mis leads ── */
+async function _cerMisLeads(){
+  const{data,error}=await sb.from('leads').select(CER_LCOLS).eq('cerrador',cu.nombre).order('nombre').limit(1000);
+  if(error)throw error;
+  /* + los leads con tareas abiertas a mi nombre: las visitas recientes quedan con
+     leads.cerrador NULL (ver renderAgendaCerrador) y sin esto no aparecían. */
+  const{data:ap,error:eAp}=await sb.from('agenda_personal').select('lead_id').eq('colaborador',cu.nombre)
+    .eq('activo',true).eq('completada',false).not('lead_id','is',null).limit(1000);
+  if(eAp)throw eAp;
+  const ya=new Set((data||[]).map(function(l){return l.id;}));
+  const extra=[...new Set((ap||[]).map(function(a){return a.lead_id;}))].filter(function(id){return !ya.has(id);});
+  const extraL=extra.length?await _cerLeadsPorIds(extra):{};
+  const todos=(data||[]).concat(Object.keys(extraL).map(function(k){return extraL[k];}));
+  todos.sort(function(a,b){return String(a.nombre||'').localeCompare(String(b.nombre||''),'es');});
+  _cer.leadsTodos=_cerNoArch(todos);
+  return _cer.leadsTodos;
+}
+async function cerRegistrarReunion(){
+  if(!_cerEsRol())return;
+  let ls;
+  try{ls=(await _cerMisLeads()).filter(function(l){return l.estado!=='cerrado_perdido';});}
+  catch(e){toast('Error: '+((e&&e.message)||'error'),'error');return;}
+  const p=_cwPanelEl(); document.getElementById('cw-ov').classList.add('on');
+  const hoy=ymdBolivia(new Date());
+  p.innerHTML=`<button type="button" class="cw-x" onclick="cwCerrar()">✕</button>
+    <span class="cw-tag cer-k-reu">Reunión de seguimiento</span><h3>Registrar reunión</h3>
+    <div class="cw-sec"><div class="l">Cliente</div>
+      <input type="text" id="cer-rr-q" class="form-control" placeholder="Buscar por nombre o celular" oninput="_cerRrFiltrar()">
+      <select id="cer-rr-lead" class="form-control" size="6" style="margin-top:6px"></select></div>
+    <div class="cw-sec"><div class="l">Fecha y hora</div>
+      <div class="form-row"><input type="date" id="cer-rr-f" class="form-control" value="${hoy}"><input type="time" id="cer-rr-h" class="form-control" value="10:00"></div></div>
+    <div class="cw-sec"><div class="l">Nota (opcional)</div><textarea id="cer-rr-n" class="form-control" rows="2"></textarea></div>
+    <div class="cw-btns"><button type="button" class="cw-btn pri" id="cer-rr-btn" onclick="cerGuardarReunion()">💾 Guardar reunión</button></div>`;
+  _cer.rrLeads=ls; _cerRrFiltrar();
+  p.classList.add('on');
+}
+function _cerRrFiltrar(){
+  const q=_cwNorm((document.getElementById('cer-rr-q')||{}).value||'');
+  const sel=document.getElementById('cer-rr-lead'); if(!sel)return;
+  const ls=(_cer.rrLeads||[]).filter(function(l){return !q||_cwNorm(l.nombre).indexOf(q)>=0||String(l.celular||'').indexOf(q)>=0;});
+  sel.innerHTML=ls.length?ls.map(function(l){return `<option value="${l.id}">${_escPend(l.nombre||'—')} · ${_escPend(l.celular||'')}</option>`;}).join(''):'<option value="" disabled>Sin resultados</option>';
+  if(ls.length===1)sel.value=String(ls[0].id);
+}
+async function cerGuardarReunion(){
+  const id=Number((document.getElementById('cer-rr-lead')||{}).value||0);
+  const l=(_cer.rrLeads||[]).find(function(x){return x.id===id;});
+  if(!l){toast('Elegí el cliente','error');return;}
+  const f=document.getElementById('cer-rr-f').value, h=document.getElementById('cer-rr-h').value;
+  const iso=_dtBoliviaToIso(f+'T'+h);
+  if(!f||!h||!iso){toast('Completá fecha y hora','error');return;}
+  const nota=(document.getElementById('cer-rr-n').value||'').trim();
+  const btn=document.getElementById('cer-rr-btn'); if(btn)btn.disabled=true;
+  try{
+    await _cerNuevaTarea(l,iso,nota||'Reunión registrada desde Mi agenda');
+    if(new Date(iso)>new Date()){
+      const{error}=await sb.from('leads').update({proximo_contacto:iso}).eq('id',l.id);
+      if(error)throw error;
+    }
+    await _cerHist(l,{tipo_actividad:'reunion_registrada',fecha_proxima:iso,
+      nota:'🗓️ Reunión de seguimiento: '+_cwDiaTxt(iso)+' · '+_cwHm(iso)+(nota?' — '+nota:'')});
+    toast('✅ Reunión registrada: '+(l.nombre||'')+' · '+_cwDiaTxt(iso)+' '+_cwHm(iso));
+    cwCerrar();
+    _cer.ws=getMonday(new Date(iso));
+    await renderAgendaCerrador();
+  }catch(e){toast('Error: '+((e&&e.message)||'no se pudo guardar'),'error');}
+  finally{if(btn)btn.disabled=false;}
+}
+const CER_ESTADOS_ORDEN=[['visita_agendada','Visita agendada'],['visita_realizada','Visitó'],['en_seguimiento','En seguimiento'],['reservado','Reservado'],['nuevo','Nuevo'],['cerrado_ganado','Ganado'],['cerrado_perdido','Perdido']];
+async function cerTodosMisLeads(){
+  if(!_cerEsRol())return;
+  try{await _cerMisLeads();}catch(e){toast('Error: '+((e&&e.message)||'error'),'error');return;}
+  const p=_cwPanelEl(); document.getElementById('cw-ov').classList.add('on');
+  p.innerHTML=`<button type="button" class="cw-x" onclick="cwCerrar()">✕</button>
+    <h3>Todos mis leads · ${_cer.leadsTodos.length}</h3>
+    <input type="text" id="cer-tl-q" class="form-control" placeholder="Buscar por nombre o celular" oninput="_cerTlPintar()" style="margin-top:8px">
+    <div id="cer-tl-body"></div>`;
+  _cerTlPintar();
+  p.classList.add('on');
+}
+function _cerTlPintar(){
+  const q=_cwNorm((document.getElementById('cer-tl-q')||{}).value||'');
+  const box=document.getElementById('cer-tl-body'); if(!box)return;
+  const ls=(_cer.leadsTodos||[]).filter(function(l){return !q||_cwNorm(l.nombre).indexOf(q)>=0||String(l.celular||'').indexOf(q)>=0;});
+  const conocidos=CER_ESTADOS_ORDEN.map(function(e){return e[0];});
+  const grupos=CER_ESTADOS_ORDEN.concat([['__otro','Otros']]);
+  box.innerHTML=grupos.map(function(gr){
+    const xs=ls.filter(function(l){return gr[0]==='__otro'?conocidos.indexOf(l.estado)<0:l.estado===gr[0];});
+    if(!xs.length)return '';
+    return `<div class="cw-sec"><div class="l">${gr[1]} · ${xs.length}</div>`+xs.map(function(l){
+      return `<button type="button" class="cw-btn cer-lista-l" onclick="cwCerrar();openLeadDetail(${l.id})">${_escPend(l.nombre||'—')}<span style="opacity:.6;font-weight:600"> · ${_escPend(l.etapa||'')}</span></button>`;}).join('')+'</div>';
+  }).join('')||'<div class="cw-empty">Sin leads</div>';
 }
 
 function buildLegend(){
@@ -11701,6 +12350,8 @@ function abrirReprogramarVisita(){
 /* Al cerrar se refresca la ficha para que no quede mostrando la fecha vieja. */
 function cerrarReprogramarVisita(){
   closeModal('modalReprogramarVisita');
+  /* v289 — si se abrió desde Mi agenda del cerrador, repintarla */
+  try{const _sc=document.getElementById('screen-cerrador');if(_sc&&_sc.classList.contains('active'))renderAgendaCerrador();}catch(_e){}
   try{
     const ml=document.getElementById('modalLead');
     if(_rpVis&&_rpVis.lead_id&&ml&&ml.classList.contains('show'))
